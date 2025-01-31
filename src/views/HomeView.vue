@@ -1,14 +1,26 @@
 <template>
   <div class="home">
-    <h1>Welcome to the Home Page</h1>
+    <h1>Planowanie zakupów</h1>
+    <router-link to="/ingredients">
+      <button>Go to Ingredients</button>
+    </router-link>
+    <router-link to="/meals">
+      <button>Go to Meals</button>
+    </router-link>
   </div>
 </template>
 
 <style scoped>
 .home {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
   align-items: center;
-  height: 100vh;
+  gap: 1rem;
+}
+
+button {
+  padding: 0.5rem 1rem;
+  font-size: 1rem;
+  cursor: pointer;
 }
 </style>
