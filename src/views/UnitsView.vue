@@ -6,9 +6,9 @@
       <div>
         <ul>
           <li v-for="unit in units" :key="unit.id">
-            {{ unit.name }}
-            <button @click="showEditModal(unit)">Edit</button>
-            <button @click="confirmDeleteUnit(unit)">Delete</button>
+            <div class="unit_name">{{ unit.name }}</div>
+            <div class="unit_edit"><button @click="showEditModal(unit)">Edit</button></div>
+            <div class="unit_delete"><button @click="confirmDeleteUnit(unit)">Delete</button></div>
           </li>
         </ul>
       </div>
@@ -165,8 +165,16 @@ li {
   gap: 1rem;
 }
 
-li button {
-  margin-left: auto;
+.unit_name {
+  width: 150px;
+}
+
+.unit_edit {
+  width: 80px;
+}
+
+.unit_delete {
+  width: 100px;
 }
 
 button {
