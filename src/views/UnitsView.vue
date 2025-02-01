@@ -8,7 +8,7 @@
           <li v-for="unit in units" :key="unit.id">
             {{ unit.name }}
             <button @click="showEditModal(unit)">Edit</button>
-            <button @click="deleteUnit(unit)">Delete</button>
+            <button @click="confirmDeleteUnit(unit)">Delete</button>
           </li>
         </ul>
       </div>
@@ -104,8 +104,8 @@ export default {
 
     const editUnit = async () => {
       try {
-        console.log('editUnit.value:', editUnitRef.value)
         await unitStore.updateUnit(editUnitRef.value)
+        await fetchUnits()
         closeEditModal()
       } catch (error) {
         console.error('Error updating unit:', error)
@@ -118,6 +118,12 @@ export default {
         await fetchUnits()
       } catch (error) {
         console.error('Error deleting unit:', error)
+      }
+    }
+
+    const confirmDeleteUnit = (unit) => {
+      if (confirm(`Czy jesteś pewien że chcesz skasować jednostkę: "${unit.name}"?`)) {
+        deleteUnit(unit)
       }
     }
 
@@ -134,6 +140,7 @@ export default {
       closeAddModal,
       addUnit,
       deleteUnit,
+      confirmDeleteUnit
     }
   },
 }
