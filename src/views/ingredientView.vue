@@ -56,8 +56,8 @@
 
 <script>
 import { onMounted } from 'vue'
-import { useIngredientStore } from '@/stores/ingredientStore'
-import { useUnitStore } from '@/stores/unitStore'
+import { useIngredientStore } from '@stores/ingredientStore'
+import { useUnitStore } from '@stores/unitStore'
 
 export default {
   setup() {

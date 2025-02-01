@@ -1,5 +1,5 @@
 import express from 'express'
-import { getUnits, addUnit, updateUnit, deleteUnit } from '@/src/db/units.js'
+import { getUnits, addUnit, updateUnit, deleteUnit } from '../db/units.js'
 
 const apiRouter = express.Router()
 

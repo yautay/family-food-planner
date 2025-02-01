@@ -1,4 +1,4 @@
-import db from './database.js'
+import db from '../db.js'
 
 export function getUnits() {
   return db.prepare('SELECT * FROM units').all()

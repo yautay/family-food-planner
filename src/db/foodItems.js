@@ -1,4 +1,4 @@
-import db from './database.js'
+import db from '../db.js'
 
 export function addFoodItem(item) {
   const stmt = db.prepare(`
