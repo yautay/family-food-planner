@@ -1,7 +1,7 @@
 import express from 'express'
 import cors from 'cors'
-import unitRoutes from './apiroutes/units.js'
-import foodItemRoutes from './apiroutes/foodItems.js'
+import unitRoutes from './src/apiroutes/units.js'
+import foodItemRoutes from './src/apiroutes/fooditems.js'
 
 const app = express()
 const port = 3000

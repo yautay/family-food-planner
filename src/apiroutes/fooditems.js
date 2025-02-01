@@ -1,5 +1,5 @@
 import express from 'express'
-import { addFoodItem } from '@/db/foodItems.js'
+import { addFoodItem } from '@/src/db/fooditems.js'
 
 const apiRouter = express.Router()
 
