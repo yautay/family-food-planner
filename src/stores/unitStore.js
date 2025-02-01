@@ -8,23 +8,12 @@ const apiClient = axios.create({
   },
 })
 
-export const useFoodStore = defineStore('food', {
+export const useUnitStore = defineStore('unit', {
   state: () => ({
-    ingredient: {
+    units: {
       name: '',
-      comment: '',
-      unit_id: null,
-      quantity_per_package: null,
-      calories: null,
-      carbohydrates: null,
-      sugars: null,
-      fat: null,
-      protein: null,
-      fiber: null,
-      g: null,
     },
-    units: [],
-    newUnit: {
+    addUnit: {
       name: '',
     },
     editUnit: {
@@ -41,29 +30,6 @@ export const useFoodStore = defineStore('food', {
         console.log('Units in state:', this.units) // Log units in state
       } catch (error) {
         console.error('Error fetching units:', error)
-      }
-    },
-    async addIngredient() {
-      try {
-        await apiClient.post('/food-items', this.ingredient)
-        this.resetIngredient()
-      } catch (error) {
-        console.error('Error adding ingredient:', error)
-      }
-    },
-    resetIngredient() {
-      this.ingredient = {
-        name: '',
-        comment: '',
-        unit_id: null,
-        quantity_per_package: null,
-        calories: null,
-        carbohydrates: null,
-        sugars: null,
-        fat: null,
-        protein: null,
-        fiber: null,
-        g: null,
       }
     },
     async addUnit() {

@@ -51,63 +51,26 @@
       </div>
       <button type="submit">Add Ingredient</button>
     </form>
-
-    <h2>Manage Units</h2>
-    <form @submit.prevent="addUnit">
-      <div>
-        <label for="new-unit-name">New Unit Name:</label>
-        <input type="text" id="new-unit-name" v-model="newUnit.name" required />
-      </div>
-      <button type="submit">Add Unit</button>
-    </form>
-
-    <form @submit.prevent="updateUnit" v-if="editUnit.id">
-      <div>
-        <label for="edit-unit-name">Edit Unit Name:</label>
-        <input type="text" id="edit-unit-name" v-model="editUnit.name" required />
-      </div>
-      <button type="submit">Update Unit</button>
-    </form>
-
-    <ul>
-      <li v-for="unit in units" :key="unit.id">
-        {{ unit.name }}
-        <button @click="setEditUnit(unit)">Edit</button>
-        <button @click="deleteUnit(unit.id)">Delete</button>
-      </li>
-    </ul>
   </div>
 </template>
 
 <script>
 import { onMounted } from 'vue'
-import { useFoodStore } from '@/stores/foodStore'
+import { useIngredientStore } from '@/stores/ingredientStore'
+import { useUnitStore } from '@/stores/unitStore'
 
 export default {
   setup() {
-    const foodStore = useFoodStore()
+    const ingredientStore = useIngredientStore()
+    const unitStore = useUnitStore()
 
     onMounted(() => {
-      foodStore.fetchUnits()
+      unitStore.fetchUnits()
     })
-
-    const addUnit = async () => {
-      await foodStore.addUnit()
-      await foodStore.fetchUnits() // Refresh units after adding a new unit
-    }
-
-    console.log('Units in template:', foodStore.units) // Log units in template
-
     return {
-      ingredient: foodStore.ingredient,
-      units: foodStore.units,
-      addIngredient: foodStore.addIngredient,
-      newUnit: foodStore.newUnit,
-      editUnit: foodStore.editUnit,
-      addUnit,
-      updateUnit: foodStore.updateUnit,
-      deleteUnit: foodStore.deleteUnit,
-      setEditUnit: foodStore.setEditUnit,
+      ingredient: ingredientStore.ingredient,
+      units: unitStore.units,
+      addIngredient: ingredientStore.addIngredient,
     }
   },
 }
@@ -141,5 +104,10 @@ button {
   padding: 0.5rem 1rem;
   font-size: 1rem;
   cursor: pointer;
+}
+
+.manage-units {
+  display: flex;
+  gap: 1rem;
 }
 </style>

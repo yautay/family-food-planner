@@ -7,6 +7,9 @@
     <router-link to="/meals">
       <button>Go to Meals</button>
     </router-link>
+    <router-link to="/settings">
+      <button>Go to Settings</button>
+    </router-link>
   </div>
 </template>
 
