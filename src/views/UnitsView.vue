@@ -4,11 +4,13 @@
     <div class="unit_list">
       <div><h2>Units list</h2></div>
       <div>
-        <li v-for="unit in units" :key="unit.id">
-          {{ unit.name }}
-          <button @click="editUnit(unit)">Edit</button>
-          <button @click="deleteUnit(unit)">Delete</button>
-        </li>
+        <ul>
+          <li v-for="unit in units" :key="unit.id">
+            {{ unit.name }}
+            <button @click="showEditModal(unit)">Edit</button>
+            <button @click="deleteUnit(unit)">Delete</button>
+          </li>
+        </ul>
       </div>
     </div>
 
@@ -20,10 +22,10 @@
       <div class="modal-content">
         <span class="close" @click="closeEditModal">&times;</span>
         <h2>Edit Unit</h2>
-        <form @submit.prevent="updateUnit">
+        <form @submit.prevent="editUnit">
           <div>
             <label for="edit-unit-name">Unit Name:</label>
-            <input type="text" id="edit-unit-name" v-model="editUnit.name" required />
+            <input type="text" id="edit-unit-name" v-model="editUnitRef.name" required />
           </div>
           <button type="submit">Update Unit</button>
         </form>
@@ -37,13 +39,12 @@
         <form @submit.prevent="addUnit">
           <div>
             <label for="new-unit-name">Unit Name:</label>
-            <input type="text" id="new-unit-name" v-model="newUnit.name" required />
+            <input type="text" id="new-unit-name" v-model="newUnitRef.name" required />
           </div>
           <button type="submit">Add Unit</button>
         </form>
       </div>
     </div>
-
   </div>
 </template>
 
@@ -54,28 +55,27 @@ import { useUnitStore } from '@stores/unitStore'
 export default {
   setup() {
     const unitStore = useUnitStore()
+    var units = ref([])
     const isEditModalVisible = ref(false)
     const isAddModalVisible = ref(false)
+    const newUnitRef = ref({ name: "" })
+    const editUnitRef = ref({ id: undefined, name: "" })
 
     onMounted(() => {
-      unitStore.fetchUnits()
+      fetchUnits()
     })
 
-    const showEditModal = (unit) => {
-      unitStore.setEditUnit(unit)
-      isEditModalVisible.value = true
-    }
-
-    const closeEditModal = () => {
-      isEditModalVisible.value = false
-    }
-
-    const updateUnit = async () => {
-      await unitStore.updateUnit()
-      closeEditModal()
+    const fetchUnits = async () => {
+      try {
+        await unitStore.fetchUnits()
+        units.value = unitStore.units
+      } catch (error) {
+        console.error('Error fetching units:', error)
+      }
     }
 
     const showAddModal = () => {
+      newUnitRef.value = { name: "" }
       isAddModalVisible.value = true
     }
 
@@ -84,25 +84,56 @@ export default {
     }
 
     const addUnit = async () => {
-      console.log("dodaję unit")
-      await unitStore.addUnit()
-      unitStore.fetchUnits()
-      closeAddModal()
+      try {
+        await unitStore.addUnit(newUnitRef.value)
+        await fetchUnits()
+        closeAddModal()
+      } catch (error) {
+        console.error('Error adding unit:', error)
+      }
+    }
+
+    const showEditModal = (unit) => {
+      editUnitRef.value = { id: unit.id, name: "" }
+      isEditModalVisible.value = true
+    }
+
+    const closeEditModal = () => {
+      isEditModalVisible.value = false
+    }
+
+    const editUnit = async () => {
+      try {
+        console.log('editUnit.value:', editUnitRef.value)
+        await unitStore.updateUnit(editUnitRef.value)
+        closeEditModal()
+      } catch (error) {
+        console.error('Error updating unit:', error)
+      }
+    }
+
+    const deleteUnit = async (unit) => {
+      try {
+        await unitStore.deleteUnit(unit)
+        await fetchUnits()
+      } catch (error) {
+        console.error('Error deleting unit:', error)
+      }
     }
 
     return {
-      units: unitStore.units,
-      newUnit: unitStore.addUnit,
-      editUnit: unitStore.editUnit,
+      units,
+      newUnitRef,
+      editUnit,
       isEditModalVisible,
       isAddModalVisible,
       showEditModal,
       closeEditModal,
-      updateUnit,
+      editUnitRef,
       showAddModal,
       closeAddModal,
       addUnit,
-      deleteUnit: unitStore.deleteUnit,
+      deleteUnit,
     }
   },
 }
@@ -131,6 +162,12 @@ li button {
   margin-left: auto;
 }
 
+button {
+  padding: 0.5rem 1rem;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
 .modal {
   display: flex;
   justify-content: center;
@@ -146,7 +183,7 @@ li button {
 }
 
 .modal-content {
-  background-color: #fefefe;
+  background-color: #000000;
   padding: 20px;
   border: 1px solid #888;
   width: 80%;

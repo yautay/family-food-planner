@@ -10,26 +10,39 @@ const apiClient = axios.create({
 
 export const useUnitStore = defineStore('unit', {
   state: () => ({
-    units: {
-      name: String,
-    },
-    addUnit: {
-      name: String,
-    },
-    editUnit: {
-      id: null,
-      name: String,
-    },
+    units: []
   }),
   actions: {
     async fetchUnits() {
       try {
         const response = await apiClient.get('/units')
-        console.log('Fetched units:', response.data) // Log fetched units
         this.units = response.data
-        console.log('Units in state:', this.units) // Log units in state
       } catch (error) {
         console.error('Error fetching units:', error)
+      }
+    },
+    async addUnit(unit) {
+      try {
+        await apiClient.post('/units', unit)
+        await this.fetchUnits()
+      } catch (error) {
+        console.error('Error adding unit:', error)
+      }
+    },
+    async updateUnit(unit) {
+      try {
+        await apiClient.put(`/units/${unit.id}`, unit )
+        await this.fetchUnits()
+      } catch (error) {
+        console.error('Error updating unit:', error)
+      }
+    },
+    async deleteUnit(unit) {
+      try {
+        await apiClient.delete(`/units/${unit.id}`)
+        await this.fetchUnits()
+      } catch (error) {
+        console.error('Error deleting unit:', error)
       }
     },
   },

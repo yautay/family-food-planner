@@ -10,11 +10,14 @@ export function addUnit(unit) {
 }
 
 export function updateUnit(unit) {
+  console.log('updateUnit called with:', unit) // Log the unit object
   const stmt = db.prepare('UPDATE units SET name = ? WHERE id = ?')
-  stmt.run(unit.name, unit.id)
+  const result = stmt.run(unit.name, unit.id)
+  console.log('SQL query executed:', stmt) // Log the SQL statement
+  console.log('Result:', result) // Log the result of the query
 }
 
-export function deleteUnit(unit) {
+export function deleteUnit(id) {
   const stmt = db.prepare('DELETE FROM units WHERE id = ?')
-  stmt.run(unit.id)
+  stmt.run(id)
 }
