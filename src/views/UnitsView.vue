@@ -11,7 +11,7 @@
         </li>
       </div>
     </div>
-    
+
     <div class="add_unit">
       <div><button @click="showAddModal">Add Unit</button></div>
     </div>
@@ -83,14 +83,15 @@ export default {
       isAddModalVisible.value = false
     }
 
-    const addUnit = async () => {
-      await unitStore.addUnit()
+    const addUnit = async (name) => {
+      console.log(name)
+      await unitStore.addUnit(name)
       closeAddModal()
     }
 
     return {
       units: unitStore.units,
-      newUnit: unitStore.newUnit,
+      newUnit: unitStore.addUnit,
       editUnit: unitStore.editUnit,
       isEditModalVisible,
       isAddModalVisible,

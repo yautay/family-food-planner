@@ -11,14 +11,14 @@ const apiClient = axios.create({
 export const useUnitStore = defineStore('unit', {
   state: () => ({
     units: {
-      name: '',
+      name: String,
     },
     addUnit: {
-      name: '',
+      name: String,
     },
     editUnit: {
       id: null,
-      name: '',
+      name: String,
     },
   }),
   actions: {
@@ -32,10 +32,10 @@ export const useUnitStore = defineStore('unit', {
         console.error('Error fetching units:', error)
       }
     },
-    async addUnit() {
+    async addUnit(name) {
       try {
         await apiClient.post('/units', this.newUnit)
-        this.newUnit.name = ''
+        this.newUnit.name = name
         await this.fetchUnits()
       } catch (error) {
         console.error('Error adding unit:', error)
@@ -60,6 +60,7 @@ export const useUnitStore = defineStore('unit', {
       }
     },
     setEditUnit(unit) {
+      console.error('Set Edit unit:', unit.id)
       this.editUnit.id = unit.id
       this.editUnit.name = unit.name
     },
