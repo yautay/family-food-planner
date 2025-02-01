@@ -1,4 +1,3 @@
-// src/db.js
 import Database from 'better-sqlite3'
 
 const db = new Database('database.db', { verbose: console.log })
@@ -16,40 +15,14 @@ db.exec(`
     comment TEXT,
     unit_id INTEGER NOT NULL,
     quantity_per_package INTEGER,
-    calories INTEGER,
-    carbohydrates INTEGER,
-    sugars INTEGER,
-    fat INTEGER,
-    protein INTEGER,
-    fiber INTEGER,
-    g INTEGER,
+    calories_per_100g INTEGER,
+    carbohydrates_per_100g REAL,
+    sugars_per_100g REAL,
+    fat_per_100g REAL,
+    protein_per_100g REAL,
+    fiber_per_100g REAL,
     FOREIGN KEY (unit_id) REFERENCES units(id)
   )
 `)
 
-export function addFoodItem(item) {
-  const stmt = db.prepare(`
-    INSERT INTO food_items (name, comment, unit_id, quantity_per_package, calories, carbohydrates, sugars, fat, protein, fiber, g)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `)
-  stmt.run(item.name, item.comment, item.unit_id, item.quantity_per_package, item.calories, item.carbohydrates, item.sugars, item.fat, item.protein, item.fiber, item.g)
-}
-
-export function getUnits() {
-  return db.prepare('SELECT * FROM units').all()
-}
-
-export function addUnit(unit) {
-  const stmt = db.prepare('INSERT INTO units (name) VALUES (?)')
-  stmt.run(unit.name)
-}
-
-export function updateUnit(id, unit) {
-  const stmt = db.prepare('UPDATE units SET name = ? WHERE id = ?')
-  stmt.run(unit.name, id)
-}
-
-export function deleteUnit(id) {
-  const stmt = db.prepare('DELETE FROM units WHERE id = ?')
-  stmt.run(id)
-}
+export default db

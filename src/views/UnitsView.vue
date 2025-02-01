@@ -7,7 +7,7 @@
         <li v-for="unit in units" :key="unit.id">
           {{ unit.name }}
           <button @click="editUnit(unit)">Edit</button>
-          <button @click="deleteUnit(unit.id)">Delete</button>
+          <button @click="deleteUnit(unit)">Delete</button>
         </li>
       </div>
     </div>
@@ -83,9 +83,10 @@ export default {
       isAddModalVisible.value = false
     }
 
-    const addUnit = async (name) => {
-      console.log(name)
-      await unitStore.addUnit(name)
+    const addUnit = async () => {
+      console.log("dodaję unit")
+      await unitStore.addUnit()
+      unitStore.fetchUnits()
       closeAddModal()
     }
 

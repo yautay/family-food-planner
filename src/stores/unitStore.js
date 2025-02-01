@@ -32,37 +32,5 @@ export const useUnitStore = defineStore('unit', {
         console.error('Error fetching units:', error)
       }
     },
-    async addUnit(name) {
-      try {
-        await apiClient.post('/units', this.newUnit)
-        this.newUnit.name = name
-        await this.fetchUnits()
-      } catch (error) {
-        console.error('Error adding unit:', error)
-      }
-    },
-    async updateUnit() {
-      try {
-        await apiClient.put(`/units/${this.editUnit.id}`, this.editUnit)
-        this.editUnit.id = null
-        this.editUnit.name = ''
-        await this.fetchUnits()
-      } catch (error) {
-        console.error('Error updating unit:', error)
-      }
-    },
-    async deleteUnit(id) {
-      try {
-        await apiClient.delete(`/units/${id}`)
-        await this.fetchUnits()
-      } catch (error) {
-        console.error('Error deleting unit:', error)
-      }
-    },
-    setEditUnit(unit) {
-      console.error('Set Edit unit:', unit.id)
-      this.editUnit.id = unit.id
-      this.editUnit.name = unit.name
-    },
   },
 })
