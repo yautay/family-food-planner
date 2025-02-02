@@ -50,7 +50,7 @@
 
 <script>
 import { ref, onMounted } from 'vue'
-import { useTagStore } from '@stores/TagsStore'
+import { useTagStore } from '@stores/tagsStore.js'
 
 export default {
   setup() {
@@ -85,7 +85,7 @@ export default {
 
     const addTag = async () => {
       try {
-        await tagStore.addUnit(newTagRef.value)
+        await tagStore.addTag(newTagRef.value)
         await fetchTags()
         closeAddModal()
       } catch (error) {
@@ -104,7 +104,7 @@ export default {
 
     const editTag = async () => {
       try {
-        await tagStore.updateUnit(editTagRef.value)
+        await tagStore.updateTag(editTagRef.value)
         await fetchTags()
         closeEditModal()
       } catch (error) {
@@ -114,7 +114,7 @@ export default {
 
     const deleteTag = async (tag) => {
       try {
-        await tagStore.deleteUnit(tag)
+        await tagStore.deleteTag(tag)
         await fetchTags()
       } catch (error) {
         console.error('Error deleting tags:', error)

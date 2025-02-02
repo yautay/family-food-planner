@@ -12,7 +12,7 @@ db.exec(`
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL
   );
-  CREATE TABLE IF NOT EXISTS food_items (
+  CREATE TABLE IF NOT EXISTS ingredients (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     comment TEXT,
@@ -25,7 +25,13 @@ db.exec(`
     protein_per_100g REAL,
     fiber_per_100g REAL,
     FOREIGN KEY (unit_id) REFERENCES units(id)
-  )
+  );
+  CREATE TABLE IF NOT EXISTS ingredients_tags (
+    ingredient_id INTEGER,
+    tag_id INTEGER,
+    FOREIGN KEY (ingredient_id) REFERENCES ingredients(id),
+    FOREIGN KEY (tag_id) REFERENCES tags(id)
+  );
 `)
 
 export default db

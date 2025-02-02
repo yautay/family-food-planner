@@ -3,12 +3,12 @@
     <h1>Ingredients</h1>
     <form @submit.prevent="addIngredient">
       <div>
-        <label for="name">Name:</label>
-        <input type="text" id="name" v-model="ingredient.name" required />
+        <label for="nazwa">Nazwa:</label>
+        <input type="text" id="nazwa" v-model="ingredient.nazwa" required />
       </div>
       <div>
-        <label for="comment">Comment:</label>
-        <input type="text" id="comment" v-model="ingredient.comment" />
+        <label for="komentarz">Komentarz:</label>
+        <input type="text" id="komentarz" v-model="ingredient.komentarz" />
       </div>
       <div>
         <label for="unit">Unit:</label>
@@ -18,59 +18,87 @@
         </select>
       </div>
       <div>
-        <label for="quantity_per_package">Quantity per Package:</label>
-        <input type="number" id="quantity_per_package" v-model="ingredient.quantity_per_package" />
+        <label for="ilosc_w_opakowaniu">Ilość w opakowaniu:</label>
+        <input type="number" id="ilosc_w_opakowaniu" v-model="ingredient.ilosc_w_opakowaniu" />
       </div>
       <div>
-        <label for="calories">Calories:</label>
-        <input type="number" id="calories" v-model="ingredient.calories" />
+        <label for="kalorie">Kalorie:</label>
+        <input type="number" id="kalorie" v-model="ingredient.kalorie" />
       </div>
       <div>
-        <label for="carbohydrates">Carbohydrates:</label>
-        <input type="number" id="carbohydrates" v-model="ingredient.carbohydrates" />
+        <label for="weglowodany">Węglowodany:</label>
+        <input type="number" id="weglowodany" v-model="ingredient.weglowodany" />
       </div>
       <div>
-        <label for="sugars">Sugars:</label>
-        <input type="number" id="sugars" v-model="ingredient.sugars" />
+        <label for="cukry">Cukry:</label>
+        <input type="number" id="cukry" v-model="ingredient.cukry" />
       </div>
       <div>
-        <label for="fat">Fat:</label>
-        <input type="number" id="fat" v-model="ingredient.fat" />
+        <label for="tluszcz">Tłuszcz:</label>
+        <input type="number" id="tluszcz" v-model="ingredient.tluszcz" />
       </div>
       <div>
-        <label for="protein">Protein:</label>
-        <input type="number" id="protein" v-model="ingredient.protein" />
+        <label for="bialko">Białko:</label>
+        <input type="number" id="bialko" v-model="ingredient.bialko" />
       </div>
       <div>
-        <label for="fiber">Fiber:</label>
-        <input type="number" id="fiber" v-model="ingredient.fiber" />
+        <label for="blonnik">Błonnik:</label>
+        <input type="number" id="blonnik" v-model="ingredient.blonnik" />
       </div>
       <div>
-        <label for="g">G:</label>
-        <input type="number" id="g" v-model="ingredient.g" />
+        <label>Tags:</label>
+        <div v-for="tag in tags" :key="tag.id">
+          <input type="checkbox" :value="tag.id" v-model="ingredient.tags" /> {{ tag.name }}
+        </div>
       </div>
       <button type="submit">Add Ingredient</button>
     </form>
+    <ul>
+      <li v-for="ingredient in ingredients" :key="ingredient.id">
+        {{ ingredient.nazwa }} - {{ ingredient.unit_name }}
+        <button @click="editIngredient(ingredient)">Edit</button>
+        <button @click="confirmDeleteIngredient(ingredient.id)">Delete</button>
+      </li>
+    </ul>
   </div>
 </template>
 
 <script>
 import { onMounted } from 'vue'
-import { useIngredientStore } from '@stores/ingredientStore'
-import { useUnitStore } from '@stores/unitStore'
+import { useIngredientStore } from '@stores/ingredientsStore'
+import { useUnitStore } from '@stores/unitsStore'
+import { useTagStore } from '@stores/tagsStore'
 
 export default {
   setup() {
     const ingredientStore = useIngredientStore()
     const unitStore = useUnitStore()
+    const tagStore = useTagStore()
 
     onMounted(() => {
+      ingredientStore.fetchIngredients()
       unitStore.fetchUnits()
+      tagStore.fetchTags()
     })
+
+    const editIngredient = (ingredient) => {
+      ingredientStore.ingredient = { ...ingredient, tags: ingredient.tags.map(tag => tag.id) }
+    }
+
+    const confirmDeleteIngredient = (id) => {
+      if (confirm('Are you sure you want to delete this ingredient?')) {
+        ingredientStore.deleteIngredient(id)
+      }
+    }
+
     return {
       ingredient: ingredientStore.ingredient,
+      ingredients: ingredientStore.ingredients,
       units: unitStore.units,
+      tags: tagStore.tags,
       addIngredient: ingredientStore.addIngredient,
+      editIngredient,
+      confirmDeleteIngredient,
     }
   },
 }
@@ -104,10 +132,5 @@ button {
   padding: 0.5rem 1rem;
   font-size: 1rem;
   cursor: pointer;
-}
-
-.manage-units {
-  display: flex;
-  gap: 1rem;
 }
 </style>

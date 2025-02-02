@@ -50,7 +50,7 @@
 
 <script>
 import { ref, onMounted } from 'vue'
-import { useUnitStore } from '@stores/unitStore'
+import { useUnitStore } from '@stores/unitsStore'
 
 export default {
   setup() {
