@@ -8,22 +8,9 @@ const apiClient = axios.create({
   },
 })
 
-export const useIngredientStore = defineStore('ingredient', {
+export const useIngredientStore = defineStore('ingredients', {
   state: () => ({
     ingredients: [],
-    ingredient: {
-      name: '',
-      comment: '',
-      unit_id: null,
-      quantity_per_package: null,
-      calories_per_100g: null,
-      carbohydrates_per_100g: null,
-      sugars_per_100g: null,
-      fat_per_100g: null,
-      protein_per_100g: null,
-      fiber_per_100g: null,
-      tags: [],
-    },
   }),
   actions: {
     async fetchIngredients() {

@@ -61,10 +61,6 @@ export default {
     const newUnitRef = ref({ name: "" })
     const editUnitRef = ref({ id: undefined, name: "" })
 
-    onMounted(() => {
-      fetchUnits()
-    })
-
     const fetchUnits = async () => {
       try {
         await unitStore.fetchUnits()
@@ -73,6 +69,10 @@ export default {
         console.error('Error fetching units:', error)
       }
     }
+
+    onMounted(() => {
+      fetchUnits()
+    })
 
     const showAddModal = () => {
       newUnitRef.value = { name: "" }
