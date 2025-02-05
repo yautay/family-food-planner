@@ -1,15 +1,19 @@
 <template>
-  <div class="ingredients">
-    <h1>Ingredients</h1>
-    <div>
-      <ul class="ingredients_list">
-        <li v-for="ingredient in ingredients" :key="ingredient.id">
-          <div class="unit_name">{{ ingredient.name }}</div>
-          <div class="unit_edit"><button @click="showEditModal(ingredient)">Edit</button></div>
-          <div class="unit_delete"><button @click="confirmDeleteIngredient(ingredient)">Delete</button></div>
-        </li>
-      </ul>
+  <div class="elements">
+    <div><h1>Ingredients</h1></div>
+    <div class="elements_list">
+      <div><h2>Ingredients list</h2></div>
+      <div>
+        <ul v-if="ingredients.length > 0">
+          <li v-for="ingredient in ingredients" :key="ingredient.id">
+            <div class="element_name">{{ ingredient.name }}</div>
+            <div class="element_edit"><button @click="showEditModal(ingredient)">Edit</button></div>
+            <div class="element_delete"><button @click="confirmPop(ingredient, 'Czy jesteś pewien że chcesz skasować produkt: ')">Delete</button></div>
+          </li>
+        </ul>
+      </div>
     </div>
+  </div>
 
 
   <div class="add_ingredient">
@@ -67,11 +71,11 @@
       <div>
         <label>Tags:</label>
         <div v-for="tag in tags" :key="tag.id">
-          <input type="checkbox" :id="'edit-tag-' + tag.id" :value="tag.id" v-model="editIngredientRef.tags" />
+          <input type="checkbox" :id="'edit-tag-' + tag.id" :value="tag.id" v-model="tagRef" />
           <label :for="'edit-tag-' + tag.id">{{ tag.name }}</label>
         </div>
       </div>
-      <button type="submit">Add Ingredient</button>
+      <button type="submit" @click="confirmPop(editIngredientRef, 'Czy jesteś pewien że chcesz edit produkt: ')">Edit Ingredient</button>
     </form>
       </div>
     </div>
@@ -127,7 +131,7 @@
       <div>
         <label>Tags:</label>
         <div v-for="tag in tags" :key="tag.id">
-          <input type="checkbox" :id="'add-tag-' + tag.id" :value="tag.id" v-model="addIngredientRef.tags" />
+          <input type="checkbox" :id="'add-tag-' + tag.id" :value="tag.id" v-model="tagRef" />
           <label :for="'add-tag-' + tag.id">{{ tag.name }}</label>
         </div>
       </div>
@@ -135,8 +139,6 @@
     </form>
       </div>
     </div>
-  </div>
-
 </template>
 
 <script>
@@ -155,21 +157,7 @@ export default {
     const tags = ref([])
     const isEditModalVisible = ref(false)
     const isAddModalVisible = ref(false)
-    const addIngredientRef = ref({
-      name: '',
-      comment: '',
-      unit_id: undefined,
-      quantity_per_package: '',
-      calories_per_100g: '',
-      carbohydrates_per_100g: '',
-      sugars_per_100g: '',
-      fat_per_100g: '',
-      protein_per_100g: '',
-      fiber_per_100g: '',
-      tags: [],
-    })
-    const editIngredientRef = ref({
-      id: undefined,
+    const initialIngredientRef = {
       name: '',
       comment: '',
       unit_id: '',
@@ -181,7 +169,10 @@ export default {
       protein_per_100g: '',
       fiber_per_100g: '',
       tags: [],
-    })
+    }
+    const addIngredientRef = ref({ ...initialIngredientRef })
+    const editIngredientRef = ref({ ...initialIngredientRef })
+    const tagRef = ref([])
 
     const fetchData = async (fetchUnits = true, fetchTags = true, fetchIngredients = true) => {
       if (fetchUnits) { try {
@@ -225,10 +216,19 @@ export default {
       isEditModalVisible.value = false
     }
 
+    const resetRefs = () => {
+      addIngredientRef.value = { ...initialIngredientRef }
+      editIngredientRef.value = { ...initialIngredientRef }
+      tagRef.value = []
+    }
+
     const addIngredient = async () => {
       try {
+        addIngredientRef.value.tags = tagRef.value
         await ingredientStore.addIngredient(addIngredientRef)
-        await fetchData()
+        closeAddModal()
+        resetRefs()
+        await fetchData(true, false, false)
       } catch (error) {
         console.error('Error adding ingredient:', error)
       }
@@ -236,8 +236,11 @@ export default {
 
     const editIngredient = async () => {
       try {
+        editIngredientRef.value.tags = tagRef.value
         await ingredientStore.editIngredient(editIngredientRef)
-        await fetchData()
+        closeAddModal()
+        resetRefs()
+        await fetchData(true, false, false)
       } catch (error) {
         console.error('Error adding ingredient:', error)
       }
@@ -252,11 +255,12 @@ export default {
       }
     }
 
-    const confirmDeleteIngredient = (ingredient) => {
-      if (confirm(`Czy jesteś pewien że chcesz skasować produkt: "${ingredient.name}"?`)) {
+    const confirmPop = (ingredient, text) => {
+      if (confirm(text + ingredient.name + '?')) {
         deleteIndegrient(ingredient)
       }
     }
+
 
     return {
       ingredients,
@@ -273,7 +277,8 @@ export default {
       showAddModal,
       closeAddModal,
       deleteIndegrient,
-      confirmDeleteIngredient,
+      confirmPop,
+      tagRef,
     }
   },
 }
@@ -282,11 +287,34 @@ export default {
 </script>
 
 <style scoped>
-.ingredients {
+.elements {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 1rem;
+}
+
+ul {
+  list-style-type: none;
+  padding: 0;
+}
+
+li {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.element_name {
+  width: 150px;
+}
+
+.element_edit {
+  width: 80px;
+}
+
+.element_delete {
+  width: 100px;
 }
 
 form {

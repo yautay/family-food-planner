@@ -23,7 +23,8 @@ export const useIngredientStore = defineStore('ingredients', {
     },
     async addIngredient(ingredient) {
       try {
-        await apiClient.post('/ingredients', ingredient)
+        console.debug('adding ingredient:', ingredient.value)
+        await apiClient.post('/ingredients', ingredient.value)
         await this.fetchIngredients()
       } catch (error) {
         console.error('Error adding ingredient:', error)

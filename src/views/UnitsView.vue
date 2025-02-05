@@ -1,14 +1,14 @@
 <template>
-  <div class="units">
+  <div class="elements">
     <div><h1>Units</h1></div>
-    <div class="unit_list">
+    <div class="elements_list">
       <div><h2>Units list</h2></div>
       <div>
         <ul>
           <li v-for="unit in units" :key="unit.id">
-            <div class="unit_name">{{ unit.name }}</div>
-            <div class="unit_edit"><button @click="showEditModal(unit)">Edit</button></div>
-            <div class="unit_delete"><button @click="confirmDeleteUnit(unit)">Delete</button></div>
+            <div class="element_name">{{ unit.name }}</div>
+            <div class="element_edit"><button @click="showEditModal(unit)">Edit</button></div>
+            <div class="element_delete"><button @click="confirmDeleteUnit(unit)">Delete</button></div>
           </li>
         </ul>
       </div>
@@ -147,7 +147,7 @@ export default {
 </script>
 
 <style scoped>
-.units {
+.elements {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -165,15 +165,15 @@ li {
   gap: 1rem;
 }
 
-.unit_name {
+.element_name {
   width: 150px;
 }
 
-.unit_edit {
+.element_edit {
   width: 80px;
 }
 
-.unit_delete {
+.element_delete {
   width: 100px;
 }
 

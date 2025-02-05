@@ -1,14 +1,14 @@
 <template>
-  <div class="tags">
+  <div class="elements">
     <div><h1>Tags</h1></div>
-    <div class="tag_list">
+    <div class="elements_list">
       <div><h2>Tags list</h2></div>
       <div>
         <ul>
           <li v-for="tag in tags" :key="tag.id">
-            <div class="tag_name">{{ tag.name }}</div>
-            <div class="tag_edit"><button @click="showEditModal(tag)">Edit</button></div>
-            <div class="tag_delete"><button @click="confirmDeleteTag(tag)">Delete</button></div>
+            <div class="element_name">{{ tag.name }}</div>
+            <div class="element_edit"><button @click="showEditModal(tag)">Edit</button></div>
+            <div class="element_delete"><button @click="confirmDeleteTag(tag)">Delete</button></div>
           </li>
         </ul>
       </div>
@@ -147,7 +147,7 @@ export default {
 </script>
 
 <style scoped>
-.tags {
+.elements {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -165,15 +165,15 @@ li {
   gap: 1rem;
 }
 
-.tag_name {
+.element_name {
   width: 150px;
 }
 
-.tag_edit {
+.element_edit {
   width: 80px;
 }
 
-.tag_delete {
+.element_delete {
   width: 100px;
 }
 
