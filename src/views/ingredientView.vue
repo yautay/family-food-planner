@@ -4,13 +4,43 @@
     <div class="elements_list">
       <div><h2>Ingredients list</h2></div>
       <div>
-        <ul v-if="ingredients.length > 0">
-          <li v-for="ingredient in ingredients" :key="ingredient.id">
-            <div class="element_name">{{ ingredient.name }}</div>
-            <div class="element_edit"><button @click="showEditModal(ingredient)">Edit</button></div>
-            <div class="element_delete"><button @click="confirmPop(ingredient, 'Czy jesteś pewien że chcesz skasować produkt: ')">Delete</button></div>
-          </li>
-        </ul>
+        <table v-if="ingredients.length > 0">
+          <thead>
+            <tr>
+              <th>Nazwa</th>
+              <th>Komentarz</th>
+              <th>Unit</th>
+              <th>Ilość w opakowaniu</th>
+              <th>Kalorie</th>
+              <th>Węglowodany</th>
+              <th>Cukry</th>
+              <th>Tłuszcz</th>
+              <th>Białko</th>
+              <th>Błonnik</th>
+              <th>Tagi</th>
+              <th>Akcje</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="ingredient in ingredients" :key="ingredient.id">
+              <td>{{ ingredient.name }}</td>
+              <td>{{ ingredient.comment }}</td>
+              <td>{{ ingredient.unit_name }}</td>
+              <td>{{ ingredient.quantity_per_package }}</td>
+              <td>{{ ingredient.calories_per_100g }}</td>
+              <td>{{ ingredient.carbohydrates_per_100g }}</td>
+              <td>{{ ingredient.sugars_per_100g }}</td>
+              <td>{{ ingredient.fat_per_100g }}</td>
+              <td>{{ ingredient.protein_per_100g }}</td>
+              <td>{{ ingredient.fiber_per_100g }}</td>
+              <td>{{ ingredient.tags }}</td>
+              <td>
+                <button @click="showEditModal(ingredient)">Edit</button>
+                <button @click="confirmDeleteIngredient(ingredient)">Delete</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
   </div>
