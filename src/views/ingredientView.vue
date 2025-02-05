@@ -236,7 +236,7 @@ export default {
         const tag = tags.value.find(tag => tag.id === tagsIds[i])
         tagsNames.push(tag.name)
       }
-      return tagsNames.join(', ')
+      return tagsNames.join(', ') ? tagsNames : 'Unknown'
     }
 
     onMounted( () => {fetchData(true, true, true)} )
