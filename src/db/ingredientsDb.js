@@ -2,7 +2,7 @@ import db from '../db.js'
 
 export function getIngredients() {
   const query = `
-    SELECT fi.*, u.name as unit_name, GROUP_CONCAT(t.name, ',') as tags
+    SELECT fi.*, u.id as unit_id, GROUP_CONCAT(t.id, ',') as tag_id
     FROM ingredients fi
     LEFT JOIN units u ON fi.unit_id = u.id
     LEFT JOIN ingredients_tags fit ON fi.id = fit.ingredient_id

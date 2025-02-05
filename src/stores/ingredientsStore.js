@@ -16,7 +16,13 @@ export const useIngredientStore = defineStore('ingredients', {
     async fetchIngredients() {
       try {
         const response = await apiClient.get('/ingredients')
-        this.ingredients = response.data
+        console.debug('fetching ingredients:', response.data)
+        this.ingredients = response.data.map(ingredient => {
+          if (typeof ingredient.tag_id === 'string') {
+            ingredient.tag_id = ingredient.tag_id.split(',').map(Number)
+          }
+          return ingredient
+        })
       } catch (error) {
         console.error('Error fetching ingredients:', error)
       }

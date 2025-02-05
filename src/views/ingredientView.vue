@@ -25,7 +25,7 @@
             <tr v-for="ingredient in ingredients" :key="ingredient.id">
               <td>{{ ingredient.name }}</td>
               <td>{{ ingredient.comment }}</td>
-              <td>{{ ingredient.unit_name }}</td>
+              <td>{{ getUnitName(ingredient.unit_id) }}</td>
               <td>{{ ingredient.quantity_per_package }}</td>
               <td>{{ ingredient.calories_per_100g }}</td>
               <td>{{ ingredient.carbohydrates_per_100g }}</td>
@@ -33,7 +33,7 @@
               <td>{{ ingredient.fat_per_100g }}</td>
               <td>{{ ingredient.protein_per_100g }}</td>
               <td>{{ ingredient.fiber_per_100g }}</td>
-              <td>{{ ingredient.tags }}</td>
+              <td>{{ getTagName(ingredient.tag_id) }}</td>
               <td>
                 <button @click="showEditModal(ingredient)">Edit</button>
                 <button @click="confirmDeleteIngredient(ingredient)">Delete</button>
@@ -190,7 +190,7 @@ export default {
     const initialIngredientRef = {
       name: '',
       comment: '',
-      unit_id: '',
+      unit_id: 0,
       quantity_per_package: '',
       calories_per_100g: '',
       carbohydrates_per_100g: '',
@@ -214,7 +214,6 @@ export default {
       if (fetchTags) { try {
         await tagStore.fetchTags()
         tags.value = tagStore.tags
-        console.log(tags)
       } catch (error) {
         console.error('Error fetching tags:', error)
       }}
@@ -224,6 +223,20 @@ export default {
       } catch (error) {
         console.error('Error fetching ingredients:', error)
       }}
+    }
+
+    const getUnitName = (unitId) => {
+      const unit = units.value.find(unit => unit.id === unitId)
+      return unit ? unit.name : 'Unknown'
+    }
+
+    const getTagName = (tagsIds) => {
+      let tagsNames = []
+      for (let i = 0; i < tagsIds.length; i++) {
+        const tag = tags.value.find(tag => tag.id === tagsIds[i])
+        tagsNames.push(tag.name)
+      }
+      return tagsNames.join(', ')
     }
 
     onMounted( () => {fetchData(true, true, true)} )
@@ -239,6 +252,7 @@ export default {
 
     const showEditModal = (ingredient) => {
       editIngredientRef.value = { ...ingredient }
+      console.log(editIngredientRef)
       isEditModalVisible.value = true
     }
 
@@ -266,7 +280,6 @@ export default {
 
     const editIngredient = async () => {
       try {
-        editIngredientRef.value.tags = tagRef.value
         await ingredientStore.editIngredient(editIngredientRef)
         closeAddModal()
         resetRefs()
@@ -309,6 +322,8 @@ export default {
       deleteIndegrient,
       confirmPop,
       tagRef,
+      getUnitName,
+      getTagName,
     }
   },
 }
