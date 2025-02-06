@@ -16,7 +16,6 @@ export const useIngredientStore = defineStore('ingredients', {
     async fetchIngredients() {
       try {
         const response = await apiClient.get('/ingredients')
-        console.debug('fetching ingredients:', response.data)
         this.ingredients = response.data.map(ingredient => {
           if (typeof ingredient.tag_id === 'string') {
             ingredient.tag_id = ingredient.tag_id.split(',').map(Number)
@@ -29,7 +28,6 @@ export const useIngredientStore = defineStore('ingredients', {
     },
     async addIngredient(ingredient) {
       try {
-        console.debug('adding ingredient:', ingredient.value)
         await apiClient.post('/ingredients', ingredient.value)
         await this.fetchIngredients()
       } catch (error) {

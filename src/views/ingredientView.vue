@@ -36,7 +36,7 @@
               <td>{{ getTagName(ingredient.tag_id) }}</td>
               <td>
                 <button @click="showEditModal(ingredient)">Edit</button>
-                <button @click="confirmDeleteIngredient(ingredient)">Delete</button>
+                <button @click="confirmPop(ingredient, 'Czy jesteś pewien że chcesz usunąć produkt: ')">Delete</button>
               </td>
             </tr>
           </tbody>
@@ -232,13 +232,13 @@ export default {
 
     const getTagName = (tagsIds) => {
       let tagsNames = []
-
+      if (tagsIds) {
       for (let i = 0; i < tagsIds.length; i++) {
         const tag = tags.value.find(tag => tag.id === tagsIds[i])
         tagsNames.push(tag.name)
       }
       return tagsNames ? tagsNames.join(', ') : 'Unknown'
-    }
+    }}
 
     onMounted( () => {fetchData(true, true, true)} )
 
@@ -273,7 +273,7 @@ export default {
         await ingredientStore.addIngredient(addIngredientRef)
         closeAddModal()
         resetRefs()
-        await fetchData(true, false, false)
+        await fetchData(false, false, true)
       } catch (error) {
         console.error('Error adding ingredient:', error)
       }
@@ -284,7 +284,7 @@ export default {
         await ingredientStore.editIngredient(editIngredientRef)
         closeAddModal()
         resetRefs()
-        await fetchData(true, false, false)
+        await fetchData(false, false, true)
       } catch (error) {
         console.error('Error adding ingredient:', error)
       }
