@@ -232,11 +232,12 @@ export default {
 
     const getTagName = (tagsIds) => {
       let tagsNames = []
+
       for (let i = 0; i < tagsIds.length; i++) {
         const tag = tags.value.find(tag => tag.id === tagsIds[i])
         tagsNames.push(tag.name)
       }
-      return tagsNames.join(', ') ? tagsNames : 'Unknown'
+      return tagsNames ? tagsNames.join(', ') : 'Unknown'
     }
 
     onMounted( () => {fetchData(true, true, true)} )
