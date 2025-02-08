@@ -18,8 +18,18 @@ export function addIngredient(item) {
     INSERT INTO ingredients (name, comment, unit_id, quantity_per_package, calories_per_100g, carbohydrates_per_100g, sugars_per_100g, fat_per_100g, protein_per_100g, fiber_per_100g)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `)
-  const info = stmt.run(item.name, item.comment, item.unit_id, item.quantity_per_package, item.calories, item.carbohydrates, item.sugars, item.fat, item.protein, item.fiber)
-
+  const info = stmt.run(
+    item.name,
+    item.comment,
+    item.unit_id,
+    parseFloat(item.quantity_per_package),
+    parseFloat(item.calories_per_100g),
+    parseFloat(item.carbohydrates_per_100g),
+    parseFloat(item.sugars_per_100g),
+    parseFloat(item.fat_per_100g),
+    parseFloat(item.protein_per_100g),
+    parseFloat(item.fiber_per_100g)
+  )
   if (item.tags && item.tags.length > 0) {
     const tagStmt = db.prepare('INSERT INTO ingredients_tags (ingredient_id, tag_id) VALUES (?, ?)')
     for (const tagId of item.tags) {
@@ -34,8 +44,19 @@ export function updateIngredient(item) {
     SET name = ?, comment = ?, unit_id = ?, quantity_per_package = ?, calories_per_100g = ?, carbohydrates_per_100g = ?, sugars_per_100g = ?, fat_per_100g = ?, protein_per_100g, fiber_per_100g = ?
     WHERE id = ?
   `)
-  stmt.run(item.name, item.comment, item.unit_id, item.quantity_per_package, item.calories, item.carbohydrates, item.sugars, item.fat, item.protein, item.fiber)
-
+  stmt.run(
+    item.name,
+    item.comment,
+    item.unit_id,
+    parseFloat(item.quantity_per_package),
+    parseFloat(item.calories_per_100g),
+    parseFloat(item.carbohydrates_per_100g),
+    parseFloat(item.sugars_per_100g),
+    parseFloat(item.fat_per_100g),
+    parseFloat(item.protein_per_100g),
+    parseFloat(item.fiber_per_100g),
+    item.id
+  )
   const deleteTagsStmt = db.prepare('DELETE FROM ingredients_tags WHERE ingredient_id = ?')
   deleteTagsStmt.run(item.id)
 

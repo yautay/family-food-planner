@@ -140,23 +140,23 @@
       </div>
       <div>
         <label for="weglowodany">Węglowodany:</label>
-        <input type="number" id="carbohydrates_per_100g" v-model="addIngredientRef.carbohydrates_per_100g" />
+        <input type="number" id="carbohydrates_per_100g" v-model="addIngredientRef.carbohydrates_per_100g" step=".1"/>
       </div>
       <div>
         <label for="cukry">Cukry:</label>
-        <input type="number" id="sugars_per_100g" v-model="addIngredientRef.sugars_per_100g" />
+        <input type="number" id="sugars_per_100g" v-model="addIngredientRef.sugars_per_100g" step=".1"/>
       </div>
       <div>
         <label for="tluszcz">Tłuszcz:</label>
-        <input type="number" id="fat_per_100g" v-model="addIngredientRef.fat_per_100g" />
+        <input type="number" id="fat_per_100g" v-model="addIngredientRef.fat_per_100g" step=".1"/>
       </div>
       <div>
         <label for="bialko">Białko:</label>
-        <input type="number" id="protein_per_100g" v-model="addIngredientRef.protein_per_100g" />
+        <input type="number" id="protein_per_100g" v-model="addIngredientRef.protein_per_100g" step=".1"/>
       </div>
       <div>
         <label for="blonnik">Błonnik:</label>
-        <input type="number" id="fiber_per_100g" v-model="addIngredientRef.fiber_per_100g" />
+        <input type="number" id="fiber_per_100g" v-model="addIngredientRef.fiber_per_100g" step=".1"/>
       </div>
       <div>
         <label>Tags:</label>
