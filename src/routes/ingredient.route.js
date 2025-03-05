@@ -1,12 +1,12 @@
 import express from 'express'
-import { getIngredients, addIngredient, updateIngredient, deleteIngredient } from '../db/ingredientsDb.js'
+import controllers from '../controllers/index.js'
 
 const apiRouter = express.Router()
 
 // Route to get all ingredients
 apiRouter.get('/', (req, res) => {
   try {
-    const ingredients = getIngredients()
+    const ingredients = controllers.ingredient.getIngredients()
     res.json(ingredients)
   } catch (error) {
     res.status(500).json({ error: error.message })
@@ -17,7 +17,7 @@ apiRouter.get('/', (req, res) => {
 apiRouter.post('/', (req, res) => {
   try {
     const ingredient = req.body
-    addIngredient(ingredient)
+    controllers.ingredient.addIngredient(ingredient)
     res.status(201).json({ message: 'Ingredient added successfully' })
   } catch (error) {
     res.status(500).json({ error: error.message })
@@ -27,7 +27,7 @@ apiRouter.post('/', (req, res) => {
 // Route to update an ingredient
 apiRouter.put('/:id', (req, res) => {
   try {
-    updateIngredient(req.body)
+    controllers.ingredient.updateIngredient(req.body)
     res.status(200).json({ message: 'Ingredient updated successfully' })
   } catch (error) {
     res.status(500).json({ error: error.message })
@@ -38,7 +38,7 @@ apiRouter.put('/:id', (req, res) => {
 apiRouter.delete('/:id', (req, res) => {
   try {
     const id = req.params.id
-    deleteIngredient(id)
+    controllers.ingredient.deleteIngredient(id)
     res.status(200).json({ message: 'Ingredient deleted successfully' })
   } catch (error) {
     res.status(500).json({ error: error.message })

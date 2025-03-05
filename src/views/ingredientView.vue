@@ -1,7 +1,7 @@
 <template>
-  <div class="elements">
+  <div class="ingredients">
     <div><h1>Ingredients</h1></div>
-    <div class="elements_list">
+    <div class="ingredients_list">
       <div><h2>Ingredients list</h2></div>
       <div>
         <table v-if="ingredients.length > 0">
@@ -9,7 +9,7 @@
             <tr>
               <th>Nazwa</th>
               <th>Komentarz</th>
-              <th>Unit</th>
+              <th>UnitModel</th>
               <th>Ilość w opakowaniu</th>
               <th>Kalorie</th>
               <th>Węglowodany</th>
@@ -64,7 +64,7 @@
         <input type="text" id="comment" v-model="editIngredientRef.comment" />
       </div>
       <div>
-        <label for="unit">Unit:</label>
+        <label for="unit">UnitModel:</label>
         <select id="unit_id" v-model="editIngredientRef.unit_id" required>
           <option value="" disabled>Select a unit</option>
           <option v-for="unit in units" :key="unit.id" :value="unit.id">{{ unit.name }}</option>
@@ -124,7 +124,7 @@
         <input type="text" id="comment" v-model="addIngredientRef.comment" />
       </div>
       <div>
-        <label for="unit">Unit:</label>
+        <label for="unit">UnitModel:</label>
         <select id="unit_id" v-model="addIngredientRef.unit_id" required>
           <option value="" disabled>Select a unit</option>
           <option v-for="unit in units" :key="unit.id" :value="unit.id">{{ unit.name }}</option>
@@ -333,7 +333,7 @@ export default {
 </script>
 
 <style scoped>
-.elements {
+.ingredients {
   display: flex;
   flex-direction: column;
   align-items: center;

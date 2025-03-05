@@ -15,19 +15,19 @@
     </div>
 
     <div class="add_unit">
-      <div><button @click="showAddModal">Add Unit</button></div>
+      <div><button @click="showAddModal">Add UnitModel</button></div>
     </div>
 
     <div v-if="isEditModalVisible" class="modal">
       <div class="modal-content">
         <span class="close" @click="closeEditModal">&times;</span>
-        <h2>Edit Unit</h2>
+        <h2>Edit UnitModel</h2>
         <form @submit.prevent="editUnit">
           <div>
-            <label for="edit-unit-name">Unit Name:</label>
+            <label for="edit-unit-name">UnitModel Name:</label>
             <input type="text" id="edit-unit-name" v-model="editUnitRef.name" required />
           </div>
-          <button type="submit">Update Unit</button>
+          <button type="submit">Update UnitModel</button>
         </form>
       </div>
     </div>
@@ -35,13 +35,13 @@
     <div v-if="isAddModalVisible" class="modal">
       <div class="modal-content">
         <span class="close" @click="closeAddModal">&times;</span>
-        <h2>Add Unit</h2>
+        <h2>Add UnitModel</h2>
         <form @submit.prevent="addUnit">
           <div>
-            <label for="new-unit-name">Unit Name:</label>
+            <label for="new-unit-name">UnitModel Name:</label>
             <input type="text" id="new-unit-name" v-model="newUnitRef.name" required />
           </div>
-          <button type="submit">Add Unit</button>
+          <button type="submit">Add UnitModel</button>
         </form>
       </div>
     </div>

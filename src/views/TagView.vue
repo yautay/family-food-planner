@@ -15,19 +15,19 @@
     </div>
 
     <div class="add_tag">
-      <div><button @click="showAddModal">Add Tag</button></div>
+      <div><button @click="showAddModal">Add TagModel</button></div>
     </div>
 
     <div v-if="isEditModalVisible" class="modal">
       <div class="modal-content">
         <span class="close" @click="closeEditModal">&times;</span>
-        <h2>Edit Tag</h2>
+        <h2>Edit TagModel</h2>
         <form @submit.prevent="editTag">
           <div>
-            <label for="edit-tag-name">Tag Name:</label>
+            <label for="edit-tag-name">TagModel Name:</label>
             <input type="text" id="edit-tag-name" v-model="editTagRef.name" required />
           </div>
-          <button type="submit">Update Tag</button>
+          <button type="submit">Update TagModel</button>
         </form>
       </div>
     </div>
@@ -35,13 +35,13 @@
     <div v-if="isAddModalVisible" class="modal">
       <div class="modal-content">
         <span class="close" @click="closeAddModal">&times;</span>
-        <h2>Add Tag</h2>
+        <h2>Add TagModel</h2>
         <form @submit.prevent="addTag">
           <div>
-            <label for="new-tag-name">Tag Name:</label>
+            <label for="new-tag-name">TagModel Name:</label>
             <input type="text" id="new-tag-name" v-model="newTagRef.name" required />
           </div>
-          <button type="submit">Add Tag</button>
+          <button type="submit">Add TagModel</button>
         </form>
       </div>
     </div>
