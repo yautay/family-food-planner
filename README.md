@@ -1,146 +1,142 @@
-# family_meal_planner
+# Family Food Planner
 
-Aplikacja do planowania jedzenia i zakupow dla wielu domownikow.
+Aplikacja web do planowania jedzenia dla rodziny, katalogowania produktow i przepisow oraz budowy list zakupowych.
 
-## Co zostalo poprawione
+## Aktualny zakres
 
-- Usuniety krytyczny problem niszczenia danych przy starcie serwera (`force: true`).
-- Naprawione inicjalizowanie Sequelize i modele (bez cyklicznych importow).
-- Endpointy API (`units`, `tags`, `ingredients`) dzialaja asynchronicznie i poprawnie czekaja na zapytania do DB.
-- Dodany system migracji SQLite oparty o pliki SQL.
-- Dodany katalog produktow i dan:
-  - `products`
-  - `product_aliases`
-  - `recipes`
-  - `recipe_ingredients`
-- Dodany importer PDF (`tmp/*.pdf`) do automatycznego zasilania bazy produktami i daniami.
+- katalog produktow i przepisow,
+- import przepisow i produktow z PDF (`tmp/*.pdf`),
+- API CRUD dla przepisow (z kontrola uprawnien),
+- logowanie, rejestracja, reset hasla,
+- Turnstile CAPTCHA dla rejestracji i resetu hasla,
+- RBAC (role + uprawnienia),
+- kontekst wlasciciela przepisu,
+- przepisy systemowe z importu: publiczne, tylko do odczytu,
+- UI z motywami (light/dark/system) i lokalizacja PL/EN.
 
-## Architektura
+## Szybki start
 
-- Frontend: Vue 3 + Vite + Pinia (`src/views`, `src/stores`)
-- Backend API: Express (`server.js`, `src/routes`, `src/controllers`)
-- DB runtime: SQLite + Sequelize (istniejace API)
-- Migracje i import danych: `better-sqlite3` + skrypty w `scripts/`
+```sh
+npm install
+npm run db:migrate
+npm run db:import:diets
+npm run dev
+```
 
-## Struktura katalogow
+## Komendy
 
-- `src/` - kod aplikacji frontend/backend
-- `db/migrations/` - migracje SQL
-- `scripts/run-migrations.mjs` - runner migracji
-- `scripts/import-diet-pdfs.mjs` - importer diet z PDF
-- `tmp/` - pliki PDF z dietami
-
-## Schemat danych (katalog produktow i dan)
-
-Migracja `db/migrations/001_catalog_schema.sql` tworzy:
-
-- `products` - unikalny katalog produktow
-- `product_aliases` - aliasy nazw produktow
-- `recipes` - katalog dan
-- `recipe_ingredients` - sklad dan (ilosc, jednostka, gramy)
-
-Uzywane sa tez istniejace `units` (jednostki).
+- `npm run dev` - frontend + backend lokalnie
+- `npm run start:server` - sam backend
+- `npm run db:migrate` - migracje SQL
+- `npm run db:import:diets` - import PDF do katalogu
+- `npm run db:setup` - migracje + import
 
 ## Wymagania
 
 - Node.js + npm
-- Narzedzie systemowe `pdftotext` (wykorzystywane przez importer)
+- `pdftotext` (systemowe narzedzie CLI)
 
-## Uruchomienie
+## Zmienne srodowiskowe
 
-```sh
-npm install
-```
+Skopiuj `.env.example` do `.env` i uzupelnij wartosci:
 
-### Development
+- `TURNSTILE_SITE_KEY`
+- `TURNSTILE_SECRET_KEY`
+- `SMTP_HOST`
+- `SMTP_PORT`
+- `SMTP_USER`
+- `SMTP_PASS`
+- `SMTP_FROM`
+- `APP_BASE_URL`
 
-```sh
-npm run dev
-```
+`APP_BASE_URL` powinno wskazywac frontend (np. `http://localhost:5173`), bo tam prowadzi link resetu hasla.
 
-### Start backendu
+## Domyslny uzytkownik
 
-```sh
-npm run start:server
-```
+- login: `yautay`
+- haslo tymczasowe: `Test123!@#`
 
-## Migracje i import danych
+Po pierwszym logowaniu zalecana zmiana hasla.
 
-### 1) Migracje
+## Migracje i baza
 
-```sh
-npm run db:migrate
-```
+### Kluczowe migracje
 
-### 2) Import PDF -> produkty + dania
+- `001_catalog_schema.sql`
+  - `products`, `product_aliases`, `recipes`, `recipe_ingredients`
+- `002_auth_rbac.sql`
+  - `users`, `roles`, `permissions`, `user_roles`, `user_permissions`, `auth_sessions`, `password_reset_tokens`
+- `003_recipe_acl.sql`
+  - `recipes.owner_user_id`, `recipes.is_system`, `recipes.is_editable`
 
-```sh
-npm run db:import:diets
-```
+### Zasady dostepu do przepisow
 
-### 3) Pelny setup DB
+- przepisy z `tmp` sa oznaczane jako systemowe (`is_system=1`, `is_editable=0`),
+- sa widoczne dla wszystkich,
+- nie mozna ich edytowac/usuwac,
+- przepisy tworzone z UI maja `owner_user_id` i mozna nimi zarzadzac zgodnie z uprawnieniami.
 
-```sh
-npm run db:setup
-```
+## API
 
-`db:setup` uruchamia migracje i import w kolejnosci.
+### Auth
 
-## Endpointy API
+- `GET /api/auth/captcha-config`
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `POST /api/auth/logout` (auth)
+- `GET /api/auth/me` (auth)
+- `POST /api/auth/change-password` (auth)
+- `POST /api/auth/forgot-password`
+- `POST /api/auth/reset-password`
+- `GET /api/auth/access-catalog` (auth + `permissions.manage`)
+- `GET /api/auth/users` (auth + `permissions.manage`)
+- `PUT /api/auth/users/:id/roles` (auth + `permissions.manage`)
+- `PUT /api/auth/users/:id/permissions` (auth + `permissions.manage`)
 
-### Katalog produktow
+### Katalog
 
 - `GET /api/products`
 - `GET /api/products?search=<fraza>`
-
-Przyklad odpowiedzi:
-
-```json
-[
-  {
-    "id": 1,
-    "name": "Cebula",
-    "normalized_name": "cebula",
-    "default_unit_id": 2,
-    "default_unit_name": "Sztuka",
-    "recipes_count": 12
-  }
-]
-```
-
-### Katalog dan
-
 - `GET /api/recipes`
 - `GET /api/recipes?search=<fraza>`
 - `GET /api/recipes/:id`
 - `GET /api/recipes/:id/ingredients`
+- `POST /api/recipes` (auth + `recipes.manage`)
+- `PUT /api/recipes/:id` (auth + `recipes.manage`)
+- `DELETE /api/recipes/:id` (auth + `recipes.manage`)
 
-Przyklad odpowiedzi skladnikow dania:
+### Istniejace CRUD
 
-```json
-[
-  {
-    "id": 10,
-    "recipe_id": 4,
-    "product_id": 2,
-    "product_name": "Papryka czerwona",
-    "quantity": 0.5,
-    "unit_name": "Sztuka",
-    "grams": 115,
-    "note": ""
-  }
-]
-```
+- `units`, `tags`, `ingredients`:
+  - `GET` publiczny,
+  - `POST/PUT/DELETE` wymaga `catalog.write`.
 
-## Uwagi o imporcie PDF
+## Frontend
 
-- Importer czyta wszystkie `*.pdf` z katalogu `tmp/`.
-- Dane sa normalizowane (nazwy produktow i dan).
-- Receptury (`recipe_ingredients`) sa odswiezane przy kazdym imporcie.
-- Produkty pozostaja w katalogu i sa uzupelniane/updatowane.
+### Ekrany auth
 
-## Dalsze kroki (rekomendowane)
+- `/login`
+- `/register`
+- `/forgot-password`
+- `/reset-password`
+- `/account`
+- `/access-control` (dla `permissions.manage`)
 
-- Dodac walidacje requestow i testy integracyjne API.
-- Dodac modul generowania list zakupowych z wybranych dan i okresu.
-- Dodac auth (logowanie/rejestracja, role i uprawnienia, reset hasla).
+### Ustawienia UI
+
+- motyw: `light`, `dark`, `system`
+- lokalizacja: `PL`, `EN`
+
+## Bezpieczenstwo
+
+- hasla: PBKDF2 (`sha512`, iteracje)
+- sesje: tokeny opaque hashowane w DB (`auth_sessions`)
+- reset hasla: token jednorazowy, wygasa czasowo
+- CAPTCHA: weryfikacja serwerowa Turnstile
+
+## Ograniczenia i kolejne kroki
+
+- dodac testy integracyjne endpointow auth i RBAC,
+- dodac endpointy list zakupowych i planowania okresu,
+- dodac audit log operacji administracyjnych,
+- ewentualnie przeniesc z SQLite na PostgreSQL dla produkcji.
