@@ -1,11 +1,11 @@
-import { DataTypes } from 'sequelize';
-import db from '../db/sequelize.js';
+import { DataTypes } from 'sequelize'
+import sequelize from '../db/client.js'
 
-const UnitModel = db.sequelize.define('Unit', {
+const UnitModel = sequelize.define('Unit', {
   name: {
     type: DataTypes.STRING,
-    allowNull: false
-  }
-});
+    allowNull: false,
+  },
+})
 
-export default UnitModel;
+export default UnitModel

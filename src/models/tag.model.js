@@ -1,11 +1,11 @@
-import { DataTypes } from 'sequelize';
-import db from '../db/sequelize.js';
+import { DataTypes } from 'sequelize'
+import sequelize from '../db/client.js'
 
-const TagModel = db.sequelize.define('Tag', {
+const TagModel = sequelize.define('Tag', {
   name: {
     type: DataTypes.STRING,
-    allowNull: false
-  }
-});
+    allowNull: false,
+  },
+})
 
-export default TagModel;
+export default TagModel

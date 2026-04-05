@@ -281,8 +281,8 @@ export default {
 
     const editIngredient = async () => {
       try {
-        await ingredientStore.editIngredient(editIngredientRef)
-        closeAddModal()
+        await ingredientStore.updateIngredient(editIngredientRef.value)
+        closeEditModal()
         resetRefs()
         await fetchData(false, false, true)
       } catch (error) {

@@ -10,6 +10,9 @@
     <router-link to="/settings">
       <button>Go to Settings</button>
     </router-link>
+    <router-link to="/catalog">
+      <button>Katalog produktow i dan</button>
+    </router-link>
   </div>
 </template>
 

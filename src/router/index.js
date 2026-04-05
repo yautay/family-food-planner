@@ -5,6 +5,7 @@ import MealsView from '@views/MealsView.vue'
 import SettingsView from '@views/SettingsView.vue'
 import UnitsView from '@views/UnitsView.vue'
 import TagView from '@views/TagView.vue'
+import CatalogView from '@views/CatalogView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -38,6 +39,11 @@ const router = createRouter({
       path: '/settings/tags',
       name: 'tags',
       component: TagView,
+    },
+    {
+      path: '/catalog',
+      name: 'catalog',
+      component: CatalogView,
     },
   ],
 })

@@ -3,43 +3,40 @@ import controllers from '../controllers/index.js'
 
 const apiRouter = express.Router()
 
-// Route to get all units
-apiRouter.get('/', (req, res) => {
+apiRouter.get('/', async (req, res) => {
   try {
-    const units = controllers.tag.getTags()
-    res.json(units)
+    const tags = await controllers.tag.getTags()
+    res.json(tags)
   } catch (error) {
     res.status(500).json({ error: error.message })
   }
 })
 
-// Route to add a new unit
-apiRouter.post('/', (req, res) => {
+apiRouter.post('/', async (req, res) => {
   try {
-    const unit = req.body
-    controllers.tag.addTag(unit)
-    res.status(201).json({ message: 'TagModel added successfully' })
+    const tag = req.body
+    const created = await controllers.tag.addTag(tag)
+    res.status(201).json(created)
   } catch (error) {
     res.status(500).json({ error: error.message })
   }
 })
 
-// Route to update a unit
-apiRouter.put('/:id', (req, res) => {
+apiRouter.put('/:id', async (req, res) => {
   try {
-    controllers.tag.updateTag(req.body)
-    res.status(200).json({ message: 'TagModel updated successfully' })
+    const payload = { ...req.body, id: Number(req.params.id) }
+    await controllers.tag.updateTag(payload)
+    res.status(200).json({ message: 'Tag updated successfully' })
   } catch (error) {
     res.status(500).json({ error: error.message })
   }
 })
 
-// Route to delete a unit
-apiRouter.delete('/:id', (req, res) => {
+apiRouter.delete('/:id', async (req, res) => {
   try {
-    const id = req.params.id
-    controllers.tag.deleteTag(id)
-    res.status(200).json({ message: 'TagModel deleted successfully' })
+    const id = Number(req.params.id)
+    await controllers.tag.deleteTag(id)
+    res.status(200).json({ message: 'Tag deleted successfully' })
   } catch (error) {
     res.status(500).json({ error: error.message })
   }
