@@ -3,6 +3,7 @@ import unitController from './unit.controller.js'
 import ingredientController from './ingredient.controller.js'
 import productController from './product.controller.js'
 import recipeController from './recipe.controller.js'
+import authController from './auth.controller.js'
 
 const controllers = {}
 
@@ -11,5 +12,6 @@ controllers.unit = unitController
 controllers.ingredient = ingredientController
 controllers.product = productController
 controllers.recipe = recipeController
+controllers.auth = authController
 
 export default controllers

@@ -20,6 +20,7 @@
     "better-sqlite3": "^11.8.1",
     "cors": "^2.8.5",
     "express": "^4.21.2",
+    "nodemailer": "^6.10.1",
     "pinia": "^2.3.1",
     "pinia-plugin-persistedstate": "^4.2.0",
     "sequelize": "^6.37.6",

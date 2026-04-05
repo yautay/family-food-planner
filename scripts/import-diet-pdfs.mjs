@@ -366,6 +366,19 @@ const insertRecipe = db.prepare(`
     updated_at = CURRENT_TIMESTAMP
 `)
 
+const insertSystemRecipe = db.prepare(`
+  INSERT INTO recipes(name, normalized_name, source_file, owner_user_id, is_system, is_editable)
+  VALUES (@name, @normalizedName, @sourceFile, NULL, 1, 0)
+  ON CONFLICT(normalized_name)
+  DO UPDATE SET
+    name = excluded.name,
+    source_file = excluded.source_file,
+    owner_user_id = NULL,
+    is_system = 1,
+    is_editable = 0,
+    updated_at = CURRENT_TIMESTAMP
+`)
+
 const selectRecipes = db.prepare('SELECT id, normalized_name FROM recipes')
 
 const insertRecipeIngredient = db.prepare(`
@@ -374,8 +387,19 @@ const insertRecipeIngredient = db.prepare(`
 `)
 
 const persistData = db.transaction(() => {
-  db.exec('DELETE FROM recipe_ingredients')
-  db.exec('DELETE FROM recipes')
+  const recipeTableInfo = db.prepare('PRAGMA table_info(recipes)').all()
+  const hasRecipeAclColumns = recipeTableInfo.some((column) => column.name === 'is_system')
+
+  if (hasRecipeAclColumns) {
+    db.exec(`
+      DELETE FROM recipe_ingredients
+      WHERE recipe_id IN (SELECT id FROM recipes WHERE is_system = 1)
+    `)
+    db.exec('DELETE FROM recipes WHERE is_system = 1')
+  } else {
+    db.exec('DELETE FROM recipe_ingredients')
+    db.exec('DELETE FROM recipes')
+  }
 
   const allUnitKeys = new Set()
   for (const product of productCatalog.values()) {
@@ -420,11 +444,17 @@ const persistData = db.transaction(() => {
   }
 
   for (const recipe of recipeCatalog.values()) {
-    insertRecipe.run({
+    const payload = {
       name: recipe.name,
       normalizedName: recipe.normalizedName,
       sourceFile: Array.from(recipe.sourceFiles).sort((left, right) => left.localeCompare(right)).join(', '),
-    })
+    }
+
+    if (hasRecipeAclColumns) {
+      insertSystemRecipe.run(payload)
+    } else {
+      insertRecipe.run(payload)
+    }
   }
 
   const productIdByKey = new Map(

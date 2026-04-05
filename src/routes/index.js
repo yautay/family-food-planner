@@ -3,6 +3,7 @@ import unitRoute from './unit.route.js'
 import tagRoute from './tag.route.js'
 import productRoute from './product.route.js'
 import recipeRoute from './recipe.route.js'
+import authRoute from './auth.route.js'
 
 const routes = {}
 
@@ -11,5 +12,6 @@ routes.units = unitRoute
 routes.tags = tagRoute
 routes.products = productRoute
 routes.recipes = recipeRoute
+routes.auth = authRoute
 
 export default routes
