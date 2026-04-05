@@ -35,8 +35,10 @@
               <td>{{ ingredient.fiber_per_100g }}</td>
               <td>{{ getTagName(ingredient.tag_id) }}</td>
               <td>
-                <button @click="showEditModal(ingredient)">Edit</button>
-                <button @click="confirmPop(ingredient, 'Czy jesteś pewien że chcesz usunąć produkt: ')">Delete</button>
+                <template v-if="canWrite">
+                  <button @click="showEditModal(ingredient)">Edit</button>
+                  <button @click="confirmPop(ingredient, 'Czy jesteś pewien że chcesz usunąć produkt: ')">Delete</button>
+                </template>
               </td>
             </tr>
           </tbody>
@@ -46,11 +48,11 @@
   </div>
 
 
-  <div class="add_ingredient">
+  <div v-if="canWrite" class="add_ingredient">
       <div><button @click="showAddModal">Add Ingredient</button></div>
     </div>
 
-    <div v-if="isEditModalVisible" class="modal">
+    <div v-if="canWrite && isEditModalVisible" class="modal">
       <div class="modal-content">
         <span class="close" @click="closeEditModal">&times;</span>
         <h2>Edit Ingredient</h2>
@@ -110,7 +112,7 @@
       </div>
     </div>
 
-    <div v-if="isAddModalVisible" class="modal">
+    <div v-if="canWrite && isAddModalVisible" class="modal">
       <div class="modal-content">
         <span class="close" @click="closeAddModal">&times;</span>
         <h2>Add Ingredient</h2>
@@ -172,16 +174,18 @@
 </template>
 
 <script>
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, computed } from 'vue'
 import { useIngredientStore } from '@stores/ingredientsStore'
 import { useUnitStore } from '@stores/unitsStore'
 import { useTagStore } from '@stores/tagsStore'
+import { useAuthStore } from '@stores/authStore'
 
 export default {
   setup() {
     const ingredientStore = useIngredientStore()
     const unitStore = useUnitStore()
     const tagStore = useTagStore()
+    const authStore = useAuthStore()
     const ingredients = ref([])
     const units = ref([])
     const tags = ref([])
@@ -325,6 +329,7 @@ export default {
       tagRef,
       getUnitName,
       getTagName,
+      canWrite: computed(() => authStore.can('catalog.write')),
     }
   },
 }

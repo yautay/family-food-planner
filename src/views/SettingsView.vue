@@ -12,6 +12,16 @@
           <button>Go to Tags</button>
         </router-link>
       </li>
+      <li>
+        <router-link to="/account">
+          <button>Account</button>
+        </router-link>
+      </li>
+      <li>
+        <router-link to="/access-control">
+          <button>Access control</button>
+        </router-link>
+      </li>
     </ul>
   </div>
 </template>

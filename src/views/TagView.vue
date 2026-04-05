@@ -7,14 +7,14 @@
         <ul>
           <li v-for="tag in tags" :key="tag.id">
             <div class="element_name">{{ tag.name }}</div>
-            <div class="element_edit"><button @click="showEditModal(tag)">Edit</button></div>
-            <div class="element_delete"><button @click="confirmDeleteTag(tag)">Delete</button></div>
+            <div v-if="canWrite" class="element_edit"><button @click="showEditModal(tag)">Edit</button></div>
+            <div v-if="canWrite" class="element_delete"><button @click="confirmDeleteTag(tag)">Delete</button></div>
           </li>
         </ul>
       </div>
     </div>
 
-    <div class="add_tag">
+    <div v-if="canWrite" class="add_tag">
       <div><button @click="showAddModal">Add TagModel</button></div>
     </div>
 
@@ -49,12 +49,14 @@
 </template>
 
 <script>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useTagStore } from '@stores/tagsStore.js'
+import { useAuthStore } from '@stores/authStore'
 
 export default {
   setup() {
     const tagStore = useTagStore()
+    const authStore = useAuthStore()
     var tags = ref([])
     const isEditModalVisible = ref(false)
     const isAddModalVisible = ref(false)
@@ -140,7 +142,8 @@ export default {
       closeAddModal,
       addTag,
       deleteTag,
-      confirmDeleteTag
+      confirmDeleteTag,
+      canWrite: computed(() => authStore.can('catalog.write')),
     }
   },
 }

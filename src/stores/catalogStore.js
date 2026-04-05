@@ -1,12 +1,5 @@
 import { defineStore } from 'pinia'
-import axios from 'axios'
-
-const apiClient = axios.create({
-  baseURL: 'http://localhost:3000/api',
-  headers: {
-    'Content-Type': 'application/json',
-  },
-})
+import apiClient from '../services/apiClient'
 
 export const useCatalogStore = defineStore('catalog', {
   state: () => ({
@@ -49,6 +42,27 @@ export const useCatalogStore = defineStore('catalog', {
         this.activeRecipeIngredients = ingredientsResponse.data
       } catch (error) {
         console.error('Error fetching recipe details:', error)
+      }
+    },
+
+    async createRecipe(payload) {
+      const response = await apiClient.post('/recipes', payload)
+      await this.fetchRecipes()
+      return response.data
+    },
+
+    async updateRecipe(recipeId, payload) {
+      const response = await apiClient.put(`/recipes/${recipeId}`, payload)
+      await this.fetchRecipes()
+      return response.data
+    },
+
+    async deleteRecipe(recipeId) {
+      await apiClient.delete(`/recipes/${recipeId}`)
+      await this.fetchRecipes()
+      if (this.activeRecipe?.id === recipeId) {
+        this.activeRecipe = null
+        this.activeRecipeIngredients = []
       }
     },
   },

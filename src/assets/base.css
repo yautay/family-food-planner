@@ -1,86 +1,163 @@
-/* color palette from <https://github.com/vuejs/theme> */
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap');
+
 :root {
-  --vt-c-white: #ffffff;
-  --vt-c-white-soft: #f8f8f8;
-  --vt-c-white-mute: #f2f2f2;
-
-  --vt-c-black: #181818;
-  --vt-c-black-soft: #222222;
-  --vt-c-black-mute: #282828;
-
-  --vt-c-indigo: #2c3e50;
-
-  --vt-c-divider-light-1: rgba(60, 60, 60, 0.29);
-  --vt-c-divider-light-2: rgba(60, 60, 60, 0.12);
-  --vt-c-divider-dark-1: rgba(84, 84, 84, 0.65);
-  --vt-c-divider-dark-2: rgba(84, 84, 84, 0.48);
-
-  --vt-c-text-light-1: var(--vt-c-indigo);
-  --vt-c-text-light-2: rgba(60, 60, 60, 0.66);
-  --vt-c-text-dark-1: var(--vt-c-white);
-  --vt-c-text-dark-2: rgba(235, 235, 235, 0.64);
+  --app-bg: #f5f7fb;
+  --app-surface: #ffffff;
+  --app-surface-alt: #eef3ff;
+  --app-text: #1f2430;
+  --app-muted: #5d667a;
+  --app-border: #d8deeb;
+  --app-link: #1f5fd4;
+  --app-accent: #f08f43;
+  --app-danger: #b33434;
+  --app-success: #2f7b42;
 }
 
-/* semantic color variables for this project */
-:root {
-  --color-background: var(--vt-c-white);
-  --color-background-soft: var(--vt-c-white-soft);
-  --color-background-mute: var(--vt-c-white-mute);
-
-  --color-border: var(--vt-c-divider-light-2);
-  --color-border-hover: var(--vt-c-divider-light-1);
-
-  --color-heading: var(--vt-c-text-light-1);
-  --color-text: var(--vt-c-text-light-1);
-
-  --section-gap: 160px;
+:root[data-theme='dark'] {
+  --app-bg: #10131b;
+  --app-surface: #171d2a;
+  --app-surface-alt: #1f2638;
+  --app-text: #f4f7ff;
+  --app-muted: #a7b2cd;
+  --app-border: #2b344b;
+  --app-link: #8ab6ff;
+  --app-accent: #ffb067;
+  --app-danger: #ff8d8d;
+  --app-success: #7ae695;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-background: var(--vt-c-black);
-    --color-background-soft: var(--vt-c-black-soft);
-    --color-background-mute: var(--vt-c-black-mute);
-
-    --color-border: var(--vt-c-divider-dark-2);
-    --color-border-hover: var(--vt-c-divider-dark-1);
-
-    --color-heading: var(--vt-c-text-dark-1);
-    --color-text: var(--vt-c-text-dark-2);
-  }
-}
-
-*,
-*::before,
-*::after {
+* {
   box-sizing: border-box;
+}
+
+html,
+body,
+#app {
   margin: 0;
-  font-weight: normal;
+  min-height: 100%;
+  font-family: 'Manrope', 'Segoe UI', sans-serif;
 }
 
 body {
-  min-height: 100vh;
-  color: var(--color-text);
-  background: var(--color-background);
-  transition:
-    color 0.5s,
-    background-color 0.5s;
-  line-height: 1.6;
-  font-family:
-    Inter,
-    -apple-system,
-    BlinkMacSystemFont,
-    'Segoe UI',
-    Roboto,
-    Oxygen,
-    Ubuntu,
-    Cantarell,
-    'Fira Sans',
-    'Droid Sans',
-    'Helvetica Neue',
-    sans-serif;
-  font-size: 15px;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  background: var(--app-bg);
+  color: var(--app-text);
+}
+
+input,
+button,
+select,
+textarea {
+  font: inherit;
+}
+
+.surface-card {
+  background: color-mix(in srgb, var(--app-surface) 88%, transparent);
+  border: 1px solid var(--app-border);
+  border-radius: 0.9rem;
+  padding: 1rem;
+  box-shadow: 0 10px 30px rgba(10, 20, 60, 0.09);
+}
+
+.form-grid {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.form-grid label {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.95rem;
+}
+
+.form-grid input,
+.form-grid select,
+.form-grid textarea {
+  border: 1px solid var(--app-border);
+  border-radius: 0.55rem;
+  padding: 0.55rem 0.65rem;
+  background: var(--app-surface);
+  color: var(--app-text);
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--app-accent), #ffce89);
+  color: #1f2430;
+  border: none;
+  border-radius: 0.6rem;
+  padding: 0.55rem 0.8rem;
+  font-weight: 700;
+}
+
+.auth-page {
+  width: min(460px, 100%);
+  margin: 0 auto;
+}
+
+.auth-card {
+  background: color-mix(in srgb, var(--app-surface) 90%, transparent);
+  border: 1px solid var(--app-border);
+  border-radius: 1rem;
+  padding: 1.1rem;
+  box-shadow: 0 10px 24px rgba(10, 20, 50, 0.1);
+}
+
+.auth-links {
+  margin-top: 0.8rem;
+  display: flex;
+  gap: 0.8rem;
+}
+
+.error-message {
+  color: var(--app-danger);
+  font-size: 0.9rem;
+}
+
+.success-message {
+  color: var(--app-success);
+  font-size: 0.9rem;
+}
+
+.muted {
+  color: var(--app-muted);
+}
+
+.badge-list {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.9rem;
+}
+
+.badge {
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  border: 1px solid var(--app-border);
+  font-size: 0.75rem;
+  background: var(--app-surface-alt);
+}
+
+.grid-two {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+}
+
+.checkbox-line {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 0.35rem;
+  font-size: 0.92rem;
+}
+
+.user-card {
+  border-top: 1px solid var(--app-border);
+  margin-top: 1rem;
+  padding-top: 1rem;
+}
+
+@media (min-width: 900px) {
+  .grid-two {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }

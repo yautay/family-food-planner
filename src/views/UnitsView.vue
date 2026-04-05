@@ -7,14 +7,14 @@
         <ul>
           <li v-for="unit in units" :key="unit.id">
             <div class="element_name">{{ unit.name }}</div>
-            <div class="element_edit"><button @click="showEditModal(unit)">Edit</button></div>
-            <div class="element_delete"><button @click="confirmDeleteUnit(unit)">Delete</button></div>
+            <div v-if="canWrite" class="element_edit"><button @click="showEditModal(unit)">Edit</button></div>
+            <div v-if="canWrite" class="element_delete"><button @click="confirmDeleteUnit(unit)">Delete</button></div>
           </li>
         </ul>
       </div>
     </div>
 
-    <div class="add_unit">
+    <div v-if="canWrite" class="add_unit">
       <div><button @click="showAddModal">Add UnitModel</button></div>
     </div>
 
@@ -49,12 +49,14 @@
 </template>
 
 <script>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useUnitStore } from '@stores/unitsStore'
+import { useAuthStore } from '@stores/authStore'
 
 export default {
   setup() {
     const unitStore = useUnitStore()
+    const authStore = useAuthStore()
     var units = ref([])
     const isEditModalVisible = ref(false)
     const isAddModalVisible = ref(false)
@@ -140,7 +142,8 @@ export default {
       closeAddModal,
       addUnit,
       deleteUnit,
-      confirmDeleteUnit
+      confirmDeleteUnit,
+      canWrite: computed(() => authStore.can('catalog.write')),
     }
   },
 }
