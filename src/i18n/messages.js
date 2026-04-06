@@ -3,6 +3,7 @@ export const messages = {
     nav: {
       home: 'Start',
       catalog: 'Katalog',
+      meals: 'Planer',
       ingredients: 'Skladniki',
       settings: 'Ustawienia',
       account: 'Konto',
@@ -42,6 +43,7 @@ export const messages = {
     nav: {
       home: 'Home',
       catalog: 'Catalog',
+      meals: 'Planner',
       ingredients: 'Ingredients',
       settings: 'Settings',
       account: 'Account',

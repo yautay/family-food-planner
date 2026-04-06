@@ -52,6 +52,7 @@ async function logout() {
       <nav class="nav-links">
         <RouterLink to="/">{{ t('nav.home') }}</RouterLink>
         <RouterLink to="/catalog">{{ t('nav.catalog') }}</RouterLink>
+        <RouterLink to="/meals">{{ t('nav.meals') }}</RouterLink>
         <RouterLink to="/ingredients">{{ t('nav.ingredients') }}</RouterLink>
         <RouterLink to="/settings">{{ t('nav.settings') }}</RouterLink>
       </nav>

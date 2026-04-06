@@ -30,6 +30,7 @@ const router = createRouter({
       path: '/meals',
       name: 'meals',
       component: MealsView,
+      meta: { requiresAuth: true },
     },
     {
       path: '/settings',
