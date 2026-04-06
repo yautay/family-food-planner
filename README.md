@@ -1,5 +1,7 @@
 # Family Food Planner
 
+[![Unit Tests](https://github.com/yautay/family-food-planner/actions/workflows/unit-tests.yml/badge.svg?branch=master)](https://github.com/yautay/family-food-planner/actions/workflows/unit-tests.yml)
+[![Integration Tests](https://github.com/yautay/family-food-planner/actions/workflows/integration-tests.yml/badge.svg?branch=master)](https://github.com/yautay/family-food-planner/actions/workflows/integration-tests.yml)
 [![Project Status](https://img.shields.io/badge/status-in%20dev-orange)](https://github.com/yautay/family-food-planner/blob/master/docs/release-checklist.md)
 [![Progress](https://img.shields.io/badge/progress-95%25-yellow)](https://github.com/yautay/family-food-planner/blob/master/docs/release-checklist.md)
 [![Last Commit](https://img.shields.io/github/last-commit/yautay/family-food-planner)](https://github.com/yautay/family-food-planner/commits/master)
