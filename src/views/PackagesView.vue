@@ -13,6 +13,9 @@ const { t } = useI18n()
 
 const isEditModalVisible = ref(false)
 const isAddModalVisible = ref(false)
+const search = ref('')
+const sortBy = ref('product_name')
+const sortDirection = ref('asc')
 
 const initialPayload = {
   product_id: '',
@@ -29,6 +32,47 @@ const packageRows = computed(() => packagesStore.packages)
 const packageTypes = computed(() => packagesStore.packageTypes)
 const ingredients = computed(() => ingredientStore.ingredients)
 const canWrite = computed(() => authStore.can('catalog.write'))
+
+const filteredAndSortedRows = computed(() => {
+  const needle = search.value.trim().toLowerCase()
+  const direction = sortDirection.value === 'desc' ? -1 : 1
+
+  const filtered = packageRows.value.filter((row) => {
+    if (!needle) {
+      return true
+    }
+
+    const searchable = [row.product_name, row.package_type_name, row.source]
+      .filter(Boolean)
+      .join(' | ')
+      .toLowerCase()
+
+    return searchable.includes(needle)
+  })
+
+  return [...filtered].sort((left, right) => {
+    const leftValue = left[sortBy.value] ?? ''
+    const rightValue = right[sortBy.value] ?? ''
+
+    const leftNumber = Number(leftValue)
+    const rightNumber = Number(rightValue)
+    const numbersComparable = Number.isFinite(leftNumber) && Number.isFinite(rightNumber)
+
+    if (numbersComparable) {
+      if (leftNumber === rightNumber) {
+        return 0
+      }
+      return leftNumber > rightNumber ? direction : -direction
+    }
+
+    return (
+      String(leftValue).localeCompare(String(rightValue), undefined, {
+        sensitivity: 'base',
+        numeric: true,
+      }) * direction
+    )
+  })
+})
 
 function normalizePayload(payload) {
   const toNullableNumber = (value) => {
@@ -119,7 +163,33 @@ onMounted(async () => {
 
     <h2 class="title is-5">{{ t('packages.listTitle') }}</h2>
 
-    <div class="table-wrapper" v-if="packageRows.length > 0">
+    <div class="toolbar-grid">
+      <label>
+        {{ t('catalog.searchProduct') }}
+        <input v-model="search" type="text" class="input" />
+      </label>
+
+      <label>
+        {{ t('common.sortBy') }}
+        <select v-model="sortBy" class="input">
+          <option value="product_name">{{ t('packages.ingredientColumn') }}</option>
+          <option value="package_type_name">{{ t('packages.typeColumn') }}</option>
+          <option value="grams_per_package">{{ t('packages.gramsPerPackage') }}</option>
+          <option value="samples_count">{{ t('packages.samplesCount') }}</option>
+          <option value="source">{{ t('packages.source') }}</option>
+        </select>
+      </label>
+
+      <label>
+        {{ t('common.sortOrder') }}
+        <select v-model="sortDirection" class="input">
+          <option value="asc">{{ t('common.sortAsc') }}</option>
+          <option value="desc">{{ t('common.sortDesc') }}</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="table-wrapper" v-if="filteredAndSortedRows.length > 0">
       <table class="table is-fullwidth is-hoverable is-striped is-size-7-mobile">
         <thead>
           <tr>
@@ -132,7 +202,7 @@ onMounted(async () => {
           </tr>
         </thead>
         <tbody>
-          <tr v-for="row in packageRows" :key="row.id">
+          <tr v-for="row in filteredAndSortedRows" :key="row.id">
             <td>{{ row.product_name }}</td>
             <td>{{ row.package_type_name }}</td>
             <td>{{ row.grams_per_package }}</td>
@@ -274,6 +344,11 @@ onMounted(async () => {
   gap: 0.35rem;
 }
 
+.toolbar-grid {
+  display: grid;
+  gap: 0.65rem;
+}
+
 .table-wrapper {
   width: 100%;
   overflow-x: auto;
@@ -324,5 +399,11 @@ onMounted(async () => {
   color: black;
   text-decoration: none;
   cursor: pointer;
+}
+
+@media (min-width: 900px) {
+  .toolbar-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 </style>

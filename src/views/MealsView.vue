@@ -14,8 +14,26 @@
 
       <div class="list-block">
         <h2 class="title is-5">{{ t('meals.plansListTitle') }}</h2>
+        <div class="inline-filters">
+          <input
+            v-model="mealPlanSearch"
+            class="input"
+            :placeholder="t('catalog.searchRecipe')"
+            type="text"
+          />
+          <select v-model="mealPlanSortBy" class="input">
+            <option value="name">{{ t('meals.name') }}</option>
+            <option value="start_date">{{ t('meals.dateFrom') }}</option>
+            <option value="end_date">{{ t('meals.dateTo') }}</option>
+            <option value="entries_count">{{ t('common.records') }}</option>
+          </select>
+          <select v-model="mealPlanSortDirection" class="input">
+            <option value="asc">{{ t('common.sortAsc') }}</option>
+            <option value="desc">{{ t('common.sortDesc') }}</option>
+          </select>
+        </div>
         <ul class="list">
-          <li v-for="plan in mealPlans" :key="plan.id">
+          <li v-for="plan in visibleMealPlans" :key="plan.id">
             <button class="link" @click="selectMealPlan(plan.id)">{{ plan.name }}</button>
             <span class="muted"
               >{{ plan.start_date }} - {{ plan.end_date }} | {{ plan.entries_count }}
@@ -94,8 +112,26 @@
 
       <div class="list-block">
         <h2 class="title is-5">{{ t('meals.shoppingListListTitle') }}</h2>
+        <div class="inline-filters">
+          <input
+            v-model="shoppingListSearch"
+            class="input"
+            :placeholder="t('catalog.searchRecipe')"
+            type="text"
+          />
+          <select v-model="shoppingListSortBy" class="input">
+            <option value="name">{{ t('meals.name') }}</option>
+            <option value="status">{{ t('common.status') }}</option>
+            <option value="items_count">{{ t('meals.itemsTitle') }}</option>
+            <option value="checked_count">{{ t('common.records') }}</option>
+          </select>
+          <select v-model="shoppingListSortDirection" class="input">
+            <option value="asc">{{ t('common.sortAsc') }}</option>
+            <option value="desc">{{ t('common.sortDesc') }}</option>
+          </select>
+        </div>
         <ul class="list">
-          <li v-for="list in shoppingLists" :key="list.id">
+          <li v-for="list in visibleShoppingLists" :key="list.id">
             <button class="link" @click="selectShoppingList(list.id)">{{ list.name }}</button>
             <span class="muted"
               >{{
@@ -262,6 +298,12 @@ const { t } = useI18n()
 
 const editingMealPlanId = ref(null)
 const editingShoppingListId = ref(null)
+const mealPlanSearch = ref('')
+const mealPlanSortBy = ref('start_date')
+const mealPlanSortDirection = ref('asc')
+const shoppingListSearch = ref('')
+const shoppingListSortBy = ref('name')
+const shoppingListSortDirection = ref('asc')
 
 const mealPlanMessage = ref('')
 const mealPlanError = ref('')
@@ -299,6 +341,78 @@ const shoppingLists = computed(() => mealPlannerStore.shoppingLists)
 const activeShoppingList = computed(() => mealPlannerStore.activeShoppingList)
 const products = computed(() => catalogStore.products)
 const units = computed(() => unitStore.units)
+
+const visibleMealPlans = computed(() => {
+  const needle = mealPlanSearch.value.trim().toLowerCase()
+  const direction = mealPlanSortDirection.value === 'desc' ? -1 : 1
+
+  const filtered = mealPlans.value.filter((plan) => {
+    if (!needle) {
+      return true
+    }
+
+    return `${plan.name} ${plan.start_date} ${plan.end_date}`.toLowerCase().includes(needle)
+  })
+
+  return [...filtered].sort((left, right) => {
+    const leftValue = left[mealPlanSortBy.value] ?? ''
+    const rightValue = right[mealPlanSortBy.value] ?? ''
+
+    const leftNumber = Number(leftValue)
+    const rightNumber = Number(rightValue)
+    const numbersComparable = Number.isFinite(leftNumber) && Number.isFinite(rightNumber)
+
+    if (numbersComparable) {
+      if (leftNumber === rightNumber) {
+        return 0
+      }
+      return leftNumber > rightNumber ? direction : -direction
+    }
+
+    return (
+      String(leftValue).localeCompare(String(rightValue), undefined, {
+        sensitivity: 'base',
+        numeric: true,
+      }) * direction
+    )
+  })
+})
+
+const visibleShoppingLists = computed(() => {
+  const needle = shoppingListSearch.value.trim().toLowerCase()
+  const direction = shoppingListSortDirection.value === 'desc' ? -1 : 1
+
+  const filtered = shoppingLists.value.filter((list) => {
+    if (!needle) {
+      return true
+    }
+
+    return `${list.name} ${list.status}`.toLowerCase().includes(needle)
+  })
+
+  return [...filtered].sort((left, right) => {
+    const leftValue = left[shoppingListSortBy.value] ?? ''
+    const rightValue = right[shoppingListSortBy.value] ?? ''
+
+    const leftNumber = Number(leftValue)
+    const rightNumber = Number(rightValue)
+    const numbersComparable = Number.isFinite(leftNumber) && Number.isFinite(rightNumber)
+
+    if (numbersComparable) {
+      if (leftNumber === rightNumber) {
+        return 0
+      }
+      return leftNumber > rightNumber ? direction : -direction
+    }
+
+    return (
+      String(leftValue).localeCompare(String(rightValue), undefined, {
+        sensitivity: 'base',
+        numeric: true,
+      }) * direction
+    )
+  })
+})
 
 function resetMealPlanForm(clearMessages = true) {
   editingMealPlanId.value = null
@@ -628,6 +742,11 @@ onMounted(async () => {
   gap: 0.5rem;
 }
 
+.inline-filters {
+  display: grid;
+  gap: 0.5rem;
+}
+
 .list {
   list-style: none;
   margin: 0;
@@ -681,6 +800,10 @@ textarea {
   .planner-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     align-items: start;
+  }
+
+  .inline-filters {
+    grid-template-columns: 1.6fr 1fr 1fr;
   }
 }
 </style>

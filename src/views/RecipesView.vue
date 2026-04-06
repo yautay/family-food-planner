@@ -9,11 +9,100 @@ const catalogStore = useCatalogStore()
 const { t } = useI18n()
 
 const search = ref('')
+const sortBy = ref('name')
+const sortDirection = ref('asc')
 
-const recipes = computed(() => catalogStore.recipes)
+const recipes = computed(() => {
+  const needle = search.value.trim().toLowerCase()
+  const direction = sortDirection.value === 'desc' ? -1 : 1
+
+  const filtered = catalogStore.recipes.filter((recipe) => {
+    if (!needle) {
+      return true
+    }
+
+    const searchable = [recipe.name, recipe.owner_username]
+      .filter(Boolean)
+      .join(' | ')
+      .toLowerCase()
+
+    return searchable.includes(needle)
+  })
+
+  return [...filtered].sort((left, right) => {
+    const leftValue = left[sortBy.value] ?? ''
+    const rightValue = right[sortBy.value] ?? ''
+
+    const leftNumber = Number(leftValue)
+    const rightNumber = Number(rightValue)
+    const numbersComparable = Number.isFinite(leftNumber) && Number.isFinite(rightNumber)
+
+    if (numbersComparable) {
+      if (leftNumber === rightNumber) {
+        return 0
+      }
+      return leftNumber > rightNumber ? direction : -direction
+    }
+
+    return (
+      String(leftValue).localeCompare(String(rightValue), undefined, {
+        sensitivity: 'base',
+        numeric: true,
+      }) * direction
+    )
+  })
+})
 const activeRecipe = computed(() => catalogStore.activeRecipe)
 const activeRecipeIngredients = computed(() => catalogStore.activeRecipeIngredients)
 const activeRecipeNutrition = computed(() => catalogStore.activeRecipeNutrition)
+
+const PHYSICAL_UNITS = new Set([
+  'mg',
+  'g',
+  'gram',
+  'gramy',
+  'dag',
+  'kg',
+  'kilogram',
+  'kilogramy',
+  'ml',
+  'mililitr',
+  'mililitry',
+  'l',
+  'litr',
+  'litry',
+])
+
+function normalizeUnitName(value) {
+  return String(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+}
+
+function formatIngredientAmount(ingredient) {
+  const unit = ingredient?.unit_name ? String(ingredient.unit_name).trim() : ''
+  const hasQuantity = ingredient?.quantity !== null && ingredient?.quantity !== undefined
+  const numericQuantity = Number(ingredient?.quantity)
+  const isPhysicalUnit = unit && PHYSICAL_UNITS.has(normalizeUnitName(unit))
+  const noPackageMapping = !ingredient?.ingredient_package_conversion_id
+
+  if (hasQuantity) {
+    if (
+      noPackageMapping &&
+      isPhysicalUnit &&
+      Number.isFinite(numericQuantity) &&
+      numericQuantity === 1
+    ) {
+      return unit || '-'
+    }
+
+    return unit ? `${ingredient.quantity} ${unit}` : String(ingredient.quantity)
+  }
+
+  return unit || '-'
+}
 
 async function refreshRecipes() {
   await catalogStore.fetchRecipes(search.value)
@@ -48,6 +137,24 @@ onMounted(async () => {
         />
       </label>
 
+      <div class="search-field">
+        <label>
+          <span>{{ t('common.sortBy') }}</span>
+          <select v-model="sortBy" class="input">
+            <option value="name">{{ t('catalog.name') }}</option>
+            <option value="ingredients_count">{{ t('catalog.ingredientsCount') }}</option>
+            <option value="owner_username">{{ t('catalog.owner') }}</option>
+          </select>
+        </label>
+        <label>
+          <span>{{ t('common.sortOrder') }}</span>
+          <select v-model="sortDirection" class="input">
+            <option value="asc">{{ t('common.sortAsc') }}</option>
+            <option value="desc">{{ t('common.sortDesc') }}</option>
+          </select>
+        </label>
+      </div>
+
       <h2 class="title is-5">{{ t('recipes.listTitle') }}</h2>
       <ul class="list">
         <li v-for="recipe in recipes" :key="recipe.id">
@@ -70,8 +177,15 @@ onMounted(async () => {
           {{ t('catalog.owner') }}: {{ activeRecipe.owner_username }}
         </p>
         <p class="muted" v-if="activeRecipe.is_system === 1">{{ t('catalog.system') }}</p>
+        <p v-if="activeRecipe.instructions" class="recipe-instructions">
+          <strong>{{ t('catalog.instructions') }}:</strong> {{ activeRecipe.instructions }}
+        </p>
 
         <div v-if="activeRecipeNutrition?.summary" class="nutrition-summary">
+          <span
+            >{{ t('catalog.totalMass') }}:
+            {{ activeRecipeNutrition.summary.total_grams ?? 0 }} g</span
+          >
           <span>{{ activeRecipeNutrition.summary.calories ?? 0 }} kcal</span>
           <span
             >{{ t('ingredients.protein') }}:
@@ -91,8 +205,7 @@ onMounted(async () => {
           <li v-for="ingredient in activeRecipeIngredients" :key="ingredient.id">
             <strong>{{ ingredient.product_name }}</strong>
             <span class="muted"
-              >{{ ingredient.quantity ?? '-' }} {{ ingredient.unit_name || '' }} |
-              {{ ingredient.grams ?? '-' }} g</span
+              >{{ formatIngredientAmount(ingredient) }} | {{ ingredient.grams ?? '-' }} g</span
             >
           </li>
         </ul>
@@ -156,6 +269,10 @@ onMounted(async () => {
   gap: 0.55rem;
   margin-top: 0.55rem;
   font-size: 0.92rem;
+}
+
+.recipe-instructions {
+  margin-top: 0.5rem;
 }
 
 @media (min-width: 1000px) {

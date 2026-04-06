@@ -85,6 +85,7 @@ function recipeSelectSql() {
       r.name,
       r.normalized_name,
       r.source_file,
+      r.instructions,
       r.owner_user_id,
       r.is_system,
       r.is_editable,
@@ -346,6 +347,15 @@ function effectiveGramsSql() {
         WHEN ri.quantity IS NOT NULL AND u.to_grams_factor IS NOT NULL
           THEN ri.quantity * u.to_grams_factor
         ELSE NULL
+      END,
+      CASE
+        WHEN ri.quantity IS NOT NULL
+             AND u.to_ml_factor IS NOT NULL
+             AND p.unit_to_ml IS NOT NULL
+             AND p.unit_to_ml > 0
+             AND du.to_grams_factor IS NOT NULL
+          THEN ri.quantity * u.to_ml_factor * du.to_grams_factor / p.unit_to_ml
+        ELSE NULL
       END
     )
   `
@@ -409,6 +419,7 @@ async function getRecipeIngredients(recipeId, user) {
       FROM recipe_ingredients ri
       INNER JOIN products p ON p.id = ri.product_id
       LEFT JOIN units u ON u.id = ri.unit_id
+      LEFT JOIN units du ON du.id = p.default_unit_id
       LEFT JOIN ingredient_package_conversions ipc ON ipc.id = ri.ingredient_package_conversion_id
       LEFT JOIN package_types pt ON pt.id = ipc.package_type_id
       LEFT JOIN packages pkg ON pkg.id = ri.package_id
@@ -609,6 +620,7 @@ async function getRecipeNutrition(recipeId, user) {
       FROM recipe_ingredients ri
       INNER JOIN products p ON p.id = ri.product_id
       LEFT JOIN units u ON u.id = ri.unit_id
+      LEFT JOIN units du ON du.id = p.default_unit_id
       LEFT JOIN ingredient_package_conversions ipc ON ipc.id = ri.ingredient_package_conversion_id
       LEFT JOIN package_types pt ON pt.id = ipc.package_type_id
       LEFT JOIN packages pkg ON pkg.id = ri.package_id

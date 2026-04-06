@@ -9,9 +9,22 @@
       <div>
         <h2 class="title is-5">{{ t('tags.listTitle') }}</h2>
       </div>
+      <div class="toolbar-grid">
+        <label>
+          {{ t('catalog.searchProduct') }}
+          <input v-model="search" class="input" type="text" />
+        </label>
+        <label>
+          {{ t('common.sortOrder') }}
+          <select v-model="sortDirection" class="input">
+            <option value="asc">{{ t('common.sortAsc') }}</option>
+            <option value="desc">{{ t('common.sortDesc') }}</option>
+          </select>
+        </label>
+      </div>
       <div>
         <ul class="entity-list">
-          <li v-for="tag in tags" :key="tag.id">
+          <li v-for="tag in filteredAndSortedTags" :key="tag.id">
             <div class="element_name">{{ tag.name }}</div>
             <div v-if="canWrite" class="element_edit">
               <button class="button is-small" @click="showEditModal(tag)">
@@ -75,9 +88,24 @@ const isEditModalVisible = ref(false)
 const isAddModalVisible = ref(false)
 const newTagRef = ref({ name: '' })
 const editTagRef = ref({ id: undefined, name: '' })
+const search = ref('')
+const sortDirection = ref('asc')
 
 const tags = computed(() => tagStore.tags)
 const canWrite = computed(() => authStore.can('catalog.write'))
+
+const filteredAndSortedTags = computed(() => {
+  const needle = search.value.trim().toLowerCase()
+  const direction = sortDirection.value === 'desc' ? -1 : 1
+
+  return [...tags.value]
+    .filter((tag) => tag.name.toLowerCase().includes(needle))
+    .sort(
+      (left, right) =>
+        left.name.localeCompare(right.name, undefined, { sensitivity: 'base', numeric: true }) *
+        direction,
+    )
+})
 
 onMounted(async () => {
   await tagStore.fetchTags()
@@ -151,6 +179,11 @@ function confirmDeleteTag(tag) {
   min-width: 180px;
 }
 
+.toolbar-grid {
+  display: grid;
+  gap: 0.65rem;
+}
+
 button {
   cursor: pointer;
 }
@@ -190,5 +223,11 @@ button {
   color: black;
   text-decoration: none;
   cursor: pointer;
+}
+
+@media (min-width: 760px) {
+  .toolbar-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 </style>

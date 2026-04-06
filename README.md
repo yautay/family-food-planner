@@ -41,7 +41,12 @@ npm run dev
 - `npm run start:server` - backend only
 - `npm run db:migrate` - run SQL migrations
 - `npm run db:import:diets` - import PDFs into catalog
-- `npm run db:setup` - migrations + PDF import
+- `npm run db:rebuild:conversions` - rebuild ingredient-package conversion links from recipes
+- `npm run db:enrich:nutrition` - fill nutritional values from OpenFoodFacts
+- `npm run db:fill:nutrition` - complete missing nutrition fields from OpenFoodFacts-derived averages
+- `npm run db:tag:ingredients` - auto-tag ingredients (excludes meal-time tags)
+- `npm run db:setup` - migrations + PDF import + rebuild ingredient-package conversions
+- `npm run db:setup:full` - `db:setup` + nutrition enrichment + auto-tagging + fallback nutrition fill
 - `npm run test:unit` - unit-test suite (excludes integration tests)
 - `npm run test:integration` - auth + RBAC + shopping-list generator integration tests
 
@@ -95,6 +100,12 @@ Changing the password after first login is recommended.
   - `recipes.owner_user_id`, `recipes.is_system`, `recipes.is_editable`
 - `004_meal_planning.sql`
   - `meal_plans`, `meal_plan_entries`, `shopping_lists`, `shopping_list_items`, `audit_logs`
+- `006_catalog_enrichment.sql`, `007_ingredient_package_conversions.sql`, `008_cleanup_non_physical_units.sql`
+  - nutrition columns, package types/conversions, physical units normalization
+- `009_ingredient_packaging_and_volume.sql`
+  - ingredient package pointer + unit-to-ml conversion on products
+- `010_recipe_instructions.sql`
+  - recipe text instructions extracted from `core_recipes/*.pdf`
 
 ### Recipe Access Rules
 

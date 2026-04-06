@@ -11,6 +11,8 @@ const options = {
   limit: Number.POSITIVE_INFINITY,
   overwrite: false,
   delayMs: 250,
+  minScore: 0.2,
+  forceFillMissing: false,
 }
 
 for (const arg of args) {
@@ -30,6 +32,17 @@ for (const arg of args) {
     if (Number.isFinite(parsed) && parsed >= 0) {
       options.delayMs = parsed
     }
+  }
+
+  if (arg.startsWith('--min-score=')) {
+    const parsed = Number(arg.replace('--min-score=', ''))
+    if (Number.isFinite(parsed) && parsed >= 0) {
+      options.minScore = parsed
+    }
+  }
+
+  if (arg === '--force-fill-missing') {
+    options.forceFillMissing = true
   }
 }
 
@@ -101,15 +114,28 @@ function scoreMatch(productName, candidateName, nutrition) {
     }
   }
 
-  const overlapRatio = sourceTokens.size > 0 ? tokenOverlap / sourceTokens.size : 0
+  const recall = sourceTokens.size > 0 ? tokenOverlap / sourceTokens.size : 0
+  const precision = candidateTokens.size > 0 ? tokenOverlap / candidateTokens.size : 0
+  const overlapF1 =
+    recall > 0 && precision > 0 ? (2 * recall * precision) / (recall + precision) : 0
   const macroScore = countDefinedCoreMacros(nutrition) / 4
 
-  return overlapRatio * 0.7 + macroScore * 0.3
+  return overlapF1 * 0.75 + macroScore * 0.25
 }
 
 async function fetchBestNutritionForProduct(productName) {
+  const normalizedName = normalizeKey(productName)
+  const normalizedTokens = normalizedName.split(' ').filter(Boolean)
+
   const searchTerms = Array.from(
-    new Set([productName, sanitizeSearchTerm(productName)].filter((value) => value.length > 1)),
+    new Set(
+      [
+        productName,
+        sanitizeSearchTerm(productName),
+        normalizedTokens.slice(0, 1).join(' '),
+        normalizedTokens.slice(0, 2).join(' '),
+      ].filter((value) => value.length > 1),
+    ),
   )
 
   let best = null
@@ -143,7 +169,7 @@ async function fetchBestNutritionForProduct(productName) {
       }
 
       const nutrition = getCandidatesFromNutriments(candidate?.nutriments)
-      if (countDefinedCoreMacros(nutrition) < 2) {
+      if (countDefinedCoreMacros(nutrition) < 1) {
         continue
       }
 
@@ -160,7 +186,7 @@ async function fetchBestNutritionForProduct(productName) {
     }
   }
 
-  if (!best || best.score < 0.25) {
+  if (!best || best.score < options.minScore) {
     return null
   }
 
@@ -228,16 +254,17 @@ for (const product of products) {
       ? `openfoodfacts:${best.sourceCode}:${best.candidateName}`
       : `openfoodfacts:${best.candidateName}`
 
-    updateProduct.run(
-      best.nutrition.calories,
-      best.nutrition.carbohydrates,
-      best.nutrition.sugars,
-      best.nutrition.fat,
-      best.nutrition.protein,
-      best.nutrition.fiber,
-      source,
-      product.id,
-    )
+    const calories =
+      best.nutrition.calories ?? (options.forceFillMissing ? 0 : best.nutrition.calories)
+    const carbohydrates =
+      best.nutrition.carbohydrates ?? (options.forceFillMissing ? 0 : best.nutrition.carbohydrates)
+    const sugars = best.nutrition.sugars ?? (options.forceFillMissing ? 0 : best.nutrition.sugars)
+    const fat = best.nutrition.fat ?? (options.forceFillMissing ? 0 : best.nutrition.fat)
+    const protein =
+      best.nutrition.protein ?? (options.forceFillMissing ? 0 : best.nutrition.protein)
+    const fiber = best.nutrition.fiber ?? (options.forceFillMissing ? 0 : best.nutrition.fiber)
+
+    updateProduct.run(calories, carbohydrates, sugars, fat, protein, fiber, source, product.id)
 
     updated += 1
     console.log(`OK    ${product.name} -> ${best.candidateName} (score: ${best.score.toFixed(2)})`)

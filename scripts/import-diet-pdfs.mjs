@@ -180,6 +180,22 @@ function looksLikeInstructionLine(line) {
   return false
 }
 
+function looksLikeIngredientFragment(line) {
+  if (!line) {
+    return false
+  }
+
+  if (/^\([0-9]+(?:[.,][0-9]+)?\s*g\)$/i.test(line.trim())) {
+    return true
+  }
+
+  if (/,[\s]*[0-9]+(?:[.,][0-9]+)?\s*x\s+/i.test(line)) {
+    return true
+  }
+
+  return false
+}
+
 function mergeWrappedLines(rawLines) {
   const merged = []
 
@@ -297,11 +313,25 @@ function upsertRecipe(name, sourceFile) {
       name,
       normalizedName,
       sourceFiles: new Set(),
+      instructionLines: [],
     })
   }
 
   recipeCatalog.get(normalizedName).sourceFiles.add(sourceFile)
   return normalizedName
+}
+
+function appendRecipeInstruction(recipeKey, line) {
+  if (!recipeKey || !recipeCatalog.has(recipeKey)) {
+    return
+  }
+
+  const normalizedLine = normalizeWhitespace(line)
+  if (!normalizedLine) {
+    return
+  }
+
+  recipeCatalog.get(recipeKey).instructionLines.push(normalizedLine)
 }
 
 function parsePdf(filePath, fileName) {
@@ -344,23 +374,37 @@ function parsePdf(filePath, fileName) {
     }
 
     const ingredient = parseIngredientLine(line)
-    if (!ingredient || !currentRecipeKey) {
+    if (!currentRecipeKey) {
       continue
     }
 
-    const productKey = upsertProduct(ingredient.name, ingredient.unitName)
-    if (!productKey) {
+    if (ingredient) {
+      const productKey = upsertProduct(ingredient.name, ingredient.unitName)
+      if (!productKey) {
+        continue
+      }
+
+      relationRows.push({
+        recipeKey: currentRecipeKey,
+        productKey,
+        quantity: ingredient.quantity,
+        unitName: ingredient.unitName,
+        grams: ingredient.grams,
+        sourceFile: fileName,
+      })
+
       continue
     }
 
-    relationRows.push({
-      recipeKey: currentRecipeKey,
-      productKey,
-      quantity: ingredient.quantity,
-      unitName: ingredient.unitName,
-      grams: ingredient.grams,
-      sourceFile: fileName,
-    })
+    if (isNoiseLine(line) || titleByKey.has(normalizedLine)) {
+      continue
+    }
+
+    if (!looksLikeInstructionLine(line) || looksLikeIngredientFragment(line)) {
+      continue
+    }
+
+    appendRecipeInstruction(currentRecipeKey, line)
   }
 }
 
@@ -425,22 +469,24 @@ const insertProduct = db.prepare(`
 const selectProducts = db.prepare('SELECT id, normalized_name FROM products')
 
 const insertRecipe = db.prepare(`
-  INSERT INTO recipes(name, normalized_name, source_file)
-  VALUES (@name, @normalizedName, @sourceFile)
+  INSERT INTO recipes(name, normalized_name, source_file, instructions)
+  VALUES (@name, @normalizedName, @sourceFile, @instructions)
   ON CONFLICT(normalized_name)
   DO UPDATE SET
     name = excluded.name,
     source_file = excluded.source_file,
+    instructions = excluded.instructions,
     updated_at = CURRENT_TIMESTAMP
 `)
 
 const insertSystemRecipe = db.prepare(`
-  INSERT INTO recipes(name, normalized_name, source_file, owner_user_id, is_system, is_editable)
-  VALUES (@name, @normalizedName, @sourceFile, NULL, 1, 0)
+  INSERT INTO recipes(name, normalized_name, source_file, instructions, owner_user_id, is_system, is_editable)
+  VALUES (@name, @normalizedName, @sourceFile, @instructions, NULL, 1, 0)
   ON CONFLICT(normalized_name)
   DO UPDATE SET
     name = excluded.name,
     source_file = excluded.source_file,
+    instructions = excluded.instructions,
     owner_user_id = NULL,
     is_system = 1,
     is_editable = 0,
@@ -545,12 +591,26 @@ const persistData = db.transaction(() => {
   }
 
   for (const recipe of recipeCatalog.values()) {
+    const uniqueInstructions = []
+    const seenInstructionKeys = new Set()
+
+    for (const line of recipe.instructionLines) {
+      const key = normalizeKey(line)
+      if (!key || seenInstructionKeys.has(key)) {
+        continue
+      }
+
+      seenInstructionKeys.add(key)
+      uniqueInstructions.push(line)
+    }
+
     const payload = {
       name: recipe.name,
       normalizedName: recipe.normalizedName,
       sourceFile: Array.from(recipe.sourceFiles)
         .sort((left, right) => left.localeCompare(right))
         .join(', '),
+      instructions: uniqueInstructions.join(' '),
     }
 
     if (hasRecipeAclColumns) {

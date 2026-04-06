@@ -9,9 +9,22 @@
       <div>
         <h2 class="title is-5">{{ t('units.listTitle') }}</h2>
       </div>
+      <div class="toolbar-grid">
+        <label>
+          {{ t('catalog.searchProduct') }}
+          <input v-model="search" class="input" type="text" />
+        </label>
+        <label>
+          {{ t('common.sortOrder') }}
+          <select v-model="sortDirection" class="input">
+            <option value="asc">{{ t('common.sortAsc') }}</option>
+            <option value="desc">{{ t('common.sortDesc') }}</option>
+          </select>
+        </label>
+      </div>
       <div>
         <ul class="entity-list">
-          <li v-for="unit in units" :key="unit.id">
+          <li v-for="unit in filteredAndSortedUnits" :key="unit.id">
             <div class="element_name">{{ unit.name }}</div>
             <div v-if="canWrite" class="element_edit">
               <button class="button is-small" @click="showEditModal(unit)">
@@ -75,9 +88,24 @@ const isEditModalVisible = ref(false)
 const isAddModalVisible = ref(false)
 const newUnitRef = ref({ name: '' })
 const editUnitRef = ref({ id: undefined, name: '' })
+const search = ref('')
+const sortDirection = ref('asc')
 
 const units = computed(() => unitStore.units)
 const canWrite = computed(() => authStore.can('catalog.write'))
+
+const filteredAndSortedUnits = computed(() => {
+  const needle = search.value.trim().toLowerCase()
+  const direction = sortDirection.value === 'desc' ? -1 : 1
+
+  return [...units.value]
+    .filter((unit) => unit.name.toLowerCase().includes(needle))
+    .sort(
+      (left, right) =>
+        left.name.localeCompare(right.name, undefined, { sensitivity: 'base', numeric: true }) *
+        direction,
+    )
+})
 
 onMounted(async () => {
   await unitStore.fetchUnits()
@@ -151,6 +179,11 @@ function confirmDeleteUnit(unit) {
   min-width: 180px;
 }
 
+.toolbar-grid {
+  display: grid;
+  gap: 0.65rem;
+}
+
 button {
   cursor: pointer;
 }
@@ -190,5 +223,11 @@ button {
   color: black;
   text-decoration: none;
   cursor: pointer;
+}
+
+@media (min-width: 760px) {
+  .toolbar-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 </style>

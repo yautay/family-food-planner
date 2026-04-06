@@ -16,7 +16,10 @@
     "db:import:diets": "node scripts/import-diet-pdfs.mjs",
     "db:rebuild:conversions": "node scripts/rebuild-packages-from-recipes.mjs",
     "db:enrich:nutrition": "node scripts/enrich-product-nutrition.mjs",
-    "db:setup": "npm run db:migrate && npm run db:import:diets && npm run db:rebuild:conversions"
+    "db:fill:nutrition": "node scripts/fill-missing-nutrition.mjs",
+    "db:tag:ingredients": "node scripts/auto-tag-ingredients.mjs",
+    "db:setup": "npm run db:migrate && npm run db:import:diets && npm run db:rebuild:conversions",
+    "db:setup:full": "npm run db:setup && npm run db:enrich:nutrition && npm run db:tag:ingredients && npm run db:fill:nutrition"
   },
   "dependencies": {
     "axios": "^1.7.9",
