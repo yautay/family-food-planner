@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "test:unit": "vitest",
+    "test:integration": "vitest run tests/integration",
     "lint": "eslint . --fix",
     "format": "prettier --write src/",
     "start:server": "node server.js",

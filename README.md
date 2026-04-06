@@ -33,6 +33,7 @@ npm run dev
 - `npm run db:migrate` - migracje SQL
 - `npm run db:import:diets` - import PDF do katalogu
 - `npm run db:setup` - migracje + import
+- `npm run test:integration` - testy integracyjne auth + RBAC
 
 ## Wymagania
 
@@ -165,6 +166,12 @@ Po pierwszym logowaniu zalecana zmiana hasla.
 - sesje: tokeny opaque hashowane w DB (`auth_sessions`)
 - reset hasla: token jednorazowy, wygasa czasowo
 - CAPTCHA: weryfikacja serwerowa Turnstile
+
+## Testy integracyjne
+
+- testy integracyjne uruchamiaj: `npm run test:integration`,
+- suite tworzy izolowana baze SQLite przez `DATABASE_PATH`,
+- Turnstile i wysylka email sa mockowane, zeby testy nie wymagaly zewnetrznych uslug.
 
 ## Ograniczenia i kolejne kroki
 
