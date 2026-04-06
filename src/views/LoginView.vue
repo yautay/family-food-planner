@@ -1,22 +1,22 @@
 <template>
-  <section class="auth-page">
+  <section class="auth-page section p-0">
     <div class="auth-card">
-      <h1>{{ t('auth.loginTitle') }}</h1>
+      <h1 class="title is-4">{{ t('auth.loginTitle') }}</h1>
 
       <form @submit.prevent="onSubmit" class="form-grid">
         <label>
           {{ t('auth.emailOrUsername') }}
-          <input v-model="identity" required autocomplete="username" />
+          <input v-model="identity" class="input" required autocomplete="username" />
         </label>
 
         <label>
           {{ t('auth.password') }}
-          <input v-model="password" type="password" required autocomplete="current-password" />
+          <input v-model="password" class="input" type="password" required autocomplete="current-password" />
         </label>
 
         <p v-if="errorMessage" class="error-message">{{ errorMessage }}</p>
 
-        <button type="submit" class="btn-primary">{{ t('auth.submitLogin') }}</button>
+        <button type="submit" class="button is-primary">{{ t('auth.submitLogin') }}</button>
       </form>
 
       <div class="auth-links">

@@ -1,6 +1,6 @@
 <template>
   <section v-if="!isAuthenticated" class="surface-card">
-    <h1>Meal planner</h1>
+    <h1 class="title is-4">Meal planner</h1>
     <p class="muted">Ten widok wymaga logowania.</p>
     <RouterLink to="/login">Przejdz do logowania</RouterLink>
   </section>
@@ -8,12 +8,12 @@
   <section v-else class="planner-grid">
     <article class="surface-card section-stack">
       <div class="section-header">
-        <h1>Planowanie okresu</h1>
+        <h1 class="title is-4">Planowanie okresu</h1>
         <p class="muted">Prywatne plany tylko dla zalogowanego uzytkownika.</p>
       </div>
 
       <div class="list-block">
-        <h2>Plany</h2>
+        <h2 class="title is-5">Plany</h2>
         <ul class="list">
           <li v-for="plan in mealPlans" :key="plan.id">
             <button class="link" @click="selectMealPlan(plan.id)">{{ plan.name }}</button>
@@ -23,50 +23,50 @@
       </div>
 
       <form class="form-grid" @submit.prevent="saveMealPlan">
-        <h3>{{ editingMealPlanId ? 'Edycja planu' : 'Nowy plan' }}</h3>
+        <h3 class="title is-5">{{ editingMealPlanId ? 'Edycja planu' : 'Nowy plan' }}</h3>
 
         <label>
           Nazwa
-          <input v-model="mealPlanForm.name" required />
+          <input v-model="mealPlanForm.name" class="input" required />
         </label>
 
         <div class="grid-two">
           <label>
             Data od
-            <input v-model="mealPlanForm.start_date" type="date" required />
+            <input v-model="mealPlanForm.start_date" class="input" type="date" required />
           </label>
 
           <label>
             Data do
-            <input v-model="mealPlanForm.end_date" type="date" required />
+            <input v-model="mealPlanForm.end_date" class="input" type="date" required />
           </label>
         </div>
 
         <label>
           Notatka
-          <textarea v-model="mealPlanForm.note" rows="3"></textarea>
+          <textarea v-model="mealPlanForm.note" class="textarea" rows="3"></textarea>
         </label>
 
         <p v-if="mealPlanMessage" class="success-message">{{ mealPlanMessage }}</p>
         <p v-if="mealPlanError" class="error-message">{{ mealPlanError }}</p>
 
         <div class="actions-row">
-          <button class="btn-primary" type="submit">{{ editingMealPlanId ? 'Zapisz plan' : 'Dodaj plan' }}</button>
-          <button type="button" @click="resetMealPlanForm">Reset</button>
-          <button v-if="editingMealPlanId" type="button" @click="removeMealPlan">Usun plan</button>
+          <button class="button is-primary" type="submit">{{ editingMealPlanId ? 'Zapisz plan' : 'Dodaj plan' }}</button>
+          <button class="button" type="button" @click="resetMealPlanForm">Reset</button>
+          <button v-if="editingMealPlanId" class="button" type="button" @click="removeMealPlan">Usun plan</button>
         </div>
       </form>
 
       <div v-if="activeMealPlan" class="entries-block">
-        <h3>Pozycje planu: {{ activeMealPlan.name }}</h3>
+        <h3 class="title is-5">Pozycje planu: {{ activeMealPlan.name }}</h3>
         <p class="muted">Format linii: data|slot|recipe_id|custom_name|servings|note</p>
         <p class="muted">slot: breakfast, lunch, dinner, snack</p>
 
-        <textarea v-model="entriesText" rows="10"></textarea>
+        <textarea v-model="entriesText" class="textarea" rows="10"></textarea>
 
         <div class="actions-row">
-          <button class="btn-primary" type="button" @click="saveEntries">Zapisz pozycje</button>
-          <button type="button" @click="generateShoppingListFromActiveMealPlan">
+          <button class="button is-primary" type="button" @click="saveEntries">Zapisz pozycje</button>
+          <button class="button" type="button" @click="generateShoppingListFromActiveMealPlan">
             Generuj liste zakupowa z planu
           </button>
         </div>
@@ -75,12 +75,12 @@
 
     <article class="surface-card section-stack">
       <div class="section-header">
-        <h1>Listy zakupowe</h1>
+        <h1 class="title is-4">Listy zakupowe</h1>
         <p class="muted">Lista moze byc podlaczona do planu okresu.</p>
       </div>
 
       <div class="list-block">
-        <h2>Listy</h2>
+        <h2 class="title is-5">Listy</h2>
         <ul class="list">
           <li v-for="list in shoppingLists" :key="list.id">
             <button class="link" @click="selectShoppingList(list.id)">{{ list.name }}</button>
@@ -90,17 +90,17 @@
       </div>
 
       <form class="form-grid" @submit.prevent="saveShoppingList">
-        <h3>{{ editingShoppingListId ? 'Edycja listy' : 'Nowa lista' }}</h3>
+        <h3 class="title is-5">{{ editingShoppingListId ? 'Edycja listy' : 'Nowa lista' }}</h3>
 
         <label>
           Nazwa
-          <input v-model="shoppingListForm.name" required />
+          <input v-model="shoppingListForm.name" class="input" required />
         </label>
 
         <div class="grid-two">
           <label>
             Status
-            <select v-model="shoppingListForm.status">
+            <select v-model="shoppingListForm.status" class="input">
               <option value="open">open</option>
               <option value="archived">archived</option>
             </select>
@@ -108,7 +108,7 @@
 
           <label>
             Powiazany plan
-            <select v-model="shoppingListForm.meal_plan_id">
+            <select v-model="shoppingListForm.meal_plan_id" class="input">
               <option value="">Brak</option>
               <option v-for="plan in mealPlans" :key="plan.id" :value="String(plan.id)">{{ plan.name }}</option>
             </select>
@@ -117,21 +117,21 @@
 
         <label>
           Notatka
-          <textarea v-model="shoppingListForm.note" rows="3"></textarea>
+          <textarea v-model="shoppingListForm.note" class="textarea" rows="3"></textarea>
         </label>
 
         <p v-if="shoppingListMessage" class="success-message">{{ shoppingListMessage }}</p>
         <p v-if="shoppingListError" class="error-message">{{ shoppingListError }}</p>
 
         <div class="actions-row">
-          <button class="btn-primary" type="submit">{{ editingShoppingListId ? 'Zapisz liste' : 'Dodaj liste' }}</button>
-          <button type="button" @click="resetShoppingListForm">Reset</button>
-          <button v-if="editingShoppingListId" type="button" @click="removeShoppingList">Usun liste</button>
+          <button class="button is-primary" type="submit">{{ editingShoppingListId ? 'Zapisz liste' : 'Dodaj liste' }}</button>
+          <button class="button" type="button" @click="resetShoppingListForm">Reset</button>
+          <button v-if="editingShoppingListId" class="button" type="button" @click="removeShoppingList">Usun liste</button>
         </div>
       </form>
 
       <div v-if="activeShoppingList" class="items-block">
-        <h3>Pozycje: {{ activeShoppingList.name }}</h3>
+        <h3 class="title is-5">Pozycje: {{ activeShoppingList.name }}</h3>
 
         <ul class="list">
           <li v-for="item in activeShoppingList.items" :key="item.id" class="item-row">
@@ -145,16 +145,16 @@
             </label>
 
             <span class="muted">{{ item.quantity ?? '-' }} {{ item.unit_name || '' }}</span>
-            <button type="button" @click="removeShoppingListItem(item.id)">Usun</button>
+            <button class="button is-small" type="button" @click="removeShoppingListItem(item.id)">Usun</button>
           </li>
         </ul>
 
         <form class="form-grid" @submit.prevent="addItemToShoppingList">
-          <h4>Dodaj pozycje</h4>
+          <h4 class="title is-6">Dodaj pozycje</h4>
 
           <label>
             Produkt z katalogu
-            <select v-model="shoppingItemForm.product_id">
+            <select v-model="shoppingItemForm.product_id" class="input">
               <option value="">Wybierz produkt</option>
               <option v-for="product in products" :key="product.id" :value="String(product.id)">{{ product.name }}</option>
             </select>
@@ -162,18 +162,18 @@
 
           <label>
             Lub nazwa reczna
-            <input v-model="shoppingItemForm.custom_name" placeholder="np. Pomidor koktajlowy" />
+            <input v-model="shoppingItemForm.custom_name" class="input" placeholder="np. Pomidor koktajlowy" />
           </label>
 
           <div class="grid-two">
             <label>
               Ilosc
-              <input v-model="shoppingItemForm.quantity" type="number" min="0" step="0.01" />
+              <input v-model="shoppingItemForm.quantity" class="input" type="number" min="0" step="0.01" />
             </label>
 
             <label>
               Jednostka
-              <select v-model="shoppingItemForm.unit_id">
+              <select v-model="shoppingItemForm.unit_id" class="input">
                 <option value="">Brak</option>
                 <option v-for="unit in units" :key="unit.id" :value="String(unit.id)">{{ unit.name }}</option>
               </select>
@@ -182,10 +182,10 @@
 
           <label>
             Notatka
-            <input v-model="shoppingItemForm.note" />
+            <input v-model="shoppingItemForm.note" class="input" />
           </label>
 
-          <button class="btn-primary" type="submit">Dodaj pozycje</button>
+          <button class="button is-primary" type="submit">Dodaj pozycje</button>
         </form>
       </div>
     </article>

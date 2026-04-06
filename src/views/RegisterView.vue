@@ -1,29 +1,29 @@
 <template>
-  <section class="auth-page">
+  <section class="auth-page section p-0">
     <div class="auth-card">
-      <h1>{{ t('auth.registerTitle') }}</h1>
+      <h1 class="title is-4">{{ t('auth.registerTitle') }}</h1>
 
       <form @submit.prevent="onSubmit" class="form-grid">
         <label>
           Username
-          <input v-model="username" required autocomplete="username" />
+          <input v-model="username" class="input" required autocomplete="username" />
         </label>
 
         <label>
           Email
-          <input v-model="email" type="email" required autocomplete="email" />
+          <input v-model="email" class="input" type="email" required autocomplete="email" />
         </label>
 
         <label>
           {{ t('auth.password') }}
-          <input v-model="password" type="password" required autocomplete="new-password" />
+          <input v-model="password" class="input" type="password" required autocomplete="new-password" />
         </label>
 
         <TurnstileWidget v-if="captchaSiteKey" v-model="captchaToken" :site-key="captchaSiteKey" />
 
         <p v-if="errorMessage" class="error-message">{{ errorMessage }}</p>
 
-        <button type="submit" class="btn-primary">{{ t('auth.submitRegister') }}</button>
+        <button type="submit" class="button is-primary">{{ t('auth.submitRegister') }}</button>
       </form>
 
       <div class="auth-links">

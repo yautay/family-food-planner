@@ -1,12 +1,12 @@
 <template>
   <section class="surface-card">
-    <h1>Uprawnienia uzytkownikow</h1>
+    <h1 class="title is-4">Uprawnienia uzytkownikow</h1>
 
     <p class="muted">Tylko uzytkownik z uprawnieniem <code>permissions.manage</code> moze edytowac ten widok.</p>
     <p v-if="loadError" class="error-message">{{ loadError }}</p>
 
     <div v-for="user in users" :key="user.id" class="user-card">
-      <h2>{{ user.username }}</h2>
+      <h2 class="title is-5">{{ user.username }}</h2>
       <p class="muted">{{ user.email }}</p>
 
       <div class="grid-two">

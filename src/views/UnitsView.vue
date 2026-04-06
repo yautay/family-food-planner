@@ -1,21 +1,21 @@
 <template>
-  <div class="elements">
-    <div><h1>Units</h1></div>
+  <section class="surface-card elements">
+    <div><h1 class="title is-4">Units</h1></div>
     <div class="elements_list">
-      <div><h2>Units list</h2></div>
+      <div><h2 class="title is-5">Units list</h2></div>
       <div>
         <ul>
           <li v-for="unit in units" :key="unit.id">
             <div class="element_name">{{ unit.name }}</div>
-            <div v-if="canWrite" class="element_edit"><button @click="showEditModal(unit)">Edit</button></div>
-            <div v-if="canWrite" class="element_delete"><button @click="confirmDeleteUnit(unit)">Delete</button></div>
+            <div v-if="canWrite" class="element_edit"><button class="button is-small" @click="showEditModal(unit)">Edit</button></div>
+            <div v-if="canWrite" class="element_delete"><button class="button is-small" @click="confirmDeleteUnit(unit)">Delete</button></div>
           </li>
         </ul>
       </div>
     </div>
 
     <div v-if="canWrite" class="add_unit">
-      <div><button @click="showAddModal">Add UnitModel</button></div>
+      <div><button class="button is-primary" @click="showAddModal">Add UnitModel</button></div>
     </div>
 
     <div v-if="isEditModalVisible" class="modal">
@@ -27,7 +27,7 @@
             <label for="edit-unit-name">UnitModel Name:</label>
             <input type="text" id="edit-unit-name" v-model="editUnitRef.name" required />
           </div>
-          <button type="submit">Update UnitModel</button>
+          <button class="button is-primary" type="submit">Update UnitModel</button>
         </form>
       </div>
     </div>
@@ -41,11 +41,11 @@
             <label for="new-unit-name">UnitModel Name:</label>
             <input type="text" id="new-unit-name" v-model="newUnitRef.name" required />
           </div>
-          <button type="submit">Add UnitModel</button>
+          <button class="button is-primary" type="submit">Add UnitModel</button>
         </form>
       </div>
     </div>
-  </div>
+  </section>
 </template>
 
 <script>
@@ -153,7 +153,7 @@ export default {
 .elements {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch;
   gap: 1rem;
 }
 
@@ -181,8 +181,6 @@ li {
 }
 
 button {
-  padding: 0.5rem 1rem;
-  font-size: 1rem;
   cursor: pointer;
 }
 
@@ -201,9 +199,11 @@ button {
 }
 
 .modal-content {
-  background-color: #000000;
+  background-color: var(--app-surface);
+  color: var(--app-text);
   padding: 20px;
-  border: 1px solid #888;
+  border: 1px solid var(--app-border);
+  border-radius: 0.75rem;
   width: 80%;
   max-width: 500px;
 }

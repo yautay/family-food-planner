@@ -1,12 +1,12 @@
 <template>
-  <section class="auth-page">
+  <section class="auth-page section p-0">
     <div class="auth-card">
-      <h1>Reset hasla</h1>
+      <h1 class="title is-4">Reset hasla</h1>
 
       <form @submit.prevent="onSubmit" class="form-grid">
         <label>
           Email
-          <input v-model="email" type="email" required autocomplete="email" />
+          <input v-model="email" class="input" type="email" required autocomplete="email" />
         </label>
 
         <TurnstileWidget v-if="captchaSiteKey" v-model="captchaToken" :site-key="captchaSiteKey" />
@@ -14,7 +14,7 @@
         <p v-if="message" class="success-message">{{ message }}</p>
         <p v-if="errorMessage" class="error-message">{{ errorMessage }}</p>
 
-        <button type="submit" class="btn-primary">Wyslij link resetu</button>
+        <button type="submit" class="button is-primary">Wyslij link resetu</button>
       </form>
 
       <div class="auth-links">

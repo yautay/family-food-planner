@@ -1,10 +1,10 @@
 <template>
-  <div class="ingredients">
-    <div><h1>Ingredients</h1></div>
+  <section class="surface-card ingredients">
+    <div><h1 class="title is-4">Ingredients</h1></div>
     <div class="ingredients_list">
-      <div><h2>Ingredients list</h2></div>
+      <div><h2 class="title is-5">Ingredients list</h2></div>
       <div>
-        <table v-if="ingredients.length > 0">
+        <table v-if="ingredients.length > 0" class="table is-striped is-hoverable is-fullwidth is-size-7-mobile">
           <thead>
             <tr>
               <th>Nazwa</th>
@@ -36,8 +36,8 @@
               <td>{{ getTagName(ingredient.tag_id) }}</td>
               <td>
                 <template v-if="canWrite">
-                  <button @click="showEditModal(ingredient)">Edit</button>
-                  <button @click="confirmPop(ingredient, 'Czy jesteś pewien że chcesz usunąć produkt: ')">Delete</button>
+                  <button class="button is-small" @click="showEditModal(ingredient)">Edit</button>
+                  <button class="button is-small" @click="confirmPop(ingredient, 'Czy jesteś pewien że chcesz usunąć produkt: ')">Delete</button>
                 </template>
               </td>
             </tr>
@@ -45,11 +45,11 @@
         </table>
       </div>
     </div>
-  </div>
+  </section>
 
 
   <div v-if="canWrite" class="add_ingredient">
-      <div><button @click="showAddModal">Add Ingredient</button></div>
+      <div><button class="button is-primary" @click="showAddModal">Add Ingredient</button></div>
     </div>
 
     <div v-if="canWrite && isEditModalVisible" class="modal">
@@ -107,7 +107,7 @@
           <label :for="'edit-tag-' + tag.id">{{ tag.name }}</label>
         </div>
       </div>
-      <button type="submit" @click="confirmPop(editIngredientRef, 'Czy jesteś pewien że chcesz edit produkt: ')">Edit Ingredient</button>
+      <button class="button is-primary" type="submit" @click="confirmPop(editIngredientRef, 'Czy jesteś pewien że chcesz edit produkt: ')">Edit Ingredient</button>
     </form>
       </div>
     </div>
@@ -167,7 +167,7 @@
           <label :for="'add-tag-' + tag.id">{{ tag.name }}</label>
         </div>
       </div>
-      <button type="submit">Add Ingredient</button>
+      <button class="button is-primary" type="submit">Add Ingredient</button>
     </form>
       </div>
     </div>
@@ -341,7 +341,7 @@ export default {
 .ingredients {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch;
   gap: 1rem;
 }
 
@@ -385,8 +385,6 @@ select {
 }
 
 button {
-  padding: 0.5rem 1rem;
-  font-size: 1rem;
   cursor: pointer;
 }
 .modal {
@@ -404,9 +402,11 @@ button {
 }
 
 .modal-content {
-  background-color: #000000;
+  background-color: var(--app-surface);
+  color: var(--app-text);
   padding: 20px;
-  border: 1px solid #888;
+  border: 1px solid var(--app-border);
+  border-radius: 0.75rem;
   width: 80%;
   max-width: 500px;
 }

@@ -1,21 +1,21 @@
 <template>
-  <div class="elements">
-    <div><h1>Tags</h1></div>
+  <section class="surface-card elements">
+    <div><h1 class="title is-4">Tags</h1></div>
     <div class="elements_list">
-      <div><h2>Tags list</h2></div>
+      <div><h2 class="title is-5">Tags list</h2></div>
       <div>
         <ul>
           <li v-for="tag in tags" :key="tag.id">
             <div class="element_name">{{ tag.name }}</div>
-            <div v-if="canWrite" class="element_edit"><button @click="showEditModal(tag)">Edit</button></div>
-            <div v-if="canWrite" class="element_delete"><button @click="confirmDeleteTag(tag)">Delete</button></div>
+            <div v-if="canWrite" class="element_edit"><button class="button is-small" @click="showEditModal(tag)">Edit</button></div>
+            <div v-if="canWrite" class="element_delete"><button class="button is-small" @click="confirmDeleteTag(tag)">Delete</button></div>
           </li>
         </ul>
       </div>
     </div>
 
     <div v-if="canWrite" class="add_tag">
-      <div><button @click="showAddModal">Add TagModel</button></div>
+      <div><button class="button is-primary" @click="showAddModal">Add TagModel</button></div>
     </div>
 
     <div v-if="isEditModalVisible" class="modal">
@@ -27,7 +27,7 @@
             <label for="edit-tag-name">TagModel Name:</label>
             <input type="text" id="edit-tag-name" v-model="editTagRef.name" required />
           </div>
-          <button type="submit">Update TagModel</button>
+          <button class="button is-primary" type="submit">Update TagModel</button>
         </form>
       </div>
     </div>
@@ -41,11 +41,11 @@
             <label for="new-tag-name">TagModel Name:</label>
             <input type="text" id="new-tag-name" v-model="newTagRef.name" required />
           </div>
-          <button type="submit">Add TagModel</button>
+          <button class="button is-primary" type="submit">Add TagModel</button>
         </form>
       </div>
     </div>
-  </div>
+  </section>
 </template>
 
 <script>
@@ -153,7 +153,7 @@ export default {
 .elements {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch;
   gap: 1rem;
 }
 
@@ -181,8 +181,6 @@ li {
 }
 
 button {
-  padding: 0.5rem 1rem;
-  font-size: 1rem;
   cursor: pointer;
 }
 
@@ -201,9 +199,11 @@ button {
 }
 
 .modal-content {
-  background-color: #000000;
+  background-color: var(--app-surface);
+  color: var(--app-text);
   padding: 20px;
-  border: 1px solid #888;
+  border: 1px solid var(--app-border);
+  border-radius: 0.75rem;
   width: 80%;
   max-width: 500px;
 }

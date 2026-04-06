@@ -1,18 +1,18 @@
 <template>
-  <section class="auth-page">
+  <section class="auth-page section p-0">
     <div class="auth-card">
-      <h1>Ustaw nowe haslo</h1>
+      <h1 class="title is-4">Ustaw nowe haslo</h1>
 
       <form @submit.prevent="onSubmit" class="form-grid">
         <label>
           Nowe haslo
-          <input v-model="newPassword" type="password" required autocomplete="new-password" />
+          <input v-model="newPassword" class="input" type="password" required autocomplete="new-password" />
         </label>
 
         <p v-if="message" class="success-message">{{ message }}</p>
         <p v-if="errorMessage" class="error-message">{{ errorMessage }}</p>
 
-        <button type="submit" class="btn-primary">Zmien haslo</button>
+        <button type="submit" class="button is-primary">Zmien haslo</button>
       </form>
 
       <div class="auth-links">

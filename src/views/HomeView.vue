@@ -1,6 +1,6 @@
 <template>
-  <section class="surface-card home-page">
-    <div class="hero">
+  <section class="surface-card">
+    <div class="content mb-4">
       <h1>Planowanie diety dla calej rodziny</h1>
       <p>
         Tworz harmonogram posilkow, korzystaj ze wspolnego katalogu przepisow i generuj liste zakupow
@@ -8,21 +8,33 @@
       </p>
     </div>
 
-    <div class="feature-grid">
-      <RouterLink to="/catalog" class="feature-card">
-        <h2>Katalog</h2>
-        <p>Przegladaj produkty i przepisy. Dane zaimportowane z PDF sa publiczne i tylko do odczytu.</p>
-      </RouterLink>
+    <div class="columns is-multiline">
+      <div class="column is-4-desktop is-6-tablet">
+        <RouterLink to="/catalog" class="box is-block">
+          <h2 class="title is-5 mb-2">Katalog</h2>
+          <p class="is-size-6 has-text-grey">
+            Przegladaj produkty i przepisy. Dane zaimportowane z PDF sa publiczne i tylko do odczytu.
+          </p>
+        </RouterLink>
+      </div>
 
-      <RouterLink to="/ingredients" class="feature-card">
-        <h2>Skladniki</h2>
-        <p>Zarzadzaj lista skladnikow oraz ich parametrami odzywczymi (wymaga uprawnien).</p>
-      </RouterLink>
+      <div class="column is-4-desktop is-6-tablet">
+        <RouterLink to="/ingredients" class="box is-block">
+          <h2 class="title is-5 mb-2">Skladniki</h2>
+          <p class="is-size-6 has-text-grey">
+            Zarzadzaj lista skladnikow oraz ich parametrami odzywczymi (wymaga uprawnien).
+          </p>
+        </RouterLink>
+      </div>
 
-      <RouterLink to="/settings" class="feature-card">
-        <h2>Ustawienia</h2>
-        <p>Jednostki, tagi, preferencje interfejsu oraz konfiguracja konta.</p>
-      </RouterLink>
+      <div class="column is-4-desktop is-6-tablet">
+        <RouterLink to="/settings" class="box is-block">
+          <h2 class="title is-5 mb-2">Ustawienia</h2>
+          <p class="is-size-6 has-text-grey">
+            Jednostki, tagi, preferencje interfejsu oraz konfiguracja konta.
+          </p>
+        </RouterLink>
+      </div>
     </div>
   </section>
 </template>
@@ -30,45 +42,3 @@
 <script setup>
 import { RouterLink } from 'vue-router'
 </script>
-
-<style scoped>
-.home-page {
-  display: grid;
-  gap: 1rem;
-}
-
-.hero {
-  display: grid;
-  gap: 0.6rem;
-}
-
-.hero p {
-  color: var(--app-muted);
-  max-width: 70ch;
-}
-
-.feature-grid {
-  display: grid;
-  gap: 0.9rem;
-}
-
-.feature-card {
-  border: 1px solid var(--app-border);
-  border-radius: 0.8rem;
-  padding: 0.85rem;
-  background: var(--app-surface-alt);
-  color: var(--app-text);
-  text-decoration: none;
-}
-
-.feature-card p {
-  margin-top: 0.35rem;
-  color: var(--app-muted);
-}
-
-@media (min-width: 900px) {
-  .feature-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-</style>

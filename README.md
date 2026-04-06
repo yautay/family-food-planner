@@ -17,6 +17,7 @@ Aplikacja web do planowania jedzenia dla rodziny, katalogowania produktow i prze
 - generowanie listy zakupowej z planu okresu (agregacja skladnikow + mnoznik `servings`),
 - audit log zmian ACL (`audit_logs`),
 - UI z motywami (light/dark/system) i lokalizacja PL/EN.
+- UI oparte o Bulma CSS (globalne style + komponenty formularzy i nawigacji).
 
 ## Szybki start
 

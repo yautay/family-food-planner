@@ -33,3 +33,6 @@ coverage
 .env
 .env.*
 !.env.example
+
+# Local imports and temporary files
+tmp/

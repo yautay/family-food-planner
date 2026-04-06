@@ -1,6 +1,6 @@
 <template>
   <section class="surface-card">
-    <h1>Konto</h1>
+    <h1 class="title is-4">Konto</h1>
 
     <p v-if="authStore.user">
       Zalogowany: <strong>{{ authStore.user.username }}</strong> ({{ authStore.user.email }})
@@ -11,22 +11,22 @@
     </div>
 
     <form @submit.prevent="onSubmit" class="form-grid compact">
-      <h2>Zmiana hasla</h2>
+      <h2 class="title is-5">Zmiana hasla</h2>
 
       <label>
         Aktualne haslo
-        <input v-model="currentPassword" type="password" required autocomplete="current-password" />
+        <input v-model="currentPassword" class="input" type="password" required autocomplete="current-password" />
       </label>
 
       <label>
         Nowe haslo
-        <input v-model="newPassword" type="password" required autocomplete="new-password" />
+        <input v-model="newPassword" class="input" type="password" required autocomplete="new-password" />
       </label>
 
       <p v-if="message" class="success-message">{{ message }}</p>
       <p v-if="errorMessage" class="error-message">{{ errorMessage }}</p>
 
-      <button class="btn-primary" type="submit">Zmien haslo</button>
+      <button class="button is-primary" type="submit">Zmien haslo</button>
     </form>
   </section>
 </template>

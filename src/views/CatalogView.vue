@@ -8,7 +8,7 @@
       <div class="grid-two">
         <div>
           <h2>{{ t('catalog.products') }}</h2>
-          <input v-model="productSearch" :placeholder="t('catalog.searchProduct')" @input="refreshProducts" />
+          <input v-model="productSearch" class="input" :placeholder="t('catalog.searchProduct')" @input="refreshProducts" />
           <p class="muted">{{ products.length }} rekordow</p>
           <ul class="list">
             <li v-for="product in products" :key="product.id">
@@ -20,7 +20,7 @@
 
         <div>
           <h2>{{ t('catalog.recipes') }}</h2>
-          <input v-model="recipeSearch" :placeholder="t('catalog.searchRecipe')" @input="refreshRecipes" />
+          <input v-model="recipeSearch" class="input" :placeholder="t('catalog.searchRecipe')" @input="refreshRecipes" />
           <p class="muted">{{ recipes.length }} rekordow</p>
           <ul class="list">
             <li v-for="recipe in recipes" :key="recipe.id">
@@ -46,8 +46,8 @@
       </ul>
 
       <div v-if="canManageRecipes && activeRecipe.is_editable === 1" class="actions-row">
-        <button class="btn-primary" @click="startEditActiveRecipe">Edytuj</button>
-        <button @click="removeActiveRecipe">Usun</button>
+        <button class="button is-primary is-small" @click="startEditActiveRecipe">Edytuj</button>
+        <button class="button is-small" @click="removeActiveRecipe">Usun</button>
       </div>
     </article>
 
@@ -56,25 +56,25 @@
       <form class="form-grid" @submit.prevent="saveRecipe">
         <label>
           Nazwa
-          <input v-model="recipeForm.name" required />
+          <input v-model="recipeForm.name" class="input" required />
         </label>
 
         <label>
           Source file
-          <input v-model="recipeForm.source_file" placeholder="manual" />
+          <input v-model="recipeForm.source_file" class="input" placeholder="manual" />
         </label>
 
         <label>
           Skladniki (linia: nazwa|ilosc|jednostka|gramy)
-          <textarea v-model="ingredientsText" rows="8"></textarea>
+          <textarea v-model="ingredientsText" class="textarea" rows="8"></textarea>
         </label>
 
         <p v-if="formMessage" class="success-message">{{ formMessage }}</p>
         <p v-if="formError" class="error-message">{{ formError }}</p>
 
         <div class="actions-row">
-          <button class="btn-primary" type="submit">{{ editingRecipeId ? 'Zapisz zmiany' : 'Dodaj przepis' }}</button>
-          <button type="button" @click="resetForm">Reset</button>
+          <button class="button is-primary" type="submit">{{ editingRecipeId ? 'Zapisz zmiany' : 'Dodaj przepis' }}</button>
+          <button class="button" type="button" @click="resetForm">Reset</button>
         </div>
       </form>
     </article>
