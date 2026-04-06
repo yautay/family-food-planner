@@ -5,18 +5,24 @@
 
       <form @submit.prevent="onSubmit" class="form-grid">
         <label>
-          Username
+          {{ t('auth.username') }}
           <input v-model="username" class="input" required autocomplete="username" />
         </label>
 
         <label>
-          Email
+          {{ t('auth.email') }}
           <input v-model="email" class="input" type="email" required autocomplete="email" />
         </label>
 
         <label>
           {{ t('auth.password') }}
-          <input v-model="password" class="input" type="password" required autocomplete="new-password" />
+          <input
+            v-model="password"
+            class="input"
+            type="password"
+            required
+            autocomplete="new-password"
+          />
         </label>
 
         <TurnstileWidget v-if="captchaSiteKey" v-model="captchaToken" :site-key="captchaSiteKey" />
@@ -64,7 +70,7 @@ async function onSubmit() {
   errorMessage.value = ''
 
   if (!captchaToken.value) {
-    errorMessage.value = 'Captcha is required'
+    errorMessage.value = t('auth.captchaRequired')
     return
   }
 
@@ -77,7 +83,7 @@ async function onSubmit() {
     })
     await router.push('/catalog')
   } catch (error) {
-    errorMessage.value = error?.response?.data?.error ?? 'Registration failed'
+    errorMessage.value = error?.response?.data?.error ?? t('auth.registrationFailed')
   }
 }
 </script>

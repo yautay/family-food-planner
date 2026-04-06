@@ -11,7 +11,13 @@
 
         <label>
           {{ t('auth.password') }}
-          <input v-model="password" class="input" type="password" required autocomplete="current-password" />
+          <input
+            v-model="password"
+            class="input"
+            type="password"
+            required
+            autocomplete="current-password"
+          />
         </label>
 
         <p v-if="errorMessage" class="error-message">{{ errorMessage }}</p>
@@ -47,10 +53,11 @@ async function onSubmit() {
 
   try {
     await authStore.login(identity.value, password.value)
-    const redirectPath = typeof route.query.redirect === 'string' ? route.query.redirect : '/catalog'
+    const redirectPath =
+      typeof route.query.redirect === 'string' ? route.query.redirect : '/catalog'
     await router.push(redirectPath)
   } catch (error) {
-    errorMessage.value = error?.response?.data?.error ?? 'Login failed'
+    errorMessage.value = error?.response?.data?.error ?? t('auth.loginFailed')
   }
 }
 </script>

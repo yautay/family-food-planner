@@ -1,49 +1,54 @@
 <template>
   <section v-if="!isAuthenticated" class="surface-card">
-    <h1 class="title is-4">Meal planner</h1>
-    <p class="muted">Ten widok wymaga logowania.</p>
-    <RouterLink to="/login">Przejdz do logowania</RouterLink>
+    <h1 class="title is-4">{{ t('meals.authTitle') }}</h1>
+    <p class="muted">{{ t('common.requiredAuth') }}</p>
+    <RouterLink to="/login">{{ t('common.goToLogin') }}</RouterLink>
   </section>
 
   <section v-else class="planner-grid">
     <article class="surface-card section-stack">
       <div class="section-header">
-        <h1 class="title is-4">Planowanie okresu</h1>
-        <p class="muted">Prywatne plany tylko dla zalogowanego uzytkownika.</p>
+        <h1 class="title is-4">{{ t('meals.planningTitle') }}</h1>
+        <p class="muted">{{ t('meals.planningDescription') }}</p>
       </div>
 
       <div class="list-block">
-        <h2 class="title is-5">Plany</h2>
+        <h2 class="title is-5">{{ t('meals.plansListTitle') }}</h2>
         <ul class="list">
           <li v-for="plan in mealPlans" :key="plan.id">
             <button class="link" @click="selectMealPlan(plan.id)">{{ plan.name }}</button>
-            <span class="muted">{{ plan.start_date }} - {{ plan.end_date }} | {{ plan.entries_count }} pozycji</span>
+            <span class="muted"
+              >{{ plan.start_date }} - {{ plan.end_date }} | {{ plan.entries_count }}
+              {{ t('common.records') }}</span
+            >
           </li>
         </ul>
       </div>
 
       <form class="form-grid" @submit.prevent="saveMealPlan">
-        <h3 class="title is-5">{{ editingMealPlanId ? 'Edycja planu' : 'Nowy plan' }}</h3>
+        <h3 class="title is-5">
+          {{ editingMealPlanId ? t('meals.editPlanTitle') : t('meals.newPlanTitle') }}
+        </h3>
 
         <label>
-          Nazwa
+          {{ t('meals.name') }}
           <input v-model="mealPlanForm.name" class="input" required />
         </label>
 
         <div class="grid-two">
           <label>
-            Data od
+            {{ t('meals.dateFrom') }}
             <input v-model="mealPlanForm.start_date" class="input" type="date" required />
           </label>
 
           <label>
-            Data do
+            {{ t('meals.dateTo') }}
             <input v-model="mealPlanForm.end_date" class="input" type="date" required />
           </label>
         </div>
 
         <label>
-          Notatka
+          {{ t('meals.note') }}
           <textarea v-model="mealPlanForm.note" class="textarea" rows="3"></textarea>
         </label>
 
@@ -51,23 +56,31 @@
         <p v-if="mealPlanError" class="error-message">{{ mealPlanError }}</p>
 
         <div class="actions-row">
-          <button class="button is-primary" type="submit">{{ editingMealPlanId ? 'Zapisz plan' : 'Dodaj plan' }}</button>
-          <button class="button" type="button" @click="resetMealPlanForm">Reset</button>
-          <button v-if="editingMealPlanId" class="button" type="button" @click="removeMealPlan">Usun plan</button>
+          <button class="button is-primary" type="submit">
+            {{ editingMealPlanId ? t('meals.savePlan') : t('meals.addPlan') }}
+          </button>
+          <button class="button" type="button" @click="resetMealPlanForm">
+            {{ t('common.reset') }}
+          </button>
+          <button v-if="editingMealPlanId" class="button" type="button" @click="removeMealPlan">
+            {{ t('meals.removePlan') }}
+          </button>
         </div>
       </form>
 
       <div v-if="activeMealPlan" class="entries-block">
-        <h3 class="title is-5">Pozycje planu: {{ activeMealPlan.name }}</h3>
-        <p class="muted">Format linii: data|slot|recipe_id|custom_name|servings|note</p>
-        <p class="muted">slot: breakfast, lunch, dinner, snack</p>
+        <h3 class="title is-5">{{ t('meals.entriesTitle') }}: {{ activeMealPlan.name }}</h3>
+        <p class="muted">{{ t('meals.entriesFormat') }}</p>
+        <p class="muted">{{ t('meals.entriesSlots') }}</p>
 
         <textarea v-model="entriesText" class="textarea" rows="10"></textarea>
 
         <div class="actions-row">
-          <button class="button is-primary" type="button" @click="saveEntries">Zapisz pozycje</button>
+          <button class="button is-primary" type="button" @click="saveEntries">
+            {{ t('meals.saveEntries') }}
+          </button>
           <button class="button" type="button" @click="generateShoppingListFromActiveMealPlan">
-            Generuj liste zakupowa z planu
+            {{ t('meals.generateShoppingList') }}
           </button>
         </div>
       </div>
@@ -75,48 +88,61 @@
 
     <article class="surface-card section-stack">
       <div class="section-header">
-        <h1 class="title is-4">Listy zakupowe</h1>
-        <p class="muted">Lista moze byc podlaczona do planu okresu.</p>
+        <h1 class="title is-4">{{ t('meals.shoppingListsTitle') }}</h1>
+        <p class="muted">{{ t('meals.shoppingListsDescription') }}</p>
       </div>
 
       <div class="list-block">
-        <h2 class="title is-5">Listy</h2>
+        <h2 class="title is-5">{{ t('meals.shoppingListListTitle') }}</h2>
         <ul class="list">
           <li v-for="list in shoppingLists" :key="list.id">
             <button class="link" @click="selectShoppingList(list.id)">{{ list.name }}</button>
-            <span class="muted">{{ list.status }} | {{ list.checked_count }}/{{ list.items_count }}</span>
+            <span class="muted"
+              >{{
+                list.status === 'archived' ? t('common.statusArchived') : t('common.statusOpen')
+              }}
+              | {{ list.checked_count }}/{{ list.items_count }}</span
+            >
           </li>
         </ul>
       </div>
 
       <form class="form-grid" @submit.prevent="saveShoppingList">
-        <h3 class="title is-5">{{ editingShoppingListId ? 'Edycja listy' : 'Nowa lista' }}</h3>
+        <h3 class="title is-5">
+          {{
+            editingShoppingListId
+              ? t('meals.editShoppingListTitle')
+              : t('meals.newShoppingListTitle')
+          }}
+        </h3>
 
         <label>
-          Nazwa
+          {{ t('meals.name') }}
           <input v-model="shoppingListForm.name" class="input" required />
         </label>
 
         <div class="grid-two">
           <label>
-            Status
+            {{ t('common.status') }}
             <select v-model="shoppingListForm.status" class="input">
-              <option value="open">open</option>
-              <option value="archived">archived</option>
+              <option value="open">{{ t('common.statusOpen') }}</option>
+              <option value="archived">{{ t('common.statusArchived') }}</option>
             </select>
           </label>
 
           <label>
-            Powiazany plan
+            {{ t('meals.linkedPlan') }}
             <select v-model="shoppingListForm.meal_plan_id" class="input">
-              <option value="">Brak</option>
-              <option v-for="plan in mealPlans" :key="plan.id" :value="String(plan.id)">{{ plan.name }}</option>
+              <option value="">{{ t('meals.noLinkedPlan') }}</option>
+              <option v-for="plan in mealPlans" :key="plan.id" :value="String(plan.id)">
+                {{ plan.name }}
+              </option>
             </select>
           </label>
         </div>
 
         <label>
-          Notatka
+          {{ t('meals.note') }}
           <textarea v-model="shoppingListForm.note" class="textarea" rows="3"></textarea>
         </label>
 
@@ -124,14 +150,25 @@
         <p v-if="shoppingListError" class="error-message">{{ shoppingListError }}</p>
 
         <div class="actions-row">
-          <button class="button is-primary" type="submit">{{ editingShoppingListId ? 'Zapisz liste' : 'Dodaj liste' }}</button>
-          <button class="button" type="button" @click="resetShoppingListForm">Reset</button>
-          <button v-if="editingShoppingListId" class="button" type="button" @click="removeShoppingList">Usun liste</button>
+          <button class="button is-primary" type="submit">
+            {{ editingShoppingListId ? t('meals.saveList') : t('meals.addList') }}
+          </button>
+          <button class="button" type="button" @click="resetShoppingListForm">
+            {{ t('common.reset') }}
+          </button>
+          <button
+            v-if="editingShoppingListId"
+            class="button"
+            type="button"
+            @click="removeShoppingList"
+          >
+            {{ t('meals.removeList') }}
+          </button>
         </div>
       </form>
 
       <div v-if="activeShoppingList" class="items-block">
-        <h3 class="title is-5">Pozycje: {{ activeShoppingList.name }}</h3>
+        <h3 class="title is-5">{{ t('meals.itemsTitle') }}: {{ activeShoppingList.name }}</h3>
 
         <ul class="list">
           <li v-for="item in activeShoppingList.items" :key="item.id" class="item-row">
@@ -145,47 +182,63 @@
             </label>
 
             <span class="muted">{{ item.quantity ?? '-' }} {{ item.unit_name || '' }}</span>
-            <button class="button is-small" type="button" @click="removeShoppingListItem(item.id)">Usun</button>
+            <button class="button is-small" type="button" @click="removeShoppingListItem(item.id)">
+              {{ t('common.delete') }}
+            </button>
           </li>
         </ul>
 
         <form class="form-grid" @submit.prevent="addItemToShoppingList">
-          <h4 class="title is-6">Dodaj pozycje</h4>
+          <h4 class="title is-6">{{ t('meals.addItemTitle') }}</h4>
 
           <label>
-            Produkt z katalogu
+            {{ t('meals.productFromCatalog') }}
             <select v-model="shoppingItemForm.product_id" class="input">
-              <option value="">Wybierz produkt</option>
-              <option v-for="product in products" :key="product.id" :value="String(product.id)">{{ product.name }}</option>
+              <option value="">{{ t('meals.pickProduct') }}</option>
+              <option v-for="product in products" :key="product.id" :value="String(product.id)">
+                {{ product.name }}
+              </option>
             </select>
           </label>
 
           <label>
-            Lub nazwa reczna
-            <input v-model="shoppingItemForm.custom_name" class="input" placeholder="np. Pomidor koktajlowy" />
+            {{ t('meals.customName') }}
+            <input
+              v-model="shoppingItemForm.custom_name"
+              class="input"
+              :placeholder="t('meals.customNamePlaceholder')"
+            />
           </label>
 
           <div class="grid-two">
             <label>
-              Ilosc
-              <input v-model="shoppingItemForm.quantity" class="input" type="number" min="0" step="0.01" />
+              {{ t('meals.quantity') }}
+              <input
+                v-model="shoppingItemForm.quantity"
+                class="input"
+                type="number"
+                min="0"
+                step="0.01"
+              />
             </label>
 
             <label>
-              Jednostka
+              {{ t('meals.unit') }}
               <select v-model="shoppingItemForm.unit_id" class="input">
-                <option value="">Brak</option>
-                <option v-for="unit in units" :key="unit.id" :value="String(unit.id)">{{ unit.name }}</option>
+                <option value="">{{ t('meals.noUnit') }}</option>
+                <option v-for="unit in units" :key="unit.id" :value="String(unit.id)">
+                  {{ unit.name }}
+                </option>
               </select>
             </label>
           </div>
 
           <label>
-            Notatka
+            {{ t('meals.note') }}
             <input v-model="shoppingItemForm.note" class="input" />
           </label>
 
-          <button class="button is-primary" type="submit">Dodaj pozycje</button>
+          <button class="button is-primary" type="submit">{{ t('meals.addItem') }}</button>
         </form>
       </div>
     </article>
@@ -199,11 +252,13 @@ import { useAuthStore } from '../stores/authStore'
 import { useCatalogStore } from '../stores/catalogStore'
 import { useMealPlannerStore } from '../stores/mealPlannerStore'
 import { useUnitStore } from '../stores/unitsStore'
+import { useI18n } from '../composables/useI18n'
 
 const authStore = useAuthStore()
 const catalogStore = useCatalogStore()
 const mealPlannerStore = useMealPlannerStore()
 const unitStore = useUnitStore()
+const { t } = useI18n()
 
 const editingMealPlanId = ref(null)
 const editingShoppingListId = ref(null)
@@ -347,15 +402,15 @@ async function saveMealPlan() {
     if (editingMealPlanId.value) {
       const updated = await mealPlannerStore.updateMealPlan(editingMealPlanId.value, payload)
       await selectMealPlan(updated.id)
-      mealPlanMessage.value = 'Zapisano plan.'
+      mealPlanMessage.value = t('meals.planSaved')
       return
     }
 
     const created = await mealPlannerStore.createMealPlan(payload)
     await selectMealPlan(created.id)
-    mealPlanMessage.value = 'Dodano plan.'
+    mealPlanMessage.value = t('meals.planAdded')
   } catch (error) {
-    mealPlanError.value = error?.response?.data?.error ?? 'Nie udalo sie zapisac planu.'
+    mealPlanError.value = error?.response?.data?.error ?? t('meals.planSaveError')
   }
 }
 
@@ -364,18 +419,18 @@ async function removeMealPlan() {
     return
   }
 
-  if (!confirm(`Usunac plan: ${mealPlanForm.value.name}?`)) {
+  if (!confirm(t('meals.planDeleteConfirm', { name: mealPlanForm.value.name }))) {
     return
   }
 
   try {
     await mealPlannerStore.deleteMealPlan(editingMealPlanId.value)
     entriesText.value = ''
-    mealPlanMessage.value = 'Plan usuniety.'
+    mealPlanMessage.value = t('meals.planDeleted')
     mealPlanError.value = ''
     resetMealPlanForm(false)
   } catch (error) {
-    mealPlanError.value = error?.response?.data?.error ?? 'Nie udalo sie usunac planu.'
+    mealPlanError.value = error?.response?.data?.error ?? t('meals.planDeleteError')
   }
 }
 
@@ -393,9 +448,9 @@ async function saveEntries() {
       parseEntriesText(),
     )
     entriesText.value = mapEntriesToText(updated.entries ?? [])
-    mealPlanMessage.value = 'Zapisano pozycje planu.'
+    mealPlanMessage.value = t('meals.entriesSaved')
   } catch (error) {
-    mealPlanError.value = error?.response?.data?.error ?? 'Nie udalo sie zapisac pozycji planu.'
+    mealPlanError.value = error?.response?.data?.error ?? t('meals.entriesSaveError')
   }
 }
 
@@ -410,10 +465,9 @@ async function generateShoppingListFromActiveMealPlan() {
   try {
     const created = await mealPlannerStore.generateShoppingListFromMealPlan(activeMealPlan.value.id)
     await selectShoppingList(created.id)
-    shoppingListMessage.value = 'Wygenerowano liste zakupowa z aktywnego planu.'
+    shoppingListMessage.value = t('meals.listGenerated')
   } catch (error) {
-    shoppingListError.value =
-      error?.response?.data?.error ?? 'Nie udalo sie wygenerowac listy zakupowej z planu.'
+    shoppingListError.value = error?.response?.data?.error ?? t('meals.listGenerateError')
   }
 }
 
@@ -438,22 +492,27 @@ async function saveShoppingList() {
 
   const payload = {
     ...shoppingListForm.value,
-    meal_plan_id: shoppingListForm.value.meal_plan_id ? Number(shoppingListForm.value.meal_plan_id) : null,
+    meal_plan_id: shoppingListForm.value.meal_plan_id
+      ? Number(shoppingListForm.value.meal_plan_id)
+      : null,
   }
 
   try {
     if (editingShoppingListId.value) {
-      const updated = await mealPlannerStore.updateShoppingList(editingShoppingListId.value, payload)
+      const updated = await mealPlannerStore.updateShoppingList(
+        editingShoppingListId.value,
+        payload,
+      )
       await selectShoppingList(updated.id)
-      shoppingListMessage.value = 'Zapisano liste.'
+      shoppingListMessage.value = t('meals.listSaved')
       return
     }
 
     const created = await mealPlannerStore.createShoppingList(payload)
     await selectShoppingList(created.id)
-    shoppingListMessage.value = 'Dodano liste.'
+    shoppingListMessage.value = t('meals.listAdded')
   } catch (error) {
-    shoppingListError.value = error?.response?.data?.error ?? 'Nie udalo sie zapisac listy.'
+    shoppingListError.value = error?.response?.data?.error ?? t('meals.listSaveError')
   }
 }
 
@@ -462,17 +521,17 @@ async function removeShoppingList() {
     return
   }
 
-  if (!confirm(`Usunac liste: ${shoppingListForm.value.name}?`)) {
+  if (!confirm(t('meals.listDeleteConfirm', { name: shoppingListForm.value.name }))) {
     return
   }
 
   try {
     await mealPlannerStore.deleteShoppingList(editingShoppingListId.value)
-    shoppingListMessage.value = 'Lista usunieta.'
+    shoppingListMessage.value = t('meals.listDeleted')
     shoppingListError.value = ''
     resetShoppingListForm(false)
   } catch (error) {
-    shoppingListError.value = error?.response?.data?.error ?? 'Nie udalo sie usunac listy.'
+    shoppingListError.value = error?.response?.data?.error ?? t('meals.listDeleteError')
   }
 }
 
@@ -485,7 +544,9 @@ async function addItemToShoppingList() {
 
   try {
     await mealPlannerStore.addShoppingListItem(activeShoppingList.value.id, {
-      product_id: shoppingItemForm.value.product_id ? Number(shoppingItemForm.value.product_id) : null,
+      product_id: shoppingItemForm.value.product_id
+        ? Number(shoppingItemForm.value.product_id)
+        : null,
       custom_name: shoppingItemForm.value.custom_name || null,
       quantity: shoppingItemForm.value.quantity ? Number(shoppingItemForm.value.quantity) : null,
       unit_id: shoppingItemForm.value.unit_id ? Number(shoppingItemForm.value.unit_id) : null,
@@ -494,7 +555,7 @@ async function addItemToShoppingList() {
 
     resetShoppingItemForm()
   } catch (error) {
-    shoppingListError.value = error?.response?.data?.error ?? 'Nie udalo sie dodac pozycji.'
+    shoppingListError.value = error?.response?.data?.error ?? t('meals.itemAddError')
   }
 }
 
@@ -508,7 +569,7 @@ async function toggleItemChecked(item, checked) {
       is_checked: checked,
     })
   } catch (error) {
-    shoppingListError.value = error?.response?.data?.error ?? 'Nie udalo sie zmienic statusu pozycji.'
+    shoppingListError.value = error?.response?.data?.error ?? t('meals.itemToggleError')
   }
 }
 
@@ -520,7 +581,7 @@ async function removeShoppingListItem(itemId) {
   try {
     await mealPlannerStore.deleteShoppingListItem(activeShoppingList.value.id, itemId)
   } catch (error) {
-    shoppingListError.value = error?.response?.data?.error ?? 'Nie udalo sie usunac pozycji.'
+    shoppingListError.value = error?.response?.data?.error ?? t('meals.itemDeleteError')
   }
 }
 

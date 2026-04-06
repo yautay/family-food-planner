@@ -1,6 +1,8 @@
 <template>
   <section class="catalog-layout">
     <article class="surface-card">
+      <CatalogSectionNav />
+
       <div class="section-header">
         <h1>{{ t('catalog.title') }}</h1>
       </div>
@@ -8,26 +10,39 @@
       <div class="grid-two">
         <div>
           <h2>{{ t('catalog.products') }}</h2>
-          <input v-model="productSearch" class="input" :placeholder="t('catalog.searchProduct')" @input="refreshProducts" />
-          <p class="muted">{{ products.length }} rekordow</p>
+          <input
+            v-model="productSearch"
+            class="input"
+            :placeholder="t('catalog.searchProduct')"
+            @input="refreshProducts"
+          />
+          <p class="muted">{{ products.length }} {{ t('common.records') }}</p>
           <ul class="list">
             <li v-for="product in products" :key="product.id">
               <strong>{{ product.name }}</strong>
-              <span class="muted">{{ product.default_unit_name || '-' }} | {{ product.recipes_count }} recipes</span>
+              <span class="muted"
+                >{{ product.default_unit_name || '-' }} | {{ product.recipes_count }}
+                {{ t('catalog.recipesCount') }}</span
+              >
             </li>
           </ul>
         </div>
 
         <div>
           <h2>{{ t('catalog.recipes') }}</h2>
-          <input v-model="recipeSearch" class="input" :placeholder="t('catalog.searchRecipe')" @input="refreshRecipes" />
-          <p class="muted">{{ recipes.length }} rekordow</p>
+          <input
+            v-model="recipeSearch"
+            class="input"
+            :placeholder="t('catalog.searchRecipe')"
+            @input="refreshRecipes"
+          />
+          <p class="muted">{{ recipes.length }} {{ t('common.records') }}</p>
           <ul class="list">
             <li v-for="recipe in recipes" :key="recipe.id">
               <button class="link" @click="selectRecipe(recipe.id)">{{ recipe.name }}</button>
               <span class="muted">
-                {{ recipe.ingredients_count }} ing.
-                <template v-if="recipe.is_system === 1">| system</template>
+                {{ recipe.ingredients_count }} {{ t('catalog.ingredientsCount') }}
+                <template v-if="recipe.is_system === 1">| {{ t('catalog.system') }}</template>
               </span>
             </li>
           </ul>
@@ -37,35 +52,48 @@
 
     <article v-if="activeRecipe" class="surface-card">
       <h2>{{ t('catalog.recipeIngredients') }}: {{ activeRecipe.name }}</h2>
-      <p class="muted" v-if="activeRecipe.owner_username">owner: {{ activeRecipe.owner_username }}</p>
+      <p class="muted" v-if="activeRecipe.owner_username">
+        {{ t('catalog.owner') }}: {{ activeRecipe.owner_username }}
+      </p>
       <ul class="list">
         <li v-for="ingredient in activeRecipeIngredients" :key="ingredient.id">
           <strong>{{ ingredient.product_name }}</strong>
-          <span class="muted">{{ ingredient.quantity ?? '-' }} {{ ingredient.unit_name || '' }} | {{ ingredient.grams ?? '-' }} g</span>
+          <span class="muted"
+            >{{ ingredient.quantity ?? '-' }} {{ ingredient.unit_name || '' }} |
+            {{ ingredient.grams ?? '-' }} g</span
+          >
         </li>
       </ul>
 
       <div v-if="canManageRecipes && activeRecipe.is_editable === 1" class="actions-row">
-        <button class="button is-primary is-small" @click="startEditActiveRecipe">Edytuj</button>
-        <button class="button is-small" @click="removeActiveRecipe">Usun</button>
+        <button class="button is-primary is-small" @click="startEditActiveRecipe">
+          {{ t('common.edit') }}
+        </button>
+        <button class="button is-small" @click="removeActiveRecipe">
+          {{ t('common.delete') }}
+        </button>
       </div>
     </article>
 
     <article v-if="canManageRecipes" class="surface-card">
-      <h2>{{ editingRecipeId ? 'Edycja przepisu' : 'Nowy przepis' }}</h2>
+      <h2>{{ editingRecipeId ? t('catalog.editRecipeTitle') : t('catalog.newRecipeTitle') }}</h2>
       <form class="form-grid" @submit.prevent="saveRecipe">
         <label>
-          Nazwa
+          {{ t('catalog.name') }}
           <input v-model="recipeForm.name" class="input" required />
         </label>
 
         <label>
-          Source file
-          <input v-model="recipeForm.source_file" class="input" placeholder="manual" />
+          {{ t('catalog.sourceFile') }}
+          <input
+            v-model="recipeForm.source_file"
+            class="input"
+            :placeholder="t('catalog.sourceFilePlaceholder')"
+          />
         </label>
 
         <label>
-          Skladniki (linia: nazwa|ilosc|jednostka|gramy)
+          {{ t('catalog.ingredientsInputLabel') }}
           <textarea v-model="ingredientsText" class="textarea" rows="8"></textarea>
         </label>
 
@@ -73,8 +101,10 @@
         <p v-if="formError" class="error-message">{{ formError }}</p>
 
         <div class="actions-row">
-          <button class="button is-primary" type="submit">{{ editingRecipeId ? 'Zapisz zmiany' : 'Dodaj przepis' }}</button>
-          <button class="button" type="button" @click="resetForm">Reset</button>
+          <button class="button is-primary" type="submit">
+            {{ editingRecipeId ? t('catalog.saveChanges') : t('catalog.addRecipe') }}
+          </button>
+          <button class="button" type="button" @click="resetForm">{{ t('common.reset') }}</button>
         </div>
       </form>
     </article>
@@ -86,6 +116,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useCatalogStore } from '../stores/catalogStore'
 import { useAuthStore } from '../stores/authStore'
 import { useI18n } from '../composables/useI18n'
+import CatalogSectionNav from '../components/navigation/CatalogSectionNav.vue'
 
 const catalogStore = useCatalogStore()
 const authStore = useAuthStore()
@@ -129,7 +160,9 @@ function parseIngredientLines() {
     .filter(Boolean)
 
   return lines.map((line) => {
-    const [productName, quantity, unitName, grams] = line.split('|').map((part) => part?.trim() ?? '')
+    const [productName, quantity, unitName, grams] = line
+      .split('|')
+      .map((part) => part?.trim() ?? '')
     const quantityNumber = quantity ? Number(quantity.replace(',', '.')) : null
     const gramsNumber = grams ? Number(grams.replace(',', '.')) : null
 
@@ -156,17 +189,17 @@ async function saveRecipe() {
     if (editingRecipeId.value) {
       const updated = await catalogStore.updateRecipe(editingRecipeId.value, payload)
       await selectRecipe(updated.id)
-      formMessage.value = 'Zapisano zmiany.'
+      formMessage.value = t('catalog.recipeSaved')
     } else {
       const created = await catalogStore.createRecipe(payload)
       await selectRecipe(created.id)
-      formMessage.value = 'Dodano przepis.'
+      formMessage.value = t('catalog.recipeAdded')
     }
 
     await refreshRecipes()
     resetForm(false)
   } catch (error) {
-    formError.value = error?.response?.data?.error ?? 'Nie udalo sie zapisac przepisu'
+    formError.value = error?.response?.data?.error ?? t('catalog.saveError')
   }
 }
 
@@ -213,16 +246,16 @@ async function removeActiveRecipe() {
     return
   }
 
-  if (!confirm(`Usunac przepis: ${activeRecipe.value.name}?`)) {
+  if (!confirm(t('catalog.deleteConfirm', { name: activeRecipe.value.name }))) {
     return
   }
 
   try {
     await catalogStore.deleteRecipe(activeRecipe.value.id)
-    formMessage.value = 'Przepis usuniety.'
+    formMessage.value = t('catalog.recipeDeleted')
     formError.value = ''
   } catch (error) {
-    formError.value = error?.response?.data?.error ?? 'Nie udalo sie usunac przepisu'
+    formError.value = error?.response?.data?.error ?? t('catalog.deleteError')
   }
 }
 

@@ -1,9 +1,11 @@
 <template>
   <section class="surface-card">
-    <h1 class="title is-4">Konto</h1>
+    <h1 class="title is-4">{{ t('account.title') }}</h1>
 
     <p v-if="authStore.user">
-      Zalogowany: <strong>{{ authStore.user.username }}</strong> ({{ authStore.user.email }})
+      {{ t('account.loggedInAs') }}: <strong>{{ authStore.user.username }}</strong> ({{
+        authStore.user.email
+      }})
     </p>
 
     <div class="badge-list">
@@ -11,22 +13,36 @@
     </div>
 
     <form @submit.prevent="onSubmit" class="form-grid compact">
-      <h2 class="title is-5">Zmiana hasla</h2>
+      <h2 class="title is-5">{{ t('account.changePasswordTitle') }}</h2>
 
       <label>
-        Aktualne haslo
-        <input v-model="currentPassword" class="input" type="password" required autocomplete="current-password" />
+        {{ t('auth.currentPassword') }}
+        <input
+          v-model="currentPassword"
+          class="input"
+          type="password"
+          required
+          autocomplete="current-password"
+        />
       </label>
 
       <label>
-        Nowe haslo
-        <input v-model="newPassword" class="input" type="password" required autocomplete="new-password" />
+        {{ t('auth.newPassword') }}
+        <input
+          v-model="newPassword"
+          class="input"
+          type="password"
+          required
+          autocomplete="new-password"
+        />
       </label>
 
       <p v-if="message" class="success-message">{{ message }}</p>
       <p v-if="errorMessage" class="error-message">{{ errorMessage }}</p>
 
-      <button class="button is-primary" type="submit">Zmien haslo</button>
+      <button class="button is-primary" type="submit">
+        {{ t('account.changePasswordSubmit') }}
+      </button>
     </form>
   </section>
 </template>
@@ -34,8 +50,10 @@
 <script setup>
 import { ref } from 'vue'
 import { useAuthStore } from '../stores/authStore'
+import { useI18n } from '../composables/useI18n'
 
 const authStore = useAuthStore()
+const { t } = useI18n()
 
 const currentPassword = ref('')
 const newPassword = ref('')
@@ -48,10 +66,10 @@ async function onSubmit() {
 
   try {
     await authStore.changePassword(currentPassword.value, newPassword.value)
-    message.value = 'Haslo zostalo zmienione. Zaloguj sie ponownie.'
+    message.value = t('account.changePasswordSuccess')
     await authStore.logout()
   } catch (error) {
-    errorMessage.value = error?.response?.data?.error ?? 'Nie udalo sie zmienic hasla'
+    errorMessage.value = error?.response?.data?.error ?? t('account.changePasswordError')
   }
 }
 </script>

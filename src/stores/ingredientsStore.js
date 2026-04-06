@@ -9,7 +9,7 @@ export const useIngredientStore = defineStore('ingredients', {
     async fetchIngredients() {
       try {
         const response = await apiClient.get('/ingredients')
-        this.ingredients = response.data.map(ingredient => {
+        this.ingredients = response.data.map((ingredient) => {
           if (typeof ingredient.tag_id === 'string') {
             ingredient.tag_id = ingredient.tag_id.split(',').map(Number)
           }
@@ -21,7 +21,7 @@ export const useIngredientStore = defineStore('ingredients', {
     },
     async addIngredient(ingredient) {
       try {
-        await apiClient.post('/ingredients', ingredient.value)
+        await apiClient.post('/ingredients', ingredient?.value ?? ingredient)
         await this.fetchIngredients()
       } catch (error) {
         console.error('Error adding ingredient:', error)

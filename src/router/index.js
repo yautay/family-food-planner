@@ -6,6 +6,8 @@ import SettingsView from '@views/SettingsView.vue'
 import UnitsView from '@views/UnitsView.vue'
 import TagView from '@views/TagView.vue'
 import CatalogView from '@views/CatalogView.vue'
+import PackagesView from '@views/PackagesView.vue'
+import RecipesView from '@views/RecipesView.vue'
 import LoginView from '@views/LoginView.vue'
 import RegisterView from '@views/RegisterView.vue'
 import ForgotPasswordView from '@views/ForgotPasswordView.vue'
@@ -38,14 +40,26 @@ const router = createRouter({
       component: SettingsView,
     },
     {
-      path: '/settings/units',
+      path: '/units',
+      alias: ['/settings/units'],
       name: 'units',
       component: UnitsView,
     },
     {
-      path: '/settings/tags',
+      path: '/tags',
+      alias: ['/settings/tags'],
       name: 'tags',
       component: TagView,
+    },
+    {
+      path: '/packages',
+      name: 'packages',
+      component: PackagesView,
+    },
+    {
+      path: '/recipes',
+      name: 'recipes',
+      component: RecipesView,
     },
     {
       path: '/catalog',

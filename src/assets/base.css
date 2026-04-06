@@ -54,6 +54,10 @@ body {
   color: var(--app-text);
 }
 
+* {
+  box-sizing: border-box;
+}
+
 h1,
 h2,
 h3,
@@ -165,6 +169,27 @@ a.router-link-active {
   border-top: 1px solid var(--app-border);
   margin-top: 1rem;
   padding-top: 1rem;
+}
+
+.table-wrapper {
+  overflow-x: auto;
+}
+
+@media (max-width: 768px) {
+  .surface-card {
+    padding: 0.9rem;
+  }
+
+  .auth-card {
+    padding: 0.9rem;
+  }
+
+  .button,
+  .input,
+  .select,
+  .textarea {
+    max-width: 100%;
+  }
 }
 
 @media (min-width: 900px) {

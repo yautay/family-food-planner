@@ -1,8 +1,8 @@
 <template>
   <section class="surface-card">
-    <h1 class="title is-4">Uprawnienia uzytkownikow</h1>
+    <h1 class="title is-4">{{ t('accessControl.title') }}</h1>
 
-    <p class="muted">Tylko uzytkownik z uprawnieniem <code>permissions.manage</code> moze edytowac ten widok.</p>
+    <p class="muted">{{ t('accessControl.description') }}</p>
     <p v-if="loadError" class="error-message">{{ loadError }}</p>
 
     <div v-for="user in users" :key="user.id" class="user-card">
@@ -11,7 +11,7 @@
 
       <div class="grid-two">
         <div>
-          <h3>Role</h3>
+          <h3>{{ t('accessControl.roles') }}</h3>
           <label v-for="role in accessCatalog.roles" :key="role.name" class="checkbox-line">
             <input
               type="checkbox"
@@ -23,8 +23,12 @@
         </div>
 
         <div>
-          <h3>Uprawnienia bezposrednie</h3>
-          <label v-for="permission in accessCatalog.permissions" :key="permission.name" class="checkbox-line">
+          <h3>{{ t('accessControl.directPermissions') }}</h3>
+          <label
+            v-for="permission in accessCatalog.permissions"
+            :key="permission.name"
+            class="checkbox-line"
+          >
             <input
               type="checkbox"
               :checked="user.permissions.includes(permission.name)"
@@ -41,9 +45,13 @@
 <script setup>
 import { computed, onMounted } from 'vue'
 import { useAuthStore } from '../stores/authStore'
+import { useI18n } from '../composables/useI18n'
 
 const authStore = useAuthStore()
-const loadError = computed(() => authStore.can('permissions.manage') ? '' : 'Brak uprawnien do zarzadzania ACL.')
+const { t } = useI18n()
+const loadError = computed(() =>
+  authStore.can('permissions.manage') ? '' : t('accessControl.noPermission'),
+)
 
 const users = computed(() => authStore.users)
 const accessCatalog = computed(() => authStore.accessCatalog)
