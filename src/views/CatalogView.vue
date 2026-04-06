@@ -55,6 +55,19 @@
       <p class="muted" v-if="activeRecipe.owner_username">
         {{ t('catalog.owner') }}: {{ activeRecipe.owner_username }}
       </p>
+      <div v-if="activeRecipeNutrition?.summary" class="nutrition-summary">
+        <span>{{ t('catalog.nutritionSummary') }}:</span>
+        <span>{{ activeRecipeNutrition.summary.calories ?? 0 }} kcal</span>
+        <span
+          >{{ t('ingredients.protein') }}: {{ activeRecipeNutrition.summary.protein ?? 0 }} g</span
+        >
+        <span>{{ t('ingredients.fat') }}: {{ activeRecipeNutrition.summary.fat ?? 0 }} g</span>
+        <span
+          >{{ t('ingredients.carbohydrates') }}:
+          {{ activeRecipeNutrition.summary.carbohydrates ?? 0 }} g</span
+        >
+        <span>{{ t('ingredients.fiber') }}: {{ activeRecipeNutrition.summary.fiber ?? 0 }} g</span>
+      </div>
       <ul class="list">
         <li v-for="ingredient in activeRecipeIngredients" :key="ingredient.id">
           <strong>{{ ingredient.product_name }}</strong>
@@ -139,6 +152,7 @@ const products = computed(() => catalogStore.products)
 const recipes = computed(() => catalogStore.recipes)
 const activeRecipe = computed(() => catalogStore.activeRecipe)
 const activeRecipeIngredients = computed(() => catalogStore.activeRecipeIngredients)
+const activeRecipeNutrition = computed(() => catalogStore.activeRecipeNutrition)
 const canManageRecipes = computed(() => authStore.can('recipes.manage'))
 
 async function refreshProducts() {
@@ -302,6 +316,14 @@ onMounted(async () => {
   display: flex;
   gap: 0.5rem;
   flex-wrap: wrap;
+}
+
+.nutrition-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin: 0.6rem 0;
+  font-size: 0.92rem;
 }
 
 textarea {

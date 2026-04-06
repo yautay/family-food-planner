@@ -13,6 +13,7 @@ const search = ref('')
 const recipes = computed(() => catalogStore.recipes)
 const activeRecipe = computed(() => catalogStore.activeRecipe)
 const activeRecipeIngredients = computed(() => catalogStore.activeRecipeIngredients)
+const activeRecipeNutrition = computed(() => catalogStore.activeRecipeNutrition)
 
 async function refreshRecipes() {
   await catalogStore.fetchRecipes(search.value)
@@ -69,6 +70,22 @@ onMounted(async () => {
           {{ t('catalog.owner') }}: {{ activeRecipe.owner_username }}
         </p>
         <p class="muted" v-if="activeRecipe.is_system === 1">{{ t('catalog.system') }}</p>
+
+        <div v-if="activeRecipeNutrition?.summary" class="nutrition-summary">
+          <span>{{ activeRecipeNutrition.summary.calories ?? 0 }} kcal</span>
+          <span
+            >{{ t('ingredients.protein') }}:
+            {{ activeRecipeNutrition.summary.protein ?? 0 }} g</span
+          >
+          <span>{{ t('ingredients.fat') }}: {{ activeRecipeNutrition.summary.fat ?? 0 }} g</span>
+          <span
+            >{{ t('ingredients.carbohydrates') }}:
+            {{ activeRecipeNutrition.summary.carbohydrates ?? 0 }} g</span
+          >
+          <span
+            >{{ t('ingredients.fiber') }}: {{ activeRecipeNutrition.summary.fiber ?? 0 }} g</span
+          >
+        </div>
 
         <ul class="list mt-3">
           <li v-for="ingredient in activeRecipeIngredients" :key="ingredient.id">
@@ -131,6 +148,14 @@ onMounted(async () => {
   color: var(--app-link);
   cursor: pointer;
   padding: 0;
+}
+
+.nutrition-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin-top: 0.55rem;
+  font-size: 0.92rem;
 }
 
 @media (min-width: 1000px) {

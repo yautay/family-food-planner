@@ -13,7 +13,6 @@ const uiStore = useUiStore()
 const { t } = useI18n()
 
 const isNavigationMenuOpen = ref(false)
-const isCatalogExpanded = ref(false)
 const isUserMenuOpen = ref(false)
 
 const isLoggedIn = computed(() => authStore.isAuthenticated)
@@ -44,19 +43,11 @@ watch(
 
 function closeAllMenus() {
   isNavigationMenuOpen.value = false
-  isCatalogExpanded.value = false
   isUserMenuOpen.value = false
 }
 
 function toggleNavigationMenu() {
   isNavigationMenuOpen.value = !isNavigationMenuOpen.value
-  if (!isNavigationMenuOpen.value) {
-    isCatalogExpanded.value = false
-  }
-}
-
-function toggleCatalog() {
-  isCatalogExpanded.value = !isCatalogExpanded.value
 }
 
 function toggleUserMenu() {
@@ -109,8 +100,8 @@ async function logout() {
   </header>
 
   <transition name="slide-down">
-    <div v-if="isNavigationMenuOpen" class="menu-panel">
-      <div class="container app-panel-content">
+    <div v-if="isNavigationMenuOpen" class="menu-panel navigation-panel">
+      <div class="app-panel-content">
         <nav class="menu-list-block" :aria-label="t('header.navigationMenu')">
           <RouterLink
             v-for="item in navItems"
@@ -122,26 +113,23 @@ async function logout() {
             {{ item.label }}
           </RouterLink>
 
-          <button
-            type="button"
-            class="menu-link menu-expand"
-            :aria-expanded="isCatalogExpanded ? 'true' : 'false'"
-            @click="toggleCatalog"
-          >
-            <span>{{ t('nav.catalog') }}</span>
-            <span class="expand-indicator">{{ isCatalogExpanded ? '-' : '+' }}</span>
-          </button>
+          <div class="catalog-group" tabindex="0">
+            <div class="menu-link menu-expand">
+              <span>{{ t('nav.catalog') }}</span>
+              <span class="expand-indicator" aria-hidden="true">v</span>
+            </div>
 
-          <div v-if="isCatalogExpanded" class="submenu-block">
-            <RouterLink
-              v-for="item in catalogItems"
-              :key="item.key"
-              class="submenu-link"
-              :to="item.to"
-              @click="closeAllMenus"
-            >
-              {{ item.label }}
-            </RouterLink>
+            <div class="submenu-block">
+              <RouterLink
+                v-for="item in catalogItems"
+                :key="item.key"
+                class="submenu-link"
+                :to="item.to"
+                @click="closeAllMenus"
+              >
+                {{ item.label }}
+              </RouterLink>
+            </div>
           </div>
         </nav>
       </div>
@@ -285,9 +273,20 @@ async function logout() {
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
 }
 
+.navigation-panel {
+  width: min(25vw, 420px);
+  margin-right: auto;
+  border-right: 1px solid var(--app-border);
+}
+
 .app-panel-content {
   padding-top: 0.75rem;
   padding-bottom: 0.75rem;
+}
+
+.navigation-panel .app-panel-content {
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
 }
 
 .menu-list-block {
@@ -309,13 +308,32 @@ async function logout() {
 }
 
 .menu-expand {
-  cursor: pointer;
+  cursor: default;
+}
+
+.catalog-group {
+  display: grid;
+  gap: 0.35rem;
 }
 
 .submenu-block {
   padding-left: 0.65rem;
   display: grid;
   gap: 0.35rem;
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  visibility: hidden;
+  transition:
+    max-height 0.22s ease,
+    opacity 0.2s ease;
+}
+
+.catalog-group:hover .submenu-block,
+.catalog-group:focus-within .submenu-block {
+  max-height: 18rem;
+  opacity: 1;
+  visibility: visible;
 }
 
 .submenu-link {
@@ -324,6 +342,12 @@ async function logout() {
 
 .expand-indicator {
   font-weight: 700;
+  transition: transform 0.2s ease;
+}
+
+.catalog-group:hover .expand-indicator,
+.catalog-group:focus-within .expand-indicator {
+  transform: rotate(180deg);
 }
 
 .user-panel {
@@ -374,6 +398,10 @@ async function logout() {
 @media (min-width: 900px) {
   .app-panel-content {
     max-width: 1180px;
+  }
+
+  .navigation-panel .app-panel-content {
+    max-width: 100%;
   }
 
   .user-panel-content {

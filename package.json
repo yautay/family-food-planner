@@ -14,7 +14,9 @@
     "start:server": "node server.js",
     "db:migrate": "node scripts/run-migrations.mjs",
     "db:import:diets": "node scripts/import-diet-pdfs.mjs",
-    "db:setup": "npm run db:migrate && npm run db:import:diets"
+    "db:rebuild:conversions": "node scripts/rebuild-packages-from-recipes.mjs",
+    "db:enrich:nutrition": "node scripts/enrich-product-nutrition.mjs",
+    "db:setup": "npm run db:migrate && npm run db:import:diets && npm run db:rebuild:conversions"
   },
   "dependencies": {
     "axios": "^1.7.9",

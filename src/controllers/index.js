@@ -3,6 +3,7 @@ import unitController from './unit.controller.js'
 import ingredientController from './ingredient.controller.js'
 import productController from './product.controller.js'
 import recipeController from './recipe.controller.js'
+import packageController from './package.controller.js'
 import authController from './auth.controller.js'
 import mealPlanController from './meal-plan.controller.js'
 import shoppingListController from './shopping-list.controller.js'
@@ -14,6 +15,7 @@ controllers.unit = unitController
 controllers.ingredient = ingredientController
 controllers.product = productController
 controllers.recipe = recipeController
+controllers.package = packageController
 controllers.auth = authController
 controllers.mealPlan = mealPlanController
 controllers.shoppingList = shoppingListController

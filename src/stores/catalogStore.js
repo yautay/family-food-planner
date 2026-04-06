@@ -7,6 +7,7 @@ export const useCatalogStore = defineStore('catalog', {
     recipes: [],
     activeRecipe: null,
     activeRecipeIngredients: [],
+    activeRecipeNutrition: null,
   }),
   actions: {
     async fetchProducts(search = '') {
@@ -33,15 +34,18 @@ export const useCatalogStore = defineStore('catalog', {
 
     async fetchRecipeDetails(recipeId) {
       try {
-        const [recipeResponse, ingredientsResponse] = await Promise.all([
+        const [recipeResponse, ingredientsResponse, nutritionResponse] = await Promise.all([
           apiClient.get(`/recipes/${recipeId}`),
           apiClient.get(`/recipes/${recipeId}/ingredients`),
+          apiClient.get(`/recipes/${recipeId}/nutrition`),
         ])
 
         this.activeRecipe = recipeResponse.data
         this.activeRecipeIngredients = ingredientsResponse.data
+        this.activeRecipeNutrition = nutritionResponse.data
       } catch (error) {
         console.error('Error fetching recipe details:', error)
+        this.activeRecipeNutrition = null
       }
     },
 
@@ -63,6 +67,7 @@ export const useCatalogStore = defineStore('catalog', {
       if (this.activeRecipe?.id === recipeId) {
         this.activeRecipe = null
         this.activeRecipeIngredients = []
+        this.activeRecipeNutrition = null
       }
     },
   },

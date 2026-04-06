@@ -6,7 +6,10 @@ const apiRouter = express.Router()
 
 apiRouter.get('/', async (req, res) => {
   try {
-    const recipes = await controllers.recipe.getRecipes(req.query.search, req.auth?.user ? req.auth : null)
+    const recipes = await controllers.recipe.getRecipes(
+      req.query.search,
+      req.auth?.user ? req.auth : null,
+    )
     res.json(recipes)
   } catch (error) {
     res.status(500).json({ error: error.message })
@@ -16,7 +19,10 @@ apiRouter.get('/', async (req, res) => {
 apiRouter.get('/:id', async (req, res) => {
   try {
     const recipeId = Number(req.params.id)
-    const recipe = await controllers.recipe.getRecipeById(recipeId, req.auth?.user ? req.auth : null)
+    const recipe = await controllers.recipe.getRecipeById(
+      recipeId,
+      req.auth?.user ? req.auth : null,
+    )
 
     if (!recipe) {
       res.status(404).json({ error: 'Recipe not found' })
@@ -32,7 +38,10 @@ apiRouter.get('/:id', async (req, res) => {
 apiRouter.get('/:id/ingredients', async (req, res) => {
   try {
     const recipeId = Number(req.params.id)
-    const recipe = await controllers.recipe.getRecipeById(recipeId, req.auth?.user ? req.auth : null)
+    const recipe = await controllers.recipe.getRecipeById(
+      recipeId,
+      req.auth?.user ? req.auth : null,
+    )
 
     if (!recipe) {
       res.status(404).json({ error: 'Recipe not found' })
@@ -44,6 +53,25 @@ apiRouter.get('/:id/ingredients', async (req, res) => {
       req.auth?.user ? req.auth : null,
     )
     res.json(ingredients?.ingredients ?? [])
+  } catch (error) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+apiRouter.get('/:id/nutrition', async (req, res) => {
+  try {
+    const recipeId = Number(req.params.id)
+    const nutrition = await controllers.recipe.getRecipeNutrition(
+      recipeId,
+      req.auth?.user ? req.auth : null,
+    )
+
+    if (!nutrition) {
+      res.status(404).json({ error: 'Recipe not found' })
+      return
+    }
+
+    res.json(nutrition)
   } catch (error) {
     res.status(500).json({ error: error.message })
   }

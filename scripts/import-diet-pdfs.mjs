@@ -9,7 +9,8 @@ const projectRoot = path.resolve(__dirname, '..')
 const coreRecipesDir = path.join(projectRoot, 'core_recipes')
 const databasePath = path.resolve(projectRoot, process.env.DATABASE_PATH ?? 'database.db')
 
-const dayHeaderRegex = /^(Poniedzialek|Wtorek|Sroda|Czwartek|Piatek|Sobota|Niedziela|Poniedzialek|Sroda)$/i
+const dayHeaderRegex =
+  /^(Poniedzialek|Wtorek|Sroda|Czwartek|Piatek|Sobota|Niedziela|Poniedzialek|Sroda)$/i
 
 function removeDiacritics(value) {
   return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -35,15 +36,41 @@ function cleanName(value) {
   return normalizeWhitespace(value).replace(/\s+,/g, ',').replace(/\s+\./g, '.').trim()
 }
 
+function normalizeUnitAlias(value) {
+  return removeDiacritics(value).toLowerCase().trim()
+}
+
+function isPhysicalUnitName(unitName) {
+  const normalized = normalizeUnitAlias(unitName)
+  return [
+    'mg',
+    'g',
+    'gram',
+    'gramy',
+    'dag',
+    'kg',
+    'kilogram',
+    'kilogramy',
+    'ml',
+    'mililitr',
+    'mililitry',
+    'l',
+    'litr',
+    'litry',
+  ].includes(normalized)
+}
+
 function looksLikeIngredientLine(line) {
-  const quantityPattern = /^(.*?),\s*([0-9]+(?:[.,][0-9]+)?)\s*x\s*([^()]+?)\s*\(([0-9]+(?:[.,][0-9]+)?)\s*g\)$/i
+  const quantityPattern =
+    /^(.*?),\s*([0-9]+(?:[.,][0-9]+)?)\s*x\s*([^()]+?)\s*\(([0-9]+(?:[.,][0-9]+)?)\s*g\)$/i
   const gramsOnlyPattern = /^(.*?),\s*([0-9]+(?:[.,][0-9]+)?)\s*g$/i
 
   return quantityPattern.test(line) || gramsOnlyPattern.test(line)
 }
 
 function parseIngredientLine(line) {
-  const quantityPattern = /^(.*?),\s*([0-9]+(?:[.,][0-9]+)?)\s*x\s*([^()]+?)\s*\(([0-9]+(?:[.,][0-9]+)?)\s*g\)$/i
+  const quantityPattern =
+    /^(.*?),\s*([0-9]+(?:[.,][0-9]+)?)\s*x\s*([^()]+?)\s*\(([0-9]+(?:[.,][0-9]+)?)\s*g\)$/i
   const gramsOnlyPattern = /^(.*?),\s*([0-9]+(?:[.,][0-9]+)?)\s*g$/i
 
   const quantityMatch = line.match(quantityPattern)
@@ -123,6 +150,36 @@ function isNoiseLine(line) {
   return false
 }
 
+function looksLikeInstructionLine(line) {
+  const normalized = normalizeKey(line)
+  if (!normalized) {
+    return true
+  }
+
+  if (normalized.length > 70) {
+    return true
+  }
+
+  if (
+    /\b(dodac|dodaj|podsmazyc|usmazyc|piec|upiec|ugotowac|pokroic|wymieszac|zblenderowac|przyprawic|beztluszczowo|bez tluszczu)\b/i.test(
+      normalized,
+    )
+  ) {
+    return true
+  }
+
+  if (/[,.;:]$/.test(line.trim())) {
+    return true
+  }
+
+  const hasLowercaseStart = /^[a-z]/.test(removeDiacritics(line.trim()))
+  if (hasLowercaseStart && normalized.split(' ').length > 3) {
+    return true
+  }
+
+  return false
+}
+
 function mergeWrappedLines(rawLines) {
   const merged = []
 
@@ -149,7 +206,10 @@ function mergeWrappedLines(rawLines) {
         continue
       }
 
-      if (/^.+,\s*[0-9]+(?:[.,][0-9]+)?\s*x\s*[^()]+$/i.test(current) && /^\([0-9]+(?:[.,][0-9]+)?\s*g\)$/i.test(next)) {
+      if (
+        /^.+,\s*[0-9]+(?:[.,][0-9]+)?\s*x\s*[^()]+$/i.test(current) &&
+        /^\([0-9]+(?:[.,][0-9]+)?\s*g\)$/i.test(next)
+      ) {
         merged.push(`${current} ${next}`)
         index += 1
         continue
@@ -180,6 +240,10 @@ function extractRecipeTitles(lines) {
       }
 
       if (looksLikeIngredientLine(candidate)) {
+        continue
+      }
+
+      if (looksLikeInstructionLine(candidate)) {
         continue
       }
 
@@ -335,7 +399,11 @@ for (const fileName of pdfFiles) {
 const db = new Database(databasePath)
 db.pragma('foreign_keys = ON')
 
-if (!tableExists(db, 'products') || !tableExists(db, 'recipes') || !tableExists(db, 'recipe_ingredients')) {
+if (
+  !tableExists(db, 'products') ||
+  !tableExists(db, 'recipes') ||
+  !tableExists(db, 'recipe_ingredients')
+) {
   console.error('Missing catalog tables. Run npm run db:migrate first.')
   db.close()
   process.exit(1)
@@ -381,9 +449,42 @@ const insertSystemRecipe = db.prepare(`
 
 const selectRecipes = db.prepare('SELECT id, normalized_name FROM recipes')
 
+const insertPackageType = db.prepare(`
+  INSERT OR IGNORE INTO package_types(name, normalized_name)
+  VALUES (?, ?)
+`)
+
+const selectPackageTypes = db.prepare('SELECT id, normalized_name FROM package_types')
+
+const upsertIngredientPackageConversion = db.prepare(`
+  INSERT INTO ingredient_package_conversions(product_id, package_type_id, grams_per_package, source, samples_count)
+  VALUES (?, ?, ?, ?, ?)
+  ON CONFLICT(product_id, package_type_id)
+  DO UPDATE SET
+    grams_per_package = excluded.grams_per_package,
+    source = excluded.source,
+    samples_count = excluded.samples_count,
+    updated_at = CURRENT_TIMESTAMP
+`)
+
+const selectIngredientPackageConversion = db.prepare(`
+  SELECT id
+  FROM ingredient_package_conversions
+  WHERE product_id = ? AND package_type_id = ?
+`)
+
 const insertRecipeIngredient = db.prepare(`
-  INSERT INTO recipe_ingredients(recipe_id, product_id, quantity, unit_id, grams, note, source_file)
-  VALUES (@recipeId, @productId, @quantity, @unitId, @grams, @note, @sourceFile)
+  INSERT INTO recipe_ingredients(
+    recipe_id,
+    product_id,
+    quantity,
+    unit_id,
+    grams,
+    ingredient_package_conversion_id,
+    note,
+    source_file
+  )
+  VALUES (@recipeId, @productId, @quantity, @unitId, @grams, @ingredientPackageConversionId, @note, @sourceFile)
 `)
 
 const persistData = db.transaction(() => {
@@ -408,7 +509,7 @@ const persistData = db.transaction(() => {
     }
   }
   for (const relation of relationRows) {
-    if (relation.unitName) {
+    if (relation.unitName && isPhysicalUnitName(relation.unitName)) {
       allUnitKeys.add(normalizeKey(relation.unitName))
     }
   }
@@ -426,7 +527,7 @@ const persistData = db.transaction(() => {
 
   for (const unitKey of allUnitKeys) {
     const unitName = canonicalUnitNames.get(unitKey)
-    if (unitName) {
+    if (unitName && isPhysicalUnitName(unitName)) {
       insertUnit.run(unitName)
     }
   }
@@ -447,7 +548,9 @@ const persistData = db.transaction(() => {
     const payload = {
       name: recipe.name,
       normalizedName: recipe.normalizedName,
-      sourceFile: Array.from(recipe.sourceFiles).sort((left, right) => left.localeCompare(right)).join(', '),
+      sourceFile: Array.from(recipe.sourceFiles)
+        .sort((left, right) => left.localeCompare(right))
+        .join(', '),
     }
 
     if (hasRecipeAclColumns) {
@@ -457,17 +560,96 @@ const persistData = db.transaction(() => {
     }
   }
 
-  const productIdByKey = new Map(
-    selectProducts.all().map((row) => [row.normalized_name, row.id]),
-  )
+  const productIdByKey = new Map(selectProducts.all().map((row) => [row.normalized_name, row.id]))
   const recipeIdByKey = new Map(selectRecipes.all().map((row) => [row.normalized_name, row.id]))
+
+  const packageTypeNameByKey = new Map()
+  for (const relation of relationRows) {
+    if (!relation.unitName || isPhysicalUnitName(relation.unitName)) {
+      continue
+    }
+
+    const normalizedName = normalizeKey(relation.unitName)
+    if (!packageTypeNameByKey.has(normalizedName)) {
+      packageTypeNameByKey.set(normalizedName, cleanName(relation.unitName))
+      insertPackageType.run(cleanName(relation.unitName), normalizedName)
+    }
+  }
+
+  const packageTypeIdByKey = new Map(
+    selectPackageTypes.all().map((row) => [row.normalized_name, row.id]),
+  )
+
+  const conversionAggregates = new Map()
+  for (const relation of relationRows) {
+    if (!relation.unitName || isPhysicalUnitName(relation.unitName)) {
+      continue
+    }
+
+    if (
+      typeof relation.quantity !== 'number' ||
+      relation.quantity <= 0 ||
+      typeof relation.grams !== 'number' ||
+      relation.grams <= 0
+    ) {
+      continue
+    }
+
+    const productId = productIdByKey.get(relation.productKey)
+    const packageTypeId = packageTypeIdByKey.get(normalizeKey(relation.unitName))
+    if (!productId || !packageTypeId) {
+      continue
+    }
+
+    const gramsPerPackage = relation.grams / relation.quantity
+    const aggregateKey = `${productId}|${packageTypeId}`
+
+    if (!conversionAggregates.has(aggregateKey)) {
+      conversionAggregates.set(aggregateKey, {
+        productId,
+        packageTypeId,
+        gramsTotal: 0,
+        samples: 0,
+      })
+    }
+
+    const aggregate = conversionAggregates.get(aggregateKey)
+    aggregate.gramsTotal += gramsPerPackage
+    aggregate.samples += 1
+  }
+
+  for (const aggregate of conversionAggregates.values()) {
+    const averageGrams = Number((aggregate.gramsTotal / aggregate.samples).toFixed(2))
+    upsertIngredientPackageConversion.run(
+      aggregate.productId,
+      aggregate.packageTypeId,
+      averageGrams,
+      'import-diet-pdfs',
+      aggregate.samples,
+    )
+  }
 
   const relationDedup = new Set()
 
   for (const relation of relationRows) {
     const recipeId = recipeIdByKey.get(relation.recipeKey)
     const productId = productIdByKey.get(relation.productKey)
-    const unitId = relation.unitName ? (unitIdByKey.get(normalizeKey(relation.unitName)) ?? null) : null
+    const packageTypeId = relation.unitName
+      ? !isPhysicalUnitName(relation.unitName)
+        ? (packageTypeIdByKey.get(normalizeKey(relation.unitName)) ?? null)
+        : null
+      : null
+
+    const ingredientPackageConversionId =
+      packageTypeId && productId
+        ? (selectIngredientPackageConversion.get(productId, packageTypeId)?.id ?? null)
+        : null
+
+    const unitId = relation.unitName
+      ? isPhysicalUnitName(relation.unitName)
+        ? (unitIdByKey.get(normalizeKey(relation.unitName)) ?? null)
+        : null
+      : null
 
     if (!recipeId || !productId) {
       continue
@@ -478,6 +660,7 @@ const persistData = db.transaction(() => {
       productId,
       relation.quantity ?? '',
       unitId ?? '',
+      ingredientPackageConversionId ?? '',
       relation.grams ?? '',
     ].join('|')
 
@@ -492,6 +675,7 @@ const persistData = db.transaction(() => {
       quantity: relation.quantity,
       unitId,
       grams: relation.grams,
+      ingredientPackageConversionId,
       note: '',
       sourceFile: relation.sourceFile,
     })
