@@ -12,6 +12,9 @@ Aplikacja web do planowania jedzenia dla rodziny, katalogowania produktow i prze
 - RBAC (role + uprawnienia),
 - kontekst wlasciciela przepisu,
 - przepisy systemowe z importu: publiczne, tylko do odczytu,
+- prywatne planowanie okresu (`meal_plans`, `meal_plan_entries`),
+- prywatne listy zakupowe (`shopping_lists`, `shopping_list_items`),
+- audit log zmian ACL (`audit_logs`),
 - UI z motywami (light/dark/system) i lokalizacja PL/EN.
 
 ## Szybki start
@@ -68,6 +71,8 @@ Po pierwszym logowaniu zalecana zmiana hasla.
   - `users`, `roles`, `permissions`, `user_roles`, `user_permissions`, `auth_sessions`, `password_reset_tokens`
 - `003_recipe_acl.sql`
   - `recipes.owner_user_id`, `recipes.is_system`, `recipes.is_editable`
+- `004_meal_planning.sql`
+  - `meal_plans`, `meal_plan_entries`, `shopping_lists`, `shopping_list_items`, `audit_logs`
 
 ### Zasady dostepu do przepisow
 
@@ -90,6 +95,7 @@ Po pierwszym logowaniu zalecana zmiana hasla.
 - `POST /api/auth/reset-password`
 - `GET /api/auth/access-catalog` (auth + `permissions.manage`)
 - `GET /api/auth/users` (auth + `permissions.manage`)
+- `GET /api/auth/audit-logs` (auth + `permissions.manage`)
 - `PUT /api/auth/users/:id/roles` (auth + `permissions.manage`)
 - `PUT /api/auth/users/:id/permissions` (auth + `permissions.manage`)
 
@@ -104,6 +110,28 @@ Po pierwszym logowaniu zalecana zmiana hasla.
 - `POST /api/recipes` (auth + `recipes.manage`)
 - `PUT /api/recipes/:id` (auth + `recipes.manage`)
 - `DELETE /api/recipes/:id` (auth + `recipes.manage`)
+
+### Planowanie okresu (prywatne per user)
+
+- `GET /api/meal-plans` (auth)
+- `GET /api/meal-plans/:id` (auth, tylko owner)
+- `POST /api/meal-plans` (auth)
+- `PUT /api/meal-plans/:id` (auth, tylko owner)
+- `DELETE /api/meal-plans/:id` (auth, tylko owner)
+- `PUT /api/meal-plans/:id/entries` (auth, replace-all, tylko owner)
+
+`meal_slot` akceptuje: `breakfast`, `lunch`, `dinner`, `snack`.
+
+### Listy zakupowe (prywatne per user)
+
+- `GET /api/shopping-lists` (auth)
+- `GET /api/shopping-lists/:id` (auth, tylko owner)
+- `POST /api/shopping-lists` (auth)
+- `PUT /api/shopping-lists/:id` (auth, tylko owner)
+- `DELETE /api/shopping-lists/:id` (auth, tylko owner)
+- `POST /api/shopping-lists/:id/items` (auth, tylko owner)
+- `PUT /api/shopping-lists/:id/items/:itemId` (auth, tylko owner)
+- `DELETE /api/shopping-lists/:id/items/:itemId` (auth, tylko owner)
 
 ### Istniejace CRUD
 
@@ -121,6 +149,7 @@ Po pierwszym logowaniu zalecana zmiana hasla.
 - `/reset-password`
 - `/account`
 - `/access-control` (dla `permissions.manage`)
+- `/meals` (auth)
 
 ### Ustawienia UI
 
@@ -137,6 +166,6 @@ Po pierwszym logowaniu zalecana zmiana hasla.
 ## Ograniczenia i kolejne kroki
 
 - dodac testy integracyjne endpointow auth i RBAC,
-- dodac endpointy list zakupowych i planowania okresu,
-- dodac audit log operacji administracyjnych,
+- rozbudowac planner o automatyczne generowanie listy zakupowej z przepisow,
+- dodac wspoldzielenie planow/list na poziomie rodziny,
 - ewentualnie przeniesc z SQLite na PostgreSQL dla produkcji.
