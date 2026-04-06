@@ -44,6 +44,11 @@ npm run dev
 - `npm run test:unit` - unit-test suite (excludes integration tests)
 - `npm run test:integration` - auth + RBAC + shopping-list generator integration tests
 
+## Additional Docs
+
+- local acceptance testing guide: `docs/acceptance-tests-local.md`
+- release checklist: `docs/release-checklist.md`
+
 ## Requirements
 
 - Node.js + npm
