@@ -17,6 +17,7 @@ app.use('/api/tags', routes.tags)
 app.use('/api/ingredients', routes.ingredients)
 app.use('/api/products', routes.products)
 app.use('/api/recipes', routes.recipes)
+app.use('/api/meal-plans', routes.mealPlans)
 
 async function startServer() {
   await initDatabase()
