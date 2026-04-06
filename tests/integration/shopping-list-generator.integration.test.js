@@ -5,6 +5,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import Database from 'better-sqlite3'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const verifyTurnstileTokenMock = vi.fn(async () => ({ success: true, errors: [] }))
@@ -86,16 +87,59 @@ async function login(identity, password) {
 async function registerUser() {
   const username = nextValue('user')
   const email = `${username}@example.test`
+  const password = 'Password123!'
 
-  return api('/auth/register', {
+  const response = await api('/auth/register', {
     method: 'POST',
     body: {
       username,
       email,
-      password: 'Password123!',
+      password,
       captcha_token: 'ok',
     },
   })
+
+  return {
+    response,
+    username,
+    email,
+    password,
+  }
+}
+
+function promoteUserToAdmin(userId) {
+  const db = new Database(databasePath)
+  db.pragma('foreign_keys = ON')
+
+  db.transaction(() => {
+    db.prepare('DELETE FROM user_roles WHERE user_id = ?').run(userId)
+    db.prepare(
+      `
+      INSERT OR IGNORE INTO user_roles(user_id, role_id)
+      SELECT ?, id FROM roles WHERE name = 'admin'
+      `,
+    ).run(userId)
+  })()
+
+  db.close()
+}
+
+async function createAdminSession() {
+  const registration = await registerUser()
+  if (registration.response.status !== 201) {
+    throw new Error('Could not create test admin user')
+  }
+
+  promoteUserToAdmin(registration.response.body.user.id)
+
+  const adminLogin = await login(registration.username, registration.password)
+  if (adminLogin.status !== 200) {
+    throw new Error('Could not login as test admin user')
+  }
+
+  return {
+    token: adminLogin.body.token,
+  }
 }
 
 beforeAll(async () => {
@@ -152,14 +196,14 @@ describe('Shopping list generator endpoint', () => {
   })
 
   it('returns 404 when meal plan belongs to another user', async () => {
-    const adminLogin = await login('yautay', 'Test123!@#')
-    expect(adminLogin.status).toBe(200)
+    const ownerUser = await registerUser()
+    expect(ownerUser.response.status).toBe(201)
 
     const createdMealPlan = await api('/meal-plans', {
       method: 'POST',
-      token: adminLogin.body.token,
+      token: ownerUser.response.body.token,
       body: {
-        name: nextValue('Admin plan'),
+        name: nextValue('Owner plan'),
         start_date: '2026-04-01',
         end_date: '2026-04-07',
         note: '',
@@ -167,14 +211,14 @@ describe('Shopping list generator endpoint', () => {
     })
     expect(createdMealPlan.status).toBe(201)
 
-    const userRegistration = await registerUser()
-    expect(userRegistration.status).toBe(201)
+    const outsiderUser = await registerUser()
+    expect(outsiderUser.response.status).toBe(201)
 
     const generationAttempt = await api(
       `/shopping-lists/from-meal-plan/${createdMealPlan.body.id}`,
       {
         method: 'POST',
-        token: userRegistration.body.token,
+        token: outsiderUser.response.body.token,
       },
     )
 
@@ -182,9 +226,8 @@ describe('Shopping list generator endpoint', () => {
   })
 
   it('creates a shopping list aggregated from plan entries and servings', async () => {
-    const adminLogin = await login('yautay', 'Test123!@#')
-    expect(adminLogin.status).toBe(200)
-    const adminToken = adminLogin.body.token
+    const adminSession = await createAdminSession()
+    const adminToken = adminSession.token
 
     const recipe = await api('/recipes', {
       method: 'POST',

@@ -41,6 +41,7 @@ npm run dev
 - `npm run db:migrate` - run SQL migrations
 - `npm run db:import:diets` - import PDFs into catalog
 - `npm run db:setup` - migrations + PDF import
+- `npm run test:unit` - unit-test suite (excludes integration tests)
 - `npm run test:integration` - auth + RBAC + shopping-list generator integration tests
 
 ## Requirements

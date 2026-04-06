@@ -5,6 +5,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import Database from 'better-sqlite3'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const verifyTurnstileTokenMock = vi.fn(async () => ({ success: true, errors: [] }))
@@ -106,6 +107,41 @@ async function registerUser() {
   }
 }
 
+function promoteUserToAdmin(userId) {
+  const db = new Database(databasePath)
+  db.pragma('foreign_keys = ON')
+
+  db.transaction(() => {
+    db.prepare('DELETE FROM user_roles WHERE user_id = ?').run(userId)
+    db.prepare(
+      `
+      INSERT OR IGNORE INTO user_roles(user_id, role_id)
+      SELECT ?, id FROM roles WHERE name = 'admin'
+      `,
+    ).run(userId)
+  })()
+
+  db.close()
+}
+
+async function createAdminSession() {
+  const registration = await registerUser()
+  if (registration.response.status !== 201) {
+    throw new Error('Could not create test admin user')
+  }
+
+  promoteUserToAdmin(registration.response.body.user.id)
+
+  const adminLogin = await login(registration.username, registration.password)
+  if (adminLogin.status !== 200) {
+    throw new Error('Could not login as test admin user')
+  }
+
+  return {
+    token: adminLogin.body.token,
+  }
+}
+
 beforeAll(async () => {
   databaseDir = mkdtempSync(path.join(tmpdir(), 'ffp-auth-rbac-'))
   databasePath = path.join(databaseDir, 'integration.db')
@@ -179,12 +215,13 @@ describe('Auth + RBAC integration', () => {
   })
 
   it('supports login -> me -> logout session flow', async () => {
-    const loginResponse = await login('yautay', 'Test123!@#')
+    const { username, password } = await registerUser()
+    const loginResponse = await login(username, password)
     expect(loginResponse.status).toBe(200)
 
     const profile = await api('/auth/me', { token: loginResponse.body.token })
     expect(profile.status).toBe(200)
-    expect(profile.body.user.username).toBe('yautay')
+    expect(profile.body.user.username).toBe(username)
 
     const logoutResponse = await api('/auth/logout', {
       method: 'POST',
@@ -272,9 +309,8 @@ describe('Auth + RBAC integration', () => {
     const forbiddenForUser = await api('/auth/access-catalog', { token: userToken })
     expect(forbiddenForUser.status).toBe(403)
 
-    const adminLogin = await login('yautay', 'Test123!@#')
-    expect(adminLogin.status).toBe(200)
-    const adminToken = adminLogin.body.token
+    const adminSession = await createAdminSession()
+    const adminToken = adminSession.token
 
     const accessCatalog = await api('/auth/access-catalog', { token: adminToken })
     expect(accessCatalog.status).toBe(200)
