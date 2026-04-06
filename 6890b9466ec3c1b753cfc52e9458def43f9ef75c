@@ -1,0 +1,1 @@
+Implemented recipe instructions import from core_recipes PDFs, added ingredient unit->ml and default package metadata, and completed nutrition/tag enrichment pipeline (OpenFoodFacts + fallback averages + auto-tagging). Added dynamic search/sort controls in list-oriented views.
