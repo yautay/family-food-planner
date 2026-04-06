@@ -66,6 +66,9 @@
 
         <div class="actions-row">
           <button class="btn-primary" type="button" @click="saveEntries">Zapisz pozycje</button>
+          <button type="button" @click="generateShoppingListFromActiveMealPlan">
+            Generuj liste zakupowa z planu
+          </button>
         </div>
       </div>
     </article>
@@ -393,6 +396,24 @@ async function saveEntries() {
     mealPlanMessage.value = 'Zapisano pozycje planu.'
   } catch (error) {
     mealPlanError.value = error?.response?.data?.error ?? 'Nie udalo sie zapisac pozycji planu.'
+  }
+}
+
+async function generateShoppingListFromActiveMealPlan() {
+  if (!activeMealPlan.value) {
+    return
+  }
+
+  shoppingListMessage.value = ''
+  shoppingListError.value = ''
+
+  try {
+    const created = await mealPlannerStore.generateShoppingListFromMealPlan(activeMealPlan.value.id)
+    await selectShoppingList(created.id)
+    shoppingListMessage.value = 'Wygenerowano liste zakupowa z aktywnego planu.'
+  } catch (error) {
+    shoppingListError.value =
+      error?.response?.data?.error ?? 'Nie udalo sie wygenerowac listy zakupowej z planu.'
   }
 }
 

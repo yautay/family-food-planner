@@ -14,6 +14,7 @@ Aplikacja web do planowania jedzenia dla rodziny, katalogowania produktow i prze
 - przepisy systemowe z importu: publiczne, tylko do odczytu,
 - prywatne planowanie okresu (`meal_plans`, `meal_plan_entries`),
 - prywatne listy zakupowe (`shopping_lists`, `shopping_list_items`),
+- generowanie listy zakupowej z planu okresu (agregacja skladnikow + mnoznik `servings`),
 - audit log zmian ACL (`audit_logs`),
 - UI z motywami (light/dark/system) i lokalizacja PL/EN.
 
@@ -33,7 +34,7 @@ npm run dev
 - `npm run db:migrate` - migracje SQL
 - `npm run db:import:diets` - import PDF do katalogu
 - `npm run db:setup` - migracje + import
-- `npm run test:integration` - testy integracyjne auth + RBAC
+- `npm run test:integration` - testy integracyjne auth + RBAC + generator listy zakupowej
 
 ## Wymagania
 
@@ -179,11 +180,11 @@ Generator listy zakupowej:
 
 - testy integracyjne uruchamiaj: `npm run test:integration`,
 - suite tworzy izolowana baze SQLite przez `DATABASE_PATH`,
-- Turnstile i wysylka email sa mockowane, zeby testy nie wymagaly zewnetrznych uslug.
+- Turnstile i wysylka email sa mockowane, zeby testy nie wymagaly zewnetrznych uslug,
+- pokryte obszary: auth, RBAC, endpoint generatora listy zakupowej z planu.
 
 ## Ograniczenia i kolejne kroki
 
-- dodac testy integracyjne endpointow auth i RBAC,
 - rozbudowac generator listy zakupowej o zaawansowane reguly normalizacji i laczenia pozycji,
 - dodac wspoldzielenie planow/list na poziomie rodziny,
 - ewentualnie przeniesc z SQLite na PostgreSQL dla produkcji.

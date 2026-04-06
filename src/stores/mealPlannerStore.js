@@ -109,5 +109,12 @@ export const useMealPlannerStore = defineStore('mealPlanner', {
       }
       await this.fetchShoppingLists()
     },
+
+    async generateShoppingListFromMealPlan(mealPlanId, payload = {}) {
+      const response = await apiClient.post(`/shopping-lists/from-meal-plan/${mealPlanId}`, payload)
+      await this.fetchShoppingLists()
+      this.activeShoppingList = response.data
+      return response.data
+    },
   },
 })
