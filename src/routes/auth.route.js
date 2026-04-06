@@ -1,6 +1,7 @@
 import express from 'express'
 import controllers from '../controllers/index.js'
 import authService from '../services/auth.service.js'
+import auditService from '../services/audit.service.js'
 import { requireAuth, requirePermission } from '../middleware/auth.middleware.js'
 
 const apiRouter = express.Router()
@@ -80,10 +81,40 @@ apiRouter.get('/users', requireAuth, requirePermission('permissions.manage'), as
   res.json(users)
 })
 
+apiRouter.get('/audit-logs', requireAuth, requirePermission('permissions.manage'), async (req, res) => {
+  const logs = auditService.listAuditLogs({ limit: req.query.limit })
+  res.json(logs)
+})
+
 apiRouter.put('/users/:id/roles', requireAuth, requirePermission('permissions.manage'), async (req, res) => {
   try {
     const userId = Number(req.params.id)
+    const profileBefore = authService.getUserProfile(userId)
+
+    if (!profileBefore) {
+      res.status(404).json({ error: 'User not found' })
+      return
+    }
+
     const profile = await controllers.auth.updateUserRoles(userId, req.body?.roles)
+
+    if (!profile) {
+      res.status(404).json({ error: 'User not found' })
+      return
+    }
+
+    auditService.logEvent({
+      actorUserId: req.auth.user.id,
+      action: 'acl.roles.updated',
+      targetType: 'user',
+      targetId: userId,
+      meta: {
+        username: profile.user.username,
+        before_roles: profileBefore.roles,
+        after_roles: profile.roles,
+      },
+    })
+
     res.json(profile)
   } catch (error) {
     res.status(400).json({ error: error.message })
@@ -97,7 +128,32 @@ apiRouter.put(
   async (req, res) => {
     try {
       const userId = Number(req.params.id)
+      const profileBefore = authService.getUserProfile(userId)
+
+      if (!profileBefore) {
+        res.status(404).json({ error: 'User not found' })
+        return
+      }
+
       const profile = await controllers.auth.updateUserPermissions(userId, req.body?.permissions)
+
+      if (!profile) {
+        res.status(404).json({ error: 'User not found' })
+        return
+      }
+
+      auditService.logEvent({
+        actorUserId: req.auth.user.id,
+        action: 'acl.permissions.updated',
+        targetType: 'user',
+        targetId: userId,
+        meta: {
+          username: profile.user.username,
+          before_permissions: profileBefore.permissions,
+          after_permissions: profile.permissions,
+        },
+      })
+
       res.json(profile)
     } catch (error) {
       res.status(400).json({ error: error.message })
