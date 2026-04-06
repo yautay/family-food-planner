@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const projectRoot = path.resolve(__dirname, '..')
-const tmpDir = path.join(projectRoot, 'tmp')
+const coreRecipesDir = path.join(projectRoot, 'core_recipes')
 const databasePath = path.resolve(projectRoot, process.env.DATABASE_PATH ?? 'database.db')
 
 const dayHeaderRegex = /^(Poniedzialek|Wtorek|Sroda|Czwartek|Piatek|Sobota|Niedziela|Poniedzialek|Sroda)$/i
@@ -318,17 +318,17 @@ function tableExists(db, tableName) {
   return Boolean(row)
 }
 
-const pdfFiles = readdirSync(tmpDir)
+const pdfFiles = readdirSync(coreRecipesDir)
   .filter((name) => name.toLowerCase().endsWith('.pdf'))
   .sort((left, right) => left.localeCompare(right))
 
 if (pdfFiles.length === 0) {
-  console.error('No PDF files found in tmp/.')
+  console.error('No PDF files found in core_recipes/.')
   process.exit(1)
 }
 
 for (const fileName of pdfFiles) {
-  const filePath = path.join(tmpDir, fileName)
+  const filePath = path.join(coreRecipesDir, fileName)
   parsePdf(filePath, fileName)
 }
 

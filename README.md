@@ -6,26 +6,26 @@
 [![Progress](https://img.shields.io/badge/progress-95%25-yellow)](https://github.com/yautay/family-food-planner/blob/master/docs/release-checklist.md)
 [![Last Commit](https://img.shields.io/github/last-commit/yautay/family-food-planner)](https://github.com/yautay/family-food-planner/commits/master)
 
-Aplikacja web do planowania jedzenia dla rodziny, katalogowania produktow i przepisow oraz budowy list zakupowych.
+A web app for family meal planning, recipe/product catalog management, and shopping list generation.
 
-## Aktualny zakres
+## Current Scope
 
-- katalog produktow i przepisow,
-- import przepisow i produktow z PDF (`tmp/*.pdf`),
-- API CRUD dla przepisow (z kontrola uprawnien),
-- logowanie, rejestracja, reset hasla,
-- Turnstile CAPTCHA dla rejestracji i resetu hasla,
-- RBAC (role + uprawnienia),
-- kontekst wlasciciela przepisu,
-- przepisy systemowe z importu: publiczne, tylko do odczytu,
-- prywatne planowanie okresu (`meal_plans`, `meal_plan_entries`),
-- prywatne listy zakupowe (`shopping_lists`, `shopping_list_items`),
-- generowanie listy zakupowej z planu okresu (agregacja skladnikow + mnoznik `servings`),
-- audit log zmian ACL (`audit_logs`),
-- UI z motywami (light/dark/system) i lokalizacja PL/EN.
-- UI oparte o Bulma CSS (globalne style + komponenty formularzy i nawigacji).
+- product and recipe catalog,
+- PDF import of recipes/products from `core_recipes/*.pdf`,
+- recipe CRUD API with permission checks,
+- login, registration, and password reset,
+- Turnstile CAPTCHA for registration and password reset,
+- RBAC (roles + permissions),
+- recipe ownership context,
+- imported system recipes are public and read-only,
+- private period planning (`meal_plans`, `meal_plan_entries`),
+- private shopping lists (`shopping_lists`, `shopping_list_items`),
+- shopping list generation from meal plans (ingredient aggregation + `servings` multiplier),
+- ACL audit logs (`audit_logs`),
+- themed UI (light/dark/system), PL/EN localization,
+- Bulma-based UI styling (global styles + form/navigation components).
 
-## Szybki start
+## Quick Start
 
 ```sh
 npm install
@@ -34,23 +34,23 @@ npm run db:import:diets
 npm run dev
 ```
 
-## Komendy
+## Commands
 
-- `npm run dev` - frontend + backend lokalnie
-- `npm run start:server` - sam backend
-- `npm run db:migrate` - migracje SQL
-- `npm run db:import:diets` - import PDF do katalogu
-- `npm run db:setup` - migracje + import
-- `npm run test:integration` - testy integracyjne auth + RBAC + generator listy zakupowej
+- `npm run dev` - frontend + backend locally
+- `npm run start:server` - backend only
+- `npm run db:migrate` - run SQL migrations
+- `npm run db:import:diets` - import PDFs into catalog
+- `npm run db:setup` - migrations + PDF import
+- `npm run test:integration` - auth + RBAC + shopping-list generator integration tests
 
-## Wymagania
+## Requirements
 
 - Node.js + npm
-- `pdftotext` (systemowe narzedzie CLI)
+- `pdftotext` (system CLI tool)
 
-## Zmienne srodowiskowe
+## Environment Variables
 
-Skopiuj `.env.example` do `.env` i uzupelnij wartosci:
+Copy `.env.example` to `.env` and fill in values:
 
 - `TURNSTILE_SITE_KEY`
 - `TURNSTILE_SECRET_KEY`
@@ -60,22 +60,22 @@ Skopiuj `.env.example` do `.env` i uzupelnij wartosci:
 - `SMTP_PASS`
 - `SMTP_FROM`
 - `APP_BASE_URL`
-- `DATABASE_PATH` (opcjonalnie, domyslnie `database.db`)
+- `DATABASE_PATH` (optional, default: `database.db`)
 
-`APP_BASE_URL` powinno wskazywac frontend (np. `http://localhost:5173`), bo tam prowadzi link resetu hasla.
+`APP_BASE_URL` should point to the frontend app (for example: `http://localhost:5173`) because password-reset links are generated with that base URL.
 
-`DATABASE_PATH` mozna ustawic do izolacji bazy (np. testy integracyjne).
+`DATABASE_PATH` can be set to isolate the database (for example for integration tests).
 
-## Domyslny uzytkownik
+## Default User
 
 - login: `yautay`
-- haslo tymczasowe: `Test123!@#`
+- temporary password: `Test123!@#`
 
-Po pierwszym logowaniu zalecana zmiana hasla.
+Changing the password after first login is recommended.
 
-## Migracje i baza
+## Migrations and Database
 
-### Kluczowe migracje
+### Key Migrations
 
 - `001_catalog_schema.sql`
   - `products`, `product_aliases`, `recipes`, `recipe_ingredients`
@@ -86,12 +86,12 @@ Po pierwszym logowaniu zalecana zmiana hasla.
 - `004_meal_planning.sql`
   - `meal_plans`, `meal_plan_entries`, `shopping_lists`, `shopping_list_items`, `audit_logs`
 
-### Zasady dostepu do przepisow
+### Recipe Access Rules
 
-- przepisy z `tmp` sa oznaczane jako systemowe (`is_system=1`, `is_editable=0`),
-- sa widoczne dla wszystkich,
-- nie mozna ich edytowac/usuwac,
-- przepisy tworzone z UI maja `owner_user_id` i mozna nimi zarzadzac zgodnie z uprawnieniami.
+- recipes imported from `core_recipes` are marked as system recipes (`is_system=1`, `is_editable=0`),
+- they are visible to all users,
+- they cannot be edited or deleted,
+- recipes created from UI are owner-bound (`owner_user_id`) and managed according to permissions.
 
 ## API
 
@@ -111,87 +111,87 @@ Po pierwszym logowaniu zalecana zmiana hasla.
 - `PUT /api/auth/users/:id/roles` (auth + `permissions.manage`)
 - `PUT /api/auth/users/:id/permissions` (auth + `permissions.manage`)
 
-### Katalog
+### Catalog
 
 - `GET /api/products`
-- `GET /api/products?search=<fraza>`
+- `GET /api/products?search=<query>`
 - `GET /api/recipes`
-- `GET /api/recipes?search=<fraza>`
+- `GET /api/recipes?search=<query>`
 - `GET /api/recipes/:id`
 - `GET /api/recipes/:id/ingredients`
 - `POST /api/recipes` (auth + `recipes.manage`)
 - `PUT /api/recipes/:id` (auth + `recipes.manage`)
 - `DELETE /api/recipes/:id` (auth + `recipes.manage`)
 
-### Planowanie okresu (prywatne per user)
+### Meal Planning (private per user)
 
 - `GET /api/meal-plans` (auth)
-- `GET /api/meal-plans/:id` (auth, tylko owner)
+- `GET /api/meal-plans/:id` (auth, owner only)
 - `POST /api/meal-plans` (auth)
-- `PUT /api/meal-plans/:id` (auth, tylko owner)
-- `DELETE /api/meal-plans/:id` (auth, tylko owner)
-- `PUT /api/meal-plans/:id/entries` (auth, replace-all, tylko owner)
+- `PUT /api/meal-plans/:id` (auth, owner only)
+- `DELETE /api/meal-plans/:id` (auth, owner only)
+- `PUT /api/meal-plans/:id/entries` (auth, replace-all, owner only)
 
-`meal_slot` akceptuje: `breakfast`, `lunch`, `dinner`, `snack`.
+`meal_slot` accepts: `breakfast`, `lunch`, `dinner`, `snack`.
 
-### Listy zakupowe (prywatne per user)
+### Shopping Lists (private per user)
 
 - `GET /api/shopping-lists` (auth)
-- `GET /api/shopping-lists/:id` (auth, tylko owner)
+- `GET /api/shopping-lists/:id` (auth, owner only)
 - `POST /api/shopping-lists` (auth)
-- `PUT /api/shopping-lists/:id` (auth, tylko owner)
-- `DELETE /api/shopping-lists/:id` (auth, tylko owner)
-- `POST /api/shopping-lists/:id/items` (auth, tylko owner)
-- `PUT /api/shopping-lists/:id/items/:itemId` (auth, tylko owner)
-- `DELETE /api/shopping-lists/:id/items/:itemId` (auth, tylko owner)
-- `POST /api/shopping-lists/from-meal-plan/:mealPlanId` (auth, tylko owner planu)
+- `PUT /api/shopping-lists/:id` (auth, owner only)
+- `DELETE /api/shopping-lists/:id` (auth, owner only)
+- `POST /api/shopping-lists/:id/items` (auth, owner only)
+- `PUT /api/shopping-lists/:id/items/:itemId` (auth, owner only)
+- `DELETE /api/shopping-lists/:id/items/:itemId` (auth, owner only)
+- `POST /api/shopping-lists/from-meal-plan/:mealPlanId` (auth, meal-plan owner only)
 
-Generator listy zakupowej:
+Shopping-list generator behavior:
 
-- agreguje skladniki z przepisow z wpisow planu,
-- mnozy ilosci skladnikow przez `servings` dla kazdego wpisu,
-- grupuje po produkcie i jednostce,
-- dodaje wpisy bez przepisu jako pozycje `custom_name`.
+- aggregates recipe ingredients from meal-plan entries,
+- multiplies ingredient quantities by `servings` for each entry,
+- groups output by product and unit,
+- includes non-recipe entries as `custom_name` shopping items.
 
-### Istniejace CRUD
+### Existing CRUD
 
 - `units`, `tags`, `ingredients`:
-  - `GET` publiczny,
-  - `POST/PUT/DELETE` wymaga `catalog.write`.
+  - `GET` is public,
+  - `POST/PUT/DELETE` requires `catalog.write`.
 
 ## Frontend
 
-### Ekrany auth
+### Auth Screens
 
 - `/login`
 - `/register`
 - `/forgot-password`
 - `/reset-password`
 - `/account`
-- `/access-control` (dla `permissions.manage`)
+- `/access-control` (for `permissions.manage`)
 - `/meals` (auth)
 
-### Ustawienia UI
+### UI Settings
 
-- motyw: `light`, `dark`, `system`
-- lokalizacja: `PL`, `EN`
+- theme: `light`, `dark`, `system`
+- language: `PL`, `EN`
 
-## Bezpieczenstwo
+## Security
 
-- hasla: PBKDF2 (`sha512`, iteracje)
-- sesje: tokeny opaque hashowane w DB (`auth_sessions`)
-- reset hasla: token jednorazowy, wygasa czasowo
-- CAPTCHA: weryfikacja serwerowa Turnstile
+- passwords: PBKDF2 (`sha512`, iterations)
+- sessions: opaque tokens hashed in DB (`auth_sessions`)
+- password reset: single-use token with expiration
+- CAPTCHA: server-side Turnstile verification
 
-## Testy integracyjne
+## Integration Tests
 
-- testy integracyjne uruchamiaj: `npm run test:integration`,
-- suite tworzy izolowana baze SQLite przez `DATABASE_PATH`,
-- Turnstile i wysylka email sa mockowane, zeby testy nie wymagaly zewnetrznych uslug,
-- pokryte obszary: auth, RBAC, endpoint generatora listy zakupowej z planu.
+- run integration tests with: `npm run test:integration`,
+- suite creates an isolated SQLite DB via `DATABASE_PATH`,
+- Turnstile and email sending are mocked to avoid external dependencies,
+- covered areas: auth, RBAC, and shopping-list generation endpoint.
 
-## Ograniczenia i kolejne kroki
+## Limitations and Next Steps
 
-- rozbudowac generator listy zakupowej o zaawansowane reguly normalizacji i laczenia pozycji,
-- dodac wspoldzielenie planow/list na poziomie rodziny,
-- ewentualnie przeniesc z SQLite na PostgreSQL dla produkcji.
+- extend shopping-list generation with advanced normalization/merging rules,
+- add family-level sharing for plans/lists,
+- consider migration from SQLite to PostgreSQL for production.

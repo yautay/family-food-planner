@@ -1,30 +1,29 @@
 # Release Checklist
 
-## Status wdrozenia (Etapy 1+2, Sprinty A-D)
+## Delivery Status (Phases 1+2, Sprints A-D)
 
-- [x] Etap 1 (testability backend): `createApp` wydzielone (`src/app.js`), bootstrap uproszczony (`server.js`), DB przez `DATABASE_PATH` (`src/db/catalog.js`, `src/db/client.js`).
-- [x] Etap 1 (testy): testy integracyjne auth/RBAC dodane (`tests/integration/auth-rbac.integration.test.js`), skrypt `test:integration` w `package.json`.
-- [x] Etap 2 (backend): endpoint generatora listy z planu dodany (`src/routes/shopping-list.route.js`), logika agregacji + mnozenie przez `servings` (`src/controllers/shopping-list.controller.js`).
-- [x] Etap 2 (testy): testy generatora listy dodane (`tests/integration/shopping-list-generator.integration.test.js`).
-- [x] Etap 2 (frontend): akcja store + przycisk w UI (`src/stores/mealPlannerStore.js`, `src/views/MealsView.vue`).
-- [x] Dokumentacja aktualizowana na biezaco (`README.md`).
+- [x] Phase 1 (backend testability): `createApp` extracted (`src/app.js`), bootstrap simplified (`server.js`), DB made configurable through `DATABASE_PATH` (`src/db/catalog.js`, `src/db/client.js`).
+- [x] Phase 1 (tests): auth/RBAC integration tests added (`tests/integration/auth-rbac.integration.test.js`), `test:integration` script added in `package.json`.
+- [x] Phase 2 (backend): shopping list generator endpoint from meal plan added (`src/routes/shopping-list.route.js`), aggregation logic + `servings` multiplier implemented (`src/controllers/shopping-list.controller.js`).
+- [x] Phase 2 (tests): shopping list generator integration tests added (`tests/integration/shopping-list-generator.integration.test.js`).
+- [x] Phase 2 (frontend): store action + UI button integrated (`src/stores/mealPlannerStore.js`, `src/views/MealsView.vue`).
+- [x] Documentation updated continuously (`README.md`).
 
-## Do domkniecia
+## Remaining Steps
 
-- [ ] Uruchomic walidacje w srodowisku z Node/npm:
+- [ ] Run validation in an environment with Node/npm:
   - [ ] `npm run test:integration`
   - [ ] `npm run test:unit`
   - [ ] `npm run build`
-- [ ] Smoke test manualny UI:
-  - [ ] Utworzyc plan posilkow.
-  - [ ] Dodac wpisy z roznymi wartosciami `servings`.
-  - [ ] Wygenerowac liste zakupowa z planu.
-  - [ ] Zweryfikowac sumowanie ilosci i pozycje `custom_name`.
-- [ ] Decyzja porzadkowa dla `tmp/`:
-  - [x] Dodane do `.gitignore`.
+- [ ] Manual UI smoke test:
+  - [ ] Create a meal plan.
+  - [ ] Add entries with different `servings` values.
+  - [ ] Generate a shopping list from the plan.
+  - [ ] Verify quantity sums and `custom_name` items.
+- [x] Rename import directory from `tmp/` to `core_recipes/` and update references.
 
-## UI / CSS - stan
+## UI / CSS Status
 
-- [x] UI ma nowe style (custom CSS, zmienne, motywy light/dark/system).
-- [x] UI korzysta z frameworka CSS: Bulma.
-- [x] Font: `Manrope` z Google Fonts (`src/assets/base.css`).
+- [x] UI has updated styling with theme support (light/dark/system).
+- [x] UI uses Bulma as CSS framework.
+- [x] Font: `Manrope` from Google Fonts (`src/assets/base.css`).
