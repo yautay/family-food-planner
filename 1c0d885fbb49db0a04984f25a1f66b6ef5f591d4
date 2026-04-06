@@ -1,0 +1,1 @@
+Implemented ingredient-scoped package conversions (e.g., sztuka per ingredient), removed non-physical units from unit catalog, and added recipe nutrition rollups with migration + import/enrichment tooling.
