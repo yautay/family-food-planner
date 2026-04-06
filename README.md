@@ -1,5 +1,9 @@
 # Family Food Planner
 
+[![Project Status](https://img.shields.io/badge/status-in%20dev-orange)](https://github.com/yautay/family-food-planner/blob/master/docs/release-checklist.md)
+[![Progress](https://img.shields.io/badge/progress-95%25-yellow)](https://github.com/yautay/family-food-planner/blob/master/docs/release-checklist.md)
+[![Last Commit](https://img.shields.io/github/last-commit/yautay/family-food-planner)](https://github.com/yautay/family-food-planner/commits/master)
+
 Aplikacja web do planowania jedzenia dla rodziny, katalogowania produktow i przepisow oraz budowy list zakupowych.
 
 ## Aktualny zakres
