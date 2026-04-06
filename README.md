@@ -136,6 +136,14 @@ Po pierwszym logowaniu zalecana zmiana hasla.
 - `POST /api/shopping-lists/:id/items` (auth, tylko owner)
 - `PUT /api/shopping-lists/:id/items/:itemId` (auth, tylko owner)
 - `DELETE /api/shopping-lists/:id/items/:itemId` (auth, tylko owner)
+- `POST /api/shopping-lists/from-meal-plan/:mealPlanId` (auth, tylko owner planu)
+
+Generator listy zakupowej:
+
+- agreguje skladniki z przepisow z wpisow planu,
+- mnozy ilosci skladnikow przez `servings` dla kazdego wpisu,
+- grupuje po produkcie i jednostce,
+- dodaje wpisy bez przepisu jako pozycje `custom_name`.
 
 ### Istniejace CRUD
 
@@ -176,6 +184,6 @@ Po pierwszym logowaniu zalecana zmiana hasla.
 ## Ograniczenia i kolejne kroki
 
 - dodac testy integracyjne endpointow auth i RBAC,
-- rozbudowac planner o automatyczne generowanie listy zakupowej z przepisow,
+- rozbudowac generator listy zakupowej o zaawansowane reguly normalizacji i laczenia pozycji,
 - dodac wspoldzielenie planow/list na poziomie rodziny,
 - ewentualnie przeniesc z SQLite na PostgreSQL dla produkcji.

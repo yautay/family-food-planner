@@ -34,6 +34,12 @@ function getOwnedMealPlanById(mealPlanId, ownerUserId) {
     .get(mealPlanId, ownerUserId)
 }
 
+function getOwnedMealPlanForGeneration(mealPlanId, ownerUserId) {
+  return catalogDb
+    .prepare('SELECT id, name FROM meal_plans WHERE id = ? AND owner_user_id = ?')
+    .get(mealPlanId, ownerUserId)
+}
+
 function validateShoppingListPayload(payload, ownerUserId) {
   const name = normalizeText(payload?.name)
   const status = normalizeText(payload?.status).toLowerCase() || 'open'
@@ -141,6 +147,90 @@ function getOwnedShoppingListItem(shoppingListId, itemId, ownerUserId) {
       `,
     )
     .get(itemId, shoppingListId, ownerUserId)
+}
+
+function buildGeneratedItems(mealPlanId) {
+  const rows = catalogDb
+    .prepare(
+      `
+      SELECT
+        e.recipe_id,
+        e.custom_name AS entry_custom_name,
+        e.servings,
+        ri.product_id,
+        ri.quantity,
+        COALESCE(ri.unit_id, p.default_unit_id) AS unit_id
+      FROM meal_plan_entries e
+      LEFT JOIN recipe_ingredients ri ON ri.recipe_id = e.recipe_id
+      LEFT JOIN products p ON p.id = ri.product_id
+      WHERE e.meal_plan_id = ?
+      ORDER BY e.id ASC, ri.id ASC
+      `,
+    )
+    .all(mealPlanId)
+
+  const generatedItems = new Map()
+
+  for (const row of rows) {
+    if (!row.recipe_id) {
+      const customName = normalizeText(row.entry_custom_name)
+      if (!customName) {
+        continue
+      }
+
+      const key = `custom:${customName.toLowerCase()}`
+      if (!generatedItems.has(key)) {
+        generatedItems.set(key, {
+          product_id: null,
+          custom_name: customName,
+          quantity: null,
+          unit_id: null,
+          note: '',
+          is_checked: 0,
+          has_quantity: false,
+        })
+      }
+
+      continue
+    }
+
+    if (!row.product_id) {
+      continue
+    }
+
+    const servings = parseOptionalNumber(row.servings)
+    const multiplier = servings !== null && servings > 0 ? servings : 1
+    const quantity = parseOptionalNumber(row.quantity)
+    const scaledQuantity = quantity === null ? null : quantity * multiplier
+    const key = `product:${row.product_id}:unit:${row.unit_id ?? 'none'}`
+
+    if (!generatedItems.has(key)) {
+      generatedItems.set(key, {
+        product_id: row.product_id,
+        custom_name: null,
+        quantity: 0,
+        unit_id: row.unit_id ?? null,
+        note: '',
+        is_checked: 0,
+        has_quantity: false,
+      })
+    }
+
+    if (scaledQuantity !== null) {
+      const existing = generatedItems.get(key)
+      existing.quantity += scaledQuantity
+      existing.has_quantity = true
+    }
+  }
+
+  return Array.from(generatedItems.values()).map((item) => ({
+    product_id: item.product_id,
+    custom_name: item.custom_name,
+    quantity: item.has_quantity ? item.quantity : null,
+    unit_id: item.unit_id,
+    note: item.note,
+    is_checked: item.is_checked,
+  }))
 }
 
 async function listShoppingLists(user) {
@@ -335,6 +425,53 @@ async function deleteShoppingListItem(shoppingListId, itemId, user) {
   return true
 }
 
+async function generateShoppingListFromMealPlan(mealPlanId, payload, user) {
+  const mealPlan = getOwnedMealPlanForGeneration(mealPlanId, user.id)
+  if (!mealPlan) {
+    return null
+  }
+
+  const providedName = normalizeText(payload?.name)
+  const shoppingListName = providedName || `Zakupy: ${mealPlan.name}`
+  const generatedItems = buildGeneratedItems(mealPlanId)
+
+  const shoppingListId = catalogDb.transaction(() => {
+    const created = catalogDb
+      .prepare(
+        `
+        INSERT INTO shopping_lists(owner_user_id, meal_plan_id, name, status, note)
+        VALUES (?, ?, ?, 'open', ?)
+        `,
+      )
+      .run(user.id, mealPlan.id, shoppingListName, 'Wygenerowano z planu okresu')
+
+    const nextShoppingListId = Number(created.lastInsertRowid)
+
+    const insertItem = catalogDb.prepare(
+      `
+      INSERT INTO shopping_list_items(shopping_list_id, product_id, custom_name, quantity, unit_id, is_checked, note)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      `,
+    )
+
+    for (const item of generatedItems) {
+      insertItem.run(
+        nextShoppingListId,
+        item.product_id,
+        item.custom_name,
+        item.quantity,
+        item.unit_id,
+        item.is_checked,
+        item.note,
+      )
+    }
+
+    return nextShoppingListId
+  })()
+
+  return getShoppingListById(shoppingListId, user)
+}
+
 export default {
   listShoppingLists,
   getShoppingListById,
@@ -344,4 +481,5 @@ export default {
   addShoppingListItem,
   updateShoppingListItem,
   deleteShoppingListItem,
+  generateShoppingListFromMealPlan,
 }

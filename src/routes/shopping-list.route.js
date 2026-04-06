@@ -41,6 +41,26 @@ apiRouter.post('/', requireAuth, async (req, res) => {
   }
 })
 
+apiRouter.post('/from-meal-plan/:mealPlanId', requireAuth, async (req, res) => {
+  try {
+    const mealPlanId = Number(req.params.mealPlanId)
+    const created = await controllers.shoppingList.generateShoppingListFromMealPlan(
+      mealPlanId,
+      req.body,
+      req.auth.user,
+    )
+
+    if (!created) {
+      res.status(404).json({ error: 'Meal plan not found' })
+      return
+    }
+
+    res.status(201).json(created)
+  } catch (error) {
+    res.status(400).json({ error: error.message })
+  }
+})
+
 apiRouter.put('/:id', requireAuth, async (req, res) => {
   try {
     const shoppingListId = Number(req.params.id)
