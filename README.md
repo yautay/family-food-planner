@@ -51,8 +51,11 @@ Skopiuj `.env.example` do `.env` i uzupelnij wartosci:
 - `SMTP_PASS`
 - `SMTP_FROM`
 - `APP_BASE_URL`
+- `DATABASE_PATH` (opcjonalnie, domyslnie `database.db`)
 
 `APP_BASE_URL` powinno wskazywac frontend (np. `http://localhost:5173`), bo tam prowadzi link resetu hasla.
+
+`DATABASE_PATH` mozna ustawic do izolacji bazy (np. testy integracyjne).
 
 ## Domyslny uzytkownik
 
