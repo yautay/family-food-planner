@@ -1,7 +1,8 @@
 import { createApp } from './src/app.js'
 import { initDatabase } from './src/db/sequelize.js'
 
-const port = Number(process.env.PORT ?? 3000)
+const configuredPort = Number.parseInt(process.env.PORT ?? '', 10)
+const port = Number.isNaN(configuredPort) ? 3000 : configuredPort
 
 async function startServer() {
   const app = createApp()

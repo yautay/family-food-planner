@@ -37,6 +37,7 @@ npm run dev
 ## Commands
 
 - `npm run dev` - frontend + backend locally
+- `PORT=3001 npm run dev` - frontend + backend with backend on custom port
 - `npm run start:server` - backend only
 - `npm run db:migrate` - run SQL migrations
 - `npm run db:import:diets` - import PDFs into catalog
@@ -60,6 +61,7 @@ Copy `.env.example` to `.env` and fill in values:
 
 - `TURNSTILE_SITE_KEY`
 - `TURNSTILE_SECRET_KEY`
+- `PORT` (optional, default: `3000`)
 - `SMTP_HOST`
 - `SMTP_PORT`
 - `SMTP_USER`
@@ -69,6 +71,8 @@ Copy `.env.example` to `.env` and fill in values:
 - `DATABASE_PATH` (optional, default: `database.db`)
 
 `APP_BASE_URL` should point to the frontend app (for example: `http://localhost:5173`) because password-reset links are generated with that base URL.
+
+`PORT` controls the backend API port. During local development, Vite proxies `/api` requests to `http://localhost:$PORT`.
 
 `DATABASE_PATH` can be set to isolate the database (for example for integration tests).
 

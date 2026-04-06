@@ -64,6 +64,12 @@ Domyslnie:
 - frontend: `http://localhost:5173`
 - backend API: `http://localhost:3000`
 
+Jesli port `3000` jest zajety, uruchom:
+
+```bash
+PORT=3001 npm run dev
+```
+
 ## 6. Konto testowe (seed)
 
 Po migracjach dostepne jest konto:

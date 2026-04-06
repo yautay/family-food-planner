@@ -4,9 +4,20 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import vueDevTools from 'vite-plugin-vue-devtools'
 
+const configuredPort = Number.parseInt(process.env.PORT ?? '', 10)
+const backendPort = Number.isNaN(configuredPort) ? 3000 : configuredPort
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [vue(), vueDevTools()],
+  server: {
+    proxy: {
+      '/api': {
+        target: `http://localhost:${backendPort}`,
+        changeOrigin: true,
+      },
+    },
+  },
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./', import.meta.url)),
