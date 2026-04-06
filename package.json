@@ -7,7 +7,7 @@
     "dev": "concurrently \"vite\" \"nodemon server.js\"",
     "build": "vite build",
     "preview": "vite preview",
-    "test:unit": "vitest --exclude tests/integration/** --passWithNoTests",
+    "test:unit": "vitest run tests/unit --passWithNoTests",
     "test:integration": "vitest run tests/integration",
     "lint": "eslint . --fix",
     "format": "prettier --write src/",

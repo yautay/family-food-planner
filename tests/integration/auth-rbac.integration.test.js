@@ -7,6 +7,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import Database from 'better-sqlite3'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { hashPassword } from '../../src/lib/password.js'
 
 const verifyTurnstileTokenMock = vi.fn(async () => ({ success: true, errors: [] }))
 const sendResetPasswordEmailMock = vi.fn(async () => undefined)
@@ -107,37 +108,80 @@ async function registerUser() {
   }
 }
 
-function promoteUserToAdmin(userId) {
+async function createAdminSession() {
+  const username = nextValue('admin')
+  const email = `${username}@example.test`
+  const password = 'AdminPass123!'
+
   const db = new Database(databasePath)
   db.pragma('foreign_keys = ON')
 
-  db.transaction(() => {
-    db.prepare('DELETE FROM user_roles WHERE user_id = ?').run(userId)
+  const userId = db.transaction(() => {
+    const userResult = db
+      .prepare(
+        `
+        INSERT INTO users(username, email, password_hash, must_change_password)
+        VALUES (?, ?, ?, 0)
+        `,
+      )
+      .run(username, email, hashPassword(password))
+
+    const nextUserId = Number(userResult.lastInsertRowid)
+
     db.prepare(
       `
       INSERT OR IGNORE INTO user_roles(user_id, role_id)
       SELECT ?, id FROM roles WHERE name = 'admin'
       `,
-    ).run(userId)
+    ).run(nextUserId)
+
+    db.prepare(
+      `
+      INSERT OR IGNORE INTO user_permissions(user_id, permission_id, allow)
+      SELECT ?, id, 1 FROM permissions
+      WHERE name IN ('permissions.manage', 'recipes.manage', 'catalog.read', 'catalog.write')
+      `,
+    ).run(nextUserId)
+
+    return nextUserId
   })()
 
-  db.close()
-}
+  const assignedPermissions = db
+    .prepare(
+      `
+      SELECT DISTINCT p.name
+      FROM user_roles ur
+      INNER JOIN role_permissions rp ON rp.role_id = ur.role_id
+      INNER JOIN permissions p ON p.id = rp.permission_id
+      WHERE ur.user_id = ?
+      UNION
+      SELECT p.name
+      FROM user_permissions up
+      INNER JOIN permissions p ON p.id = up.permission_id
+      WHERE up.user_id = ? AND up.allow = 1
+      ORDER BY name ASC
+      `,
+    )
+    .all(userId, userId)
+    .map((row) => row.name)
 
-async function createAdminSession() {
-  const registration = await registerUser()
-  if (registration.response.status !== 201) {
-    throw new Error('Could not create test admin user')
+  db.close()
+
+  if (!assignedPermissions.includes('permissions.manage')) {
+    throw new Error(`Admin seed missing permissions.manage for user ${userId}`)
   }
 
-  promoteUserToAdmin(registration.response.body.user.id)
-
-  const adminLogin = await login(registration.username, registration.password)
+  const adminLogin = await login(username, password)
   if (adminLogin.status !== 200) {
     throw new Error('Could not login as test admin user')
   }
 
+  if (!adminLogin.body.permissions.includes('permissions.manage')) {
+    throw new Error(`Admin login missing permissions.manage: ${JSON.stringify(adminLogin.body.permissions)}`)
+  }
+
   return {
+    userId,
     token: adminLogin.body.token,
   }
 }
@@ -313,7 +357,7 @@ describe('Auth + RBAC integration', () => {
     const adminToken = adminSession.token
 
     const accessCatalog = await api('/auth/access-catalog', { token: adminToken })
-    expect(accessCatalog.status).toBe(200)
+    expect(accessCatalog.status, JSON.stringify(accessCatalog.body)).toBe(200)
     expect(Array.isArray(accessCatalog.body.permissions)).toBe(true)
 
     const usersNoPermission = await api('/auth/users', { token: userToken })

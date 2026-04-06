@@ -134,7 +134,21 @@ function getSessionByToken(token) {
   return catalogDb
     .prepare(
       `
-      SELECT s.*, u.username, u.email, u.is_active, u.must_change_password, u.created_at, u.updated_at
+      SELECT
+        s.id AS session_id,
+        s.user_id AS session_user_id,
+        s.token_hash,
+        s.expires_at,
+        s.created_at AS session_created_at,
+        s.last_seen_at,
+        s.revoked_at,
+        u.id,
+        u.username,
+        u.email,
+        u.is_active,
+        u.must_change_password,
+        u.created_at,
+        u.updated_at
       FROM auth_sessions s
       INNER JOIN users u ON u.id = s.user_id
       WHERE s.token_hash = ?
@@ -176,7 +190,7 @@ function getAuthContextFromToken(token) {
 
   catalogDb
     .prepare('UPDATE auth_sessions SET last_seen_at = ? WHERE id = ?')
-    .run(nowIso(), session.id)
+    .run(nowIso(), session.session_id)
 
   const user = mapUser(session)
   const roles = getUserRoles(user.id)

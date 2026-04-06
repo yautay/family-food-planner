@@ -1,0 +1,2 @@
+ALTER TABLE shopping_lists
+ADD COLUMN note TEXT NOT NULL DEFAULT '';

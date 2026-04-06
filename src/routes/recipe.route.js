@@ -51,7 +51,7 @@ apiRouter.get('/:id/ingredients', async (req, res) => {
 
 apiRouter.post('/', requirePermission('recipes.manage'), async (req, res) => {
   try {
-    const created = await controllers.recipe.createRecipe(req.body, req.auth.user)
+    const created = await controllers.recipe.createRecipe(req.body, req.auth)
     res.status(201).json(created)
   } catch (error) {
     res.status(400).json({ error: error.message })
@@ -61,7 +61,7 @@ apiRouter.post('/', requirePermission('recipes.manage'), async (req, res) => {
 apiRouter.put('/:id', requirePermission('recipes.manage'), async (req, res) => {
   try {
     const recipeId = Number(req.params.id)
-    const updated = await controllers.recipe.updateRecipe(recipeId, req.body, req.auth.user)
+    const updated = await controllers.recipe.updateRecipe(recipeId, req.body, req.auth)
 
     if (!updated) {
       res.status(404).json({ error: 'Recipe not found' })
