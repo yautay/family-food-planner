@@ -167,7 +167,6 @@
                     :size="24"
                   />
                 </div>
-                <span v-if="mealSlot.slot_time" class="muted">{{ mealSlot.slot_time }}</span>
               </th>
               <td
                 v-for="daySlot in activeMealPlan.day_slots"
@@ -196,6 +195,9 @@
               >
                 <p class="matrix-day-summary-text">{{ daySummaryLineOne(daySlot.totals ?? {}) }}</p>
                 <p class="matrix-day-summary-text">{{ daySummaryLineTwo(daySlot.totals ?? {}) }}</p>
+                <p class="matrix-day-summary-text">
+                  {{ daySummaryLineThree(daySlot.totals ?? {}) }}
+                </p>
               </td>
             </tr>
           </tbody>
@@ -604,12 +606,26 @@ function summaryValue(totals, field) {
   return Number.isFinite(parsed) ? Number(parsed.toFixed(2)) : 0
 }
 
+function formatMassFromGrams(value) {
+  const parsed = Number(value)
+  const grams = Number.isFinite(parsed) ? Number(parsed.toFixed(2)) : 0
+  if (grams >= 1000) {
+    return `${Number((grams / 1000).toFixed(2))} kg`
+  }
+
+  return `${grams} g`
+}
+
 function daySummaryLineOne(totals) {
-  return `kcal ${summaryValue(totals, 'calories')} | B ${summaryValue(totals, 'protein')}g | T ${summaryValue(totals, 'fat')}g`
+  return `kcal ${summaryValue(totals, 'calories')}`
 }
 
 function daySummaryLineTwo(totals) {
-  return `W ${summaryValue(totals, 'carbohydrates')}g | M ${summaryValue(totals, 'total_mass_grams')}g`
+  return `B ${summaryValue(totals, 'protein')}g | T ${summaryValue(totals, 'fat')}g | W ${summaryValue(totals, 'carbohydrates')}g`
+}
+
+function daySummaryLineThree(totals) {
+  return `M ${formatMassFromGrams(totals?.total_mass_grams)}`
 }
 
 function recipeName(recipeId) {

@@ -23,6 +23,10 @@ function valueOf(field) {
   return Number.isFinite(value) ? value : 0
 }
 
+function formatNumber(value) {
+  return Number(value.toFixed(2)).toString()
+}
+
 function massValue() {
   const totalMass = Number(props.totals?.total_mass_grams)
   if (Number.isFinite(totalMass)) {
@@ -32,6 +36,15 @@ function massValue() {
   const mass = Number(props.totals?.mass_grams)
   return Number.isFinite(mass) ? mass : 0
 }
+
+function formattedMass() {
+  const grams = massValue()
+  if (grams >= 1000) {
+    return `${formatNumber(grams / 1000)} kg`
+  }
+
+  return `${formatNumber(grams)} g`
+}
 </script>
 
 <template>
@@ -40,7 +53,7 @@ function massValue() {
 
     <div class="chips" role="group" aria-label="Nutrition totals">
       <template v-if="props.massOnly">
-        <span class="chip">{{ props.massLabel }} {{ massValue() }} g</span>
+        <span class="chip">{{ props.massLabel }} {{ formattedMass() }}</span>
       </template>
 
       <template v-else>
@@ -48,7 +61,7 @@ function massValue() {
         <span class="chip">B {{ valueOf('protein') }} g</span>
         <span class="chip">T {{ valueOf('fat') }} g</span>
         <span class="chip">W {{ valueOf('carbohydrates') }} g</span>
-        <span class="chip">{{ props.massLabel }} {{ massValue() }} g</span>
+        <span class="chip">{{ props.massLabel }} {{ formattedMass() }}</span>
       </template>
     </div>
   </div>
