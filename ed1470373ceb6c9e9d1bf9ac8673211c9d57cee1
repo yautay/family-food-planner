@@ -1,0 +1,1 @@
+Handoff 2026-04-07: planner is custom-only, meal portions model active, docs updated. Tomorrow: add auto-migrations at server startup, add integration tests for portions/effective servings and overflow import modal.
