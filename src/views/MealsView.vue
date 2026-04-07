@@ -160,7 +160,12 @@
               <th class="matrix-slot-cell">
                 <div class="matrix-slot-title">
                   <strong>{{ mealSlot.slot_name }}</strong>
-                  <SlotTimeClock v-if="mealSlot.slot_time" :time="mealSlot.slot_time" :size="24" />
+                  <SlotTimeClock
+                    v-if="mealSlot.slot_time"
+                    class="slot-clock-cell"
+                    :time="mealSlot.slot_time"
+                    :size="24"
+                  />
                 </div>
                 <span v-if="mealSlot.slot_time" class="muted">{{ mealSlot.slot_time }}</span>
               </th>
@@ -189,10 +194,8 @@
                 :key="`summary-${daySlot.planned_date}`"
                 :class="{ 'is-selected-column': daySlot.planned_date === selectedDaySlotDate }"
               >
-                <NutritionTotalsInline
-                  :totals="daySlot.totals ?? {}"
-                  :mass-label="t('meals.massLabel')"
-                />
+                <p class="matrix-day-summary-text">{{ daySummaryLineOne(daySlot.totals ?? {}) }}</p>
+                <p class="matrix-day-summary-text">{{ daySummaryLineTwo(daySlot.totals ?? {}) }}</p>
               </td>
             </tr>
           </tbody>
@@ -596,6 +599,19 @@ function matrixMealServings(daySlot, rowIndex) {
   return `${t('meals.servingsLabel')}: ${effectiveServings}`
 }
 
+function summaryValue(totals, field) {
+  const parsed = Number(totals?.[field])
+  return Number.isFinite(parsed) ? Number(parsed.toFixed(2)) : 0
+}
+
+function daySummaryLineOne(totals) {
+  return `kcal ${summaryValue(totals, 'calories')} | B ${summaryValue(totals, 'protein')}g | T ${summaryValue(totals, 'fat')}g`
+}
+
+function daySummaryLineTwo(totals) {
+  return `W ${summaryValue(totals, 'carbohydrates')}g | M ${summaryValue(totals, 'total_mass_grams')}g`
+}
+
 function recipeName(recipeId) {
   return recipesById.value.get(recipeId)?.name ?? `#${recipeId}`
 }
@@ -936,14 +952,29 @@ onMounted(async () => {
 }
 
 .matrix-slot-title {
-  display: inline-flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 0.45rem;
+  width: 100%;
+}
+
+.slot-clock-cell {
+  justify-self: end;
 }
 
 .matrix-day-summary-row th,
 .matrix-day-summary-row td {
   background: color-mix(in oklab, var(--app-surface-alt), #ffffff 35%);
+}
+
+.matrix-day-summary-text {
+  margin: 0;
+  font-family: 'Courier Prime', 'Courier New', monospace;
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+  line-height: 1.25;
+  white-space: nowrap;
 }
 
 .matrix-cell-button {

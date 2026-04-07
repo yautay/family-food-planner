@@ -63,6 +63,9 @@ const clockStyle = computed(() => {
   const pixelSize = Number.isFinite(props.size) && props.size > 0 ? props.size : 20
   return {
     '--clock-size': `${pixelSize}px`,
+    '--tooltip-width': `${Math.max(pixelSize * 3.8, 86)}px`,
+    '--tooltip-height': `${Math.max(pixelSize * 1.9, 38)}px`,
+    '--tooltip-font-size': `${Math.max(pixelSize * 0.82, 18)}px`,
     '--hour-angle': `${handAngles.value.hour}deg`,
     '--minute-angle': `${handAngles.value.minute}deg`,
   }
@@ -72,17 +75,16 @@ const displayText = computed(() => parsedTime.value?.text ?? '--:--')
 </script>
 
 <template>
-  <span class="slot-time-clock" :style="clockStyle" :aria-label="displayText">
-    <span class="clock-flip" role="img" :aria-label="displayText">
-      <span class="clock-face analog-face">
-        <span class="dial-ring"></span>
-        <span class="dial-center"></span>
-        <span class="hand hand-hour"></span>
-        <span class="hand hand-minute"></span>
-      </span>
-      <span class="clock-face digital-face">
-        <span class="digital-window">{{ displayText }}</span>
-      </span>
+  <span class="slot-time-clock" :style="clockStyle" :aria-label="displayText" tabindex="0">
+    <span class="clock-face analog-face" role="img" :aria-label="displayText">
+      <span class="dial-ring"></span>
+      <span class="dial-center"></span>
+      <span class="hand hand-hour"></span>
+      <span class="hand hand-minute"></span>
+    </span>
+
+    <span class="digital-tooltip" aria-hidden="true">
+      <span class="digital-window">{{ displayText }}</span>
     </span>
   </span>
 </template>
@@ -90,32 +92,32 @@ const displayText = computed(() => parsedTime.value?.text ?? '--:--')
 <style scoped>
 .slot-time-clock {
   --clock-size: 20px;
+  --tooltip-width: 86px;
+  --tooltip-height: 38px;
+  --tooltip-font-size: 18px;
   --hour-angle: 0deg;
   --minute-angle: 0deg;
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
   width: var(--clock-size);
   height: var(--clock-size);
+  vertical-align: middle;
+  outline: none;
 }
 
-.clock-flip {
-  width: 100%;
-  height: 100%;
-  position: relative;
-  transform-style: preserve-3d;
-  transition: transform 280ms ease;
-}
-
-.slot-time-clock:hover .clock-flip {
-  transform: rotateY(180deg);
+.slot-time-clock:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--app-link), #ffffff 30%);
+  border-radius: 999px;
 }
 
 .clock-face {
-  position: absolute;
-  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  backface-visibility: hidden;
+  width: 100%;
+  height: 100%;
 }
 
 .analog-face {
@@ -166,21 +168,44 @@ const displayText = computed(() => parsedTime.value?.text ?? '--:--')
   transform: rotate(var(--minute-angle));
 }
 
-.digital-face {
-  transform: rotateY(180deg);
-  border-radius: 6px;
-  background: linear-gradient(180deg, #e9f4ff 0%, #d4e7ff 100%);
-  box-shadow: inset 0 0 0 1px rgba(31, 95, 212, 0.4);
+.digital-tooltip {
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 8px);
+  transform: translateX(-50%) rotateX(-78deg) scale(0.82);
+  transform-origin: top center;
+  border-radius: 9px;
+  width: var(--tooltip-width);
+  height: var(--tooltip-height);
+  background: linear-gradient(180deg, #eff7ff 0%, #d8e8ff 100%);
+  box-shadow:
+    0 12px 24px rgba(17, 42, 84, 0.2),
+    inset 0 0 0 1px rgba(31, 95, 212, 0.42);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 190ms ease,
+    transform 260ms ease;
+  z-index: 25;
 }
 
 .digital-window {
   color: #13325f;
-  font-size: calc(var(--clock-size) * 0.33);
+  font-size: var(--tooltip-font-size);
   line-height: 1;
   font-weight: 700;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.08em;
   font-family: 'Courier Prime', 'Courier New', monospace;
   font-variant-numeric: tabular-nums;
-  text-shadow: 0 0 8px rgba(52, 112, 196, 0.34);
+  text-shadow: 0 0 10px rgba(52, 112, 196, 0.45);
+}
+
+.slot-time-clock:hover .digital-tooltip,
+.slot-time-clock:focus-visible .digital-tooltip {
+  opacity: 1;
+  transform: translateX(-50%) rotateX(0deg) scale(1);
 }
 </style>

@@ -419,14 +419,16 @@ function slotLabel(meal, index) {
 .meal-slot {
   margin: 0;
   font-size: 0.86rem;
-  display: inline-flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 0.45rem;
+  width: 100%;
 }
 
 .slot-time-clock-wrap {
-  display: inline-flex;
-  align-items: center;
+  display: inline-grid;
+  justify-self: end;
 }
 
 .nutrition-line {
