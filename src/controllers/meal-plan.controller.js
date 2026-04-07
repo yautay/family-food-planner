@@ -104,14 +104,20 @@ function normalizeDayMealsPayload(rawMeals, options = {}) {
   return rawMeals.map((rawMeal, index) => {
     const recipeId = parseRequiredPositiveInteger(rawMeal?.recipe_id)
     const servings = parseOptionalNumber(rawMeal?.servings)
+    const portions = parseOptionalNumber(rawMeal?.portions)
 
     if (servings !== null && servings <= 0) {
       throw new Error('servings must be greater than 0')
     }
 
+    if (portions !== null && portions <= 0) {
+      throw new Error('portions must be greater than 0')
+    }
+
     return {
       recipe_id: recipeId,
       servings,
+      portions: portions !== null ? portions : 1,
       note: typeof rawMeal?.note === 'string' ? rawMeal.note.trim() : '',
       meal_order: index + 1,
     }
@@ -245,13 +251,20 @@ function getRecipeNutritionMap(recipeIds) {
   return new Map(rows.map((row) => [row.recipe_id, row]))
 }
 
-function resolveEffectiveServings(servingsValue, defaultServings = 1) {
+function resolveMealPortions(portionsValue) {
+  const portions = parseOptionalNumber(portionsValue)
+  return portions !== null && portions > 0 ? portions : 1
+}
+
+function resolveEffectiveServings(servingsValue, planPortions = 1, mealPortionsValue = 1) {
   const servings = parseOptionalNumber(servingsValue)
   if (servings !== null && servings > 0) {
     return servings
   }
 
-  return defaultServings > 0 ? defaultServings : 1
+  const normalizedPlanPortions =
+    Number.isFinite(planPortions) && planPortions > 0 ? planPortions : 1
+  return normalizedPlanPortions * resolveMealPortions(mealPortionsValue)
 }
 
 function hydrateMealsWithNutrition(meals, nutritionMap, mealSlots, defaultServings) {
@@ -259,7 +272,8 @@ function hydrateMealsWithNutrition(meals, nutritionMap, mealSlots, defaultServin
 
   return meals.map((meal, index) => {
     const recipeNutrition = nutritionMap.get(meal.recipe_id)
-    const effectiveServings = resolveEffectiveServings(meal.servings, defaultServings)
+    const portions = resolveMealPortions(meal.portions)
+    const effectiveServings = resolveEffectiveServings(meal.servings, defaultServings, portions)
 
     const nutrition = {
       calories: roundNutrition(recipeNutrition?.calories ?? 0),
@@ -277,6 +291,7 @@ function hydrateMealsWithNutrition(meals, nutritionMap, mealSlots, defaultServin
 
     return {
       ...meal,
+      portions: roundNutrition(portions),
       effective_servings: roundNutrition(effectiveServings),
       planned_slot_name: mappedSlot?.slot_name ?? null,
       planned_slot_time: mappedSlot?.slot_time ?? null,
@@ -521,6 +536,7 @@ function getDayPlanMealsByDayPlanIds(dayPlanIds) {
         m.recipe_id,
         r.name AS recipe_name,
         m.servings,
+        m.portions,
         m.note,
         m.meal_order,
         m.created_at,
@@ -544,6 +560,7 @@ function getDayPlanMealsByDayPlanIds(dayPlanIds) {
       recipe_id: row.recipe_id,
       recipe_name: row.recipe_name,
       servings: row.servings,
+      portions: row.portions,
       note: row.note,
       meal_order: row.meal_order,
       created_at: row.created_at,
@@ -558,7 +575,7 @@ function getDayPlanMealsForImport(dayPlanId) {
   return catalogDb
     .prepare(
       `
-      SELECT recipe_id, servings, note, meal_order
+      SELECT recipe_id, servings, portions, note, meal_order
       FROM day_plan_meals
       WHERE day_plan_id = ?
       ORDER BY meal_order ASC
@@ -582,6 +599,7 @@ function getCustomDaySlotMealsBySlotIds(slotIds) {
         m.recipe_id,
         r.name AS recipe_name,
         m.servings,
+        m.portions,
         m.note,
         m.meal_order,
         m.created_at,
@@ -605,6 +623,7 @@ function getCustomDaySlotMealsBySlotIds(slotIds) {
       recipe_id: row.recipe_id,
       recipe_name: row.recipe_name,
       servings: row.servings,
+      portions: row.portions,
       note: row.note,
       meal_order: row.meal_order,
       created_at: row.created_at,
@@ -878,9 +897,16 @@ async function updateMealPlanDaySlot(mealPlanId, plannedDateRaw, payload, user) 
   const slot = ensureSlotByPlanAndDate(mealPlanId, plannedDate)
   const slotLimit = getMealSlotLimit(mealPlanId)
   const importedMeals = dayPlanId
-    ? normalizeDayMealsPayload(getDayPlanMealsForImport(dayPlanId), {
-        maxMeals: slotLimit,
-      })
+    ? normalizeDayMealsPayload(
+        getDayPlanMealsForImport(dayPlanId).map((meal) => ({
+          ...meal,
+          servings: null,
+          portions: meal.portions ?? meal.servings ?? 1,
+        })),
+        {
+          maxMeals: slotLimit,
+        },
+      )
     : []
 
   catalogDb.transaction(() => {
@@ -899,13 +925,20 @@ async function updateMealPlanDaySlot(mealPlanId, plannedDateRaw, payload, user) 
 
       const insertMeal = catalogDb.prepare(
         `
-        INSERT INTO meal_plan_day_slot_meals(day_slot_id, recipe_id, servings, note, meal_order)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO meal_plan_day_slot_meals(day_slot_id, recipe_id, servings, portions, note, meal_order)
+        VALUES (?, ?, ?, ?, ?, ?)
         `,
       )
 
       for (const meal of importedMeals) {
-        insertMeal.run(slot.id, meal.recipe_id, meal.servings, meal.note, meal.meal_order)
+        insertMeal.run(
+          slot.id,
+          meal.recipe_id,
+          meal.servings,
+          meal.portions,
+          meal.note,
+          meal.meal_order,
+        )
       }
     } else {
       catalogDb
@@ -965,13 +998,20 @@ async function replaceMealPlanDaySlotMeals(mealPlanId, plannedDateRaw, meals, us
 
     const insertMeal = catalogDb.prepare(
       `
-      INSERT INTO meal_plan_day_slot_meals(day_slot_id, recipe_id, servings, note, meal_order)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO meal_plan_day_slot_meals(day_slot_id, recipe_id, servings, portions, note, meal_order)
+      VALUES (?, ?, ?, ?, ?, ?)
       `,
     )
 
     for (const meal of normalizedMeals) {
-      insertMeal.run(slot.id, meal.recipe_id, meal.servings, meal.note, meal.meal_order)
+      insertMeal.run(
+        slot.id,
+        meal.recipe_id,
+        meal.servings,
+        meal.portions,
+        meal.note,
+        meal.meal_order,
+      )
     }
 
     catalogDb

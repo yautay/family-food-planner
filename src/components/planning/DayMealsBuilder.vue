@@ -45,6 +45,10 @@ const props = defineProps({
     type: Boolean,
     default: true,
   },
+  editMealPortions: {
+    type: Boolean,
+    default: false,
+  },
 })
 
 const emit = defineEmits(['update:modelValue'])
@@ -84,20 +88,37 @@ const filteredRecipes = computed(() => {
   return props.recipes.filter((recipe) => recipe.name.toLowerCase().includes(needle))
 })
 
-function resolveEffectiveServings(servingsValue) {
+function resolveEffectiveServings(servingsValue, portionsValue) {
   const servings = Number(servingsValue)
   if (Number.isFinite(servings) && servings > 0) {
     return servings
   }
 
-  return props.defaultServings > 0 ? props.defaultServings : 1
+  const mealPortions = resolveMealPortionsValue(portionsValue)
+  const planPortions = props.defaultServings > 0 ? props.defaultServings : 1
+
+  if (props.editMealPortions) {
+    return mealPortions
+  }
+
+  return planPortions * mealPortions
+}
+
+function resolveMealPortionsValue(portionsValue) {
+  const portions = Number(portionsValue)
+  if (Number.isFinite(portions) && portions > 0) {
+    return portions
+  }
+
+  return 1
 }
 
 const mealsWithMetrics = computed(() => {
   return props.modelValue.map((meal, index) => {
     const recipe = recipesById.value.get(meal.recipe_id)
     const nutritionSummary = nutritionByRecipeId.value.get(meal.recipe_id)
-    const effectiveServings = resolveEffectiveServings(meal.servings)
+    const mealPortions = resolveMealPortionsValue(meal.portions)
+    const effectiveServings = resolveEffectiveServings(meal.servings, meal.portions)
 
     const nutrition = {
       calories: Number((nutritionSummary?.calories ?? 0).toFixed(2)),
@@ -114,6 +135,7 @@ const mealsWithMetrics = computed(() => {
 
     return {
       ...meal,
+      portions: mealPortions,
       slot_name: slot?.slot_name ?? null,
       slot_time: slot?.slot_time ?? null,
       effective_servings: effectiveServings,
@@ -176,6 +198,7 @@ function selectRecipe(recipeId) {
     nextMeals.push({
       recipe_id: recipeId,
       servings: null,
+      portions: 1,
       note: '',
     })
   } else {
@@ -195,7 +218,11 @@ function selectRecipe(recipeId) {
 function updateMealServings(index, value) {
   const nextMeals = props.modelValue.map((meal) => ({ ...meal }))
   const parsed = Number(value)
-  nextMeals[index].servings = Number.isFinite(parsed) && parsed > 0 ? parsed : null
+  if (props.editMealPortions) {
+    nextMeals[index].portions = Number.isFinite(parsed) && parsed > 0 ? parsed : 1
+  } else {
+    nextMeals[index].servings = Number.isFinite(parsed) && parsed > 0 ? parsed : null
+  }
   emitMeals(nextMeals)
 }
 
@@ -300,7 +327,10 @@ function slotLabel(meal, index) {
             </span>
           </p>
           <strong>{{ meal.recipe_name }}</strong>
-          <p class="muted">{{ t('meals.servingsLabel') }}: {{ meal.effective_servings }}</p>
+          <p class="muted">
+            {{ props.editMealPortions ? t('meals.mealPortionsLabel') : t('meals.servingsLabel') }}:
+            {{ props.editMealPortions ? meal.portions : meal.effective_servings }}
+          </p>
 
           <div class="nutrition-line">
             <NutritionTotalsInline :totals="meal.nutrition" :caption="t('meals.onePortionLabel')" />
@@ -312,14 +342,14 @@ function slotLabel(meal, index) {
 
         <div v-if="!props.readOnly" class="meal-row-actions">
           <label>
-            {{ t('meals.servingsLabel') }}
+            {{ props.editMealPortions ? t('meals.mealPortionsLabel') : t('meals.servingsLabel') }}
             <input
-              :value="meal.effective_servings"
+              :value="props.editMealPortions ? meal.portions : meal.effective_servings"
               class="input"
               type="number"
               min="0.1"
               step="0.1"
-              :placeholder="String(props.defaultServings)"
+              :placeholder="props.editMealPortions ? '1' : String(props.defaultServings)"
               @input="updateMealServings(index, $event.target.value)"
             />
           </label>

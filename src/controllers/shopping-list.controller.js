@@ -178,8 +178,11 @@ function mergeGeneratedItem(targetMap, row) {
 
   const servings = parseOptionalNumber(row.servings)
   const portionsCount = parseOptionalNumber(row.portions_count)
-  const mealMultiplier =
-    servings !== null && servings > 0 ? servings : portionsCount > 0 ? portionsCount : 1
+  const mealPortions = parseOptionalNumber(row.meal_portions)
+  const defaultMultiplier =
+    (portionsCount !== null && portionsCount > 0 ? portionsCount : 1) *
+    (mealPortions !== null && mealPortions > 0 ? mealPortions : 1)
+  const mealMultiplier = servings !== null && servings > 0 ? servings : defaultMultiplier
   const quantity = parseOptionalNumber(row.quantity)
   const scaledQuantity = quantity === null ? null : quantity * mealMultiplier
   const key = `product:${row.product_id}:unit:${row.unit_id ?? 'none'}`
@@ -212,6 +215,7 @@ function buildGeneratedItems(mealPlanId, portionsCount = 1) {
         e.custom_name AS entry_custom_name,
         e.servings,
         ? AS portions_count,
+        1 AS meal_portions,
         ri.product_id,
         ri.quantity,
         COALESCE(ri.unit_id, p.default_unit_id) AS unit_id
@@ -232,6 +236,7 @@ function buildGeneratedItems(mealPlanId, portionsCount = 1) {
         NULL AS entry_custom_name,
         m.servings,
         COALESCE(mp.portions_count, 1) AS portions_count,
+        COALESCE(m.portions, 1) AS meal_portions,
         ri.product_id,
         ri.quantity,
         COALESCE(ri.unit_id, p.default_unit_id) AS unit_id
@@ -254,6 +259,7 @@ function buildGeneratedItems(mealPlanId, portionsCount = 1) {
         NULL AS entry_custom_name,
         m.servings,
         COALESCE(mp.portions_count, 1) AS portions_count,
+        COALESCE(m.portions, 1) AS meal_portions,
         ri.product_id,
         ri.quantity,
         COALESCE(ri.unit_id, p.default_unit_id) AS unit_id

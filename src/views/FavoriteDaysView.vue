@@ -51,6 +51,7 @@ function cloneMeals(meals) {
   return meals.map((meal) => ({
     recipe_id: meal.recipe_id,
     servings: meal.servings ?? null,
+    portions: meal.portions ?? 1,
     note: meal.note ?? '',
   }))
 }
@@ -240,6 +241,7 @@ onMounted(async () => {
         :recipes="recipes"
         :nutrition-summaries="recipeNutritionSummaries"
         :default-servings="1"
+        :edit-meal-portions="true"
         :empty-label="t('meals.emptyMeals')"
         :add-button-label="t('meals.addMealToDay')"
       />

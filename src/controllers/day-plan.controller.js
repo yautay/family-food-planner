@@ -64,9 +64,15 @@ function normalizeDayMealsPayload(rawMeals) {
       throw new Error('servings must be greater than 0')
     }
 
+    const portions = parseOptionalNumber(rawMeal?.portions)
+    if (portions !== null && portions <= 0) {
+      throw new Error('portions must be greater than 0')
+    }
+
     return {
       recipe_id: recipeId,
       servings,
+      portions: portions !== null ? portions : 1,
       note: typeof rawMeal?.note === 'string' ? rawMeal.note.trim() : '',
       meal_order: index + 1,
     }
@@ -95,6 +101,7 @@ function getDayPlanMeals(dayPlanId) {
         m.recipe_id,
         r.name AS recipe_name,
         m.servings,
+        m.portions,
         m.note,
         m.meal_order,
         m.created_at,
@@ -148,8 +155,8 @@ function hydrateMealsWithNutrition(meals) {
 
   const hydratedMeals = meals.map((meal) => {
     const recipeNutrition = nutritionMap.get(meal.recipe_id)
-    const servings = parseOptionalNumber(meal.servings)
-    const factor = servings !== null && servings > 0 ? servings : 1
+    const portions = parseOptionalNumber(meal.portions)
+    const factor = portions !== null && portions > 0 ? portions : 1
 
     const nutrition = {
       calories: roundNutrition((recipeNutrition?.calories ?? 0) * factor),
@@ -165,6 +172,7 @@ function hydrateMealsWithNutrition(meals) {
 
     return {
       ...meal,
+      portions: roundNutrition(factor),
       nutrition,
       cumulative_mass_grams: roundNutrition(cumulativeMass),
     }
@@ -293,13 +301,20 @@ async function replaceDayPlanMeals(dayPlanId, meals, user) {
 
     const insertMeal = catalogDb.prepare(
       `
-      INSERT INTO day_plan_meals(day_plan_id, recipe_id, servings, note, meal_order)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO day_plan_meals(day_plan_id, recipe_id, servings, portions, note, meal_order)
+      VALUES (?, ?, ?, ?, ?, ?)
       `,
     )
 
     for (const meal of normalizedMeals) {
-      insertMeal.run(dayPlanId, meal.recipe_id, meal.servings, meal.note, meal.meal_order)
+      insertMeal.run(
+        dayPlanId,
+        meal.recipe_id,
+        meal.servings,
+        meal.portions,
+        meal.note,
+        meal.meal_order,
+      )
     }
 
     catalogDb

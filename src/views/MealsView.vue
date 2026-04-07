@@ -414,6 +414,7 @@ function cloneMeals(meals) {
   return meals.map((meal) => ({
     recipe_id: meal.recipe_id,
     servings: meal.servings ?? null,
+    portions: meal.portions ?? 1,
     note: meal.note ?? '',
   }))
 }
@@ -630,9 +631,13 @@ function matrixMealServings(daySlot, rowIndex) {
   }
 
   const parsed = Number(meal.servings)
-  const defaultServings =
+  const planPortions =
     Number(activeMealPlan.value?.portions_count) > 0 ? activeMealPlan.value.portions_count : 1
-  const effectiveServings = Number.isFinite(parsed) && parsed > 0 ? parsed : defaultServings
+  const mealPortions = Number(meal.portions)
+  const normalizedMealPortions =
+    Number.isFinite(mealPortions) && mealPortions > 0 ? mealPortions : 1
+  const effectiveServings =
+    Number.isFinite(parsed) && parsed > 0 ? parsed : planPortions * normalizedMealPortions
 
   return `${t('meals.servingsLabel')}: ${effectiveServings}`
 }
@@ -694,6 +699,7 @@ function mapImportedMeals(dayPlanMeals) {
   return dayPlanMeals.map((meal) => ({
     recipe_id: meal.recipe_id,
     servings: meal.servings ?? null,
+    portions: meal.portions ?? 1,
     note: meal.note ?? '',
   }))
 }
