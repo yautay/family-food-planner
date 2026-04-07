@@ -54,6 +54,7 @@ const isPickerOpen = ref(false)
 const pickerTargetIndex = ref(null)
 const pickerSearch = ref('')
 const draggingIndex = ref(null)
+const dropTargetIndex = ref(null)
 
 const mealLimit = computed(() => {
   const parsed = Number(props.maxMeals)
@@ -221,12 +222,13 @@ function startMealDrag(index, event) {
   }
 }
 
-function allowMealDrop(event) {
+function allowMealDrop(index, event) {
   if (props.readOnly) {
     return
   }
 
   event.preventDefault()
+  dropTargetIndex.value = index
   if (event?.dataTransfer) {
     event.dataTransfer.dropEffect = 'move'
   }
@@ -241,6 +243,7 @@ function dropMeal(index, event) {
   const fromIndex = draggingIndex.value
   if (!Number.isInteger(fromIndex) || fromIndex === index) {
     draggingIndex.value = null
+    dropTargetIndex.value = null
     return
   }
 
@@ -248,16 +251,19 @@ function dropMeal(index, event) {
   const [movedMeal] = nextMeals.splice(fromIndex, 1)
   if (!movedMeal) {
     draggingIndex.value = null
+    dropTargetIndex.value = null
     return
   }
 
   nextMeals.splice(index, 0, movedMeal)
   emitMeals(nextMeals)
   draggingIndex.value = null
+  dropTargetIndex.value = null
 }
 
 function endMealDrag() {
   draggingIndex.value = null
+  dropTargetIndex.value = null
 }
 
 function slotLabel(meal, index) {
@@ -276,10 +282,13 @@ function slotLabel(meal, index) {
         v-for="(meal, index) in mealsWithMetrics"
         :key="`${meal.recipe_id}-${index}`"
         class="meal-row"
-        :class="{ 'is-dragging': draggingIndex === index }"
+        :class="{
+          'is-dragging': draggingIndex === index,
+          'is-drop-target': dropTargetIndex === index && draggingIndex !== index,
+        }"
         :draggable="!props.readOnly"
         @dragstart="startMealDrag(index, $event)"
-        @dragover="allowMealDrop($event)"
+        @dragover="allowMealDrop(index, $event)"
         @drop="dropMeal(index, $event)"
         @dragend="endMealDrag"
       >
@@ -409,6 +418,11 @@ function slotLabel(meal, index) {
 .meal-row.is-dragging {
   opacity: 0.6;
   border-style: dashed;
+}
+
+.meal-row.is-drop-target {
+  box-shadow: inset 0 -3px 0 color-mix(in oklab, var(--app-link), #000000 10%);
+  background: color-mix(in oklab, var(--app-surface), #c9dcff 20%);
 }
 
 .meal-row-main {

@@ -146,9 +146,7 @@
                 >
                   {{ daySlot.planned_date }}
                 </button>
-                <p class="matrix-source muted">
-                  {{ t('meals.sourceCustom') }}
-                </p>
+                <p class="matrix-day-title muted">{{ matrixDayTitle(daySlot) }}</p>
               </th>
             </tr>
           </thead>
@@ -210,8 +208,17 @@
         <div class="day-slot-header">
           <div class="date-meta">
             <h3 class="title is-6">{{ selectedDaySlot.planned_date }}</h3>
-            <span class="source-badge is-custom">{{ t('meals.sourceCustom') }}</span>
           </div>
+
+          <label>
+            {{ t('meals.dayTitleLabel') }}
+            <input
+              class="input"
+              :value="daySlotTitleDraft(selectedDaySlot.planned_date)"
+              :placeholder="t('meals.dayTitlePlaceholder')"
+              @input="updateDaySlotTitleDraft(selectedDaySlot.planned_date, $event.target.value)"
+            />
+          </label>
 
           <label>
             {{ t('meals.importFavoriteDay') }}
@@ -362,6 +369,7 @@ const mealPlanForm = ref({
 
 const mealSlotsDraft = ref([])
 const daySlotMealsDrafts = ref({})
+const daySlotTitlesDraft = ref({})
 const favoriteImportModal = ref(null)
 const favoriteImportSelection = ref([])
 
@@ -438,6 +446,12 @@ function applyMealPlanState(plan) {
       [daySlot.planned_date]: cloneMeals(daySlot.meals),
     }
   }, {})
+  daySlotTitlesDraft.value = (plan.day_slots ?? []).reduce((accumulator, daySlot) => {
+    return {
+      ...accumulator,
+      [daySlot.planned_date]: daySlot.note ?? '',
+    }
+  }, {})
 
   if ((plan.day_slots ?? []).some((slot) => slot.planned_date === selectedDaySlotDate.value)) {
     return
@@ -457,6 +471,7 @@ function resetMealPlanForm(clearMessages = true) {
   }
   mealSlotsDraft.value = []
   daySlotMealsDrafts.value = {}
+  daySlotTitlesDraft.value = {}
   favoriteImportModal.value = null
   favoriteImportSelection.value = []
   selectedDaySlotDate.value = null
@@ -565,6 +580,27 @@ function selectDaySlot(plannedDate) {
   selectedDaySlotDate.value = plannedDate
 }
 
+function daySlotTitleDraft(plannedDate) {
+  return daySlotTitlesDraft.value[plannedDate] ?? ''
+}
+
+function updateDaySlotTitleDraft(plannedDate, value) {
+  daySlotTitlesDraft.value = {
+    ...daySlotTitlesDraft.value,
+    [plannedDate]: typeof value === 'string' ? value : '',
+  }
+}
+
+function matrixDayTitle(daySlot) {
+  const draftTitle = daySlotTitleDraft(daySlot.planned_date).trim()
+  if (draftTitle) {
+    return draftTitle
+  }
+
+  const storedTitle = typeof daySlot?.note === 'string' ? daySlot.note.trim() : ''
+  return storedTitle || t('meals.dayTitleFallback')
+}
+
 function mealsForMatrix(daySlot) {
   if (!daySlot) {
     return []
@@ -671,11 +707,25 @@ async function importMealsIntoDaySlot(plannedDate, meals, dayPlanName) {
   mealPlanError.value = ''
 
   try {
-    const updated = await mealPlannerStore.replaceMealPlanDaySlotMeals(
+    const updatedMeals = await mealPlannerStore.replaceMealPlanDaySlotMeals(
       activeMealPlan.value.id,
       plannedDate,
       meals,
     )
+
+    const preferredTitle = daySlotTitleDraft(plannedDate).trim() || String(dayPlanName ?? '').trim()
+    const savedTitle = String(
+      updatedMeals.day_slots?.find((slot) => slot.planned_date === plannedDate)?.note ?? '',
+    ).trim()
+
+    const updated =
+      preferredTitle === savedTitle
+        ? updatedMeals
+        : await mealPlannerStore.updateMealPlanDaySlot(activeMealPlan.value.id, plannedDate, {
+            day_plan_id: null,
+            note: preferredTitle,
+          })
+
     applyMealPlanState(updated)
     selectedDaySlotDate.value = plannedDate
     mealPlanMessage.value = t('meals.favoriteImportedToCustom', { name: dayPlanName })
@@ -710,7 +760,7 @@ async function handleFavoriteDayImport(daySlot, event) {
     if (importedMeals.length > limit) {
       favoriteImportModal.value = {
         plannedDate: daySlot.planned_date,
-        dayPlanName: dayPlan?.name ?? t('meals.sourceCustom'),
+        dayPlanName: dayPlan?.name ?? t('meals.dayTitleFallback'),
         meals: importedMeals,
         limit,
       }
@@ -755,11 +805,25 @@ async function saveDaySlotMeals(plannedDate) {
   mealPlanError.value = ''
 
   try {
-    const updated = await mealPlannerStore.replaceMealPlanDaySlotMeals(
+    const updatedMeals = await mealPlannerStore.replaceMealPlanDaySlotMeals(
       activeMealPlan.value.id,
       plannedDate,
       daySlotMealsDrafts.value[plannedDate] ?? [],
     )
+
+    const nextTitle = daySlotTitleDraft(plannedDate).trim()
+    const savedTitle = String(
+      updatedMeals.day_slots?.find((slot) => slot.planned_date === plannedDate)?.note ?? '',
+    ).trim()
+
+    const updated =
+      nextTitle === savedTitle
+        ? updatedMeals
+        : await mealPlannerStore.updateMealPlanDaySlot(activeMealPlan.value.id, plannedDate, {
+            day_plan_id: null,
+            note: nextTitle,
+          })
+
     applyMealPlanState(updated)
     mealPlanMessage.value = t('meals.slotMealsSaved')
   } catch (error) {
@@ -956,9 +1020,10 @@ onMounted(async () => {
   font-weight: 700;
 }
 
-.matrix-source {
+.matrix-day-title {
   margin: 0.15rem 0 0;
   font-size: 0.78rem;
+  line-height: 1.2;
 }
 
 .matrix-slot-cell {
@@ -1031,20 +1096,6 @@ onMounted(async () => {
 .date-meta {
   display: grid;
   gap: 0.35rem;
-}
-
-.source-badge {
-  justify-self: start;
-  border: 1px solid var(--app-border);
-  border-radius: 999px;
-  padding: 0.15rem 0.55rem;
-  font-size: 0.76rem;
-  font-weight: 700;
-}
-
-.source-badge.is-custom {
-  border-color: #2f5fbe;
-  color: #2f5fbe;
 }
 
 .modal {
