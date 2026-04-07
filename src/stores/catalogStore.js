@@ -8,6 +8,7 @@ export const useCatalogStore = defineStore('catalog', {
     activeRecipe: null,
     activeRecipeIngredients: [],
     activeRecipeNutrition: null,
+    recipeNutritionSummaries: [],
   }),
   actions: {
     async fetchProducts(search = '') {
@@ -29,6 +30,15 @@ export const useCatalogStore = defineStore('catalog', {
         this.recipes = response.data
       } catch (error) {
         console.error('Error fetching recipes:', error)
+      }
+    },
+
+    async fetchRecipeNutritionSummaries() {
+      try {
+        const response = await apiClient.get('/recipes/nutrition-summaries')
+        this.recipeNutritionSummaries = response.data
+      } catch (error) {
+        console.error('Error fetching recipe nutrition summaries:', error)
       }
     },
 

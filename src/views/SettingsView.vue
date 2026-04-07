@@ -32,6 +32,9 @@ const { t } = useI18n()
         <RouterLink class="button" to="/packages">{{ t('settings.packagesLink') }}</RouterLink>
         <RouterLink class="button" to="/tags">{{ t('settings.tagsLink') }}</RouterLink>
         <RouterLink class="button" to="/recipes">{{ t('settings.recipesLink') }}</RouterLink>
+        <RouterLink class="button" to="/favorite-days">{{
+          t('settings.favoriteDaysLink')
+        }}</RouterLink>
       </div>
     </article>
 

@@ -5,277 +5,321 @@
     <RouterLink to="/login">{{ t('common.goToLogin') }}</RouterLink>
   </section>
 
-  <section v-else class="planner-grid">
+  <section v-else class="planner-layout">
     <article class="surface-card section-stack">
-      <div class="section-header">
-        <h1 class="title is-4">{{ t('meals.planningTitle') }}</h1>
-        <p class="muted">{{ t('meals.planningDescription') }}</p>
-      </div>
+      <h1 class="title is-4">{{ t('meals.planningTitle') }}</h1>
+      <p class="muted">{{ t('meals.planningDescription') }}</p>
+    </article>
 
-      <div class="list-block">
-        <h2 class="title is-5">{{ t('meals.plansListTitle') }}</h2>
-        <div class="inline-filters">
+    <div class="top-grid">
+      <article class="surface-card section-stack">
+        <div class="section-header">
+          <h2 class="title is-5">{{ t('meals.plansListTitle') }}</h2>
           <input
             v-model="mealPlanSearch"
             class="input"
             :placeholder="t('catalog.searchRecipe')"
             type="text"
           />
-          <select v-model="mealPlanSortBy" class="input">
-            <option value="name">{{ t('meals.name') }}</option>
-            <option value="start_date">{{ t('meals.dateFrom') }}</option>
-            <option value="end_date">{{ t('meals.dateTo') }}</option>
-            <option value="entries_count">{{ t('common.records') }}</option>
-          </select>
-          <select v-model="mealPlanSortDirection" class="input">
-            <option value="asc">{{ t('common.sortAsc') }}</option>
-            <option value="desc">{{ t('common.sortDesc') }}</option>
-          </select>
         </div>
+
         <ul class="list">
-          <li v-for="plan in visibleMealPlans" :key="plan.id">
-            <button class="link" @click="selectMealPlan(plan.id)">{{ plan.name }}</button>
-            <span class="muted"
-              >{{ plan.start_date }} - {{ plan.end_date }} | {{ plan.entries_count }}
-              {{ t('common.records') }}</span
-            >
-          </li>
-        </ul>
-      </div>
-
-      <form class="form-grid" @submit.prevent="saveMealPlan">
-        <h3 class="title is-5">
-          {{ editingMealPlanId ? t('meals.editPlanTitle') : t('meals.newPlanTitle') }}
-        </h3>
-
-        <label>
-          {{ t('meals.name') }}
-          <input v-model="mealPlanForm.name" class="input" required />
-        </label>
-
-        <div class="grid-two">
-          <label>
-            {{ t('meals.dateFrom') }}
-            <input v-model="mealPlanForm.start_date" class="input" type="date" required />
-          </label>
-
-          <label>
-            {{ t('meals.dateTo') }}
-            <input v-model="mealPlanForm.end_date" class="input" type="date" required />
-          </label>
-        </div>
-
-        <label>
-          {{ t('meals.note') }}
-          <textarea v-model="mealPlanForm.note" class="textarea" rows="3"></textarea>
-        </label>
-
-        <p v-if="mealPlanMessage" class="success-message">{{ mealPlanMessage }}</p>
-        <p v-if="mealPlanError" class="error-message">{{ mealPlanError }}</p>
-
-        <div class="actions-row">
-          <button class="button is-primary" type="submit">
-            {{ editingMealPlanId ? t('meals.savePlan') : t('meals.addPlan') }}
-          </button>
-          <button class="button" type="button" @click="resetMealPlanForm">
-            {{ t('common.reset') }}
-          </button>
-          <button v-if="editingMealPlanId" class="button" type="button" @click="removeMealPlan">
-            {{ t('meals.removePlan') }}
-          </button>
-        </div>
-      </form>
-
-      <div v-if="activeMealPlan" class="entries-block">
-        <h3 class="title is-5">{{ t('meals.entriesTitle') }}: {{ activeMealPlan.name }}</h3>
-        <p class="muted">{{ t('meals.entriesFormat') }}</p>
-        <p class="muted">{{ t('meals.entriesSlots') }}</p>
-
-        <textarea v-model="entriesText" class="textarea" rows="10"></textarea>
-
-        <div class="actions-row">
-          <button class="button is-primary" type="button" @click="saveEntries">
-            {{ t('meals.saveEntries') }}
-          </button>
-          <button class="button" type="button" @click="generateShoppingListFromActiveMealPlan">
-            {{ t('meals.generateShoppingList') }}
-          </button>
-        </div>
-      </div>
-    </article>
-
-    <article class="surface-card section-stack">
-      <div class="section-header">
-        <h1 class="title is-4">{{ t('meals.shoppingListsTitle') }}</h1>
-        <p class="muted">{{ t('meals.shoppingListsDescription') }}</p>
-      </div>
-
-      <div class="list-block">
-        <h2 class="title is-5">{{ t('meals.shoppingListListTitle') }}</h2>
-        <div class="inline-filters">
-          <input
-            v-model="shoppingListSearch"
-            class="input"
-            :placeholder="t('catalog.searchRecipe')"
-            type="text"
-          />
-          <select v-model="shoppingListSortBy" class="input">
-            <option value="name">{{ t('meals.name') }}</option>
-            <option value="status">{{ t('common.status') }}</option>
-            <option value="items_count">{{ t('meals.itemsTitle') }}</option>
-            <option value="checked_count">{{ t('common.records') }}</option>
-          </select>
-          <select v-model="shoppingListSortDirection" class="input">
-            <option value="asc">{{ t('common.sortAsc') }}</option>
-            <option value="desc">{{ t('common.sortDesc') }}</option>
-          </select>
-        </div>
-        <ul class="list">
-          <li v-for="list in visibleShoppingLists" :key="list.id">
-            <button class="link" @click="selectShoppingList(list.id)">{{ list.name }}</button>
-            <span class="muted"
-              >{{
-                list.status === 'archived' ? t('common.statusArchived') : t('common.statusOpen')
-              }}
-              | {{ list.checked_count }}/{{ list.items_count }}</span
-            >
-          </li>
-        </ul>
-      </div>
-
-      <form class="form-grid" @submit.prevent="saveShoppingList">
-        <h3 class="title is-5">
-          {{
-            editingShoppingListId
-              ? t('meals.editShoppingListTitle')
-              : t('meals.newShoppingListTitle')
-          }}
-        </h3>
-
-        <label>
-          {{ t('meals.name') }}
-          <input v-model="shoppingListForm.name" class="input" required />
-        </label>
-
-        <div class="grid-two">
-          <label>
-            {{ t('common.status') }}
-            <select v-model="shoppingListForm.status" class="input">
-              <option value="open">{{ t('common.statusOpen') }}</option>
-              <option value="archived">{{ t('common.statusArchived') }}</option>
-            </select>
-          </label>
-
-          <label>
-            {{ t('meals.linkedPlan') }}
-            <select v-model="shoppingListForm.meal_plan_id" class="input">
-              <option value="">{{ t('meals.noLinkedPlan') }}</option>
-              <option v-for="plan in mealPlans" :key="plan.id" :value="String(plan.id)">
-                {{ plan.name }}
-              </option>
-            </select>
-          </label>
-        </div>
-
-        <label>
-          {{ t('meals.note') }}
-          <textarea v-model="shoppingListForm.note" class="textarea" rows="3"></textarea>
-        </label>
-
-        <p v-if="shoppingListMessage" class="success-message">{{ shoppingListMessage }}</p>
-        <p v-if="shoppingListError" class="error-message">{{ shoppingListError }}</p>
-
-        <div class="actions-row">
-          <button class="button is-primary" type="submit">
-            {{ editingShoppingListId ? t('meals.saveList') : t('meals.addList') }}
-          </button>
-          <button class="button" type="button" @click="resetShoppingListForm">
-            {{ t('common.reset') }}
-          </button>
-          <button
-            v-if="editingShoppingListId"
-            class="button"
-            type="button"
-            @click="removeShoppingList"
+          <li
+            v-for="plan in visibleMealPlans"
+            :key="plan.id"
+            :class="{ 'is-active-row': plan.id === selectedMealPlanId }"
           >
-            {{ t('meals.removeList') }}
-          </button>
-        </div>
-      </form>
+            <button class="link" type="button" @click="selectMealPlan(plan.id)">
+              {{ plan.name }}
+            </button>
+            <span class="muted"
+              >{{ plan.start_date }} - {{ plan.end_date }} | {{ t('meals.portionsCount') }}:
+              {{ plan.portions_count }}</span
+            >
+          </li>
+        </ul>
 
-      <div v-if="activeShoppingList" class="items-block">
-        <h3 class="title is-5">{{ t('meals.itemsTitle') }}: {{ activeShoppingList.name }}</h3>
+        <form class="form-grid" @submit.prevent="saveMealPlan">
+          <h3 class="title is-5">
+            {{ editingMealPlanId ? t('meals.editPlanTitle') : t('meals.newPlanTitle') }}
+          </h3>
 
-        <ul class="list">
-          <li v-for="item in activeShoppingList.items" :key="item.id" class="item-row">
-            <label class="checkbox-line">
-              <input
-                :checked="item.is_checked === 1"
-                type="checkbox"
-                @change="toggleItemChecked(item, $event.target.checked)"
-              />
-              <span>{{ item.product_name || item.custom_name }}</span>
+          <label>
+            {{ t('meals.name') }}
+            <input v-model="mealPlanForm.name" class="input" required />
+          </label>
+
+          <div class="grid-two">
+            <label>
+              {{ t('meals.dateFrom') }}
+              <input v-model="mealPlanForm.start_date" class="input" type="date" required />
             </label>
 
-            <span class="muted">{{ item.quantity ?? '-' }} {{ item.unit_name || '' }}</span>
-            <button class="button is-small" type="button" @click="removeShoppingListItem(item.id)">
+            <label>
+              {{ t('meals.dateTo') }}
+              <input v-model="mealPlanForm.end_date" class="input" type="date" required />
+            </label>
+          </div>
+
+          <label>
+            {{ t('meals.portionsCount') }}
+            <input
+              v-model="mealPlanForm.portions_count"
+              class="input"
+              type="number"
+              min="1"
+              step="1"
+              required
+            />
+          </label>
+
+          <label>
+            {{ t('meals.note') }}
+            <textarea v-model="mealPlanForm.note" class="textarea" rows="3"></textarea>
+          </label>
+
+          <p v-if="mealPlanMessage" class="success-message">{{ mealPlanMessage }}</p>
+          <p v-if="mealPlanError" class="error-message">{{ mealPlanError }}</p>
+
+          <div class="actions-row">
+            <button class="button is-primary" type="submit">
+              {{ editingMealPlanId ? t('meals.savePlan') : t('meals.addPlan') }}
+            </button>
+            <button class="button" type="button" @click="resetMealPlanForm">
+              {{ t('common.reset') }}
+            </button>
+            <button v-if="editingMealPlanId" class="button" type="button" @click="removeMealPlan">
+              {{ t('meals.removePlan') }}
+            </button>
+          </div>
+        </form>
+      </article>
+
+      <article v-if="activeMealPlan" class="surface-card section-stack">
+        <h2 class="title is-5">{{ t('meals.mealSlotsTitle') }}</h2>
+
+        <ul class="list">
+          <li v-for="(slot, index) in mealSlotsDraft" :key="`slot-${index}`" class="slot-row">
+            <input v-model="slot.slot_name" class="input" :placeholder="t('meals.mealSlotName')" />
+            <input v-model="slot.slot_time" class="input" type="time" />
+            <button
+              class="button is-small"
+              type="button"
+              :disabled="mealSlotsDraft.length <= 1"
+              @click="removeMealSlot(index)"
+            >
               {{ t('common.delete') }}
             </button>
           </li>
         </ul>
 
-        <form class="form-grid" @submit.prevent="addItemToShoppingList">
-          <h4 class="title is-6">{{ t('meals.addItemTitle') }}</h4>
+        <div class="actions-row">
+          <button class="button is-small" type="button" @click="addMealSlot">
+            {{ t('meals.addMealSlot') }}
+          </button>
+          <button class="button is-primary is-small" type="button" @click="saveMealSlots">
+            {{ t('meals.saveMealSlots') }}
+          </button>
+        </div>
+      </article>
+    </div>
 
-          <label>
-            {{ t('meals.productFromCatalog') }}
-            <select v-model="shoppingItemForm.product_id" class="input">
-              <option value="">{{ t('meals.pickProduct') }}</option>
-              <option v-for="product in products" :key="product.id" :value="String(product.id)">
-                {{ product.name }}
-              </option>
-            </select>
-          </label>
+    <article v-if="activeMealPlan" class="surface-card section-stack plan-days-block">
+      <div class="block-header">
+        <h2 class="title is-5">{{ t('meals.daySlotsTitle') }}</h2>
+      </div>
 
-          <label>
-            {{ t('meals.customName') }}
-            <input
-              v-model="shoppingItemForm.custom_name"
-              class="input"
-              :placeholder="t('meals.customNamePlaceholder')"
-            />
-          </label>
+      <div class="matrix-wrapper">
+        <table class="matrix-table">
+          <thead>
+            <tr>
+              <th>{{ t('meals.mealSlotName') }}</th>
+              <th
+                v-for="daySlot in activeMealPlan.day_slots"
+                :key="`head-${daySlot.planned_date}`"
+                :class="{ 'is-selected-column': daySlot.planned_date === selectedDaySlotDate }"
+              >
+                <button
+                  class="matrix-day-button"
+                  type="button"
+                  @click="selectDaySlot(daySlot.planned_date)"
+                >
+                  {{ daySlot.planned_date }}
+                </button>
+                <p class="matrix-source muted">
+                  {{ t('meals.sourceCustom') }}
+                </p>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="(mealSlot, rowIndex) in mealSlotRows"
+              :key="`row-${mealSlot.id ?? rowIndex}`"
+            >
+              <th class="matrix-slot-cell">
+                <div class="matrix-slot-title">
+                  <strong>{{ mealSlot.slot_name }}</strong>
+                  <SlotTimeClock v-if="mealSlot.slot_time" :time="mealSlot.slot_time" :size="24" />
+                </div>
+                <span v-if="mealSlot.slot_time" class="muted">{{ mealSlot.slot_time }}</span>
+              </th>
+              <td
+                v-for="daySlot in activeMealPlan.day_slots"
+                :key="`cell-${daySlot.planned_date}-${mealSlot.id ?? rowIndex}`"
+                :class="{ 'is-selected-column': daySlot.planned_date === selectedDaySlotDate }"
+              >
+                <button
+                  class="matrix-cell-button"
+                  type="button"
+                  @click="selectDaySlot(daySlot.planned_date)"
+                >
+                  <span>{{ matrixMealName(daySlot, rowIndex) }}</span>
+                  <span v-if="matrixMealServings(daySlot, rowIndex)" class="muted">
+                    {{ matrixMealServings(daySlot, rowIndex) }}
+                  </span>
+                </button>
+              </td>
+            </tr>
 
-          <div class="grid-two">
-            <label>
-              {{ t('meals.quantity') }}
-              <input
-                v-model="shoppingItemForm.quantity"
-                class="input"
-                type="number"
-                min="0"
-                step="0.01"
-              />
-            </label>
+            <tr class="matrix-day-summary-row">
+              <th class="matrix-slot-cell">{{ t('meals.dayTotalsTitle') }}</th>
+              <td
+                v-for="daySlot in activeMealPlan.day_slots"
+                :key="`summary-${daySlot.planned_date}`"
+                :class="{ 'is-selected-column': daySlot.planned_date === selectedDaySlotDate }"
+              >
+                <NutritionTotalsInline
+                  :totals="daySlot.totals ?? {}"
+                  :mass-label="t('meals.massLabel')"
+                />
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
 
-            <label>
-              {{ t('meals.unit') }}
-              <select v-model="shoppingItemForm.unit_id" class="input">
-                <option value="">{{ t('meals.noUnit') }}</option>
-                <option v-for="unit in units" :key="unit.id" :value="String(unit.id)">
-                  {{ unit.name }}
-                </option>
-              </select>
-            </label>
+      <div class="plan-break" aria-hidden="true">*</div>
+
+      <div v-if="selectedDaySlot" class="day-slot-card is-custom-card">
+        <div class="day-slot-header">
+          <div class="date-meta">
+            <h3 class="title is-6">{{ selectedDaySlot.planned_date }}</h3>
+            <span class="source-badge is-custom">{{ t('meals.sourceCustom') }}</span>
           </div>
 
           <label>
-            {{ t('meals.note') }}
-            <input v-model="shoppingItemForm.note" class="input" />
+            {{ t('meals.importFavoriteDay') }}
+            <select
+              class="input"
+              value=""
+              @change="handleFavoriteDayImport(selectedDaySlot, $event)"
+            >
+              <option value="">{{ t('meals.pickFavoriteDay') }}</option>
+              <option v-for="dayPlan in dayPlans" :key="dayPlan.id" :value="String(dayPlan.id)">
+                {{ dayPlan.name }}
+              </option>
+            </select>
           </label>
+        </div>
 
-          <button class="button is-primary" type="submit">{{ t('meals.addItem') }}</button>
-        </form>
+        <DayMealsBuilder
+          :model-value="resolveDaySlotMeals(selectedDaySlot)"
+          :recipes="recipes"
+          :nutrition-summaries="recipeNutritionSummaries"
+          :meal-slots="activeMealPlan.meal_slots"
+          :default-servings="activeMealPlan.portions_count || 1"
+          :max-meals="mealSlotLimit"
+          :show-totals="false"
+          :empty-label="t('meals.emptyMeals')"
+          :add-button-label="t('meals.addMealToDay')"
+          @update:model-value="updateDaySlotMealsDraft(selectedDaySlot.planned_date, $event)"
+        />
+
+        <NutritionTotalsInline
+          :caption="t('meals.dayTotalsTitle')"
+          :totals="selectedDaySlot.totals ?? {}"
+          :mass-label="t('meals.massLabel')"
+        />
+
+        <div class="actions-row">
+          <button
+            class="button is-primary is-small"
+            type="button"
+            @click="saveDaySlotMeals(selectedDaySlot.planned_date)"
+          >
+            {{ t('meals.saveSlotMeals') }}
+          </button>
+
+          <button
+            class="button is-small"
+            type="button"
+            @click="saveCustomDaySlotAsFavorite(selectedDaySlot)"
+          >
+            {{ t('meals.saveFavoriteFromSlot') }}
+          </button>
+        </div>
+      </div>
+
+      <div v-if="favoriteImportModal" class="modal" @click.self="closeFavoriteImportModal">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h4 class="title is-6">{{ t('meals.favoriteOverflowTitle') }}</h4>
+            <button class="button is-small" type="button" @click="closeFavoriteImportModal">
+              {{ t('common.close') }}
+            </button>
+          </div>
+
+          <p class="muted">
+            {{
+              t('meals.favoriteOverflowHint', {
+                name: favoriteImportModal.dayPlanName,
+                selected: favoriteImportSelection.length,
+                limit: favoriteImportModal.limit,
+              })
+            }}
+          </p>
+
+          <ul class="picker-list">
+            <li v-for="(meal, index) in favoriteImportModal.meals" :key="`overflow-meal-${index}`">
+              <label class="overflow-option">
+                <input
+                  type="checkbox"
+                  :checked="favoriteImportSelection.includes(index)"
+                  :disabled="
+                    !favoriteImportSelection.includes(index) &&
+                    favoriteImportSelection.length >= favoriteImportModal.limit
+                  "
+                  @change="toggleFavoriteImportSelection(index)"
+                />
+                <span>{{ recipeName(meal.recipe_id) }}</span>
+              </label>
+            </li>
+          </ul>
+
+          <div class="actions-row">
+            <button class="button is-primary" type="button" @click="confirmFavoriteImportSelection">
+              {{ t('meals.importSelectedMeals') }}
+            </button>
+            <button class="button" type="button" @click="closeFavoriteImportModal">
+              {{ t('common.cancel') }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </article>
+
+    <article v-if="activeMealPlan" class="surface-card section-stack totals-card">
+      <h2 class="title is-5">{{ t('meals.planTotalsTitle') }}</h2>
+      <NutritionTotalsInline
+        :totals="activeMealPlan.totals ?? {}"
+        :mass-label="t('meals.massLabel')"
+      />
+
+      <div class="actions-row">
+        <button class="button" type="button" @click="generateShoppingListFromActiveMealPlan">
+          {{ t('meals.generateShoppingList') }}
+        </button>
       </div>
     </article>
   </section>
@@ -287,132 +331,115 @@ import { RouterLink } from 'vue-router'
 import { useAuthStore } from '../stores/authStore'
 import { useCatalogStore } from '../stores/catalogStore'
 import { useMealPlannerStore } from '../stores/mealPlannerStore'
-import { useUnitStore } from '../stores/unitsStore'
 import { useI18n } from '../composables/useI18n'
+import DayMealsBuilder from '../components/planning/DayMealsBuilder.vue'
+import NutritionTotalsInline from '../components/planning/NutritionTotalsInline.vue'
+import SlotTimeClock from '../components/planning/SlotTimeClock.vue'
 
 const authStore = useAuthStore()
 const catalogStore = useCatalogStore()
 const mealPlannerStore = useMealPlannerStore()
-const unitStore = useUnitStore()
 const { t } = useI18n()
 
 const editingMealPlanId = ref(null)
-const editingShoppingListId = ref(null)
 const mealPlanSearch = ref('')
-const mealPlanSortBy = ref('start_date')
-const mealPlanSortDirection = ref('asc')
-const shoppingListSearch = ref('')
-const shoppingListSortBy = ref('name')
-const shoppingListSortDirection = ref('asc')
-
 const mealPlanMessage = ref('')
 const mealPlanError = ref('')
-const shoppingListMessage = ref('')
-const shoppingListError = ref('')
-
-const entriesText = ref('')
+const selectedDaySlotDate = ref(null)
 
 const mealPlanForm = ref({
   name: '',
   start_date: '',
   end_date: '',
+  portions_count: 1,
   note: '',
 })
 
-const shoppingListForm = ref({
-  name: '',
-  status: 'open',
-  meal_plan_id: '',
-  note: '',
-})
-
-const shoppingItemForm = ref({
-  product_id: '',
-  custom_name: '',
-  quantity: '',
-  unit_id: '',
-  note: '',
-})
+const mealSlotsDraft = ref([])
+const daySlotMealsDrafts = ref({})
+const favoriteImportModal = ref(null)
+const favoriteImportSelection = ref([])
 
 const isAuthenticated = computed(() => authStore.isAuthenticated)
 const mealPlans = computed(() => mealPlannerStore.mealPlans)
 const activeMealPlan = computed(() => mealPlannerStore.activeMealPlan)
-const shoppingLists = computed(() => mealPlannerStore.shoppingLists)
-const activeShoppingList = computed(() => mealPlannerStore.activeShoppingList)
-const products = computed(() => catalogStore.products)
-const units = computed(() => unitStore.units)
+const dayPlans = computed(() => mealPlannerStore.dayPlans)
+const recipes = computed(() => catalogStore.recipes)
+const recipeNutritionSummaries = computed(() => catalogStore.recipeNutritionSummaries)
+const recipesById = computed(() => new Map(recipes.value.map((recipe) => [recipe.id, recipe])))
+const selectedMealPlanId = computed(() => activeMealPlan.value?.id ?? null)
+const mealSlotRows = computed(() => activeMealPlan.value?.meal_slots ?? [])
+const mealSlotLimit = computed(() => {
+  const slots = activeMealPlan.value?.meal_slots ?? []
+  return slots.length > 0 ? slots.length : null
+})
+const selectedDaySlot = computed(() => {
+  const slots = activeMealPlan.value?.day_slots ?? []
+  if (slots.length === 0) {
+    return null
+  }
+
+  return slots.find((slot) => slot.planned_date === selectedDaySlotDate.value) ?? slots[0]
+})
 
 const visibleMealPlans = computed(() => {
   const needle = mealPlanSearch.value.trim().toLowerCase()
-  const direction = mealPlanSortDirection.value === 'desc' ? -1 : 1
-
-  const filtered = mealPlans.value.filter((plan) => {
+  return mealPlans.value.filter((plan) => {
     if (!needle) {
       return true
     }
 
     return `${plan.name} ${plan.start_date} ${plan.end_date}`.toLowerCase().includes(needle)
   })
-
-  return [...filtered].sort((left, right) => {
-    const leftValue = left[mealPlanSortBy.value] ?? ''
-    const rightValue = right[mealPlanSortBy.value] ?? ''
-
-    const leftNumber = Number(leftValue)
-    const rightNumber = Number(rightValue)
-    const numbersComparable = Number.isFinite(leftNumber) && Number.isFinite(rightNumber)
-
-    if (numbersComparable) {
-      if (leftNumber === rightNumber) {
-        return 0
-      }
-      return leftNumber > rightNumber ? direction : -direction
-    }
-
-    return (
-      String(leftValue).localeCompare(String(rightValue), undefined, {
-        sensitivity: 'base',
-        numeric: true,
-      }) * direction
-    )
-  })
 })
 
-const visibleShoppingLists = computed(() => {
-  const needle = shoppingListSearch.value.trim().toLowerCase()
-  const direction = shoppingListSortDirection.value === 'desc' ? -1 : 1
+function cloneMeals(meals) {
+  if (!Array.isArray(meals)) {
+    return []
+  }
 
-  const filtered = shoppingLists.value.filter((list) => {
-    if (!needle) {
-      return true
+  return meals.map((meal) => ({
+    recipe_id: meal.recipe_id,
+    servings: meal.servings ?? null,
+    note: meal.note ?? '',
+  }))
+}
+
+function cloneMealSlots(slots) {
+  if (!Array.isArray(slots)) {
+    return []
+  }
+
+  return slots.map((slot) => ({
+    slot_name: slot.slot_name,
+    slot_time: slot.slot_time ?? '',
+  }))
+}
+
+function applyMealPlanState(plan) {
+  editingMealPlanId.value = plan.id
+  mealPlanForm.value = {
+    name: plan.name,
+    start_date: plan.start_date,
+    end_date: plan.end_date,
+    portions_count: plan.portions_count ?? 1,
+    note: plan.note ?? '',
+  }
+
+  mealSlotsDraft.value = cloneMealSlots(plan.meal_slots)
+  daySlotMealsDrafts.value = (plan.day_slots ?? []).reduce((accumulator, daySlot) => {
+    return {
+      ...accumulator,
+      [daySlot.planned_date]: cloneMeals(daySlot.meals),
     }
+  }, {})
 
-    return `${list.name} ${list.status}`.toLowerCase().includes(needle)
-  })
+  if ((plan.day_slots ?? []).some((slot) => slot.planned_date === selectedDaySlotDate.value)) {
+    return
+  }
 
-  return [...filtered].sort((left, right) => {
-    const leftValue = left[shoppingListSortBy.value] ?? ''
-    const rightValue = right[shoppingListSortBy.value] ?? ''
-
-    const leftNumber = Number(leftValue)
-    const rightNumber = Number(rightValue)
-    const numbersComparable = Number.isFinite(leftNumber) && Number.isFinite(rightNumber)
-
-    if (numbersComparable) {
-      if (leftNumber === rightNumber) {
-        return 0
-      }
-      return leftNumber > rightNumber ? direction : -direction
-    }
-
-    return (
-      String(leftValue).localeCompare(String(rightValue), undefined, {
-        sensitivity: 'base',
-        numeric: true,
-      }) * direction
-    )
-  })
-})
+  selectedDaySlotDate.value = plan.day_slots?.[0]?.planned_date ?? null
+}
 
 function resetMealPlanForm(clearMessages = true) {
   editingMealPlanId.value = null
@@ -420,8 +447,14 @@ function resetMealPlanForm(clearMessages = true) {
     name: '',
     start_date: '',
     end_date: '',
+    portions_count: 1,
     note: '',
   }
+  mealSlotsDraft.value = []
+  daySlotMealsDrafts.value = {}
+  favoriteImportModal.value = null
+  favoriteImportSelection.value = []
+  selectedDaySlotDate.value = null
 
   if (clearMessages) {
     mealPlanMessage.value = ''
@@ -429,77 +462,9 @@ function resetMealPlanForm(clearMessages = true) {
   }
 }
 
-function resetShoppingListForm(clearMessages = true) {
-  editingShoppingListId.value = null
-  shoppingListForm.value = {
-    name: '',
-    status: 'open',
-    meal_plan_id: '',
-    note: '',
-  }
-
-  if (clearMessages) {
-    shoppingListMessage.value = ''
-    shoppingListError.value = ''
-  }
-}
-
-function resetShoppingItemForm() {
-  shoppingItemForm.value = {
-    product_id: '',
-    custom_name: '',
-    quantity: '',
-    unit_id: '',
-    note: '',
-  }
-}
-
-function mapEntriesToText(entries) {
-  return entries
-    .map((entry) => {
-      const recipeId = entry.recipe_id ?? ''
-      const customName = entry.custom_name ?? ''
-      const servings = entry.servings ?? ''
-      const note = entry.note ?? ''
-      return `${entry.planned_date}|${entry.meal_slot}|${recipeId}|${customName}|${servings}|${note}`
-    })
-    .join('\n')
-}
-
-function parseEntriesText() {
-  return entriesText.value
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const [plannedDate, mealSlot, recipeId, customName, servings, note] = line
-        .split('|')
-        .map((part) => (typeof part === 'string' ? part.trim() : ''))
-
-      const parsedRecipeId = recipeId ? Number(recipeId) : null
-      const parsedServings = servings ? Number(servings.replace(',', '.')) : null
-
-      return {
-        planned_date: plannedDate,
-        meal_slot: mealSlot,
-        recipe_id: Number.isInteger(parsedRecipeId) ? parsedRecipeId : null,
-        custom_name: customName || null,
-        servings: Number.isFinite(parsedServings) ? parsedServings : null,
-        note: note || '',
-      }
-    })
-}
-
 async function selectMealPlan(mealPlanId) {
   const plan = await mealPlannerStore.fetchMealPlan(mealPlanId)
-  editingMealPlanId.value = plan.id
-  mealPlanForm.value = {
-    name: plan.name,
-    start_date: plan.start_date,
-    end_date: plan.end_date,
-    note: plan.note ?? '',
-  }
-  entriesText.value = mapEntriesToText(plan.entries ?? [])
+  applyMealPlanState(plan)
   mealPlanMessage.value = ''
   mealPlanError.value = ''
 }
@@ -510,18 +475,19 @@ async function saveMealPlan() {
 
   const payload = {
     ...mealPlanForm.value,
+    portions_count: Number(mealPlanForm.value.portions_count),
   }
 
   try {
     if (editingMealPlanId.value) {
       const updated = await mealPlannerStore.updateMealPlan(editingMealPlanId.value, payload)
-      await selectMealPlan(updated.id)
+      applyMealPlanState(updated)
       mealPlanMessage.value = t('meals.planSaved')
       return
     }
 
     const created = await mealPlannerStore.createMealPlan(payload)
-    await selectMealPlan(created.id)
+    applyMealPlanState(created)
     mealPlanMessage.value = t('meals.planAdded')
   } catch (error) {
     mealPlanError.value = error?.response?.data?.error ?? t('meals.planSaveError')
@@ -539,7 +505,6 @@ async function removeMealPlan() {
 
   try {
     await mealPlannerStore.deleteMealPlan(editingMealPlanId.value)
-    entriesText.value = ''
     mealPlanMessage.value = t('meals.planDeleted')
     mealPlanError.value = ''
     resetMealPlanForm(false)
@@ -548,7 +513,15 @@ async function removeMealPlan() {
   }
 }
 
-async function saveEntries() {
+function addMealSlot() {
+  mealSlotsDraft.value = [...mealSlotsDraft.value, { slot_name: '', slot_time: '' }]
+}
+
+function removeMealSlot(index) {
+  mealSlotsDraft.value = mealSlotsDraft.value.filter((_, slotIndex) => slotIndex !== index)
+}
+
+async function saveMealSlots() {
   if (!activeMealPlan.value) {
     return
   }
@@ -557,14 +530,245 @@ async function saveEntries() {
   mealPlanError.value = ''
 
   try {
-    const updated = await mealPlannerStore.replaceMealPlanEntries(
+    const updated = await mealPlannerStore.replaceMealPlanMealSlots(
       activeMealPlan.value.id,
-      parseEntriesText(),
+      mealSlotsDraft.value,
     )
-    entriesText.value = mapEntriesToText(updated.entries ?? [])
-    mealPlanMessage.value = t('meals.entriesSaved')
+    applyMealPlanState(updated)
+    mealPlanMessage.value = t('meals.mealSlotsSaved')
   } catch (error) {
-    mealPlanError.value = error?.response?.data?.error ?? t('meals.entriesSaveError')
+    mealPlanError.value = error?.response?.data?.error ?? t('meals.mealSlotsSaveError')
+  }
+}
+
+function resolveDaySlotMeals(daySlot) {
+  return cloneMeals(daySlotMealsDrafts.value[daySlot.planned_date] ?? daySlot.meals)
+}
+
+function customDaySlotMeals(daySlot) {
+  return cloneMeals(daySlotMealsDrafts.value[daySlot.planned_date] ?? daySlot.meals)
+}
+
+function updateDaySlotMealsDraft(plannedDate, meals) {
+  daySlotMealsDrafts.value = {
+    ...daySlotMealsDrafts.value,
+    [plannedDate]: cloneMeals(meals),
+  }
+}
+
+function selectDaySlot(plannedDate) {
+  selectedDaySlotDate.value = plannedDate
+}
+
+function mealsForMatrix(daySlot) {
+  if (!daySlot) {
+    return []
+  }
+
+  const draftMeals = daySlotMealsDrafts.value[daySlot.planned_date]
+  if (Array.isArray(draftMeals)) {
+    return draftMeals
+  }
+
+  return Array.isArray(daySlot.meals) ? daySlot.meals : []
+}
+
+function matrixMealName(daySlot, rowIndex) {
+  const meal = mealsForMatrix(daySlot)[rowIndex]
+  if (!meal) {
+    return '-'
+  }
+
+  return meal.recipe_name ?? recipesById.value.get(meal.recipe_id)?.name ?? `#${meal.recipe_id}`
+}
+
+function matrixMealServings(daySlot, rowIndex) {
+  const meal = mealsForMatrix(daySlot)[rowIndex]
+  if (!meal) {
+    return ''
+  }
+
+  const parsed = Number(meal.servings)
+  const defaultServings =
+    Number(activeMealPlan.value?.portions_count) > 0 ? activeMealPlan.value.portions_count : 1
+  const effectiveServings = Number.isFinite(parsed) && parsed > 0 ? parsed : defaultServings
+
+  return `${t('meals.servingsLabel')}: ${effectiveServings}`
+}
+
+function recipeName(recipeId) {
+  return recipesById.value.get(recipeId)?.name ?? `#${recipeId}`
+}
+
+function closeFavoriteImportModal() {
+  favoriteImportModal.value = null
+  favoriteImportSelection.value = []
+}
+
+function toggleFavoriteImportSelection(index) {
+  if (!favoriteImportModal.value) {
+    return
+  }
+
+  if (favoriteImportSelection.value.includes(index)) {
+    favoriteImportSelection.value = favoriteImportSelection.value.filter((item) => item !== index)
+    return
+  }
+
+  if (favoriteImportSelection.value.length >= favoriteImportModal.value.limit) {
+    return
+  }
+
+  favoriteImportSelection.value = [...favoriteImportSelection.value, index].sort((a, b) => a - b)
+}
+
+function mapImportedMeals(dayPlanMeals) {
+  return dayPlanMeals.map((meal) => ({
+    recipe_id: meal.recipe_id,
+    servings: meal.servings ?? null,
+    note: meal.note ?? '',
+  }))
+}
+
+async function importMealsIntoDaySlot(plannedDate, meals, dayPlanName) {
+  if (!activeMealPlan.value) {
+    return
+  }
+
+  mealPlanMessage.value = ''
+  mealPlanError.value = ''
+
+  try {
+    const updated = await mealPlannerStore.replaceMealPlanDaySlotMeals(
+      activeMealPlan.value.id,
+      plannedDate,
+      meals,
+    )
+    applyMealPlanState(updated)
+    selectedDaySlotDate.value = plannedDate
+    mealPlanMessage.value = t('meals.favoriteImportedToCustom', { name: dayPlanName })
+  } catch (error) {
+    mealPlanError.value = error?.response?.data?.error ?? t('meals.favoriteImportError')
+  }
+}
+
+async function handleFavoriteDayImport(daySlot, event) {
+  if (!activeMealPlan.value) {
+    return
+  }
+
+  const nextValue = String(event?.target?.value ?? '')
+  if (event?.target) {
+    event.target.value = ''
+  }
+
+  const dayPlanId = Number(nextValue)
+  if (!Number.isInteger(dayPlanId) || dayPlanId <= 0) {
+    return
+  }
+
+  mealPlanMessage.value = ''
+  mealPlanError.value = ''
+
+  try {
+    const dayPlan = await mealPlannerStore.fetchDayPlan(dayPlanId)
+    const importedMeals = mapImportedMeals(dayPlan?.meals ?? [])
+    const limit = mealSlotLimit.value ?? importedMeals.length
+
+    if (importedMeals.length > limit) {
+      favoriteImportModal.value = {
+        plannedDate: daySlot.planned_date,
+        dayPlanName: dayPlan?.name ?? t('meals.sourceCustom'),
+        meals: importedMeals,
+        limit,
+      }
+      favoriteImportSelection.value = importedMeals.map((_, index) => index).slice(0, limit)
+      selectedDaySlotDate.value = daySlot.planned_date
+      return
+    }
+
+    await importMealsIntoDaySlot(daySlot.planned_date, importedMeals, dayPlan?.name ?? '')
+  } catch (error) {
+    mealPlanError.value = error?.response?.data?.error ?? t('meals.favoriteImportError')
+  }
+}
+
+async function confirmFavoriteImportSelection() {
+  if (!favoriteImportModal.value) {
+    return
+  }
+
+  if (favoriteImportSelection.value.length === 0) {
+    mealPlanError.value = t('meals.favoriteOverflowEmptySelection')
+    return
+  }
+
+  const selectedMeals = favoriteImportSelection.value
+    .sort((a, b) => a - b)
+    .map((index) => favoriteImportModal.value.meals[index])
+    .filter(Boolean)
+
+  const plannedDate = favoriteImportModal.value.plannedDate
+  const dayPlanName = favoriteImportModal.value.dayPlanName
+  closeFavoriteImportModal()
+  await importMealsIntoDaySlot(plannedDate, selectedMeals, dayPlanName)
+}
+
+async function saveDaySlotMeals(plannedDate) {
+  if (!activeMealPlan.value) {
+    return
+  }
+
+  mealPlanMessage.value = ''
+  mealPlanError.value = ''
+
+  try {
+    const updated = await mealPlannerStore.replaceMealPlanDaySlotMeals(
+      activeMealPlan.value.id,
+      plannedDate,
+      daySlotMealsDrafts.value[plannedDate] ?? [],
+    )
+    applyMealPlanState(updated)
+    mealPlanMessage.value = t('meals.slotMealsSaved')
+  } catch (error) {
+    mealPlanError.value = error?.response?.data?.error ?? t('meals.slotMealsSaveError')
+  }
+}
+
+async function saveCustomDaySlotAsFavorite(daySlot) {
+  const meals = customDaySlotMeals(daySlot)
+  if (meals.length === 0) {
+    mealPlanError.value = t('meals.favoriteFromSlotEmptyError')
+    mealPlanMessage.value = ''
+    return
+  }
+
+  const defaultName = `${mealPlanForm.value.name} ${daySlot.planned_date}`
+  const enteredName = prompt(t('meals.favoriteNamePrompt'), defaultName)
+  const name = typeof enteredName === 'string' ? enteredName.trim() : ''
+
+  if (!name) {
+    return
+  }
+
+  mealPlanMessage.value = ''
+  mealPlanError.value = ''
+
+  try {
+    const created = await mealPlannerStore.createDayPlan({
+      name,
+      note: t('meals.favoriteSourceNote', {
+        plan: mealPlanForm.value.name,
+        date: daySlot.planned_date,
+      }),
+    })
+
+    await mealPlannerStore.replaceDayPlanMeals(created.id, meals)
+    await mealPlannerStore.fetchDayPlans()
+
+    mealPlanMessage.value = t('meals.favoriteSavedFromSlot', { name: created.name })
+  } catch (error) {
+    mealPlanError.value = error?.response?.data?.error ?? t('meals.favoriteSaveError')
   }
 }
 
@@ -573,129 +777,14 @@ async function generateShoppingListFromActiveMealPlan() {
     return
   }
 
-  shoppingListMessage.value = ''
-  shoppingListError.value = ''
+  mealPlanMessage.value = ''
+  mealPlanError.value = ''
 
   try {
-    const created = await mealPlannerStore.generateShoppingListFromMealPlan(activeMealPlan.value.id)
-    await selectShoppingList(created.id)
-    shoppingListMessage.value = t('meals.listGenerated')
+    await mealPlannerStore.generateShoppingListFromMealPlan(activeMealPlan.value.id)
+    mealPlanMessage.value = t('meals.listGenerated')
   } catch (error) {
-    shoppingListError.value = error?.response?.data?.error ?? t('meals.listGenerateError')
-  }
-}
-
-async function selectShoppingList(shoppingListId) {
-  const shoppingList = await mealPlannerStore.fetchShoppingList(shoppingListId)
-
-  editingShoppingListId.value = shoppingList.id
-  shoppingListForm.value = {
-    name: shoppingList.name,
-    status: shoppingList.status,
-    meal_plan_id: shoppingList.meal_plan_id ? String(shoppingList.meal_plan_id) : '',
-    note: shoppingList.note ?? '',
-  }
-
-  shoppingListMessage.value = ''
-  shoppingListError.value = ''
-}
-
-async function saveShoppingList() {
-  shoppingListMessage.value = ''
-  shoppingListError.value = ''
-
-  const payload = {
-    ...shoppingListForm.value,
-    meal_plan_id: shoppingListForm.value.meal_plan_id
-      ? Number(shoppingListForm.value.meal_plan_id)
-      : null,
-  }
-
-  try {
-    if (editingShoppingListId.value) {
-      const updated = await mealPlannerStore.updateShoppingList(
-        editingShoppingListId.value,
-        payload,
-      )
-      await selectShoppingList(updated.id)
-      shoppingListMessage.value = t('meals.listSaved')
-      return
-    }
-
-    const created = await mealPlannerStore.createShoppingList(payload)
-    await selectShoppingList(created.id)
-    shoppingListMessage.value = t('meals.listAdded')
-  } catch (error) {
-    shoppingListError.value = error?.response?.data?.error ?? t('meals.listSaveError')
-  }
-}
-
-async function removeShoppingList() {
-  if (!editingShoppingListId.value) {
-    return
-  }
-
-  if (!confirm(t('meals.listDeleteConfirm', { name: shoppingListForm.value.name }))) {
-    return
-  }
-
-  try {
-    await mealPlannerStore.deleteShoppingList(editingShoppingListId.value)
-    shoppingListMessage.value = t('meals.listDeleted')
-    shoppingListError.value = ''
-    resetShoppingListForm(false)
-  } catch (error) {
-    shoppingListError.value = error?.response?.data?.error ?? t('meals.listDeleteError')
-  }
-}
-
-async function addItemToShoppingList() {
-  if (!activeShoppingList.value) {
-    return
-  }
-
-  shoppingListError.value = ''
-
-  try {
-    await mealPlannerStore.addShoppingListItem(activeShoppingList.value.id, {
-      product_id: shoppingItemForm.value.product_id
-        ? Number(shoppingItemForm.value.product_id)
-        : null,
-      custom_name: shoppingItemForm.value.custom_name || null,
-      quantity: shoppingItemForm.value.quantity ? Number(shoppingItemForm.value.quantity) : null,
-      unit_id: shoppingItemForm.value.unit_id ? Number(shoppingItemForm.value.unit_id) : null,
-      note: shoppingItemForm.value.note,
-    })
-
-    resetShoppingItemForm()
-  } catch (error) {
-    shoppingListError.value = error?.response?.data?.error ?? t('meals.itemAddError')
-  }
-}
-
-async function toggleItemChecked(item, checked) {
-  if (!activeShoppingList.value) {
-    return
-  }
-
-  try {
-    await mealPlannerStore.updateShoppingListItem(activeShoppingList.value.id, item.id, {
-      is_checked: checked,
-    })
-  } catch (error) {
-    shoppingListError.value = error?.response?.data?.error ?? t('meals.itemToggleError')
-  }
-}
-
-async function removeShoppingListItem(itemId) {
-  if (!activeShoppingList.value) {
-    return
-  }
-
-  try {
-    await mealPlannerStore.deleteShoppingListItem(activeShoppingList.value.id, itemId)
-  } catch (error) {
-    shoppingListError.value = error?.response?.data?.error ?? t('meals.itemDeleteError')
+    mealPlanError.value = error?.response?.data?.error ?? t('meals.listGenerateError')
   }
 }
 
@@ -706,43 +795,34 @@ onMounted(async () => {
 
   await Promise.all([
     mealPlannerStore.fetchMealPlans(),
-    mealPlannerStore.fetchShoppingLists(),
-    catalogStore.fetchProducts(),
-    unitStore.fetchUnits(),
+    mealPlannerStore.fetchDayPlans(),
+    catalogStore.fetchRecipes(),
+    catalogStore.fetchRecipeNutritionSummaries(),
   ])
 
   if (mealPlans.value.length > 0) {
     await selectMealPlan(mealPlans.value[0].id)
   }
-
-  if (shoppingLists.value.length > 0) {
-    await selectShoppingList(shoppingLists.value[0].id)
-  }
 })
 </script>
 
 <style scoped>
-.planner-grid {
+.planner-layout {
+  display: grid;
+  gap: 1rem;
+}
+
+.top-grid {
   display: grid;
   gap: 1rem;
 }
 
 .section-stack {
   display: grid;
-  gap: 1rem;
+  gap: 0.75rem;
 }
 
 .section-header {
-  display: grid;
-  gap: 0.35rem;
-}
-
-.list-block {
-  display: grid;
-  gap: 0.5rem;
-}
-
-.inline-filters {
   display: grid;
   gap: 0.5rem;
 }
@@ -756,54 +836,233 @@ onMounted(async () => {
 }
 
 .list li {
+  border-bottom: 1px solid var(--app-border);
+  padding-bottom: 0.45rem;
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
-  gap: 0.6rem;
-  border-bottom: 1px solid var(--app-border);
-  padding-bottom: 0.45rem;
+  gap: 0.55rem;
+}
+
+.is-active-row {
+  border-bottom-color: var(--app-accent);
 }
 
 .link {
   border: none;
+  padding: 0;
   background: transparent;
   color: var(--app-link);
   cursor: pointer;
-  padding: 0;
 }
 
 .actions-row {
   display: flex;
-  gap: 0.55rem;
   flex-wrap: wrap;
+  gap: 0.55rem;
 }
 
-.entries-block,
-.items-block {
+.slot-row {
   display: grid;
-  gap: 0.65rem;
+  gap: 0.45rem;
 }
 
-.item-row {
-  align-items: center;
+.plan-days-block {
+  margin-top: 1.2rem;
+  gap: 1rem;
 }
 
-textarea {
+.block-header {
+  margin-bottom: 0.3rem;
+}
+
+.plan-break {
+  border-top: 2px dashed var(--app-border);
+  text-align: center;
+  line-height: 1;
+  font-size: 1.15rem;
+  color: var(--app-muted);
+  margin: 0.15rem 0;
+  padding-top: 0.4rem;
+}
+
+.matrix-wrapper {
+  overflow-x: auto;
   border: 1px solid var(--app-border);
-  border-radius: 0.55rem;
-  padding: 0.55rem 0.65rem;
+  border-radius: 0.75rem;
+}
+
+.matrix-table {
+  width: 100%;
+  min-width: 720px;
+  border-collapse: collapse;
+}
+
+.matrix-table th,
+.matrix-table td {
+  border-bottom: 1px solid var(--app-border);
+  border-right: 1px solid var(--app-border);
+  padding: 0.45rem;
+  vertical-align: top;
+}
+
+.matrix-table th:last-child,
+.matrix-table td:last-child {
+  border-right: none;
+}
+
+.matrix-table thead th {
+  background: var(--app-surface-alt);
+}
+
+.matrix-day-button {
+  border: none;
+  padding: 0;
+  background: transparent;
+  color: var(--app-link);
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.matrix-source {
+  margin: 0.15rem 0 0;
+  font-size: 0.78rem;
+}
+
+.matrix-slot-cell {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 170px;
+}
+
+.matrix-slot-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.matrix-day-summary-row th,
+.matrix-day-summary-row td {
+  background: color-mix(in oklab, var(--app-surface-alt), #ffffff 35%);
+}
+
+.matrix-cell-button {
+  width: 100%;
+  border: 1px solid var(--app-border);
+  border-radius: 0.6rem;
   background: var(--app-surface);
   color: var(--app-text);
+  padding: 0.35rem 0.45rem;
+  display: grid;
+  gap: 0.2rem;
+  text-align: left;
+  cursor: pointer;
 }
 
-@media (min-width: 1100px) {
-  .planner-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    align-items: start;
+.is-selected-column {
+  background: rgba(47, 95, 190, 0.08);
+}
+
+.day-slot-card {
+  border: 1px solid var(--app-border);
+  border-radius: 0.75rem;
+  padding: 0.65rem;
+  display: grid;
+  gap: 0.65rem;
+  background: linear-gradient(180deg, var(--app-surface) 0%, var(--app-surface-alt) 100%);
+}
+
+.is-custom-card {
+  border-left: 4px solid #2f5fbe;
+}
+
+.day-slot-header {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.date-meta {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.source-badge {
+  justify-self: start;
+  border: 1px solid var(--app-border);
+  border-radius: 999px;
+  padding: 0.15rem 0.55rem;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.source-badge.is-custom {
+  border-color: #2f5fbe;
+  color: #2f5fbe;
+}
+
+.modal {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  background-color: rgba(0, 0, 0, 0.42);
+}
+
+.modal-content {
+  width: min(720px, calc(100% - 1.25rem));
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
+  border-radius: 0.75rem;
+  padding: 0.75rem;
+  display: grid;
+  gap: 0.55rem;
+  max-height: calc(100vh - 3rem);
+  overflow: auto;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.55rem;
+}
+
+.picker-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.overflow-option {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.totals-card {
+  margin-top: 1rem;
+}
+
+@media (min-width: 960px) {
+  .slot-row {
+    grid-template-columns: 1.2fr 0.9fr auto;
+    align-items: center;
   }
 
-  .inline-filters {
-    grid-template-columns: 1.6fr 1fr 1fr;
+  .day-slot-header {
+    grid-template-columns: 1fr 1.3fr;
+    align-items: start;
+  }
+}
+
+@media (min-width: 1200px) {
+  .top-grid {
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
   }
 }
 </style>

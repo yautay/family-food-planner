@@ -18,6 +18,7 @@ export function createApp() {
   app.use('/api/products', routes.products)
   app.use('/api/recipes', routes.recipes)
   app.use('/api/meal-plans', routes.mealPlans)
+  app.use('/api/day-plans', routes.dayPlans)
   app.use('/api/shopping-lists', routes.shoppingLists)
 
   return app

@@ -19,6 +19,7 @@ function createTestRouter() {
       { path: '/packages', component: { template: '<div />' } },
       { path: '/tags', component: { template: '<div />' } },
       { path: '/recipes', component: { template: '<div />' } },
+      { path: '/favorite-days', component: { template: '<div />' } },
       { path: '/account', component: { template: '<div />' } },
       { path: '/access-control', component: { template: '<div />' } },
       { path: '/login', component: { template: '<div />' } },

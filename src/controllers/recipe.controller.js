@@ -379,6 +379,32 @@ async function getRecipes(search, user) {
     .all(...access.params, searchValue, searchValue, searchValue)
 }
 
+async function getRecipeNutritionSummaries(user) {
+  const access = recipeAccessWhere(user)
+  const whereClause = access.sql.length > 0 ? access.sql : ''
+
+  return catalogDb
+    .prepare(
+      `
+      SELECT
+        r.id AS recipe_id,
+        r.name AS recipe_name,
+        COALESCE(n.total_grams, 0) AS total_grams,
+        COALESCE(n.calories, 0) AS calories,
+        COALESCE(n.carbohydrates, 0) AS carbohydrates,
+        COALESCE(n.sugars, 0) AS sugars,
+        COALESCE(n.fat, 0) AS fat,
+        COALESCE(n.protein, 0) AS protein,
+        COALESCE(n.fiber, 0) AS fiber
+      FROM recipes r
+      LEFT JOIN recipe_nutrition_summary n ON n.recipe_id = r.id
+      ${whereClause}
+      ORDER BY r.name COLLATE NOCASE ASC
+      `,
+    )
+    .all(...access.params)
+}
+
 async function getRecipeById(id, user) {
   const access = recipeAccessWhere(user)
   const baseWhere = access.sql.length > 0 ? `${access.sql} AND` : 'WHERE'
@@ -639,6 +665,7 @@ async function getRecipeNutrition(recipeId, user) {
 
 export default {
   getRecipes,
+  getRecipeNutritionSummaries,
   getRecipeById,
   getRecipeIngredients,
   getRecipeNutrition,

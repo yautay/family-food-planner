@@ -36,7 +36,7 @@ function getOwnedMealPlanById(mealPlanId, ownerUserId) {
 
 function getOwnedMealPlanForGeneration(mealPlanId, ownerUserId) {
   return catalogDb
-    .prepare('SELECT id, name FROM meal_plans WHERE id = ? AND owner_user_id = ?')
+    .prepare('SELECT id, name, portions_count FROM meal_plans WHERE id = ? AND owner_user_id = ?')
     .get(mealPlanId, ownerUserId)
 }
 
@@ -149,14 +149,69 @@ function getOwnedShoppingListItem(shoppingListId, itemId, ownerUserId) {
     .get(itemId, shoppingListId, ownerUserId)
 }
 
-function buildGeneratedItems(mealPlanId) {
-  const rows = catalogDb
+function mergeGeneratedItem(targetMap, row) {
+  if (!row.recipe_id) {
+    const customName = normalizeText(row.entry_custom_name)
+    if (!customName) {
+      return
+    }
+
+    const key = `custom:${customName.toLowerCase()}`
+    if (!targetMap.has(key)) {
+      targetMap.set(key, {
+        product_id: null,
+        custom_name: customName,
+        quantity: null,
+        unit_id: null,
+        note: '',
+        is_checked: 0,
+        has_quantity: false,
+      })
+    }
+
+    return
+  }
+
+  if (!row.product_id) {
+    return
+  }
+
+  const servings = parseOptionalNumber(row.servings)
+  const portionsCount = parseOptionalNumber(row.portions_count)
+  const mealMultiplier =
+    servings !== null && servings > 0 ? servings : portionsCount > 0 ? portionsCount : 1
+  const quantity = parseOptionalNumber(row.quantity)
+  const scaledQuantity = quantity === null ? null : quantity * mealMultiplier
+  const key = `product:${row.product_id}:unit:${row.unit_id ?? 'none'}`
+
+  if (!targetMap.has(key)) {
+    targetMap.set(key, {
+      product_id: row.product_id,
+      custom_name: null,
+      quantity: 0,
+      unit_id: row.unit_id ?? null,
+      note: '',
+      is_checked: 0,
+      has_quantity: false,
+    })
+  }
+
+  if (scaledQuantity !== null) {
+    const existing = targetMap.get(key)
+    existing.quantity += scaledQuantity
+    existing.has_quantity = true
+  }
+}
+
+function buildGeneratedItems(mealPlanId, portionsCount = 1) {
+  const legacyRows = catalogDb
     .prepare(
       `
       SELECT
         e.recipe_id,
         e.custom_name AS entry_custom_name,
         e.servings,
+        ? AS portions_count,
         ri.product_id,
         ri.quantity,
         COALESCE(ri.unit_id, p.default_unit_id) AS unit_id
@@ -167,60 +222,64 @@ function buildGeneratedItems(mealPlanId) {
       ORDER BY e.id ASC, ri.id ASC
       `,
     )
+    .all(portionsCount, mealPlanId)
+
+  const templateRows = catalogDb
+    .prepare(
+      `
+      SELECT
+        m.recipe_id,
+        NULL AS entry_custom_name,
+        m.servings,
+        COALESCE(mp.portions_count, 1) AS portions_count,
+        ri.product_id,
+        ri.quantity,
+        COALESCE(ri.unit_id, p.default_unit_id) AS unit_id
+      FROM meal_plan_day_slots s
+      INNER JOIN meal_plans mp ON mp.id = s.meal_plan_id
+      INNER JOIN day_plan_meals m ON m.day_plan_id = s.day_plan_id
+      LEFT JOIN recipe_ingredients ri ON ri.recipe_id = m.recipe_id
+      LEFT JOIN products p ON p.id = ri.product_id
+      WHERE s.meal_plan_id = ?
+      ORDER BY s.planned_date ASC, m.meal_order ASC, ri.id ASC
+      `,
+    )
+    .all(mealPlanId)
+
+  const customRows = catalogDb
+    .prepare(
+      `
+      SELECT
+        m.recipe_id,
+        NULL AS entry_custom_name,
+        m.servings,
+        COALESCE(mp.portions_count, 1) AS portions_count,
+        ri.product_id,
+        ri.quantity,
+        COALESCE(ri.unit_id, p.default_unit_id) AS unit_id
+      FROM meal_plan_day_slots s
+      INNER JOIN meal_plans mp ON mp.id = s.meal_plan_id
+      INNER JOIN meal_plan_day_slot_meals m ON m.day_slot_id = s.id
+      LEFT JOIN recipe_ingredients ri ON ri.recipe_id = m.recipe_id
+      LEFT JOIN products p ON p.id = ri.product_id
+      WHERE s.meal_plan_id = ? AND s.day_plan_id IS NULL
+      ORDER BY s.planned_date ASC, m.meal_order ASC, ri.id ASC
+      `,
+    )
     .all(mealPlanId)
 
   const generatedItems = new Map()
 
-  for (const row of rows) {
-    if (!row.recipe_id) {
-      const customName = normalizeText(row.entry_custom_name)
-      if (!customName) {
-        continue
-      }
+  for (const row of legacyRows) {
+    mergeGeneratedItem(generatedItems, row)
+  }
 
-      const key = `custom:${customName.toLowerCase()}`
-      if (!generatedItems.has(key)) {
-        generatedItems.set(key, {
-          product_id: null,
-          custom_name: customName,
-          quantity: null,
-          unit_id: null,
-          note: '',
-          is_checked: 0,
-          has_quantity: false,
-        })
-      }
+  for (const row of templateRows) {
+    mergeGeneratedItem(generatedItems, row)
+  }
 
-      continue
-    }
-
-    if (!row.product_id) {
-      continue
-    }
-
-    const servings = parseOptionalNumber(row.servings)
-    const multiplier = servings !== null && servings > 0 ? servings : 1
-    const quantity = parseOptionalNumber(row.quantity)
-    const scaledQuantity = quantity === null ? null : quantity * multiplier
-    const key = `product:${row.product_id}:unit:${row.unit_id ?? 'none'}`
-
-    if (!generatedItems.has(key)) {
-      generatedItems.set(key, {
-        product_id: row.product_id,
-        custom_name: null,
-        quantity: 0,
-        unit_id: row.unit_id ?? null,
-        note: '',
-        is_checked: 0,
-        has_quantity: false,
-      })
-    }
-
-    if (scaledQuantity !== null) {
-      const existing = generatedItems.get(key)
-      existing.quantity += scaledQuantity
-      existing.has_quantity = true
-    }
+  for (const row of customRows) {
+    mergeGeneratedItem(generatedItems, row)
   }
 
   return Array.from(generatedItems.values()).map((item) => ({
@@ -356,7 +415,9 @@ async function addShoppingListItem(shoppingListId, payload, user) {
       )
 
     catalogDb
-      .prepare('UPDATE shopping_lists SET updated_at = CURRENT_TIMESTAMP WHERE id = ? AND owner_user_id = ?')
+      .prepare(
+        'UPDATE shopping_lists SET updated_at = CURRENT_TIMESTAMP WHERE id = ? AND owner_user_id = ?',
+      )
       .run(shoppingListId, user.id)
   })()
 
@@ -399,7 +460,9 @@ async function updateShoppingListItem(shoppingListId, itemId, payload, user) {
       )
 
     catalogDb
-      .prepare('UPDATE shopping_lists SET updated_at = CURRENT_TIMESTAMP WHERE id = ? AND owner_user_id = ?')
+      .prepare(
+        'UPDATE shopping_lists SET updated_at = CURRENT_TIMESTAMP WHERE id = ? AND owner_user_id = ?',
+      )
       .run(shoppingListId, user.id)
   })()
 
@@ -418,7 +481,9 @@ async function deleteShoppingListItem(shoppingListId, itemId, user) {
       .run(itemId, shoppingListId)
 
     catalogDb
-      .prepare('UPDATE shopping_lists SET updated_at = CURRENT_TIMESTAMP WHERE id = ? AND owner_user_id = ?')
+      .prepare(
+        'UPDATE shopping_lists SET updated_at = CURRENT_TIMESTAMP WHERE id = ? AND owner_user_id = ?',
+      )
       .run(shoppingListId, user.id)
   })()
 
@@ -433,7 +498,7 @@ async function generateShoppingListFromMealPlan(mealPlanId, payload, user) {
 
   const providedName = normalizeText(payload?.name)
   const shoppingListName = providedName || `Zakupy: ${mealPlan.name}`
-  const generatedItems = buildGeneratedItems(mealPlanId)
+  const generatedItems = buildGeneratedItems(mealPlanId, mealPlan.portions_count ?? 1)
 
   const shoppingListId = catalogDb.transaction(() => {
     const created = catalogDb

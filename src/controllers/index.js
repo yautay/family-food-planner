@@ -7,6 +7,7 @@ import packageController from './package.controller.js'
 import authController from './auth.controller.js'
 import mealPlanController from './meal-plan.controller.js'
 import shoppingListController from './shopping-list.controller.js'
+import dayPlanController from './day-plan.controller.js'
 
 const controllers = {}
 
@@ -19,5 +20,6 @@ controllers.package = packageController
 controllers.auth = authController
 controllers.mealPlan = mealPlanController
 controllers.shoppingList = shoppingListController
+controllers.dayPlan = dayPlanController
 
 export default controllers

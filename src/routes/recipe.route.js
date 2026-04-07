@@ -16,6 +16,17 @@ apiRouter.get('/', async (req, res) => {
   }
 })
 
+apiRouter.get('/nutrition-summaries', async (req, res) => {
+  try {
+    const summaries = await controllers.recipe.getRecipeNutritionSummaries(
+      req.auth?.user ? req.auth : null,
+    )
+    res.json(summaries)
+  } catch (error) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
 apiRouter.get('/:id', async (req, res) => {
   try {
     const recipeId = Number(req.params.id)

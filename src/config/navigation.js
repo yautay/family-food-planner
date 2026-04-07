@@ -29,6 +29,11 @@ export const catalogNavigationItems = [
     labelKey: 'nav.recipes',
     to: '/recipes',
   },
+  {
+    key: 'favoriteDays',
+    labelKey: 'nav.favoriteDays',
+    to: '/favorite-days',
+  },
 ]
 
 export const primaryNavigationItems = [
