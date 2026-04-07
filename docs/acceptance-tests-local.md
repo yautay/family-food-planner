@@ -35,6 +35,7 @@ cp .env.example .env
 ```
 
 Uwaga:
+
 - bez poprawnych danych SMTP i Turnstile nie przetestujesz w pelni scenariuszy
   `register` i `forgot/reset password`,
 - pozostale scenariusze akceptacyjne (logowanie, planner, listy zakupowe, RBAC)
@@ -61,6 +62,7 @@ npm run dev
 ```
 
 Domyslnie:
+
 - frontend: `http://localhost:5173`
 - backend API: `http://localhost:3000`
 
@@ -82,15 +84,14 @@ Po migracjach dostepne jest konto:
 1. Zaloguj sie jako `yautay`.
 2. Wejdz na `Catalog` i sprawdz, ze lista produktow i przepisow sie laduje.
 3. Wejdz na `Meals` i utworz plan (np. tydzien).
-4. Dodaj wpisy planu:
-   - min. 2 wpisy z tym samym przepisem, ale innym `servings`,
-   - min. 1 wpis custom bez `recipe_id`.
-5. Uzyj `Generuj liste zakupowa z planu`.
-6. Zweryfikuj, ze:
+4. W sekcji dnia wczytaj ulubiony dzien i zapisz jako custom.
+5. Dla jednego posilku ustaw `porcje posilku` (w ulubionym dniu) oraz sprawdz w plannerze wartosc efektywnych porcji.
+6. Uzyj `Generuj liste zakupowa z planu`.
+7. Zweryfikuj, ze:
    - ilosci skladnikow sa zsumowane,
-   - ilosci sa przemnozone przez `servings`,
+   - ilosci sa przemnozone przez effective servings (`servings` override albo `portions_count * portions`),
    - wpis custom trafil na liste jako `custom_name`.
-7. Wejdz na `Access control` i sprawdz podglad ACL/audit logs.
+8. Wejdz na `Access control` i sprawdz podglad ACL/audit logs.
 
 ## 8. Testy automatyczne (lokalnie)
 
@@ -128,3 +129,7 @@ npm ci
 4. Blad SQL typu `table shopping_lists has no column named note`
    - baza jest nie po aktualnych migracjach,
    - uruchom: `npm run db:migrate`.
+
+5. Widok planowania pokazuje tylko pierwszy blok lub API zwraca blad kolumny `portions`
+   - migracje nie zostaly odpalone po pullu,
+   - uruchom: `npm run db:migrate` i zrestartuj backend.

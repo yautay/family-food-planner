@@ -19,8 +19,13 @@ A web app for family meal planning, recipe/product catalog management, and shopp
 - recipe ownership context,
 - imported system recipes are public and read-only,
 - private period planning (`meal_plans`, `meal_plan_entries`),
+- reusable favorite days (`day_plans`, `day_plan_meals`),
+- plan-level meal-slot times and day-slot assignments (`meal_plan_meal_slots`, `meal_plan_day_slots`, `meal_plan_day_slot_meals`),
+- custom-only day-slot flow (favorite day import + local per-day edits),
+- per-day title in planner matrix headers,
+- per-meal `portions` with formula: effective servings = `meal_plans.portions_count * meal.portions` (unless explicit `servings` override exists),
 - private shopping lists (`shopping_lists`, `shopping_list_items`),
-- shopping list generation from meal plans (ingredient aggregation + `servings` multiplier),
+- shopping list generation from meal plans (ingredient aggregation + effective servings logic),
 - ACL audit logs (`audit_logs`),
 - themed UI (light/dark/system), PL/EN localization,
 - Bulma-based UI styling (global styles + form/navigation components).
@@ -33,6 +38,8 @@ npm run db:migrate
 npm run db:import:diets
 npm run dev
 ```
+
+After each pull with backend/schema changes, run `npm run db:migrate` before starting the app.
 
 ## Commands
 
@@ -100,6 +107,12 @@ Changing the password after first login is recommended.
   - `recipes.owner_user_id`, `recipes.is_system`, `recipes.is_editable`
 - `004_meal_planning.sql`
   - `meal_plans`, `meal_plan_entries`, `shopping_lists`, `shopping_list_items`, `audit_logs`
+- `011_planning_day_templates.sql`
+  - `meal_plans.portions_count`, `meal_plan_meal_slots`, `day_plans`, `day_plan_meals`, `meal_plan_day_slots`, `meal_plan_day_slot_meals`
+- `012_convert_live_day_slots_to_custom.sql`
+  - converts existing day slots from live/template references to custom rows in `meal_plan_day_slot_meals`
+- `013_meal_portions.sql`
+  - adds `portions` to `day_plan_meals` and `meal_plan_day_slot_meals`; legacy `servings` copied into `portions`
 - `006_catalog_enrichment.sql`, `007_ingredient_package_conversions.sql`, `008_cleanup_non_physical_units.sql`
   - nutrition columns, package types/conversions, physical units normalization
 - `009_ingredient_packaging_and_volume.sql`
@@ -151,9 +164,23 @@ Changing the password after first login is recommended.
 - `POST /api/meal-plans` (auth)
 - `PUT /api/meal-plans/:id` (auth, owner only)
 - `DELETE /api/meal-plans/:id` (auth, owner only)
+- `PUT /api/meal-plans/:id/meal-slots` (auth, replace-all, owner only)
+- `PUT /api/meal-plans/:id/day-slots/:plannedDate` (auth, owner only)
+- `PUT /api/meal-plans/:id/day-slots/:plannedDate/meals` (auth, replace-all, owner only)
 - `PUT /api/meal-plans/:id/entries` (auth, replace-all, owner only)
 
 `meal_slot` accepts: `breakfast`, `lunch`, `dinner`, `snack`.
+
+`meal_plans.portions_count` is used as a planning multiplier for nutritional totals and shopping-list generation.
+
+### Favorite Days (private per user)
+
+- `GET /api/day-plans` (auth)
+- `GET /api/day-plans/:id` (auth, owner only)
+- `POST /api/day-plans` (auth)
+- `PUT /api/day-plans/:id` (auth, owner only)
+- `DELETE /api/day-plans/:id` (auth, owner only)
+- `PUT /api/day-plans/:id/meals` (auth, replace-all, owner only)
 
 ### Shopping Lists (private per user)
 
@@ -170,7 +197,7 @@ Changing the password after first login is recommended.
 Shopping-list generator behavior:
 
 - aggregates recipe ingredients from meal-plan entries,
-- multiplies ingredient quantities by `servings` for each entry,
+- for day-slot meals uses `servings` override if provided, otherwise uses `meal_plans.portions_count * meal.portions`,
 - groups output by product and unit,
 - includes non-recipe entries as `custom_name` shopping items.
 

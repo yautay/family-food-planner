@@ -8,13 +8,21 @@
 - [x] Phase 2 (tests): shopping list generator integration tests added (`tests/integration/shopping-list-generator.integration.test.js`).
 - [x] Phase 2 (frontend): store action + UI button integrated (`src/stores/mealPlannerStore.js`, `src/views/MealsView.vue`).
 - [x] Documentation updated continuously (`README.md`).
+- [x] Planner flow migrated to custom-only day slots (live/template mode removed in planner UI and persisted data).
+- [x] Favorite-day overflow selection modal added (when imported meals exceed slot count).
+- [x] Drag-and-drop meal ordering added in day builder.
+- [x] Day-slot clock UX added (analog icon + digital tooltip on hover/focus).
+- [x] Day summary row in planner matrix updated (compact ASCII presentation).
+- [x] Day titles added in planner (editable per day and visible in first matrix row).
+- [x] Meal portions model added (`day_plan_meals.portions`, `meal_plan_day_slot_meals.portions`) with effective-servings formula.
+- [x] Shopping-list generator updated to use effective servings from plan portions + meal portions.
 
 ## Remaining Steps
 
-- [ ] Run validation in an environment with Node/npm:
-  - [ ] `npm run test:integration`
-  - [ ] `npm run test:unit`
-  - [ ] `npm run build`
+- [x] Run validation in an environment with Node/npm:
+  - [x] `npm run test:integration`
+  - [x] `npm run test:unit`
+  - [x] `npm run build`
 - [ ] Manual UI smoke test:
   - [ ] Create a meal plan.
   - [ ] Add entries with different `servings` values.

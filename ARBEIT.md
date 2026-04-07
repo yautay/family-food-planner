@@ -178,3 +178,28 @@ Walidacja lokalna:
 
 - `npm run test:unit` ✅
 - `npm run build` ✅
+
+## Aktualizacja po planowaniu (2026-04-07)
+
+Najwazniejsze wdrozenia produktowe:
+
+1. Planner dnia dziala juz tylko jako custom (import ulubionego dnia to kopia do custom, bez live sync).
+2. Dodano migracje danych dla slotow dziennych i modelu portions:
+   - `012_convert_live_day_slots_to_custom.sql`,
+   - `013_meal_portions.sql`.
+3. Dodano modal selekcji przy imporcie ulubionego dnia, gdy liczba posilkow przekracza liczbe slotow.
+4. Dodano ograniczenie liczby posilkow w custom dniu do liczby slotow planu (UI + backend).
+5. Dodano drag-and-drop kolejnosci posilkow z wizualnym podswietleniem targetu drop.
+6. Dodano UI czasu slotu: analogowa ikonka + cyfrowy tooltip na hover/focus.
+7. Dodano tytul dnia (edytowalny) i wyswietlanie tytulu w pierwszym wierszu tabeli slotow dni.
+8. Dodano per-posilek `portions` oraz logike efektywnych porcji:
+   - domyslnie: `portions_count planu * portions posilku`,
+   - z mozliwoscia override per plan/dzien przez pole `servings`.
+9. Zaktualizowano generator listy zakupowej do nowej logiki porcji.
+
+Do zrobienia jutro (proponowany start):
+
+1. Dodac automatyczne odpalanie migracji przy starcie backendu (z flaga w env do wylaczenia).
+2. Dodac testy integracyjne dla `portions` i fallbacku effective servings.
+3. Dodac test e2e/smoke dla importu ulubionego dnia z overflow modalem.
+4. Dopracowac copy i placeholdery w plannerze dla day title i portions (PL/EN).
