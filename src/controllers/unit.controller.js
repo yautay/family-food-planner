@@ -1,4 +1,5 @@
-import catalogDb from '../db/catalog.js'
+import { Op, literal } from 'sequelize'
+import models from '../models/index.js'
 
 const MASS_ALIASES = new Map([
   ['mg', { symbol: 'mg', toGrams: 0.001 }],
@@ -64,22 +65,16 @@ function ensurePhysicalUnitName(name) {
 }
 
 async function getUnits() {
-  return catalogDb
-    .prepare(
-      `
-      SELECT
-        id,
-        name,
-        symbol,
-        unit_type,
-        to_grams_factor,
-        to_ml_factor
-      FROM units
-      WHERE unit_type IN ('mass', 'volume')
-      ORDER BY name COLLATE NOCASE ASC
-      `,
-    )
-    .all()
+  return models.unit.findAll({
+    attributes: ['id', 'name', 'symbol', 'unit_type', 'to_grams_factor', 'to_ml_factor'],
+    where: {
+      unit_type: {
+        [Op.in]: ['mass', 'volume'],
+      },
+    },
+    order: [[literal('name COLLATE NOCASE'), 'ASC']],
+    raw: true,
+  })
 }
 
 async function addUnit(unit) {
@@ -90,30 +85,15 @@ async function addUnit(unit) {
 
   const physical = ensurePhysicalUnitName(name)
 
-  const result = catalogDb
-    .prepare(
-      `
-      INSERT INTO units(name, symbol, unit_type, to_grams_factor, to_ml_factor)
-      VALUES (?, ?, ?, ?, ?)
-      `,
-    )
-    .run(name, physical.symbol, physical.unitType, physical.toGramsFactor, physical.toMlFactor)
+  const created = await models.unit.create({
+    name,
+    symbol: physical.symbol,
+    unit_type: physical.unitType,
+    to_grams_factor: physical.toGramsFactor,
+    to_ml_factor: physical.toMlFactor,
+  })
 
-  return catalogDb
-    .prepare(
-      `
-      SELECT
-        id,
-        name,
-        symbol,
-        unit_type,
-        to_grams_factor,
-        to_ml_factor
-      FROM units
-      WHERE id = ?
-      `,
-    )
-    .get(Number(result.lastInsertRowid))
+  return created.get({ plain: true })
 }
 
 async function updateUnit(unit) {
@@ -122,7 +102,7 @@ async function updateUnit(unit) {
     throw new Error('Unit id is invalid')
   }
 
-  const existing = catalogDb.prepare('SELECT id FROM units WHERE id = ?').get(unitId)
+  const existing = await models.unit.findByPk(unitId, { attributes: ['id'] })
   if (!existing) {
     return 0
   }
@@ -134,27 +114,20 @@ async function updateUnit(unit) {
 
   const physical = ensurePhysicalUnitName(name)
 
-  return catalogDb
-    .prepare(
-      `
-      UPDATE units
-      SET
-        name = ?,
-        symbol = ?,
-        unit_type = ?,
-        to_grams_factor = ?,
-        to_ml_factor = ?
-      WHERE id = ?
-      `,
-    )
-    .run(
+  const [changes] = await models.unit.update(
+    {
       name,
-      physical.symbol,
-      physical.unitType,
-      physical.toGramsFactor,
-      physical.toMlFactor,
-      unitId,
-    ).changes
+      symbol: physical.symbol,
+      unit_type: physical.unitType,
+      to_grams_factor: physical.toGramsFactor,
+      to_ml_factor: physical.toMlFactor,
+    },
+    {
+      where: { id: unitId },
+    },
+  )
+
+  return changes
 }
 
 async function deleteUnit(id) {
@@ -163,7 +136,7 @@ async function deleteUnit(id) {
     throw new Error('Unit id is invalid')
   }
 
-  return catalogDb.prepare('DELETE FROM units WHERE id = ?').run(unitId).changes
+  return models.unit.destroy({ where: { id: unitId } })
 }
 
 export default {

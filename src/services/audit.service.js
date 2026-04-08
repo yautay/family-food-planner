@@ -1,4 +1,5 @@
-import catalogDb from '../db/catalog.js'
+import { literal } from 'sequelize'
+import models from '../models/index.js'
 
 function normalizeLimit(limit) {
   const parsed = Number(limit)
@@ -14,44 +15,41 @@ function logEvent({ actorUserId = null, action, targetType, targetId = null, met
     throw new Error('action and targetType are required for audit log event')
   }
 
-  catalogDb
-    .prepare(
-      `
-      INSERT INTO audit_logs(actor_user_id, action, target_type, target_id, meta_json)
-      VALUES (?, ?, ?, ?, ?)
-      `,
-    )
-    .run(
-      actorUserId,
-      action,
-      targetType,
-      targetId === null || targetId === undefined ? null : String(targetId),
-      JSON.stringify(meta ?? {}),
-    )
+  return models.auditLog.create({
+    actor_user_id: actorUserId,
+    action,
+    target_type: targetType,
+    target_id: targetId === null || targetId === undefined ? null : String(targetId),
+    meta_json: JSON.stringify(meta ?? {}),
+  })
 }
 
-function listAuditLogs({ limit = 100 } = {}) {
+async function listAuditLogs({ limit = 100 } = {}) {
   const normalizedLimit = normalizeLimit(limit)
 
-  const rows = catalogDb
-    .prepare(
-      `
-      SELECT
-        a.id,
-        a.actor_user_id,
-        u.username AS actor_username,
-        a.action,
-        a.target_type,
-        a.target_id,
-        a.meta_json,
-        a.created_at
-      FROM audit_logs a
-      LEFT JOIN users u ON u.id = a.actor_user_id
-      ORDER BY a.id DESC
-      LIMIT ?
-      `,
-    )
-    .all(normalizedLimit)
+  const rows = await models.auditLog.findAll({
+    attributes: [
+      'id',
+      'actor_user_id',
+      [literal('actor.username'), 'actor_username'],
+      'action',
+      'target_type',
+      'target_id',
+      'meta_json',
+      'created_at',
+    ],
+    include: [
+      {
+        model: models.user,
+        as: 'actor',
+        attributes: [],
+        required: false,
+      },
+    ],
+    order: [['id', 'DESC']],
+    limit: normalizedLimit,
+    raw: true,
+  })
 
   return rows.map((row) => {
     let meta = {}

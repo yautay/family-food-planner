@@ -131,7 +131,7 @@ apiRouter.get(
   requirePermission('permissions.manage'),
   validate({ query: schemas.auditQuery }),
   async (req, res) => {
-    const logs = auditService.listAuditLogs({ limit: req.query.limit })
+    const logs = await auditService.listAuditLogs({ limit: req.query.limit })
     res.json(logs)
   },
 )
@@ -158,7 +158,7 @@ apiRouter.put(
         return
       }
 
-      auditService.logEvent({
+      await auditService.logEvent({
         actorUserId: req.auth.user.id,
         action: 'acl.roles.updated',
         targetType: 'user',
@@ -199,7 +199,7 @@ apiRouter.put(
         return
       }
 
-      auditService.logEvent({
+      await auditService.logEvent({
         actorUserId: req.auth.user.id,
         action: 'acl.permissions.updated',
         targetType: 'user',

@@ -1,8 +1,8 @@
 import { DataTypes } from 'sequelize'
 import sequelize from '../db/client.js'
 
-const TagModel = sequelize.define(
-  'Tag',
+const ProductModel = sequelize.define(
+  'Product',
   {
     id: {
       type: DataTypes.INTEGER,
@@ -13,11 +13,19 @@ const TagModel = sequelize.define(
       type: DataTypes.STRING,
       allowNull: false,
     },
+    normalized_name: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
+    default_unit_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
   },
   {
-    tableName: 'tags',
+    tableName: 'products',
     timestamps: false,
   },
 )
 
-export default TagModel
+export default ProductModel

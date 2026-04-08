@@ -1,7 +1,12 @@
-import catalogDb from '../db/catalog.js'
+import { literal } from 'sequelize'
+import models from '../models/index.js'
 
 async function getTags() {
-  return catalogDb.prepare('SELECT id, name FROM tags ORDER BY name COLLATE NOCASE ASC').all()
+  return models.tag.findAll({
+    attributes: ['id', 'name'],
+    order: [[literal('name COLLATE NOCASE'), 'ASC']],
+    raw: true,
+  })
 }
 
 async function addTag(tag) {
@@ -10,10 +15,11 @@ async function addTag(tag) {
     throw new Error('Tag name is required')
   }
 
-  const result = catalogDb.prepare('INSERT INTO tags(name) VALUES (?)').run(name)
-  return catalogDb
-    .prepare('SELECT id, name FROM tags WHERE id = ?')
-    .get(Number(result.lastInsertRowid))
+  const created = await models.tag.create({ name })
+  return {
+    id: created.id,
+    name: created.name,
+  }
 }
 
 async function updateTag(tag) {
@@ -22,7 +28,7 @@ async function updateTag(tag) {
     throw new Error('Tag id is invalid')
   }
 
-  const existing = catalogDb.prepare('SELECT id FROM tags WHERE id = ?').get(tagId)
+  const existing = await models.tag.findByPk(tagId, { attributes: ['id'] })
   if (!existing) {
     return 0
   }
@@ -32,7 +38,8 @@ async function updateTag(tag) {
     throw new Error('Tag name is required')
   }
 
-  return catalogDb.prepare('UPDATE tags SET name = ? WHERE id = ?').run(name, tagId).changes
+  const [changes] = await models.tag.update({ name }, { where: { id: tagId } })
+  return changes
 }
 
 async function deleteTag(id) {
@@ -41,7 +48,7 @@ async function deleteTag(id) {
     throw new Error('Tag id is invalid')
   }
 
-  return catalogDb.prepare('DELETE FROM tags WHERE id = ?').run(tagId).changes
+  return models.tag.destroy({ where: { id: tagId } })
 }
 
 export default {

@@ -1,40 +1,44 @@
 import { DataTypes } from 'sequelize'
 import sequelize from '../db/client.js'
 
-const UnitModel = sequelize.define(
-  'Unit',
+const AuditLogModel = sequelize.define(
+  'AuditLog',
   {
     id: {
       type: DataTypes.INTEGER,
       primaryKey: true,
       autoIncrement: true,
     },
-    name: {
+    actor_user_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    action: {
       type: DataTypes.STRING,
       allowNull: false,
     },
-    symbol: {
-      type: DataTypes.STRING,
-      allowNull: true,
-    },
-    unit_type: {
+    target_type: {
       type: DataTypes.STRING,
       allowNull: false,
-      defaultValue: 'custom',
     },
-    to_grams_factor: {
-      type: DataTypes.FLOAT,
+    target_id: {
+      type: DataTypes.STRING,
       allowNull: true,
     },
-    to_ml_factor: {
-      type: DataTypes.FLOAT,
+    meta_json: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      defaultValue: '{}',
+    },
+    created_at: {
+      type: DataTypes.STRING,
       allowNull: true,
     },
   },
   {
-    tableName: 'units',
+    tableName: 'audit_logs',
     timestamps: false,
   },
 )
 
-export default UnitModel
+export default AuditLogModel

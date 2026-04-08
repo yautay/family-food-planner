@@ -1,4 +1,5 @@
-import catalogDb from '../db/catalog.js'
+import { Op, col, fn, literal } from 'sequelize'
+import models from '../models/index.js'
 
 function normalizeSearch(search) {
   const value = typeof search === 'string' ? search.trim() : ''
@@ -7,26 +8,44 @@ function normalizeSearch(search) {
 
 async function getProducts(search) {
   const searchValue = normalizeSearch(search)
+  const where = searchValue
+    ? {
+        [Op.or]: [
+          { name: { [Op.like]: searchValue } },
+          { normalized_name: { [Op.like]: searchValue } },
+        ],
+      }
+    : undefined
 
-  return catalogDb
-    .prepare(
-      `
-      SELECT
-        p.id,
-        p.name,
-        p.normalized_name,
-        p.default_unit_id,
-        u.name AS default_unit_name,
-        COUNT(DISTINCT ri.recipe_id) AS recipes_count
-      FROM products p
-      LEFT JOIN units u ON u.id = p.default_unit_id
-      LEFT JOIN recipe_ingredients ri ON ri.product_id = p.id
-      WHERE (? IS NULL OR p.name LIKE ? OR p.normalized_name LIKE ?)
-      GROUP BY p.id
-      ORDER BY p.name COLLATE NOCASE ASC
-      `,
-    )
-    .all(searchValue, searchValue, searchValue)
+  return models.product.findAll({
+    attributes: [
+      'id',
+      'name',
+      'normalized_name',
+      'default_unit_id',
+      [col('defaultUnit.name'), 'default_unit_name'],
+      [fn('COUNT', fn('DISTINCT', col('recipeIngredients.recipe_id'))), 'recipes_count'],
+    ],
+    include: [
+      {
+        model: models.unit,
+        as: 'defaultUnit',
+        attributes: [],
+        required: false,
+      },
+      {
+        model: models.recipeIngredient,
+        as: 'recipeIngredients',
+        attributes: [],
+        required: false,
+      },
+    ],
+    where,
+    group: ['Product.id', 'defaultUnit.id'],
+    order: [[literal('Product.name COLLATE NOCASE'), 'ASC']],
+    raw: true,
+    subQuery: false,
+  })
 }
 
 export default {
