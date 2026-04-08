@@ -1,4 +1,6 @@
-import catalogDb from '../db/catalog.js'
+import { Op, fn, col, where } from 'sequelize'
+import sequelize from '../db/client.js'
+import models from '../models/index.js'
 import { hashPassword, verifyPassword } from '../lib/password.js'
 import { createOpaqueToken, sha256Hex } from '../lib/token.js'
 
@@ -25,6 +27,10 @@ function normalizeIdentity(identity) {
   return typeof identity === 'string' ? identity.trim().toLowerCase() : ''
 }
 
+function isTruthyInt(value) {
+  return value === 1 || value === true
+}
+
 function mapUser(row) {
   if (!row) {
     return null
@@ -34,90 +40,143 @@ function mapUser(row) {
     id: row.id,
     username: row.username,
     email: row.email,
-    is_active: row.is_active === 1,
-    must_change_password: row.must_change_password === 1,
+    is_active: isTruthyInt(row.is_active),
+    must_change_password: isTruthyInt(row.must_change_password),
     created_at: row.created_at,
     updated_at: row.updated_at,
   }
 }
 
-function getUserById(userId) {
-  return catalogDb.prepare('SELECT * FROM users WHERE id = ?').get(userId)
+async function getUserById(userId) {
+  return models.user.findByPk(userId, { raw: true })
 }
 
-function getUserByIdentity(identity) {
+async function getUserByIdentity(identity) {
   const value = normalizeIdentity(identity)
-  return catalogDb
-    .prepare('SELECT * FROM users WHERE lower(username) = ? OR lower(email) = ?')
-    .get(value, value)
+  if (!value) {
+    return null
+  }
+
+  return models.user.findOne({
+    where: {
+      [Op.or]: [
+        where(fn('lower', col('username')), value),
+        where(fn('lower', col('email')), value),
+      ],
+    },
+    raw: true,
+  })
 }
 
-function getEffectivePermissions(userId) {
-  const rolePermissions = catalogDb
-    .prepare(
-      `
-      SELECT DISTINCT p.name
-      FROM user_roles ur
-      INNER JOIN role_permissions rp ON rp.role_id = ur.role_id
-      INNER JOIN permissions p ON p.id = rp.permission_id
-      WHERE ur.user_id = ?
-      `,
-    )
-    .all(userId)
-    .map((row) => row.name)
+async function getUserRoles(userId) {
+  const roleRows = await models.userRole.findAll({
+    attributes: ['role_id'],
+    where: { user_id: userId },
+    raw: true,
+  })
 
-  const directPermissions = catalogDb
-    .prepare(
-      `
-      SELECT p.name, up.allow
-      FROM user_permissions up
-      INNER JOIN permissions p ON p.id = up.permission_id
-      WHERE up.user_id = ?
-      `,
-    )
-    .all(userId)
+  const roleIds = roleRows.map((row) => row.role_id)
+  if (roleIds.length === 0) {
+    return []
+  }
 
-  const permissions = new Set(rolePermissions)
+  const roles = await models.role.findAll({
+    attributes: ['name'],
+    where: {
+      id: {
+        [Op.in]: roleIds,
+      },
+    },
+    order: [['name', 'ASC']],
+    raw: true,
+  })
 
-  for (const permission of directPermissions) {
-    if (permission.allow === 1) {
-      permissions.add(permission.name)
-    } else {
-      permissions.delete(permission.name)
+  return roles.map((row) => row.name)
+}
+
+async function getEffectivePermissions(userId) {
+  const roleRows = await models.userRole.findAll({
+    attributes: ['role_id'],
+    where: { user_id: userId },
+    raw: true,
+  })
+
+  const roleIds = roleRows.map((row) => row.role_id)
+  const rolePermissionRows =
+    roleIds.length > 0
+      ? await models.rolePermission.findAll({
+          attributes: ['permission_id'],
+          where: {
+            role_id: {
+              [Op.in]: roleIds,
+            },
+          },
+          raw: true,
+        })
+      : []
+
+  const directPermissionRows = await models.userPermission.findAll({
+    attributes: ['permission_id', 'allow'],
+    where: { user_id: userId },
+    raw: true,
+  })
+
+  const allPermissionIds = new Set(rolePermissionRows.map((row) => row.permission_id))
+  for (const row of directPermissionRows) {
+    allPermissionIds.add(row.permission_id)
+  }
+
+  if (allPermissionIds.size === 0) {
+    return new Set()
+  }
+
+  const permissions = await models.permission.findAll({
+    attributes: ['id', 'name'],
+    where: {
+      id: {
+        [Op.in]: Array.from(allPermissionIds),
+      },
+    },
+    raw: true,
+  })
+
+  const permissionNameById = new Map(permissions.map((row) => [row.id, row.name]))
+  const effective = new Set()
+
+  for (const row of rolePermissionRows) {
+    const name = permissionNameById.get(row.permission_id)
+    if (name) {
+      effective.add(name)
     }
   }
 
-  return permissions
+  for (const row of directPermissionRows) {
+    const name = permissionNameById.get(row.permission_id)
+    if (!name) {
+      continue
+    }
+
+    if (isTruthyInt(row.allow)) {
+      effective.add(name)
+    } else {
+      effective.delete(name)
+    }
+  }
+
+  return effective
 }
 
-function getUserRoles(userId) {
-  return catalogDb
-    .prepare(
-      `
-      SELECT r.name
-      FROM user_roles ur
-      INNER JOIN roles r ON r.id = ur.role_id
-      WHERE ur.user_id = ?
-      ORDER BY r.name ASC
-      `,
-    )
-    .all(userId)
-    .map((row) => row.name)
-}
-
-function createSession(userId) {
+async function createSession(userId) {
   const token = createOpaqueToken()
   const tokenHash = sha256Hex(token)
   const expiresAt = addDaysIso(SESSION_TTL_DAYS)
 
-  catalogDb
-    .prepare(
-      `
-      INSERT INTO auth_sessions(user_id, token_hash, expires_at, last_seen_at)
-      VALUES (?, ?, ?, ?)
-      `,
-    )
-    .run(userId, tokenHash, expiresAt, nowIso())
+  await models.authSession.create({
+    user_id: userId,
+    token_hash: tokenHash,
+    expires_at: expiresAt,
+    last_seen_at: nowIso(),
+  })
 
   return {
     token,
@@ -125,76 +184,89 @@ function createSession(userId) {
   }
 }
 
-function getSessionByToken(token) {
+async function getSessionByToken(token) {
   if (!token) {
     return null
   }
 
   const tokenHash = sha256Hex(token)
-  return catalogDb
-    .prepare(
-      `
-      SELECT
-        s.id AS session_id,
-        s.user_id AS session_user_id,
-        s.token_hash,
-        s.expires_at,
-        s.created_at AS session_created_at,
-        s.last_seen_at,
-        s.revoked_at,
-        u.id,
-        u.username,
-        u.email,
-        u.is_active,
-        u.must_change_password,
-        u.created_at,
-        u.updated_at
-      FROM auth_sessions s
-      INNER JOIN users u ON u.id = s.user_id
-      WHERE s.token_hash = ?
-      `,
-    )
-    .get(tokenHash)
+  return models.authSession.findOne({
+    where: { token_hash: tokenHash },
+    include: [
+      {
+        model: models.user,
+        as: 'user',
+        required: true,
+      },
+    ],
+  })
 }
 
-function revokeSession(token) {
+async function revokeSession(token) {
   if (!token) {
     return
   }
 
-  catalogDb
-    .prepare('UPDATE auth_sessions SET revoked_at = ? WHERE token_hash = ?')
-    .run(nowIso(), sha256Hex(token))
+  await models.authSession.update(
+    { revoked_at: nowIso() },
+    {
+      where: {
+        token_hash: sha256Hex(token),
+      },
+    },
+  )
 }
 
-function revokeUserSessions(userId) {
-  catalogDb
-    .prepare('UPDATE auth_sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL')
-    .run(nowIso(), userId)
+async function revokeUserSessions(userId, transaction = undefined) {
+  await models.authSession.update(
+    { revoked_at: nowIso() },
+    {
+      where: {
+        user_id: userId,
+        revoked_at: null,
+      },
+      transaction,
+    },
+  )
 }
 
-function removeExpiredSessions() {
-  catalogDb.prepare('DELETE FROM auth_sessions WHERE expires_at <= ?').run(nowIso())
+async function removeExpiredSessions() {
+  await models.authSession.destroy({
+    where: {
+      expires_at: {
+        [Op.lte]: nowIso(),
+      },
+    },
+  })
 }
 
-function getAuthContextFromToken(token) {
-  removeExpiredSessions()
-  const session = getSessionByToken(token)
-  if (!session) {
+async function getAuthContextFromToken(token) {
+  await removeExpiredSessions()
+  const sessionInstance = await getSessionByToken(token)
+
+  if (!sessionInstance) {
     return null
   }
 
-  if (session.revoked_at || session.expires_at <= nowIso() || session.is_active !== 1) {
+  const session = sessionInstance.get({ plain: true })
+  const user = mapUser(session.user)
+  const currentNow = nowIso()
+
+  if (!user || session.revoked_at || session.expires_at <= currentNow || !user.is_active) {
     return null
   }
 
-  catalogDb
-    .prepare('UPDATE auth_sessions SET last_seen_at = ? WHERE id = ?')
-    .run(nowIso(), session.session_id)
+  await models.authSession.update(
+    { last_seen_at: currentNow },
+    {
+      where: {
+        id: session.id,
+      },
+    },
+  )
 
-  const user = mapUser(session)
-  const roles = getUserRoles(user.id)
-  const permissions = getEffectivePermissions(user.id)
+  const roles = await getUserRoles(user.id)
+  const permissions = await getEffectivePermissions(user.id)
 
   return {
     user,
@@ -203,7 +275,7 @@ function getAuthContextFromToken(token) {
   }
 }
 
-function registerUser({ username, email, password }) {
+async function registerUser({ username, email, password }) {
   const normalizedUsername = typeof username === 'string' ? username.trim() : ''
   const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : ''
 
@@ -213,33 +285,35 @@ function registerUser({ username, email, password }) {
 
   const passwordHash = hashPassword(password)
 
-  const result = catalogDb
-    .prepare(
-      `
-      INSERT INTO users(username, email, password_hash)
-      VALUES (?, ?, ?)
-      `,
-    )
-    .run(normalizedUsername, normalizedEmail, passwordHash)
+  const created = await models.user.create({
+    username: normalizedUsername,
+    email: normalizedEmail,
+    password_hash: passwordHash,
+  })
 
-  const userId = Number(result.lastInsertRowid)
+  const defaultRole = await models.role.findOne({
+    where: { name: 'user' },
+    attributes: ['id'],
+    raw: true,
+  })
 
-  catalogDb
-    .prepare(
-      `
-      INSERT OR IGNORE INTO user_roles(user_id, role_id)
-      SELECT ?, id FROM roles WHERE name = 'user'
-      `,
-    )
-    .run(userId)
+  if (defaultRole) {
+    await models.userRole.findOrCreate({
+      where: {
+        user_id: created.id,
+        role_id: defaultRole.id,
+      },
+    })
+  }
 
-  return mapUser(getUserById(userId))
+  const user = await getUserById(created.id)
+  return mapUser(user)
 }
 
-function login({ identity, password }) {
-  const user = getUserByIdentity(identity)
+async function login({ identity, password }) {
+  const user = await getUserByIdentity(identity)
 
-  if (!user || user.is_active !== 1) {
+  if (!user || !isTruthyInt(user.is_active)) {
     throw new Error('Invalid credentials')
   }
 
@@ -247,9 +321,9 @@ function login({ identity, password }) {
     throw new Error('Invalid credentials')
   }
 
-  const session = createSession(user.id)
-  const roles = getUserRoles(user.id)
-  const permissions = getEffectivePermissions(user.id)
+  const session = await createSession(user.id)
+  const roles = await getUserRoles(user.id)
+  const permissions = await getEffectivePermissions(user.id)
 
   return {
     token: session.token,
@@ -260,8 +334,8 @@ function login({ identity, password }) {
   }
 }
 
-function changePassword({ userId, currentPassword, newPassword }) {
-  const user = getUserById(userId)
+async function changePassword({ userId, currentPassword, newPassword }) {
+  const user = await getUserById(userId)
 
   if (!user) {
     throw new Error('User not found')
@@ -273,38 +347,39 @@ function changePassword({ userId, currentPassword, newPassword }) {
 
   const newHash = hashPassword(newPassword)
 
-  catalogDb
-    .prepare(
-      `
-      UPDATE users
-      SET password_hash = ?, must_change_password = 0, updated_at = ?
-      WHERE id = ?
-      `,
-    )
-    .run(newHash, nowIso(), userId)
+  await models.user.update(
+    {
+      password_hash: newHash,
+      must_change_password: 0,
+      updated_at: nowIso(),
+    },
+    {
+      where: { id: userId },
+    },
+  )
 
-  revokeUserSessions(userId)
+  await revokeUserSessions(userId)
 }
 
-function createPasswordResetToken(email) {
+async function createPasswordResetToken(email) {
   const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : ''
-  const user = catalogDb.prepare('SELECT * FROM users WHERE lower(email) = ?').get(normalizedEmail)
+  const user = await models.user.findOne({
+    where: where(fn('lower', col('email')), normalizedEmail),
+    raw: true,
+  })
 
-  if (!user || user.is_active !== 1) {
+  if (!user || !isTruthyInt(user.is_active)) {
     return null
   }
 
   const rawToken = createOpaqueToken(40)
   const tokenHash = sha256Hex(rawToken)
 
-  catalogDb
-    .prepare(
-      `
-      INSERT INTO password_reset_tokens(user_id, token_hash, expires_at)
-      VALUES (?, ?, ?)
-      `,
-    )
-    .run(user.id, tokenHash, addMinutesIso(RESET_TTL_MINUTES))
+  await models.passwordResetToken.create({
+    user_id: user.id,
+    token_hash: tokenHash,
+    expires_at: addMinutesIso(RESET_TTL_MINUTES),
+  })
 
   return {
     token: rawToken,
@@ -312,45 +387,57 @@ function createPasswordResetToken(email) {
   }
 }
 
-function resetPassword({ token, newPassword }) {
+async function resetPassword({ token, newPassword }) {
   const tokenHash = sha256Hex(token)
-  const resetToken = catalogDb
-    .prepare(
-      `
-      SELECT *
-      FROM password_reset_tokens
-      WHERE token_hash = ?
-      `,
-    )
-    .get(tokenHash)
+  const resetToken = await models.passwordResetToken.findOne({
+    where: {
+      token_hash: tokenHash,
+    },
+    raw: true,
+  })
 
   if (!resetToken || resetToken.used_at || resetToken.expires_at <= nowIso()) {
     throw new Error('Reset token is invalid or expired')
   }
 
   const newHash = hashPassword(newPassword)
+  const usedAt = nowIso()
 
-  catalogDb.transaction(() => {
-    catalogDb
-      .prepare('UPDATE users SET password_hash = ?, must_change_password = 0, updated_at = ? WHERE id = ?')
-      .run(newHash, nowIso(), resetToken.user_id)
+  await sequelize.transaction(async (transaction) => {
+    await models.user.update(
+      {
+        password_hash: newHash,
+        must_change_password: 0,
+        updated_at: usedAt,
+      },
+      {
+        where: { id: resetToken.user_id },
+        transaction,
+      },
+    )
 
-    catalogDb
-      .prepare('UPDATE password_reset_tokens SET used_at = ? WHERE id = ?')
-      .run(nowIso(), resetToken.id)
+    await models.passwordResetToken.update(
+      {
+        used_at: usedAt,
+      },
+      {
+        where: { id: resetToken.id },
+        transaction,
+      },
+    )
 
-    revokeUserSessions(resetToken.user_id)
-  })()
+    await revokeUserSessions(resetToken.user_id, transaction)
+  })
 }
 
-function getUserProfile(userId) {
-  const user = mapUser(getUserById(userId))
+async function getUserProfile(userId) {
+  const user = mapUser(await getUserById(userId))
   if (!user) {
     return null
   }
 
-  const roles = getUserRoles(userId)
-  const permissions = Array.from(getEffectivePermissions(userId)).sort((left, right) =>
+  const roles = await getUserRoles(userId)
+  const permissions = Array.from(await getEffectivePermissions(userId)).sort((left, right) =>
     left.localeCompare(right),
   )
 
@@ -361,73 +448,150 @@ function getUserProfile(userId) {
   }
 }
 
-function listUsersWithPermissions() {
-  const users = catalogDb
-    .prepare('SELECT id, username, email, is_active, must_change_password, created_at, updated_at FROM users ORDER BY username COLLATE NOCASE ASC')
-    .all()
+async function listUsersWithPermissions() {
+  const users = await models.user.findAll({
+    attributes: [
+      'id',
+      'username',
+      'email',
+      'is_active',
+      'must_change_password',
+      'created_at',
+      'updated_at',
+    ],
+    order: [['username', 'ASC']],
+    raw: true,
+  })
 
-  return users.map((row) => {
-    const user = mapUser(row)
-    return {
-      ...user,
-      roles: getUserRoles(row.id),
-      permissions: Array.from(getEffectivePermissions(row.id)).sort((left, right) =>
-        left.localeCompare(right),
-      ),
+  return Promise.all(
+    users.map(async (row) => {
+      const user = mapUser(row)
+      return {
+        ...user,
+        roles: await getUserRoles(row.id),
+        permissions: Array.from(await getEffectivePermissions(row.id)).sort((left, right) =>
+          left.localeCompare(right),
+        ),
+      }
+    }),
+  )
+}
+
+async function setUserRoles(userId, roleNames) {
+  const names = Array.isArray(roleNames)
+    ? Array.from(
+        new Set(
+          roleNames
+            .map((value) => (typeof value === 'string' ? value.trim() : ''))
+            .filter((value) => value.length > 0),
+        ),
+      )
+    : []
+
+  const roles =
+    names.length > 0
+      ? await models.role.findAll({
+          attributes: ['id'],
+          where: {
+            name: {
+              [Op.in]: names,
+            },
+          },
+          raw: true,
+        })
+      : []
+
+  await sequelize.transaction(async (transaction) => {
+    await models.userRole.destroy({ where: { user_id: userId }, transaction })
+
+    if (roles.length > 0) {
+      await models.userRole.bulkCreate(
+        roles.map((role) => ({
+          user_id: userId,
+          role_id: role.id,
+        })),
+        { transaction },
+      )
     }
   })
 }
 
-function setUserRoles(userId, roleNames) {
-  const names = Array.isArray(roleNames) ? roleNames : []
-
-  catalogDb.transaction(() => {
-    catalogDb.prepare('DELETE FROM user_roles WHERE user_id = ?').run(userId)
-
-    for (const roleName of names) {
-      catalogDb
-        .prepare(
-          `
-          INSERT OR IGNORE INTO user_roles(user_id, role_id)
-          SELECT ?, id FROM roles WHERE name = ?
-          `,
-        )
-        .run(userId, roleName)
-    }
-  })()
-}
-
-function setUserPermissions(userId, permissions) {
+async function setUserPermissions(userId, permissions) {
   const values = Array.isArray(permissions) ? permissions : []
 
-  catalogDb.transaction(() => {
-    catalogDb.prepare('DELETE FROM user_permissions WHERE user_id = ?').run(userId)
-
-    for (const permission of values) {
-      if (!permission?.name) {
-        continue
+  const normalizedPermissions = values
+    .map((permission) => {
+      if (typeof permission === 'string') {
+        return {
+          name: permission.trim(),
+          allow: true,
+        }
       }
 
-      catalogDb
-        .prepare(
-          `
-          INSERT OR IGNORE INTO user_permissions(user_id, permission_id, allow)
-          SELECT ?, id, ? FROM permissions WHERE name = ?
-          `,
-        )
-        .run(userId, permission.allow === false ? 0 : 1, permission.name)
+      return {
+        name: typeof permission?.name === 'string' ? permission.name.trim() : '',
+        allow: permission?.allow !== false,
+      }
+    })
+    .filter((permission) => permission.name.length > 0)
+
+  const uniqueNames = Array.from(
+    new Set(normalizedPermissions.map((permission) => permission.name)),
+  )
+
+  const permissionsByName =
+    uniqueNames.length > 0
+      ? await models.permission.findAll({
+          attributes: ['id', 'name'],
+          where: {
+            name: {
+              [Op.in]: uniqueNames,
+            },
+          },
+          raw: true,
+        })
+      : []
+
+  const idByName = new Map(permissionsByName.map((permission) => [permission.name, permission.id]))
+
+  await sequelize.transaction(async (transaction) => {
+    await models.userPermission.destroy({ where: { user_id: userId }, transaction })
+
+    const rows = normalizedPermissions
+      .map((permission) => {
+        const permissionId = idByName.get(permission.name)
+        if (!permissionId) {
+          return null
+        }
+
+        return {
+          user_id: userId,
+          permission_id: permissionId,
+          allow: permission.allow ? 1 : 0,
+        }
+      })
+      .filter(Boolean)
+
+    if (rows.length > 0) {
+      await models.userPermission.bulkCreate(rows, { transaction })
     }
-  })()
+  })
 }
 
-function getAvailableRoles() {
-  return catalogDb.prepare('SELECT name, description FROM roles ORDER BY name ASC').all()
+async function getAvailableRoles() {
+  return models.role.findAll({
+    attributes: ['name', 'description'],
+    order: [['name', 'ASC']],
+    raw: true,
+  })
 }
 
-function getAvailablePermissions() {
-  return catalogDb
-    .prepare('SELECT name, description FROM permissions ORDER BY name ASC')
-    .all()
+async function getAvailablePermissions() {
+  return models.permission.findAll({
+    attributes: ['name', 'description'],
+    order: [['name', 'ASC']],
+    raw: true,
+  })
 }
 
 export default {

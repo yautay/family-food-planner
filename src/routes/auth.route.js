@@ -55,7 +55,7 @@ apiRouter.post('/login', loginLimiter, validate({ body: schemas.loginBody }), as
 })
 
 apiRouter.post('/logout', requireAuth, async (req, res) => {
-  authService.revokeSession(req.auth.token)
+  await authService.revokeSession(req.auth.token)
   res.status(204).send()
 })
 
@@ -144,7 +144,7 @@ apiRouter.put(
   async (req, res) => {
     try {
       const userId = Number(req.params.id)
-      const profileBefore = authService.getUserProfile(userId)
+      const profileBefore = await authService.getUserProfile(userId)
 
       if (!profileBefore) {
         res.status(404).json({ error: 'User not found' })
@@ -185,7 +185,7 @@ apiRouter.put(
   async (req, res) => {
     try {
       const userId = Number(req.params.id)
-      const profileBefore = authService.getUserProfile(userId)
+      const profileBefore = await authService.getUserProfile(userId)
 
       if (!profileBefore) {
         res.status(404).json({ error: 'User not found' })

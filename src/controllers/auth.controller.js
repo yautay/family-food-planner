@@ -9,7 +9,12 @@ function ensurePasswordStrength(password) {
     throw new Error('Password must have at least 10 characters')
   }
 
-  if (!/[A-Z]/.test(value) || !/[a-z]/.test(value) || !/[0-9]/.test(value) || !/[^A-Za-z0-9]/.test(value)) {
+  if (
+    !/[A-Z]/.test(value) ||
+    !/[a-z]/.test(value) ||
+    !/[0-9]/.test(value) ||
+    !/[^A-Za-z0-9]/.test(value)
+  ) {
     throw new Error('Password must include uppercase, lowercase, number and symbol')
   }
 }
@@ -21,9 +26,9 @@ async function register(payload, remoteIp) {
   }
 
   ensurePasswordStrength(payload?.password)
-  const user = authService.registerUser(payload)
+  const user = await authService.registerUser(payload)
 
-  const loginResult = authService.login({
+  const loginResult = await authService.login({
     identity: payload.username,
     password: payload.password,
   })
@@ -40,7 +45,7 @@ async function login(payload) {
 
 async function changePassword(payload) {
   ensurePasswordStrength(payload?.newPassword)
-  authService.changePassword(payload)
+  await authService.changePassword(payload)
 }
 
 async function forgotPassword(payload, remoteIp) {
@@ -49,7 +54,7 @@ async function forgotPassword(payload, remoteIp) {
     throw new Error('Captcha validation failed')
   }
 
-  const resetToken = authService.createPasswordResetToken(payload?.email)
+  const resetToken = await authService.createPasswordResetToken(payload?.email)
   if (!resetToken) {
     return
   }
@@ -70,7 +75,7 @@ async function forgotPassword(payload, remoteIp) {
 
 async function resetPassword(payload) {
   ensurePasswordStrength(payload?.newPassword)
-  authService.resetPassword(payload)
+  await authService.resetPassword(payload)
 }
 
 async function getProfile(userId) {
@@ -82,19 +87,19 @@ async function listUsersWithPermissions() {
 }
 
 async function updateUserRoles(userId, roles) {
-  authService.setUserRoles(userId, roles)
+  await authService.setUserRoles(userId, roles)
   return authService.getUserProfile(userId)
 }
 
 async function updateUserPermissions(userId, permissions) {
-  authService.setUserPermissions(userId, permissions)
+  await authService.setUserPermissions(userId, permissions)
   return authService.getUserProfile(userId)
 }
 
 async function getAccessCatalog() {
   return {
-    roles: authService.getAvailableRoles(),
-    permissions: authService.getAvailablePermissions(),
+    roles: await authService.getAvailableRoles(),
+    permissions: await authService.getAvailablePermissions(),
   }
 }
 

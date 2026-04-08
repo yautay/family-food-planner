@@ -13,22 +13,26 @@ function extractBearerToken(authorizationHeader) {
   return token.trim()
 }
 
-export function authOptional(req, _res, next) {
-  const token = extractBearerToken(req.headers.authorization)
-  const context = authService.getAuthContextFromToken(token)
+export async function authOptional(req, _res, next) {
+  try {
+    const token = extractBearerToken(req.headers.authorization)
+    const context = await authService.getAuthContextFromToken(token)
 
-  if (context) {
-    req.auth = {
-      token,
-      user: context.user,
-      roles: context.roles,
-      permissions: context.permissions,
+    if (context) {
+      req.auth = {
+        token,
+        user: context.user,
+        roles: context.roles,
+        permissions: context.permissions,
+      }
+    } else {
+      req.auth = null
     }
-  } else {
-    req.auth = null
-  }
 
-  next()
+    next()
+  } catch (error) {
+    next(error)
+  }
 }
 
 export function requireAuth(req, res, next) {
