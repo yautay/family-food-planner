@@ -22,6 +22,7 @@ import recipeNutritionSummaryModel from './recipe-nutrition-summary.model.js'
 import dayPlanModel from './day-plan.model.js'
 import dayPlanMealModel from './day-plan-meal.model.js'
 import mealPlanModel from './meal-plan.model.js'
+import mealPlanMealSlotModel from './meal-plan-meal-slot.model.js'
 import mealPlanEntryModel from './meal-plan-entry.model.js'
 import mealPlanDaySlotModel from './meal-plan-day-slot.model.js'
 import mealPlanDaySlotMealModel from './meal-plan-day-slot-meal.model.js'
@@ -54,6 +55,7 @@ models.recipeNutritionSummary = recipeNutritionSummaryModel
 models.dayPlan = dayPlanModel
 models.dayPlanMeal = dayPlanMealModel
 models.mealPlan = mealPlanModel
+models.mealPlanMealSlot = mealPlanMealSlotModel
 models.mealPlanEntry = mealPlanEntryModel
 models.mealPlanDaySlot = mealPlanDaySlotModel
 models.mealPlanDaySlotMeal = mealPlanDaySlotMealModel
@@ -235,6 +237,16 @@ models.mealPlan.belongsTo(models.user, {
 models.mealPlan.hasMany(models.mealPlanEntry, {
   foreignKey: 'meal_plan_id',
   as: 'entries',
+})
+
+models.mealPlan.hasMany(models.mealPlanMealSlot, {
+  foreignKey: 'meal_plan_id',
+  as: 'mealSlots',
+})
+
+models.mealPlanMealSlot.belongsTo(models.mealPlan, {
+  foreignKey: 'meal_plan_id',
+  as: 'mealPlan',
 })
 
 models.mealPlanEntry.belongsTo(models.mealPlan, {

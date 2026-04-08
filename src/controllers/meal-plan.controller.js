@@ -1,4 +1,6 @@
-import catalogDb from '../db/catalog.js'
+import { Op, fn, col } from 'sequelize'
+import sequelize from '../db/client.js'
+import models from '../models/index.js'
 
 const ALLOWED_MEAL_SLOTS = new Set(['breakfast', 'lunch', 'dinner', 'snack'])
 const DEFAULT_MEAL_SLOTS = ['Sniadanie', 'Drugie sniadanie', 'Obiad', 'Podwieczorek', 'Kolacja']
@@ -124,19 +126,11 @@ function normalizeDayMealsPayload(rawMeals, options = {}) {
   })
 }
 
-function getMealSlotLimit(mealPlanId) {
-  const row = catalogDb
-    .prepare(
-      `
-      SELECT COUNT(*) AS slots_count
-      FROM meal_plan_meal_slots
-      WHERE meal_plan_id = ?
-      `,
-    )
-    .get(mealPlanId)
-
-  const slotsCount = Number(row?.slots_count)
-  return Number.isInteger(slotsCount) && slotsCount > 0 ? slotsCount : 0
+async function getMealSlotLimit(mealPlanId, transaction = undefined) {
+  return models.mealPlanMealSlot.count({
+    where: { meal_plan_id: mealPlanId },
+    transaction,
+  })
 }
 
 function buildDateRange(startDate, endDate) {
@@ -152,72 +146,69 @@ function buildDateRange(startDate, endDate) {
   return dates
 }
 
-function ensureDaySlotsInPlanRange(mealPlanId, startDate, endDate) {
+async function ensureDaySlotsInPlanRange(mealPlanId, startDate, endDate, transaction = undefined) {
   const dates = buildDateRange(startDate, endDate)
 
-  catalogDb.transaction(() => {
-    catalogDb
-      .prepare(
-        `
-        DELETE FROM meal_plan_day_slots
-        WHERE meal_plan_id = ? AND (planned_date < ? OR planned_date > ?)
-        `,
-      )
-      .run(mealPlanId, startDate, endDate)
+  await models.mealPlanDaySlot.destroy({
+    where: {
+      meal_plan_id: mealPlanId,
+      [Op.or]: [{ planned_date: { [Op.lt]: startDate } }, { planned_date: { [Op.gt]: endDate } }],
+    },
+    transaction,
+  })
 
-    const existingDates = new Set(
-      catalogDb
-        .prepare(
-          `
-          SELECT planned_date
-          FROM meal_plan_day_slots
-          WHERE meal_plan_id = ?
-          `,
-        )
-        .all(mealPlanId)
-        .map((row) => row.planned_date),
+  const existingRows = await models.mealPlanDaySlot.findAll({
+    attributes: ['planned_date'],
+    where: { meal_plan_id: mealPlanId },
+    raw: true,
+    transaction,
+  })
+
+  const existingDates = new Set(existingRows.map((row) => row.planned_date))
+  const missingDates = dates.filter((plannedDate) => !existingDates.has(plannedDate))
+
+  if (missingDates.length > 0) {
+    await models.mealPlanDaySlot.bulkCreate(
+      missingDates.map((plannedDate) => ({
+        meal_plan_id: mealPlanId,
+        planned_date: plannedDate,
+        day_plan_id: null,
+        note: '',
+      })),
+      { transaction },
     )
-
-    const insertDaySlot = catalogDb.prepare(
-      `
-      INSERT INTO meal_plan_day_slots(meal_plan_id, planned_date, day_plan_id, note)
-      VALUES (?, ?, NULL, '')
-      `,
-    )
-
-    for (const plannedDate of dates) {
-      if (!existingDates.has(plannedDate)) {
-        insertDaySlot.run(mealPlanId, plannedDate)
-      }
-    }
-  })()
-}
-
-function insertMealPlanSlots(mealPlanId, slots) {
-  const insertSlot = catalogDb.prepare(
-    `
-    INSERT INTO meal_plan_meal_slots(meal_plan_id, slot_name, slot_time, sort_order)
-    VALUES (?, ?, ?, ?)
-    `,
-  )
-
-  for (const slot of slots) {
-    insertSlot.run(mealPlanId, slot.slot_name, slot.slot_time, slot.sort_order)
   }
 }
 
-function seedDefaultMealPlanSlots(mealPlanId) {
-  insertMealPlanSlots(
+async function insertMealPlanSlots(mealPlanId, slots, transaction = undefined) {
+  if (!Array.isArray(slots) || slots.length === 0) {
+    return
+  }
+
+  await models.mealPlanMealSlot.bulkCreate(
+    slots.map((slot) => ({
+      meal_plan_id: mealPlanId,
+      slot_name: slot.slot_name,
+      slot_time: slot.slot_time,
+      sort_order: slot.sort_order,
+    })),
+    { transaction },
+  )
+}
+
+async function seedDefaultMealPlanSlots(mealPlanId, transaction = undefined) {
+  await insertMealPlanSlots(
     mealPlanId,
     DEFAULT_MEAL_SLOTS.map((slotName, index) => ({
       slot_name: slotName,
       slot_time: null,
       sort_order: index + 1,
     })),
+    transaction,
   )
 }
 
-function getRecipeNutritionMap(recipeIds) {
+async function getRecipeNutritionMap(recipeIds, transaction = undefined) {
   if (!Array.isArray(recipeIds) || recipeIds.length === 0) {
     return new Map()
   }
@@ -229,24 +220,15 @@ function getRecipeNutritionMap(recipeIds) {
     return new Map()
   }
 
-  const placeholders = uniqueRecipeIds.map(() => '?').join(', ')
-  const rows = catalogDb
-    .prepare(
-      `
-      SELECT
-        recipe_id,
-        total_grams,
-        calories,
-        carbohydrates,
-        sugars,
-        fat,
-        protein,
-        fiber
-      FROM recipe_nutrition_summary
-      WHERE recipe_id IN (${placeholders})
-      `,
-    )
-    .all(...uniqueRecipeIds)
+  const rows = await models.recipeNutritionSummary.findAll({
+    where: {
+      recipe_id: {
+        [Op.in]: uniqueRecipeIds,
+      },
+    },
+    raw: true,
+    transaction,
+  })
 
   return new Map(rows.map((row) => [row.recipe_id, row]))
 }
@@ -397,249 +379,249 @@ function mapEntryPayload(rawEntry, plan) {
   }
 }
 
-function getOwnedPlanById(mealPlanId, ownerUserId) {
-  return catalogDb
-    .prepare(
-      `
-      SELECT
-        id,
-        owner_user_id,
-        name,
-        start_date,
-        end_date,
-        note,
-        portions_count,
-        created_at,
-        updated_at
-      FROM meal_plans
-      WHERE id = ? AND owner_user_id = ?
-      `,
-    )
-    .get(mealPlanId, ownerUserId)
+async function getOwnedPlanById(mealPlanId, ownerUserId, transaction = undefined) {
+  return models.mealPlan.findOne({
+    where: {
+      id: mealPlanId,
+      owner_user_id: ownerUserId,
+    },
+    raw: true,
+    transaction,
+  })
 }
 
-function getOwnedDayPlanById(dayPlanId, ownerUserId) {
-  return catalogDb
-    .prepare('SELECT id, owner_user_id, name FROM day_plans WHERE id = ? AND owner_user_id = ?')
-    .get(dayPlanId, ownerUserId)
+async function getOwnedDayPlanById(dayPlanId, ownerUserId, transaction = undefined) {
+  return models.dayPlan.findOne({
+    where: {
+      id: dayPlanId,
+      owner_user_id: ownerUserId,
+    },
+    attributes: ['id', 'owner_user_id', 'name'],
+    raw: true,
+    transaction,
+  })
 }
 
-function getMealPlanEntries(mealPlanId) {
-  return catalogDb
-    .prepare(
-      `
-      SELECT
-        e.id,
-        e.meal_plan_id,
-        e.planned_date,
-        e.meal_slot,
-        e.recipe_id,
-        r.name AS recipe_name,
-        e.custom_name,
-        e.servings,
-        e.note,
-        e.created_at
-      FROM meal_plan_entries e
-      LEFT JOIN recipes r ON r.id = e.recipe_id
-      WHERE e.meal_plan_id = ?
-      ORDER BY e.planned_date ASC, e.meal_slot ASC
-      `,
-    )
-    .all(mealPlanId)
+async function getMealPlanEntries(mealPlanId, transaction = undefined) {
+  const rows = await models.mealPlanEntry.findAll({
+    where: { meal_plan_id: mealPlanId },
+    include: [
+      {
+        model: models.recipe,
+        as: 'recipe',
+        attributes: ['name'],
+        required: false,
+      },
+    ],
+    order: [
+      ['planned_date', 'ASC'],
+      ['meal_slot', 'ASC'],
+    ],
+    transaction,
+  })
+
+  return rows.map((row) => {
+    const plain = row.get({ plain: true })
+    return {
+      id: plain.id,
+      meal_plan_id: plain.meal_plan_id,
+      planned_date: plain.planned_date,
+      meal_slot: plain.meal_slot,
+      recipe_id: plain.recipe_id,
+      recipe_name: plain.recipe?.name ?? null,
+      custom_name: plain.custom_name,
+      servings: plain.servings,
+      note: plain.note,
+      created_at: plain.created_at,
+    }
+  })
 }
 
-function getMealPlanMealSlots(mealPlanId) {
-  return catalogDb
-    .prepare(
-      `
-      SELECT id, meal_plan_id, slot_name, slot_time, sort_order, created_at, updated_at
-      FROM meal_plan_meal_slots
-      WHERE meal_plan_id = ?
-      ORDER BY sort_order ASC
-      `,
-    )
-    .all(mealPlanId)
+async function getMealPlanMealSlots(mealPlanId, transaction = undefined) {
+  return models.mealPlanMealSlot.findAll({
+    where: { meal_plan_id: mealPlanId },
+    order: [['sort_order', 'ASC']],
+    raw: true,
+    transaction,
+  })
 }
 
-function getMealPlanDaySlots(mealPlanId) {
-  return catalogDb
-    .prepare(
-      `
-      SELECT
-        s.id,
-        s.meal_plan_id,
-        s.planned_date,
-        s.day_plan_id,
-        d.name AS day_plan_name,
-        s.note,
-        s.created_at,
-        s.updated_at
-      FROM meal_plan_day_slots s
-      LEFT JOIN day_plans d ON d.id = s.day_plan_id
-      WHERE s.meal_plan_id = ?
-      ORDER BY s.planned_date ASC
-      `,
-    )
-    .all(mealPlanId)
+async function getMealPlanDaySlots(mealPlanId, transaction = undefined) {
+  const rows = await models.mealPlanDaySlot.findAll({
+    where: { meal_plan_id: mealPlanId },
+    include: [
+      {
+        model: models.dayPlan,
+        as: 'dayPlan',
+        attributes: ['name'],
+        required: false,
+      },
+    ],
+    order: [['planned_date', 'ASC']],
+    transaction,
+  })
+
+  return rows.map((row) => {
+    const plain = row.get({ plain: true })
+    return {
+      id: plain.id,
+      meal_plan_id: plain.meal_plan_id,
+      planned_date: plain.planned_date,
+      day_plan_id: plain.day_plan_id,
+      day_plan_name: plain.dayPlan?.name ?? null,
+      note: plain.note,
+      created_at: plain.created_at,
+      updated_at: plain.updated_at,
+    }
+  })
 }
 
-function getSlotByPlanAndDate(mealPlanId, plannedDate) {
-  return catalogDb
-    .prepare(
-      `
-      SELECT id, meal_plan_id, planned_date, day_plan_id, note
-      FROM meal_plan_day_slots
-      WHERE meal_plan_id = ? AND planned_date = ?
-      `,
-    )
-    .get(mealPlanId, plannedDate)
+async function getSlotByPlanAndDate(mealPlanId, plannedDate, transaction = undefined) {
+  return models.mealPlanDaySlot.findOne({
+    where: {
+      meal_plan_id: mealPlanId,
+      planned_date: plannedDate,
+    },
+    raw: true,
+    transaction,
+  })
 }
 
-function ensureSlotByPlanAndDate(mealPlanId, plannedDate) {
-  const existing = getSlotByPlanAndDate(mealPlanId, plannedDate)
+async function ensureSlotByPlanAndDate(mealPlanId, plannedDate, transaction = undefined) {
+  const existing = await getSlotByPlanAndDate(mealPlanId, plannedDate, transaction)
   if (existing) {
     return existing
   }
 
-  const result = catalogDb
-    .prepare(
-      `
-      INSERT INTO meal_plan_day_slots(meal_plan_id, planned_date, day_plan_id, note)
-      VALUES (?, ?, NULL, '')
-      `,
-    )
-    .run(mealPlanId, plannedDate)
-
-  return (
-    getSlotByPlanAndDate(mealPlanId, plannedDate) ?? {
-      id: Number(result.lastInsertRowid),
+  const created = await models.mealPlanDaySlot.create(
+    {
       meal_plan_id: mealPlanId,
       planned_date: plannedDate,
       day_plan_id: null,
       note: '',
-    }
+    },
+    { transaction },
   )
+
+  return created.get({ plain: true })
 }
 
-function getDayPlanMealsByDayPlanIds(dayPlanIds) {
+async function getDayPlanMealsByDayPlanIds(dayPlanIds, transaction = undefined) {
   if (dayPlanIds.length === 0) {
     return new Map()
   }
 
-  const placeholders = dayPlanIds.map(() => '?').join(', ')
-  const rows = catalogDb
-    .prepare(
-      `
-      SELECT
-        m.id,
-        m.day_plan_id,
-        m.recipe_id,
-        r.name AS recipe_name,
-        m.servings,
-        m.portions,
-        m.note,
-        m.meal_order,
-        m.created_at,
-        m.updated_at
-      FROM day_plan_meals m
-      INNER JOIN recipes r ON r.id = m.recipe_id
-      WHERE m.day_plan_id IN (${placeholders})
-      ORDER BY m.day_plan_id ASC, m.meal_order ASC
-      `,
-    )
-    .all(...dayPlanIds)
+  const rows = await models.dayPlanMeal.findAll({
+    where: {
+      day_plan_id: {
+        [Op.in]: dayPlanIds,
+      },
+    },
+    include: [
+      {
+        model: models.recipe,
+        as: 'recipe',
+        attributes: ['name'],
+        required: true,
+      },
+    ],
+    order: [
+      ['day_plan_id', 'ASC'],
+      ['meal_order', 'ASC'],
+    ],
+    transaction,
+  })
 
   const grouped = new Map()
   for (const row of rows) {
-    if (!grouped.has(row.day_plan_id)) {
-      grouped.set(row.day_plan_id, [])
+    const plain = row.get({ plain: true })
+    if (!grouped.has(plain.day_plan_id)) {
+      grouped.set(plain.day_plan_id, [])
     }
-    grouped.get(row.day_plan_id).push({
-      id: row.id,
-      day_plan_id: row.day_plan_id,
-      recipe_id: row.recipe_id,
-      recipe_name: row.recipe_name,
-      servings: row.servings,
-      portions: row.portions,
-      note: row.note,
-      meal_order: row.meal_order,
-      created_at: row.created_at,
-      updated_at: row.updated_at,
+
+    grouped.get(plain.day_plan_id).push({
+      id: plain.id,
+      day_plan_id: plain.day_plan_id,
+      recipe_id: plain.recipe_id,
+      recipe_name: plain.recipe?.name ?? null,
+      servings: plain.servings,
+      portions: plain.portions,
+      note: plain.note,
+      meal_order: plain.meal_order,
+      created_at: plain.created_at,
+      updated_at: plain.updated_at,
     })
   }
 
   return grouped
 }
 
-function getDayPlanMealsForImport(dayPlanId) {
-  return catalogDb
-    .prepare(
-      `
-      SELECT recipe_id, servings, portions, note, meal_order
-      FROM day_plan_meals
-      WHERE day_plan_id = ?
-      ORDER BY meal_order ASC
-      `,
-    )
-    .all(dayPlanId)
+async function getDayPlanMealsForImport(dayPlanId, transaction = undefined) {
+  return models.dayPlanMeal.findAll({
+    attributes: ['recipe_id', 'servings', 'portions', 'note', 'meal_order'],
+    where: { day_plan_id: dayPlanId },
+    order: [['meal_order', 'ASC']],
+    raw: true,
+    transaction,
+  })
 }
 
-function getCustomDaySlotMealsBySlotIds(slotIds) {
+async function getCustomDaySlotMealsBySlotIds(slotIds, transaction = undefined) {
   if (slotIds.length === 0) {
     return new Map()
   }
 
-  const placeholders = slotIds.map(() => '?').join(', ')
-  const rows = catalogDb
-    .prepare(
-      `
-      SELECT
-        m.id,
-        m.day_slot_id,
-        m.recipe_id,
-        r.name AS recipe_name,
-        m.servings,
-        m.portions,
-        m.note,
-        m.meal_order,
-        m.created_at,
-        m.updated_at
-      FROM meal_plan_day_slot_meals m
-      INNER JOIN recipes r ON r.id = m.recipe_id
-      WHERE m.day_slot_id IN (${placeholders})
-      ORDER BY m.day_slot_id ASC, m.meal_order ASC
-      `,
-    )
-    .all(...slotIds)
+  const rows = await models.mealPlanDaySlotMeal.findAll({
+    where: {
+      day_slot_id: {
+        [Op.in]: slotIds,
+      },
+    },
+    include: [
+      {
+        model: models.recipe,
+        as: 'recipe',
+        attributes: ['name'],
+        required: true,
+      },
+    ],
+    order: [
+      ['day_slot_id', 'ASC'],
+      ['meal_order', 'ASC'],
+    ],
+    transaction,
+  })
 
   const grouped = new Map()
   for (const row of rows) {
-    if (!grouped.has(row.day_slot_id)) {
-      grouped.set(row.day_slot_id, [])
+    const plain = row.get({ plain: true })
+    if (!grouped.has(plain.day_slot_id)) {
+      grouped.set(plain.day_slot_id, [])
     }
-    grouped.get(row.day_slot_id).push({
-      id: row.id,
-      day_slot_id: row.day_slot_id,
-      recipe_id: row.recipe_id,
-      recipe_name: row.recipe_name,
-      servings: row.servings,
-      portions: row.portions,
-      note: row.note,
-      meal_order: row.meal_order,
-      created_at: row.created_at,
-      updated_at: row.updated_at,
+
+    grouped.get(plain.day_slot_id).push({
+      id: plain.id,
+      day_slot_id: plain.day_slot_id,
+      recipe_id: plain.recipe_id,
+      recipe_name: plain.recipe?.name ?? null,
+      servings: plain.servings,
+      portions: plain.portions,
+      note: plain.note,
+      meal_order: plain.meal_order,
+      created_at: plain.created_at,
+      updated_at: plain.updated_at,
     })
   }
 
   return grouped
 }
 
-function buildResolvedDaySlots(plan, daySlots, mealSlots) {
+async function buildResolvedDaySlots(plan, daySlots, mealSlots, transaction = undefined) {
   const dayPlanIds = Array.from(new Set(daySlots.map((slot) => slot.day_plan_id).filter(Boolean)))
   const slotIds = daySlots.map((slot) => slot.id)
 
-  const groupedTemplateMeals = getDayPlanMealsByDayPlanIds(dayPlanIds)
-  const groupedCustomMeals = getCustomDaySlotMealsBySlotIds(slotIds)
+  const groupedTemplateMeals = await getDayPlanMealsByDayPlanIds(dayPlanIds, transaction)
+  const groupedCustomMeals = await getCustomDaySlotMealsBySlotIds(slotIds, transaction)
 
   const recipeIds = []
   for (const meals of groupedTemplateMeals.values()) {
@@ -653,7 +635,7 @@ function buildResolvedDaySlots(plan, daySlots, mealSlots) {
     }
   }
 
-  const nutritionMap = getRecipeNutritionMap(recipeIds)
+  const nutritionMap = await getRecipeNutritionMap(recipeIds, transaction)
 
   const slots = daySlots.map((slot) => {
     const sourceMeals = slot.day_plan_id
@@ -706,52 +688,72 @@ function buildResolvedDaySlots(plan, daySlots, mealSlots) {
 }
 
 async function listMealPlans(user) {
-  return catalogDb
-    .prepare(
-      `
-      SELECT
-        p.id,
-        p.owner_user_id,
-        p.name,
-        p.start_date,
-        p.end_date,
-        p.note,
-        p.portions_count,
-        p.created_at,
-        p.updated_at,
-        (
-          SELECT COUNT(*)
-          FROM meal_plan_entries e
-          WHERE e.meal_plan_id = p.id
-        ) AS entries_count,
-        (
-          SELECT COUNT(*)
-          FROM meal_plan_day_slots s
-          WHERE s.meal_plan_id = p.id
-        ) AS day_slots_count
-      FROM meal_plans p
-      WHERE p.owner_user_id = ?
-      ORDER BY p.start_date DESC, p.created_at DESC
-      `,
-    )
-    .all(user.id)
+  const plans = await models.mealPlan.findAll({
+    where: { owner_user_id: user.id },
+    order: [
+      ['start_date', 'DESC'],
+      ['created_at', 'DESC'],
+    ],
+    raw: true,
+  })
+
+  if (plans.length === 0) {
+    return []
+  }
+
+  const planIds = plans.map((plan) => plan.id)
+
+  const entryCounts = await models.mealPlanEntry.findAll({
+    attributes: ['meal_plan_id', [fn('COUNT', col('id')), 'entries_count']],
+    where: {
+      meal_plan_id: {
+        [Op.in]: planIds,
+      },
+    },
+    group: ['meal_plan_id'],
+    raw: true,
+  })
+
+  const daySlotCounts = await models.mealPlanDaySlot.findAll({
+    attributes: ['meal_plan_id', [fn('COUNT', col('id')), 'day_slots_count']],
+    where: {
+      meal_plan_id: {
+        [Op.in]: planIds,
+      },
+    },
+    group: ['meal_plan_id'],
+    raw: true,
+  })
+
+  const entryCountByPlan = new Map(
+    entryCounts.map((row) => [row.meal_plan_id, Number(row.entries_count) || 0]),
+  )
+  const daySlotCountByPlan = new Map(
+    daySlotCounts.map((row) => [row.meal_plan_id, Number(row.day_slots_count) || 0]),
+  )
+
+  return plans.map((plan) => ({
+    ...plan,
+    entries_count: entryCountByPlan.get(plan.id) ?? 0,
+    day_slots_count: daySlotCountByPlan.get(plan.id) ?? 0,
+  }))
 }
 
-async function getMealPlanById(mealPlanId, user) {
-  const plan = getOwnedPlanById(mealPlanId, user.id)
+async function getMealPlanById(mealPlanId, user, transaction = undefined) {
+  const plan = await getOwnedPlanById(mealPlanId, user.id, transaction)
   if (!plan) {
     return null
   }
 
-  ensureDaySlotsInPlanRange(mealPlanId, plan.start_date, plan.end_date)
+  await ensureDaySlotsInPlanRange(mealPlanId, plan.start_date, plan.end_date, transaction)
 
-  const mealSlots = getMealPlanMealSlots(mealPlanId)
-  const daySlotsRaw = getMealPlanDaySlots(mealPlanId)
-  const resolvedDaySlots = buildResolvedDaySlots(plan, daySlotsRaw, mealSlots)
+  const mealSlots = await getMealPlanMealSlots(mealPlanId, transaction)
+  const daySlotsRaw = await getMealPlanDaySlots(mealPlanId, transaction)
+  const resolvedDaySlots = await buildResolvedDaySlots(plan, daySlotsRaw, mealSlots, transaction)
 
   return {
     ...plan,
-    entries: getMealPlanEntries(mealPlanId),
+    entries: await getMealPlanEntries(mealPlanId, transaction),
     meal_slots: mealSlots,
     day_slots: resolvedDaySlots.daySlots,
     totals: resolvedDaySlots.totals,
@@ -761,119 +763,133 @@ async function getMealPlanById(mealPlanId, user) {
 async function createMealPlan(payload, user) {
   const normalized = validateMealPlanPayload(payload)
 
-  const result = catalogDb
-    .prepare(
-      `
-      INSERT INTO meal_plans(owner_user_id, name, start_date, end_date, note, portions_count)
-      VALUES (?, ?, ?, ?, ?, ?)
-      `,
+  const nextMealPlanId = await sequelize.transaction(async (transaction) => {
+    const created = await models.mealPlan.create(
+      {
+        owner_user_id: user.id,
+        name: normalized.name,
+        start_date: normalized.start_date,
+        end_date: normalized.end_date,
+        note: normalized.note,
+        portions_count: normalized.portions_count,
+      },
+      { transaction },
     )
-    .run(
-      user.id,
-      normalized.name,
+
+    await ensureDaySlotsInPlanRange(
+      created.id,
       normalized.start_date,
       normalized.end_date,
-      normalized.note,
-      normalized.portions_count,
+      transaction,
     )
-
-  const nextMealPlanId = Number(result.lastInsertRowid)
-
-  catalogDb.transaction(() => {
-    ensureDaySlotsInPlanRange(nextMealPlanId, normalized.start_date, normalized.end_date)
 
     const providedMealSlots = Array.isArray(payload?.meal_slots)
       ? normalizeMealSlotsPayload(payload.meal_slots)
       : null
 
     if (providedMealSlots && providedMealSlots.length > 0) {
-      insertMealPlanSlots(nextMealPlanId, providedMealSlots)
+      await insertMealPlanSlots(created.id, providedMealSlots, transaction)
     } else {
-      seedDefaultMealPlanSlots(nextMealPlanId)
+      await seedDefaultMealPlanSlots(created.id, transaction)
     }
-  })()
+
+    return created.id
+  })
 
   return getMealPlanById(nextMealPlanId, user)
 }
 
 async function updateMealPlan(mealPlanId, payload, user) {
-  const existing = getOwnedPlanById(mealPlanId, user.id)
+  const existing = await getOwnedPlanById(mealPlanId, user.id)
   if (!existing) {
     return null
   }
 
   const normalized = validateMealPlanPayload(payload)
 
-  catalogDb
-    .prepare(
-      `
-      UPDATE meal_plans
-      SET
-        name = ?,
-        start_date = ?,
-        end_date = ?,
-        note = ?,
-        portions_count = ?,
-        updated_at = CURRENT_TIMESTAMP
-      WHERE id = ? AND owner_user_id = ?
-      `,
-    )
-    .run(
-      normalized.name,
-      normalized.start_date,
-      normalized.end_date,
-      normalized.note,
-      normalized.portions_count,
-      mealPlanId,
-      user.id,
+  await sequelize.transaction(async (transaction) => {
+    await models.mealPlan.update(
+      {
+        name: normalized.name,
+        start_date: normalized.start_date,
+        end_date: normalized.end_date,
+        note: normalized.note,
+        portions_count: normalized.portions_count,
+        updated_at: new Date().toISOString(),
+      },
+      {
+        where: {
+          id: mealPlanId,
+          owner_user_id: user.id,
+        },
+        transaction,
+      },
     )
 
-  catalogDb.transaction(() => {
-    ensureDaySlotsInPlanRange(mealPlanId, normalized.start_date, normalized.end_date)
+    await ensureDaySlotsInPlanRange(
+      mealPlanId,
+      normalized.start_date,
+      normalized.end_date,
+      transaction,
+    )
 
     if (Array.isArray(payload?.meal_slots)) {
       const mealSlots = normalizeMealSlotsPayload(payload.meal_slots)
 
-      catalogDb.prepare('DELETE FROM meal_plan_meal_slots WHERE meal_plan_id = ?').run(mealPlanId)
-      insertMealPlanSlots(mealPlanId, mealSlots)
+      await models.mealPlanMealSlot.destroy({
+        where: { meal_plan_id: mealPlanId },
+        transaction,
+      })
+      await insertMealPlanSlots(mealPlanId, mealSlots, transaction)
     }
-  })()
+  })
 
   return getMealPlanById(mealPlanId, user)
 }
 
 async function deleteMealPlan(mealPlanId, user) {
-  const deleted = catalogDb
-    .prepare('DELETE FROM meal_plans WHERE id = ? AND owner_user_id = ?')
-    .run(mealPlanId, user.id)
+  const deleted = await models.mealPlan.destroy({
+    where: {
+      id: mealPlanId,
+      owner_user_id: user.id,
+    },
+  })
 
-  return deleted.changes > 0
+  return deleted > 0
 }
 
 async function replaceMealPlanMealSlots(mealPlanId, slots, user) {
-  const existing = getOwnedPlanById(mealPlanId, user.id)
+  const existing = await getOwnedPlanById(mealPlanId, user.id)
   if (!existing) {
     return null
   }
 
   const normalizedSlots = normalizeMealSlotsPayload(slots)
 
-  catalogDb.transaction(() => {
-    catalogDb.prepare('DELETE FROM meal_plan_meal_slots WHERE meal_plan_id = ?').run(mealPlanId)
-    insertMealPlanSlots(mealPlanId, normalizedSlots)
+  await sequelize.transaction(async (transaction) => {
+    await models.mealPlanMealSlot.destroy({
+      where: { meal_plan_id: mealPlanId },
+      transaction,
+    })
+    await insertMealPlanSlots(mealPlanId, normalizedSlots, transaction)
 
-    catalogDb
-      .prepare(
-        'UPDATE meal_plans SET updated_at = CURRENT_TIMESTAMP WHERE id = ? AND owner_user_id = ?',
-      )
-      .run(mealPlanId, user.id)
-  })()
+    await models.mealPlan.update(
+      { updated_at: new Date().toISOString() },
+      {
+        where: {
+          id: mealPlanId,
+          owner_user_id: user.id,
+        },
+        transaction,
+      },
+    )
+  })
 
   return getMealPlanById(mealPlanId, user)
 }
 
 async function updateMealPlanDaySlot(mealPlanId, plannedDateRaw, payload, user) {
-  const plan = getOwnedPlanById(mealPlanId, user.id)
+  const plan = await getOwnedPlanById(mealPlanId, user.id)
   if (!plan) {
     return null
   }
@@ -890,80 +906,82 @@ async function updateMealPlanDaySlot(mealPlanId, plannedDateRaw, payload, user) 
   const dayPlanId = parseOptionalInteger(payload?.day_plan_id)
   const note = typeof payload?.note === 'string' ? payload.note.trim() : ''
 
-  if (dayPlanId && !getOwnedDayPlanById(dayPlanId, user.id)) {
+  if (dayPlanId && !(await getOwnedDayPlanById(dayPlanId, user.id))) {
     throw new Error('day_plan_id does not belong to current user')
   }
 
-  const slot = ensureSlotByPlanAndDate(mealPlanId, plannedDate)
-  const slotLimit = getMealSlotLimit(mealPlanId)
-  const importedMeals = dayPlanId
-    ? normalizeDayMealsPayload(
-        getDayPlanMealsForImport(dayPlanId).map((meal) => ({
-          ...meal,
-          servings: null,
-          portions: meal.portions ?? meal.servings ?? 1,
-        })),
-        {
-          maxMeals: slotLimit,
-        },
-      )
-    : []
+  await sequelize.transaction(async (transaction) => {
+    const slot = await ensureSlotByPlanAndDate(mealPlanId, plannedDate, transaction)
+    const slotLimit = await getMealSlotLimit(mealPlanId, transaction)
 
-  catalogDb.transaction(() => {
-    if (dayPlanId) {
-      catalogDb
-        .prepare(
-          `
-          UPDATE meal_plan_day_slots
-          SET day_plan_id = NULL, note = ?, updated_at = CURRENT_TIMESTAMP
-          WHERE id = ? AND meal_plan_id = ?
-          `,
+    const importedMeals = dayPlanId
+      ? normalizeDayMealsPayload(
+          (await getDayPlanMealsForImport(dayPlanId, transaction)).map((meal) => ({
+            ...meal,
+            servings: null,
+            portions: meal.portions ?? meal.servings ?? 1,
+          })),
+          {
+            maxMeals: slotLimit,
+          },
         )
-        .run(note, slot.id, mealPlanId)
+      : []
 
-      catalogDb.prepare('DELETE FROM meal_plan_day_slot_meals WHERE day_slot_id = ?').run(slot.id)
+    await models.mealPlanDaySlot.update(
+      {
+        day_plan_id: null,
+        note,
+        updated_at: new Date().toISOString(),
+      },
+      {
+        where: {
+          id: slot.id,
+          meal_plan_id: mealPlanId,
+        },
+        transaction,
+      },
+    )
 
-      const insertMeal = catalogDb.prepare(
-        `
-        INSERT INTO meal_plan_day_slot_meals(day_slot_id, recipe_id, servings, portions, note, meal_order)
-        VALUES (?, ?, ?, ?, ?, ?)
-        `,
-      )
+    if (dayPlanId) {
+      await models.mealPlanDaySlotMeal.destroy({
+        where: { day_slot_id: slot.id },
+        transaction,
+      })
 
-      for (const meal of importedMeals) {
-        insertMeal.run(
-          slot.id,
-          meal.recipe_id,
-          meal.servings,
-          meal.portions,
-          meal.note,
-          meal.meal_order,
+      if (importedMeals.length > 0) {
+        await models.mealPlanDaySlotMeal.bulkCreate(
+          importedMeals.map((meal) => ({
+            day_slot_id: slot.id,
+            recipe_id: meal.recipe_id,
+            servings: meal.servings,
+            portions: meal.portions,
+            note: meal.note,
+            meal_order: meal.meal_order,
+          })),
+          { transaction },
         )
       }
-    } else {
-      catalogDb
-        .prepare(
-          `
-          UPDATE meal_plan_day_slots
-          SET day_plan_id = NULL, note = ?, updated_at = CURRENT_TIMESTAMP
-          WHERE id = ? AND meal_plan_id = ?
-          `,
-        )
-        .run(note, slot.id, mealPlanId)
     }
 
-    catalogDb
-      .prepare(
-        'UPDATE meal_plans SET updated_at = CURRENT_TIMESTAMP WHERE id = ? AND owner_user_id = ?',
-      )
-      .run(mealPlanId, user.id)
-  })()
+    await models.mealPlan.update(
+      {
+        updated_at: new Date().toISOString(),
+      },
+      {
+        where: {
+          id: mealPlanId,
+          owner_user_id: user.id,
+        },
+        transaction,
+      },
+    )
+  })
 
   return getMealPlanById(mealPlanId, user)
 }
 
 async function replaceMealPlanDaySlotMeals(mealPlanId, plannedDateRaw, meals, user) {
-  const plan = getOwnedPlanById(mealPlanId, user.id)
+  const plan = await getOwnedPlanById(mealPlanId, user.id)
   if (!plan) {
     return null
   }
@@ -977,55 +995,65 @@ async function replaceMealPlanDaySlotMeals(mealPlanId, plannedDateRaw, meals, us
     throw new Error('planned_date must be within meal plan date range')
   }
 
-  const slotLimit = getMealSlotLimit(mealPlanId)
-  const normalizedMeals = normalizeDayMealsPayload(meals, {
-    maxMeals: slotLimit,
-  })
-  const slot = ensureSlotByPlanAndDate(mealPlanId, plannedDate)
+  await sequelize.transaction(async (transaction) => {
+    const slotLimit = await getMealSlotLimit(mealPlanId, transaction)
+    const normalizedMeals = normalizeDayMealsPayload(meals, {
+      maxMeals: slotLimit,
+    })
+    const slot = await ensureSlotByPlanAndDate(mealPlanId, plannedDate, transaction)
 
-  catalogDb.transaction(() => {
-    catalogDb
-      .prepare(
-        `
-        UPDATE meal_plan_day_slots
-        SET day_plan_id = NULL, updated_at = CURRENT_TIMESTAMP
-        WHERE id = ? AND meal_plan_id = ?
-        `,
-      )
-      .run(slot.id, mealPlanId)
-
-    catalogDb.prepare('DELETE FROM meal_plan_day_slot_meals WHERE day_slot_id = ?').run(slot.id)
-
-    const insertMeal = catalogDb.prepare(
-      `
-      INSERT INTO meal_plan_day_slot_meals(day_slot_id, recipe_id, servings, portions, note, meal_order)
-      VALUES (?, ?, ?, ?, ?, ?)
-      `,
+    await models.mealPlanDaySlot.update(
+      {
+        day_plan_id: null,
+        updated_at: new Date().toISOString(),
+      },
+      {
+        where: {
+          id: slot.id,
+          meal_plan_id: mealPlanId,
+        },
+        transaction,
+      },
     )
 
-    for (const meal of normalizedMeals) {
-      insertMeal.run(
-        slot.id,
-        meal.recipe_id,
-        meal.servings,
-        meal.portions,
-        meal.note,
-        meal.meal_order,
+    await models.mealPlanDaySlotMeal.destroy({
+      where: { day_slot_id: slot.id },
+      transaction,
+    })
+
+    if (normalizedMeals.length > 0) {
+      await models.mealPlanDaySlotMeal.bulkCreate(
+        normalizedMeals.map((meal) => ({
+          day_slot_id: slot.id,
+          recipe_id: meal.recipe_id,
+          servings: meal.servings,
+          portions: meal.portions,
+          note: meal.note,
+          meal_order: meal.meal_order,
+        })),
+        { transaction },
       )
     }
 
-    catalogDb
-      .prepare(
-        'UPDATE meal_plans SET updated_at = CURRENT_TIMESTAMP WHERE id = ? AND owner_user_id = ?',
-      )
-      .run(mealPlanId, user.id)
-  })()
+    await models.mealPlan.update(
+      {
+        updated_at: new Date().toISOString(),
+      },
+      {
+        where: {
+          id: mealPlanId,
+          owner_user_id: user.id,
+        },
+        transaction,
+      },
+    )
+  })
 
   return getMealPlanById(mealPlanId, user)
 }
 
 async function replaceMealPlanEntries(mealPlanId, entries, user) {
-  const plan = getOwnedPlanById(mealPlanId, user.id)
+  const plan = await getOwnedPlanById(mealPlanId, user.id)
   if (!plan) {
     return null
   }
@@ -1043,34 +1071,40 @@ async function replaceMealPlanEntries(mealPlanId, entries, user) {
     duplicateGuard.add(key)
   }
 
-  catalogDb.transaction(() => {
-    catalogDb.prepare('DELETE FROM meal_plan_entries WHERE meal_plan_id = ?').run(mealPlanId)
+  await sequelize.transaction(async (transaction) => {
+    await models.mealPlanEntry.destroy({
+      where: { meal_plan_id: mealPlanId },
+      transaction,
+    })
 
-    const insertEntry = catalogDb.prepare(
-      `
-      INSERT INTO meal_plan_entries(meal_plan_id, planned_date, meal_slot, recipe_id, custom_name, servings, note)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-      `,
-    )
-
-    for (const entry of normalizedEntries) {
-      insertEntry.run(
-        mealPlanId,
-        entry.planned_date,
-        entry.meal_slot,
-        entry.recipe_id,
-        entry.custom_name,
-        entry.servings,
-        entry.note,
+    if (normalizedEntries.length > 0) {
+      await models.mealPlanEntry.bulkCreate(
+        normalizedEntries.map((entry) => ({
+          meal_plan_id: mealPlanId,
+          planned_date: entry.planned_date,
+          meal_slot: entry.meal_slot,
+          recipe_id: entry.recipe_id,
+          custom_name: entry.custom_name,
+          servings: entry.servings,
+          note: entry.note,
+        })),
+        { transaction },
       )
     }
 
-    catalogDb
-      .prepare(
-        'UPDATE meal_plans SET updated_at = CURRENT_TIMESTAMP WHERE id = ? AND owner_user_id = ?',
-      )
-      .run(mealPlanId, user.id)
-  })()
+    await models.mealPlan.update(
+      {
+        updated_at: new Date().toISOString(),
+      },
+      {
+        where: {
+          id: mealPlanId,
+          owner_user_id: user.id,
+        },
+        transaction,
+      },
+    )
+  })
 
   return getMealPlanById(mealPlanId, user)
 }
