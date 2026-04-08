@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import apiClient from '../services/apiClient'
+import { mealPlannerApi } from '../services/mealPlannerApi'
 
 export const useMealPlannerStore = defineStore('mealPlanner', {
   state: () => ({
@@ -12,33 +12,33 @@ export const useMealPlannerStore = defineStore('mealPlanner', {
   }),
   actions: {
     async fetchMealPlans() {
-      const response = await apiClient.get('/meal-plans')
+      const response = await mealPlannerApi.fetchMealPlans()
       this.mealPlans = response.data
       return response.data
     },
 
     async fetchMealPlan(mealPlanId) {
-      const response = await apiClient.get(`/meal-plans/${mealPlanId}`)
+      const response = await mealPlannerApi.fetchMealPlan(mealPlanId)
       this.activeMealPlan = response.data
       return response.data
     },
 
     async createMealPlan(payload) {
-      const response = await apiClient.post('/meal-plans', payload)
+      const response = await mealPlannerApi.createMealPlan(payload)
       await this.fetchMealPlans()
       this.activeMealPlan = response.data
       return response.data
     },
 
     async updateMealPlan(mealPlanId, payload) {
-      const response = await apiClient.put(`/meal-plans/${mealPlanId}`, payload)
+      const response = await mealPlannerApi.updateMealPlan(mealPlanId, payload)
       await this.fetchMealPlans()
       this.activeMealPlan = response.data
       return response.data
     },
 
     async deleteMealPlan(mealPlanId) {
-      await apiClient.delete(`/meal-plans/${mealPlanId}`)
+      await mealPlannerApi.deleteMealPlan(mealPlanId)
       await this.fetchMealPlans()
 
       if (this.activeMealPlan?.id === mealPlanId) {
@@ -47,30 +47,24 @@ export const useMealPlannerStore = defineStore('mealPlanner', {
     },
 
     async replaceMealPlanMealSlots(mealPlanId, slots) {
-      const response = await apiClient.put(`/meal-plans/${mealPlanId}/meal-slots`, {
-        slots,
-      })
+      const response = await mealPlannerApi.replaceMealPlanMealSlots(mealPlanId, slots)
       this.activeMealPlan = response.data
       await this.fetchMealPlans()
       return response.data
     },
 
     async updateMealPlanDaySlot(mealPlanId, plannedDate, payload) {
-      const response = await apiClient.put(
-        `/meal-plans/${mealPlanId}/day-slots/${plannedDate}`,
-        payload,
-      )
+      const response = await mealPlannerApi.updateMealPlanDaySlot(mealPlanId, plannedDate, payload)
       this.activeMealPlan = response.data
       await this.fetchMealPlans()
       return response.data
     },
 
     async replaceMealPlanDaySlotMeals(mealPlanId, plannedDate, meals) {
-      const response = await apiClient.put(
-        `/meal-plans/${mealPlanId}/day-slots/${plannedDate}/meals`,
-        {
-          meals,
-        },
+      const response = await mealPlannerApi.replaceMealPlanDaySlotMeals(
+        mealPlanId,
+        plannedDate,
+        meals,
       )
       this.activeMealPlan = response.data
       await this.fetchMealPlans()
@@ -78,42 +72,40 @@ export const useMealPlannerStore = defineStore('mealPlanner', {
     },
 
     async replaceMealPlanEntries(mealPlanId, entries) {
-      const response = await apiClient.put(`/meal-plans/${mealPlanId}/entries`, {
-        entries,
-      })
+      const response = await mealPlannerApi.replaceMealPlanEntries(mealPlanId, entries)
       this.activeMealPlan = response.data
       await this.fetchMealPlans()
       return response.data
     },
 
     async fetchDayPlans() {
-      const response = await apiClient.get('/day-plans')
+      const response = await mealPlannerApi.fetchDayPlans()
       this.dayPlans = response.data
       return response.data
     },
 
     async fetchDayPlan(dayPlanId) {
-      const response = await apiClient.get(`/day-plans/${dayPlanId}`)
+      const response = await mealPlannerApi.fetchDayPlan(dayPlanId)
       this.activeDayPlan = response.data
       return response.data
     },
 
     async createDayPlan(payload) {
-      const response = await apiClient.post('/day-plans', payload)
+      const response = await mealPlannerApi.createDayPlan(payload)
       await this.fetchDayPlans()
       this.activeDayPlan = response.data
       return response.data
     },
 
     async updateDayPlan(dayPlanId, payload) {
-      const response = await apiClient.put(`/day-plans/${dayPlanId}`, payload)
+      const response = await mealPlannerApi.updateDayPlan(dayPlanId, payload)
       await this.fetchDayPlans()
       this.activeDayPlan = response.data
       return response.data
     },
 
     async deleteDayPlan(dayPlanId) {
-      await apiClient.delete(`/day-plans/${dayPlanId}`)
+      await mealPlannerApi.deleteDayPlan(dayPlanId)
       await this.fetchDayPlans()
 
       if (this.activeDayPlan?.id === dayPlanId) {
@@ -122,42 +114,40 @@ export const useMealPlannerStore = defineStore('mealPlanner', {
     },
 
     async replaceDayPlanMeals(dayPlanId, meals) {
-      const response = await apiClient.put(`/day-plans/${dayPlanId}/meals`, {
-        meals,
-      })
+      const response = await mealPlannerApi.replaceDayPlanMeals(dayPlanId, meals)
       this.activeDayPlan = response.data
       await this.fetchDayPlans()
       return response.data
     },
 
     async fetchShoppingLists() {
-      const response = await apiClient.get('/shopping-lists')
+      const response = await mealPlannerApi.fetchShoppingLists()
       this.shoppingLists = response.data
       return response.data
     },
 
     async fetchShoppingList(shoppingListId) {
-      const response = await apiClient.get(`/shopping-lists/${shoppingListId}`)
+      const response = await mealPlannerApi.fetchShoppingList(shoppingListId)
       this.activeShoppingList = response.data
       return response.data
     },
 
     async createShoppingList(payload) {
-      const response = await apiClient.post('/shopping-lists', payload)
+      const response = await mealPlannerApi.createShoppingList(payload)
       await this.fetchShoppingLists()
       this.activeShoppingList = response.data
       return response.data
     },
 
     async updateShoppingList(shoppingListId, payload) {
-      const response = await apiClient.put(`/shopping-lists/${shoppingListId}`, payload)
+      const response = await mealPlannerApi.updateShoppingList(shoppingListId, payload)
       await this.fetchShoppingLists()
       this.activeShoppingList = response.data
       return response.data
     },
 
     async deleteShoppingList(shoppingListId) {
-      await apiClient.delete(`/shopping-lists/${shoppingListId}`)
+      await mealPlannerApi.deleteShoppingList(shoppingListId)
       await this.fetchShoppingLists()
 
       if (this.activeShoppingList?.id === shoppingListId) {
@@ -166,24 +156,21 @@ export const useMealPlannerStore = defineStore('mealPlanner', {
     },
 
     async addShoppingListItem(shoppingListId, payload) {
-      const response = await apiClient.post(`/shopping-lists/${shoppingListId}/items`, payload)
+      const response = await mealPlannerApi.addShoppingListItem(shoppingListId, payload)
       this.activeShoppingList = response.data
       await this.fetchShoppingLists()
       return response.data
     },
 
     async updateShoppingListItem(shoppingListId, itemId, payload) {
-      const response = await apiClient.put(
-        `/shopping-lists/${shoppingListId}/items/${itemId}`,
-        payload,
-      )
+      const response = await mealPlannerApi.updateShoppingListItem(shoppingListId, itemId, payload)
       this.activeShoppingList = response.data
       await this.fetchShoppingLists()
       return response.data
     },
 
     async deleteShoppingListItem(shoppingListId, itemId) {
-      await apiClient.delete(`/shopping-lists/${shoppingListId}/items/${itemId}`)
+      await mealPlannerApi.deleteShoppingListItem(shoppingListId, itemId)
       if (this.activeShoppingList?.id === shoppingListId) {
         await this.fetchShoppingList(shoppingListId)
       }
@@ -191,7 +178,7 @@ export const useMealPlannerStore = defineStore('mealPlanner', {
     },
 
     async generateShoppingListFromMealPlan(mealPlanId, payload = {}) {
-      const response = await apiClient.post(`/shopping-lists/from-meal-plan/${mealPlanId}`, payload)
+      const response = await mealPlannerApi.generateShoppingListFromMealPlan(mealPlanId, payload)
       await this.fetchShoppingLists()
       this.activeShoppingList = response.data
       return response.data

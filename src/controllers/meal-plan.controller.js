@@ -1,64 +1,17 @@
 import { Op, fn, col } from 'sequelize'
 import sequelize from '../db/client.js'
 import models from '../models/index.js'
+import {
+  normalizeDate,
+  normalizeText,
+  parseOptionalInteger,
+  parseOptionalNumber,
+  parseRequiredPositiveInteger,
+  roundNutrition,
+} from './helpers/parsing.js'
 
 const ALLOWED_MEAL_SLOTS = new Set(['breakfast', 'lunch', 'dinner', 'snack'])
 const DEFAULT_MEAL_SLOTS = ['Sniadanie', 'Drugie sniadanie', 'Obiad', 'Podwieczorek', 'Kolacja']
-
-function roundNutrition(value) {
-  if (!Number.isFinite(value)) {
-    return 0
-  }
-
-  return Number(value.toFixed(2))
-}
-
-function normalizeText(value) {
-  return typeof value === 'string' ? value.trim() : ''
-}
-
-function normalizeDate(value) {
-  const date = normalizeText(value)
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    return null
-  }
-
-  return date
-}
-
-function parseOptionalNumber(value) {
-  if (value === null || value === undefined || value === '') {
-    return null
-  }
-
-  const parsed = Number(value)
-  return Number.isFinite(parsed) ? parsed : null
-}
-
-function parseOptionalInteger(value) {
-  if (value === null || value === undefined || value === '') {
-    return null
-  }
-
-  const parsed = Number(value)
-  if (!Number.isInteger(parsed) || parsed <= 0) {
-    return null
-  }
-
-  return parsed
-}
-
-function parseRequiredPositiveInteger(value, fallback = null) {
-  const parsed = parseOptionalInteger(value)
-  if (parsed === null) {
-    if (fallback !== null) {
-      return fallback
-    }
-    throw new Error('Expected positive integer value')
-  }
-
-  return parsed
-}
 
 function normalizeOptionalTime(value) {
   const time = normalizeText(value)

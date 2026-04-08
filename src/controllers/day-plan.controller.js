@@ -1,40 +1,12 @@
 import { Op, fn, col } from 'sequelize'
 import sequelize from '../db/client.js'
 import models from '../models/index.js'
-
-function roundNutrition(value) {
-  if (!Number.isFinite(value)) {
-    return 0
-  }
-
-  return Number(value.toFixed(2))
-}
-
-function normalizeText(value) {
-  return typeof value === 'string' ? value.trim() : ''
-}
-
-function parseOptionalNumber(value) {
-  if (value === null || value === undefined || value === '') {
-    return null
-  }
-
-  const parsed = Number(value)
-  return Number.isFinite(parsed) ? parsed : null
-}
-
-function parseOptionalInteger(value) {
-  if (value === null || value === undefined || value === '') {
-    return null
-  }
-
-  const parsed = Number(value)
-  if (!Number.isInteger(parsed) || parsed <= 0) {
-    return null
-  }
-
-  return parsed
-}
+import {
+  normalizeText,
+  parseOptionalInteger,
+  parseOptionalNumber,
+  roundNutrition,
+} from './helpers/parsing.js'
 
 function validateDayPlanPayload(payload) {
   const name = normalizeText(payload?.name)

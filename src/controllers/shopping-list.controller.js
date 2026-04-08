@@ -1,34 +1,9 @@
 import { Op, fn, col } from 'sequelize'
 import sequelize from '../db/client.js'
 import models from '../models/index.js'
+import { normalizeText, parseOptionalInteger, parseOptionalNumber } from './helpers/parsing.js'
 
 const SHOPPING_LIST_STATUSES = new Set(['open', 'archived'])
-
-function normalizeText(value) {
-  return typeof value === 'string' ? value.trim() : ''
-}
-
-function parseOptionalNumber(value) {
-  if (value === null || value === undefined || value === '') {
-    return null
-  }
-
-  const parsed = Number(value)
-  return Number.isFinite(parsed) ? parsed : null
-}
-
-function parseOptionalInteger(value) {
-  if (value === null || value === undefined || value === '') {
-    return null
-  }
-
-  const parsed = Number(value)
-  if (!Number.isInteger(parsed) || parsed <= 0) {
-    return null
-  }
-
-  return parsed
-}
 
 async function getOwnedMealPlanById(mealPlanId, ownerUserId) {
   return models.mealPlan.findOne({
