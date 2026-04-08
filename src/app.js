@@ -48,6 +48,17 @@ export function createApp() {
     res.status(404).json({ error: 'Not found' })
   })
 
+  app.use((error, _req, res, _next) => {
+    const message = typeof error?.message === 'string' ? error.message : 'Internal server error'
+
+    if (message.includes('CORS')) {
+      res.status(403).json({ error: 'Forbidden origin' })
+      return
+    }
+
+    res.status(500).json({ error: 'Internal server error' })
+  })
+
   return app
 }
 

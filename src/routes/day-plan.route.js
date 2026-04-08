@@ -1,6 +1,8 @@
 import express from 'express'
 import controllers from '../controllers/index.js'
 import { requireAuth } from '../middleware/auth.middleware.js'
+import { validate } from '../middleware/validate.middleware.js'
+import { schemas } from '../validation/schemas.js'
 
 const apiRouter = express.Router()
 
@@ -13,7 +15,7 @@ apiRouter.get('/', requireAuth, async (req, res) => {
   }
 })
 
-apiRouter.get('/:id', requireAuth, async (req, res) => {
+apiRouter.get('/:id', requireAuth, validate({ params: schemas.idParams }), async (req, res) => {
   try {
     const dayPlanId = Number(req.params.id)
     const dayPlan = await controllers.dayPlan.getDayPlanById(dayPlanId, req.auth.user)
@@ -29,7 +31,7 @@ apiRouter.get('/:id', requireAuth, async (req, res) => {
   }
 })
 
-apiRouter.post('/', requireAuth, async (req, res) => {
+apiRouter.post('/', requireAuth, validate({ body: schemas.dayPlanBody }), async (req, res) => {
   try {
     const created = await controllers.dayPlan.createDayPlan(req.body, req.auth.user)
     res.status(201).json(created)
@@ -38,23 +40,28 @@ apiRouter.post('/', requireAuth, async (req, res) => {
   }
 })
 
-apiRouter.put('/:id', requireAuth, async (req, res) => {
-  try {
-    const dayPlanId = Number(req.params.id)
-    const updated = await controllers.dayPlan.updateDayPlan(dayPlanId, req.body, req.auth.user)
+apiRouter.put(
+  '/:id',
+  requireAuth,
+  validate({ params: schemas.idParams, body: schemas.dayPlanBody }),
+  async (req, res) => {
+    try {
+      const dayPlanId = Number(req.params.id)
+      const updated = await controllers.dayPlan.updateDayPlan(dayPlanId, req.body, req.auth.user)
 
-    if (!updated) {
-      res.status(404).json({ error: 'Day plan not found' })
-      return
+      if (!updated) {
+        res.status(404).json({ error: 'Day plan not found' })
+        return
+      }
+
+      res.json(updated)
+    } catch (error) {
+      res.status(400).json({ error: error.message })
     }
+  },
+)
 
-    res.json(updated)
-  } catch (error) {
-    res.status(400).json({ error: error.message })
-  }
-})
-
-apiRouter.delete('/:id', requireAuth, async (req, res) => {
+apiRouter.delete('/:id', requireAuth, validate({ params: schemas.idParams }), async (req, res) => {
   try {
     const dayPlanId = Number(req.params.id)
     const deleted = await controllers.dayPlan.deleteDayPlan(dayPlanId, req.auth.user)
@@ -70,24 +77,29 @@ apiRouter.delete('/:id', requireAuth, async (req, res) => {
   }
 })
 
-apiRouter.put('/:id/meals', requireAuth, async (req, res) => {
-  try {
-    const dayPlanId = Number(req.params.id)
-    const updated = await controllers.dayPlan.replaceDayPlanMeals(
-      dayPlanId,
-      req.body?.meals,
-      req.auth.user,
-    )
+apiRouter.put(
+  '/:id/meals',
+  requireAuth,
+  validate({ params: schemas.idParams, body: schemas.dayMealsBody }),
+  async (req, res) => {
+    try {
+      const dayPlanId = Number(req.params.id)
+      const updated = await controllers.dayPlan.replaceDayPlanMeals(
+        dayPlanId,
+        req.body?.meals,
+        req.auth.user,
+      )
 
-    if (!updated) {
-      res.status(404).json({ error: 'Day plan not found' })
-      return
+      if (!updated) {
+        res.status(404).json({ error: 'Day plan not found' })
+        return
+      }
+
+      res.json(updated)
+    } catch (error) {
+      res.status(400).json({ error: error.message })
     }
-
-    res.json(updated)
-  } catch (error) {
-    res.status(400).json({ error: error.message })
-  }
-})
+  },
+)
 
 export default apiRouter

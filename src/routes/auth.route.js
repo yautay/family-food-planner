@@ -4,6 +4,8 @@ import controllers from '../controllers/index.js'
 import authService from '../services/auth.service.js'
 import auditService from '../services/audit.service.js'
 import { requireAuth, requirePermission } from '../middleware/auth.middleware.js'
+import { validate } from '../middleware/validate.middleware.js'
+import { schemas } from '../validation/schemas.js'
 
 const apiRouter = express.Router()
 
@@ -29,16 +31,21 @@ apiRouter.get('/captcha-config', (req, res) => {
   })
 })
 
-apiRouter.post('/register', authWriteLimiter, async (req, res) => {
-  try {
-    const payload = await controllers.auth.register(req.body, req.ip)
-    res.status(201).json(payload)
-  } catch (error) {
-    res.status(400).json({ error: error.message })
-  }
-})
+apiRouter.post(
+  '/register',
+  authWriteLimiter,
+  validate({ body: schemas.registerBody }),
+  async (req, res) => {
+    try {
+      const payload = await controllers.auth.register(req.body, req.ip)
+      res.status(201).json(payload)
+    } catch (error) {
+      res.status(400).json({ error: error.message })
+    }
+  },
+)
 
-apiRouter.post('/login', loginLimiter, async (req, res) => {
+apiRouter.post('/login', loginLimiter, validate({ body: schemas.loginBody }), async (req, res) => {
   try {
     const payload = await controllers.auth.login(req.body)
     res.status(200).json(payload)
@@ -57,36 +64,51 @@ apiRouter.get('/me', requireAuth, async (req, res) => {
   res.json(payload)
 })
 
-apiRouter.post('/change-password', requireAuth, async (req, res) => {
-  try {
-    await controllers.auth.changePassword({
-      userId: req.auth.user.id,
-      currentPassword: req.body?.currentPassword,
-      newPassword: req.body?.newPassword,
-    })
-    res.status(204).send()
-  } catch (error) {
-    res.status(400).json({ error: error.message })
-  }
-})
+apiRouter.post(
+  '/change-password',
+  requireAuth,
+  validate({ body: schemas.changePasswordBody }),
+  async (req, res) => {
+    try {
+      await controllers.auth.changePassword({
+        userId: req.auth.user.id,
+        currentPassword: req.body?.currentPassword,
+        newPassword: req.body?.newPassword,
+      })
+      res.status(204).send()
+    } catch (error) {
+      res.status(400).json({ error: error.message })
+    }
+  },
+)
 
-apiRouter.post('/forgot-password', authWriteLimiter, async (req, res) => {
-  try {
-    await controllers.auth.forgotPassword(req.body, req.ip)
-    res.status(204).send()
-  } catch (error) {
-    res.status(400).json({ error: error.message })
-  }
-})
+apiRouter.post(
+  '/forgot-password',
+  authWriteLimiter,
+  validate({ body: schemas.forgotPasswordBody }),
+  async (req, res) => {
+    try {
+      await controllers.auth.forgotPassword(req.body, req.ip)
+      res.status(204).send()
+    } catch (error) {
+      res.status(400).json({ error: error.message })
+    }
+  },
+)
 
-apiRouter.post('/reset-password', authWriteLimiter, async (req, res) => {
-  try {
-    await controllers.auth.resetPassword(req.body)
-    res.status(204).send()
-  } catch (error) {
-    res.status(400).json({ error: error.message })
-  }
-})
+apiRouter.post(
+  '/reset-password',
+  authWriteLimiter,
+  validate({ body: schemas.resetPasswordBody }),
+  async (req, res) => {
+    try {
+      await controllers.auth.resetPassword(req.body)
+      res.status(204).send()
+    } catch (error) {
+      res.status(400).json({ error: error.message })
+    }
+  },
+)
 
 apiRouter.get(
   '/access-catalog',
@@ -107,6 +129,7 @@ apiRouter.get(
   '/audit-logs',
   requireAuth,
   requirePermission('permissions.manage'),
+  validate({ query: schemas.auditQuery }),
   async (req, res) => {
     const logs = auditService.listAuditLogs({ limit: req.query.limit })
     res.json(logs)
@@ -117,6 +140,7 @@ apiRouter.put(
   '/users/:id/roles',
   requireAuth,
   requirePermission('permissions.manage'),
+  validate({ params: schemas.idParams, body: schemas.roleUpdateBody }),
   async (req, res) => {
     try {
       const userId = Number(req.params.id)
@@ -157,6 +181,7 @@ apiRouter.put(
   '/users/:id/permissions',
   requireAuth,
   requirePermission('permissions.manage'),
+  validate({ params: schemas.idParams, body: schemas.permissionUpdateBody }),
   async (req, res) => {
     try {
       const userId = Number(req.params.id)

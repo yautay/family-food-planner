@@ -1,6 +1,8 @@
 import express from 'express'
 import controllers from '../controllers/index.js'
 import { requireAuth } from '../middleware/auth.middleware.js'
+import { validate } from '../middleware/validate.middleware.js'
+import { schemas } from '../validation/schemas.js'
 
 const apiRouter = express.Router()
 
@@ -13,7 +15,7 @@ apiRouter.get('/', requireAuth, async (req, res) => {
   }
 })
 
-apiRouter.get('/:id', requireAuth, async (req, res) => {
+apiRouter.get('/:id', requireAuth, validate({ params: schemas.idParams }), async (req, res) => {
   try {
     const mealPlanId = Number(req.params.id)
     const mealPlan = await controllers.mealPlan.getMealPlanById(mealPlanId, req.auth.user)
@@ -29,7 +31,7 @@ apiRouter.get('/:id', requireAuth, async (req, res) => {
   }
 })
 
-apiRouter.post('/', requireAuth, async (req, res) => {
+apiRouter.post('/', requireAuth, validate({ body: schemas.mealPlanBody }), async (req, res) => {
   try {
     const created = await controllers.mealPlan.createMealPlan(req.body, req.auth.user)
     res.status(201).json(created)
@@ -38,23 +40,28 @@ apiRouter.post('/', requireAuth, async (req, res) => {
   }
 })
 
-apiRouter.put('/:id', requireAuth, async (req, res) => {
-  try {
-    const mealPlanId = Number(req.params.id)
-    const updated = await controllers.mealPlan.updateMealPlan(mealPlanId, req.body, req.auth.user)
+apiRouter.put(
+  '/:id',
+  requireAuth,
+  validate({ params: schemas.idParams, body: schemas.mealPlanBody }),
+  async (req, res) => {
+    try {
+      const mealPlanId = Number(req.params.id)
+      const updated = await controllers.mealPlan.updateMealPlan(mealPlanId, req.body, req.auth.user)
 
-    if (!updated) {
-      res.status(404).json({ error: 'Meal plan not found' })
-      return
+      if (!updated) {
+        res.status(404).json({ error: 'Meal plan not found' })
+        return
+      }
+
+      res.json(updated)
+    } catch (error) {
+      res.status(400).json({ error: error.message })
     }
+  },
+)
 
-    res.json(updated)
-  } catch (error) {
-    res.status(400).json({ error: error.message })
-  }
-})
-
-apiRouter.delete('/:id', requireAuth, async (req, res) => {
+apiRouter.delete('/:id', requireAuth, validate({ params: schemas.idParams }), async (req, res) => {
   try {
     const mealPlanId = Number(req.params.id)
     const deleted = await controllers.mealPlan.deleteMealPlan(mealPlanId, req.auth.user)
@@ -70,86 +77,106 @@ apiRouter.delete('/:id', requireAuth, async (req, res) => {
   }
 })
 
-apiRouter.put('/:id/entries', requireAuth, async (req, res) => {
-  try {
-    const mealPlanId = Number(req.params.id)
-    const updated = await controllers.mealPlan.replaceMealPlanEntries(
-      mealPlanId,
-      req.body?.entries,
-      req.auth.user,
-    )
+apiRouter.put(
+  '/:id/entries',
+  requireAuth,
+  validate({ params: schemas.idParams, body: schemas.mealEntriesBody }),
+  async (req, res) => {
+    try {
+      const mealPlanId = Number(req.params.id)
+      const updated = await controllers.mealPlan.replaceMealPlanEntries(
+        mealPlanId,
+        req.body?.entries,
+        req.auth.user,
+      )
 
-    if (!updated) {
-      res.status(404).json({ error: 'Meal plan not found' })
-      return
+      if (!updated) {
+        res.status(404).json({ error: 'Meal plan not found' })
+        return
+      }
+
+      res.json(updated)
+    } catch (error) {
+      res.status(400).json({ error: error.message })
     }
+  },
+)
 
-    res.json(updated)
-  } catch (error) {
-    res.status(400).json({ error: error.message })
-  }
-})
+apiRouter.put(
+  '/:id/meal-slots',
+  requireAuth,
+  validate({ params: schemas.idParams, body: schemas.mealSlotsBody }),
+  async (req, res) => {
+    try {
+      const mealPlanId = Number(req.params.id)
+      const updated = await controllers.mealPlan.replaceMealPlanMealSlots(
+        mealPlanId,
+        req.body?.slots,
+        req.auth.user,
+      )
 
-apiRouter.put('/:id/meal-slots', requireAuth, async (req, res) => {
-  try {
-    const mealPlanId = Number(req.params.id)
-    const updated = await controllers.mealPlan.replaceMealPlanMealSlots(
-      mealPlanId,
-      req.body?.slots,
-      req.auth.user,
-    )
+      if (!updated) {
+        res.status(404).json({ error: 'Meal plan not found' })
+        return
+      }
 
-    if (!updated) {
-      res.status(404).json({ error: 'Meal plan not found' })
-      return
+      res.json(updated)
+    } catch (error) {
+      res.status(400).json({ error: error.message })
     }
+  },
+)
 
-    res.json(updated)
-  } catch (error) {
-    res.status(400).json({ error: error.message })
-  }
-})
+apiRouter.put(
+  '/:id/day-slots/:plannedDate',
+  requireAuth,
+  validate({ params: schemas.mealPlanDateParams, body: schemas.daySlotBody }),
+  async (req, res) => {
+    try {
+      const mealPlanId = Number(req.params.id)
+      const updated = await controllers.mealPlan.updateMealPlanDaySlot(
+        mealPlanId,
+        req.params.plannedDate,
+        req.body,
+        req.auth.user,
+      )
 
-apiRouter.put('/:id/day-slots/:plannedDate', requireAuth, async (req, res) => {
-  try {
-    const mealPlanId = Number(req.params.id)
-    const updated = await controllers.mealPlan.updateMealPlanDaySlot(
-      mealPlanId,
-      req.params.plannedDate,
-      req.body,
-      req.auth.user,
-    )
+      if (!updated) {
+        res.status(404).json({ error: 'Meal plan not found' })
+        return
+      }
 
-    if (!updated) {
-      res.status(404).json({ error: 'Meal plan not found' })
-      return
+      res.json(updated)
+    } catch (error) {
+      res.status(400).json({ error: error.message })
     }
+  },
+)
 
-    res.json(updated)
-  } catch (error) {
-    res.status(400).json({ error: error.message })
-  }
-})
+apiRouter.put(
+  '/:id/day-slots/:plannedDate/meals',
+  requireAuth,
+  validate({ params: schemas.mealPlanDateParams, body: schemas.daySlotMealsBody }),
+  async (req, res) => {
+    try {
+      const mealPlanId = Number(req.params.id)
+      const updated = await controllers.mealPlan.replaceMealPlanDaySlotMeals(
+        mealPlanId,
+        req.params.plannedDate,
+        req.body?.meals,
+        req.auth.user,
+      )
 
-apiRouter.put('/:id/day-slots/:plannedDate/meals', requireAuth, async (req, res) => {
-  try {
-    const mealPlanId = Number(req.params.id)
-    const updated = await controllers.mealPlan.replaceMealPlanDaySlotMeals(
-      mealPlanId,
-      req.params.plannedDate,
-      req.body?.meals,
-      req.auth.user,
-    )
+      if (!updated) {
+        res.status(404).json({ error: 'Meal plan not found' })
+        return
+      }
 
-    if (!updated) {
-      res.status(404).json({ error: 'Meal plan not found' })
-      return
+      res.json(updated)
+    } catch (error) {
+      res.status(400).json({ error: error.message })
     }
-
-    res.json(updated)
-  } catch (error) {
-    res.status(400).json({ error: error.message })
-  }
-})
+  },
+)
 
 export default apiRouter

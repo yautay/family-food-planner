@@ -1,10 +1,12 @@
 import express from 'express'
 import controllers from '../controllers/index.js'
 import { requirePermission } from '../middleware/auth.middleware.js'
+import { validate } from '../middleware/validate.middleware.js'
+import { schemas } from '../validation/schemas.js'
 
 const apiRouter = express.Router()
 
-apiRouter.get('/', async (req, res) => {
+apiRouter.get('/', validate({ query: schemas.searchQuery }), async (req, res) => {
   try {
     const recipes = await controllers.recipe.getRecipes(
       req.query.search,
@@ -27,7 +29,7 @@ apiRouter.get('/nutrition-summaries', async (req, res) => {
   }
 })
 
-apiRouter.get('/:id', async (req, res) => {
+apiRouter.get('/:id', validate({ params: schemas.idParams }), async (req, res) => {
   try {
     const recipeId = Number(req.params.id)
     const recipe = await controllers.recipe.getRecipeById(
@@ -46,7 +48,7 @@ apiRouter.get('/:id', async (req, res) => {
   }
 })
 
-apiRouter.get('/:id/ingredients', async (req, res) => {
+apiRouter.get('/:id/ingredients', validate({ params: schemas.idParams }), async (req, res) => {
   try {
     const recipeId = Number(req.params.id)
     const recipe = await controllers.recipe.getRecipeById(
@@ -69,7 +71,7 @@ apiRouter.get('/:id/ingredients', async (req, res) => {
   }
 })
 
-apiRouter.get('/:id/nutrition', async (req, res) => {
+apiRouter.get('/:id/nutrition', validate({ params: schemas.idParams }), async (req, res) => {
   try {
     const recipeId = Number(req.params.id)
     const nutrition = await controllers.recipe.getRecipeNutrition(
@@ -88,45 +90,60 @@ apiRouter.get('/:id/nutrition', async (req, res) => {
   }
 })
 
-apiRouter.post('/', requirePermission('recipes.manage'), async (req, res) => {
-  try {
-    const created = await controllers.recipe.createRecipe(req.body, req.auth)
-    res.status(201).json(created)
-  } catch (error) {
-    res.status(400).json({ error: error.message })
-  }
-})
-
-apiRouter.put('/:id', requirePermission('recipes.manage'), async (req, res) => {
-  try {
-    const recipeId = Number(req.params.id)
-    const updated = await controllers.recipe.updateRecipe(recipeId, req.body, req.auth)
-
-    if (!updated) {
-      res.status(404).json({ error: 'Recipe not found' })
-      return
+apiRouter.post(
+  '/',
+  requirePermission('recipes.manage'),
+  validate({ body: schemas.recipeBody }),
+  async (req, res) => {
+    try {
+      const created = await controllers.recipe.createRecipe(req.body, req.auth)
+      res.status(201).json(created)
+    } catch (error) {
+      res.status(400).json({ error: error.message })
     }
+  },
+)
 
-    res.json(updated)
-  } catch (error) {
-    res.status(400).json({ error: error.message })
-  }
-})
+apiRouter.put(
+  '/:id',
+  requirePermission('recipes.manage'),
+  validate({ params: schemas.idParams, body: schemas.recipeBody }),
+  async (req, res) => {
+    try {
+      const recipeId = Number(req.params.id)
+      const updated = await controllers.recipe.updateRecipe(recipeId, req.body, req.auth)
 
-apiRouter.delete('/:id', requirePermission('recipes.manage'), async (req, res) => {
-  try {
-    const recipeId = Number(req.params.id)
-    const deleted = await controllers.recipe.deleteRecipe(recipeId)
+      if (!updated) {
+        res.status(404).json({ error: 'Recipe not found' })
+        return
+      }
 
-    if (!deleted) {
-      res.status(404).json({ error: 'Recipe not found' })
-      return
+      res.json(updated)
+    } catch (error) {
+      res.status(400).json({ error: error.message })
     }
+  },
+)
 
-    res.status(204).send()
-  } catch (error) {
-    res.status(400).json({ error: error.message })
-  }
-})
+apiRouter.delete(
+  '/:id',
+  requirePermission('recipes.manage'),
+  validate({ params: schemas.idParams }),
+  async (req, res) => {
+    try {
+      const recipeId = Number(req.params.id)
+      const deleted = await controllers.recipe.deleteRecipe(recipeId)
+
+      if (!deleted) {
+        res.status(404).json({ error: 'Recipe not found' })
+        return
+      }
+
+      res.status(204).send()
+    } catch (error) {
+      res.status(400).json({ error: error.message })
+    }
+  },
+)
 
 export default apiRouter

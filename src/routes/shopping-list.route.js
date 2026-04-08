@@ -1,6 +1,8 @@
 import express from 'express'
 import controllers from '../controllers/index.js'
 import { requireAuth } from '../middleware/auth.middleware.js'
+import { validate } from '../middleware/validate.middleware.js'
+import { schemas } from '../validation/schemas.js'
 
 const apiRouter = express.Router()
 
@@ -13,7 +15,7 @@ apiRouter.get('/', requireAuth, async (req, res) => {
   }
 })
 
-apiRouter.get('/:id', requireAuth, async (req, res) => {
+apiRouter.get('/:id', requireAuth, validate({ params: schemas.idParams }), async (req, res) => {
   try {
     const shoppingListId = Number(req.params.id)
     const shoppingList = await controllers.shoppingList.getShoppingListById(
@@ -32,7 +34,7 @@ apiRouter.get('/:id', requireAuth, async (req, res) => {
   }
 })
 
-apiRouter.post('/', requireAuth, async (req, res) => {
+apiRouter.post('/', requireAuth, validate({ body: schemas.shoppingListBody }), async (req, res) => {
   try {
     const created = await controllers.shoppingList.createShoppingList(req.body, req.auth.user)
     res.status(201).json(created)
@@ -41,47 +43,57 @@ apiRouter.post('/', requireAuth, async (req, res) => {
   }
 })
 
-apiRouter.post('/from-meal-plan/:mealPlanId', requireAuth, async (req, res) => {
-  try {
-    const mealPlanId = Number(req.params.mealPlanId)
-    const created = await controllers.shoppingList.generateShoppingListFromMealPlan(
-      mealPlanId,
-      req.body,
-      req.auth.user,
-    )
+apiRouter.post(
+  '/from-meal-plan/:mealPlanId',
+  requireAuth,
+  validate({ params: schemas.mealPlanIdParams, body: schemas.generateShoppingBody }),
+  async (req, res) => {
+    try {
+      const mealPlanId = Number(req.params.mealPlanId)
+      const created = await controllers.shoppingList.generateShoppingListFromMealPlan(
+        mealPlanId,
+        req.body,
+        req.auth.user,
+      )
 
-    if (!created) {
-      res.status(404).json({ error: 'Meal plan not found' })
-      return
+      if (!created) {
+        res.status(404).json({ error: 'Meal plan not found' })
+        return
+      }
+
+      res.status(201).json(created)
+    } catch (error) {
+      res.status(400).json({ error: error.message })
     }
+  },
+)
 
-    res.status(201).json(created)
-  } catch (error) {
-    res.status(400).json({ error: error.message })
-  }
-})
+apiRouter.put(
+  '/:id',
+  requireAuth,
+  validate({ params: schemas.idParams, body: schemas.shoppingListBody }),
+  async (req, res) => {
+    try {
+      const shoppingListId = Number(req.params.id)
+      const updated = await controllers.shoppingList.updateShoppingList(
+        shoppingListId,
+        req.body,
+        req.auth.user,
+      )
 
-apiRouter.put('/:id', requireAuth, async (req, res) => {
-  try {
-    const shoppingListId = Number(req.params.id)
-    const updated = await controllers.shoppingList.updateShoppingList(
-      shoppingListId,
-      req.body,
-      req.auth.user,
-    )
+      if (!updated) {
+        res.status(404).json({ error: 'Shopping list not found' })
+        return
+      }
 
-    if (!updated) {
-      res.status(404).json({ error: 'Shopping list not found' })
-      return
+      res.json(updated)
+    } catch (error) {
+      res.status(400).json({ error: error.message })
     }
+  },
+)
 
-    res.json(updated)
-  } catch (error) {
-    res.status(400).json({ error: error.message })
-  }
-})
-
-apiRouter.delete('/:id', requireAuth, async (req, res) => {
+apiRouter.delete('/:id', requireAuth, validate({ params: schemas.idParams }), async (req, res) => {
   try {
     const shoppingListId = Number(req.params.id)
     const deleted = await controllers.shoppingList.deleteShoppingList(shoppingListId, req.auth.user)
@@ -97,67 +109,82 @@ apiRouter.delete('/:id', requireAuth, async (req, res) => {
   }
 })
 
-apiRouter.post('/:id/items', requireAuth, async (req, res) => {
-  try {
-    const shoppingListId = Number(req.params.id)
-    const updated = await controllers.shoppingList.addShoppingListItem(
-      shoppingListId,
-      req.body,
-      req.auth.user,
-    )
+apiRouter.post(
+  '/:id/items',
+  requireAuth,
+  validate({ params: schemas.idParams, body: schemas.shoppingListItemBody }),
+  async (req, res) => {
+    try {
+      const shoppingListId = Number(req.params.id)
+      const updated = await controllers.shoppingList.addShoppingListItem(
+        shoppingListId,
+        req.body,
+        req.auth.user,
+      )
 
-    if (!updated) {
-      res.status(404).json({ error: 'Shopping list not found' })
-      return
+      if (!updated) {
+        res.status(404).json({ error: 'Shopping list not found' })
+        return
+      }
+
+      res.status(201).json(updated)
+    } catch (error) {
+      res.status(400).json({ error: error.message })
     }
+  },
+)
 
-    res.status(201).json(updated)
-  } catch (error) {
-    res.status(400).json({ error: error.message })
-  }
-})
+apiRouter.put(
+  '/:id/items/:itemId',
+  requireAuth,
+  validate({ params: schemas.idItemParams, body: schemas.shoppingListItemBody }),
+  async (req, res) => {
+    try {
+      const shoppingListId = Number(req.params.id)
+      const itemId = Number(req.params.itemId)
+      const updated = await controllers.shoppingList.updateShoppingListItem(
+        shoppingListId,
+        itemId,
+        req.body,
+        req.auth.user,
+      )
 
-apiRouter.put('/:id/items/:itemId', requireAuth, async (req, res) => {
-  try {
-    const shoppingListId = Number(req.params.id)
-    const itemId = Number(req.params.itemId)
-    const updated = await controllers.shoppingList.updateShoppingListItem(
-      shoppingListId,
-      itemId,
-      req.body,
-      req.auth.user,
-    )
+      if (!updated) {
+        res.status(404).json({ error: 'Shopping list or item not found' })
+        return
+      }
 
-    if (!updated) {
-      res.status(404).json({ error: 'Shopping list or item not found' })
-      return
+      res.json(updated)
+    } catch (error) {
+      res.status(400).json({ error: error.message })
     }
+  },
+)
 
-    res.json(updated)
-  } catch (error) {
-    res.status(400).json({ error: error.message })
-  }
-})
+apiRouter.delete(
+  '/:id/items/:itemId',
+  requireAuth,
+  validate({ params: schemas.idItemParams }),
+  async (req, res) => {
+    try {
+      const shoppingListId = Number(req.params.id)
+      const itemId = Number(req.params.itemId)
+      const deleted = await controllers.shoppingList.deleteShoppingListItem(
+        shoppingListId,
+        itemId,
+        req.auth.user,
+      )
 
-apiRouter.delete('/:id/items/:itemId', requireAuth, async (req, res) => {
-  try {
-    const shoppingListId = Number(req.params.id)
-    const itemId = Number(req.params.itemId)
-    const deleted = await controllers.shoppingList.deleteShoppingListItem(
-      shoppingListId,
-      itemId,
-      req.auth.user,
-    )
+      if (!deleted) {
+        res.status(404).json({ error: 'Shopping list or item not found' })
+        return
+      }
 
-    if (!deleted) {
-      res.status(404).json({ error: 'Shopping list or item not found' })
-      return
+      res.status(204).send()
+    } catch (error) {
+      res.status(400).json({ error: error.message })
     }
-
-    res.status(204).send()
-  } catch (error) {
-    res.status(400).json({ error: error.message })
-  }
-})
+  },
+)
 
 export default apiRouter
