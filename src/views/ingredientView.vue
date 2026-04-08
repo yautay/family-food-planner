@@ -103,10 +103,13 @@
     </div>
   </section>
 
-  <div v-if="canWrite && isEditModalVisible" class="modal">
-    <div class="modal-content">
-      <span class="close" @click="closeEditModal">&times;</span>
-      <h2>{{ t('ingredients.editTitle') }}</h2>
+  <div v-if="canWrite && isEditModalVisible">
+    <AppModal
+      :title="t('ingredients.editTitle')"
+      :close-label="t('common.close')"
+      width="640px"
+      @close="closeEditModal"
+    >
       <form class="form-grid" @submit.prevent="editIngredient">
         <label>
           {{ t('ingredients.name') }}
@@ -185,13 +188,16 @@
 
         <button class="button is-primary" type="submit">{{ t('ingredients.submitEdit') }}</button>
       </form>
-    </div>
+    </AppModal>
   </div>
 
-  <div v-if="canWrite && isAddModalVisible" class="modal">
-    <div class="modal-content">
-      <span class="close" @click="closeAddModal">&times;</span>
-      <h2>{{ t('ingredients.addTitle') }}</h2>
+  <div v-if="canWrite && isAddModalVisible">
+    <AppModal
+      :title="t('ingredients.addTitle')"
+      :close-label="t('common.close')"
+      width="640px"
+      @close="closeAddModal"
+    >
       <form class="form-grid" @submit.prevent="addIngredient">
         <label>
           {{ t('ingredients.name') }}
@@ -270,19 +276,21 @@
 
         <button class="button is-primary" type="submit">{{ t('ingredients.submitAdd') }}</button>
       </form>
-    </div>
+    </AppModal>
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import CatalogSectionNav from '../components/navigation/CatalogSectionNav.vue'
+import AppModal from '../components/shared/AppModal.vue'
 import { useIngredientStore } from '@stores/ingredientsStore'
 import { useUnitStore } from '@stores/unitsStore'
 import { useTagStore } from '@stores/tagsStore'
 import { usePackagesStore } from '../stores/packagesStore'
 import { useAuthStore } from '@stores/authStore'
 import { useI18n } from '../composables/useI18n'
+import { filterBySearch, sortByField } from '../utils/listUtils'
 
 const ingredientStore = useIngredientStore()
 const unitStore = useUnitStore()
@@ -323,23 +331,8 @@ const tags = computed(() => tagStore.tags)
 const packageTypes = computed(() => packagesStore.packageTypes)
 const canWrite = computed(() => authStore.can('catalog.write'))
 
-function normalizeSearch(value) {
-  return String(value)
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .trim()
-}
-
 const filteredAndSortedIngredients = computed(() => {
-  const needle = normalizeSearch(search.value)
-  const direction = sortDirection.value === 'desc' ? -1 : 1
-
-  const filtered = ingredients.value.filter((ingredient) => {
-    if (!needle) {
-      return true
-    }
-
+  const filtered = filterBySearch(ingredients.value, search.value, (ingredient) => {
     const searchable = [
       ingredient.name,
       ingredient.comment,
@@ -350,44 +343,13 @@ const filteredAndSortedIngredients = computed(() => {
       .filter(Boolean)
       .join(' | ')
 
-    return normalizeSearch(searchable).includes(needle)
+    return searchable
   })
 
-  return [...filtered].sort((left, right) => {
-    let leftValue = ''
-    let rightValue = ''
-
-    if (sortBy.value === 'unit') {
-      leftValue = getUnitName(left.unit_id)
-      rightValue = getUnitName(right.unit_id)
-    } else if (sortBy.value === 'package') {
-      leftValue = left.package_type_name ?? ''
-      rightValue = right.package_type_name ?? ''
-    } else if (sortBy.value === 'tags') {
-      leftValue = getTagName(left.tag_id)
-      rightValue = getTagName(right.tag_id)
-    } else {
-      leftValue = left[sortBy.value] ?? ''
-      rightValue = right[sortBy.value] ?? ''
-    }
-
-    const leftNumber = Number(leftValue)
-    const rightNumber = Number(rightValue)
-    const numbersComparable = Number.isFinite(leftNumber) && Number.isFinite(rightNumber)
-
-    if (numbersComparable) {
-      if (leftNumber === rightNumber) {
-        return 0
-      }
-      return leftNumber > rightNumber ? direction : -direction
-    }
-
-    return (
-      String(leftValue).localeCompare(String(rightValue), undefined, {
-        sensitivity: 'base',
-        numeric: true,
-      }) * direction
-    )
+  return sortByField(filtered, sortBy.value, sortDirection.value, {
+    unit: (ingredient) => getUnitName(ingredient.unit_id),
+    package: (ingredient) => ingredient.package_type_name ?? '',
+    tags: (ingredient) => getTagName(ingredient.tag_id),
   })
 })
 
@@ -534,43 +496,6 @@ function confirmDelete(ingredient) {
 .add_ingredient {
   display: flex;
   justify-content: flex-start;
-}
-
-.modal {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  position: fixed;
-  z-index: 60;
-  left: 0;
-  top: 0;
-  width: 100%;
-  height: 100%;
-  overflow: auto;
-  background-color: rgba(0, 0, 0, 0.4);
-}
-
-.modal-content {
-  background-color: var(--app-surface);
-  color: var(--app-text);
-  padding: 20px;
-  border: 1px solid var(--app-border);
-  border-radius: 0.75rem;
-  width: min(640px, calc(100% - 1.5rem));
-}
-
-.close {
-  color: #aaa;
-  float: right;
-  font-size: 28px;
-  font-weight: bold;
-}
-
-.close:hover,
-.close:focus {
-  color: black;
-  text-decoration: none;
-  cursor: pointer;
 }
 
 @media (min-width: 900px) {

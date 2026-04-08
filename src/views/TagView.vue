@@ -47,28 +47,34 @@
       </div>
     </div>
 
-    <div v-if="isEditModalVisible" class="modal">
-      <div class="modal-content">
-        <span class="close" @click="closeEditModal">&times;</span>
-        <h2>{{ t('tags.editTitle') }}</h2>
+    <div v-if="isEditModalVisible">
+      <AppModal
+        :title="t('tags.editTitle')"
+        :close-label="t('common.close')"
+        width="500px"
+        @close="closeEditModal"
+      >
         <form @submit.prevent="editTag" class="form-grid">
           <label for="edit-tag-name">{{ t('tags.name') }}</label>
           <input type="text" id="edit-tag-name" v-model="editTagRef.name" required />
           <button class="button is-primary" type="submit">{{ t('tags.updateButton') }}</button>
         </form>
-      </div>
+      </AppModal>
     </div>
 
-    <div v-if="isAddModalVisible" class="modal">
-      <div class="modal-content">
-        <span class="close" @click="closeAddModal">&times;</span>
-        <h2>{{ t('tags.addTitle') }}</h2>
+    <div v-if="isAddModalVisible">
+      <AppModal
+        :title="t('tags.addTitle')"
+        :close-label="t('common.close')"
+        width="500px"
+        @close="closeAddModal"
+      >
         <form @submit.prevent="addTag" class="form-grid">
           <label for="new-tag-name">{{ t('tags.name') }}</label>
           <input type="text" id="new-tag-name" v-model="newTagRef.name" required />
           <button class="button is-primary" type="submit">{{ t('tags.addSubmit') }}</button>
         </form>
-      </div>
+      </AppModal>
     </div>
   </section>
 </template>
@@ -76,9 +82,11 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import CatalogSectionNav from '../components/navigation/CatalogSectionNav.vue'
+import AppModal from '../components/shared/AppModal.vue'
 import { useTagStore } from '@stores/tagsStore.js'
 import { useAuthStore } from '@stores/authStore'
 import { useI18n } from '../composables/useI18n'
+import { filterBySearch, sortByField } from '../utils/listUtils'
 
 const tagStore = useTagStore()
 const authStore = useAuthStore()
@@ -95,16 +103,8 @@ const tags = computed(() => tagStore.tags)
 const canWrite = computed(() => authStore.can('catalog.write'))
 
 const filteredAndSortedTags = computed(() => {
-  const needle = search.value.trim().toLowerCase()
-  const direction = sortDirection.value === 'desc' ? -1 : 1
-
-  return [...tags.value]
-    .filter((tag) => tag.name.toLowerCase().includes(needle))
-    .sort(
-      (left, right) =>
-        left.name.localeCompare(right.name, undefined, { sensitivity: 'base', numeric: true }) *
-        direction,
-    )
+  const filtered = filterBySearch(tags.value, search.value, (tag) => tag.name)
+  return sortByField(filtered, 'name', sortDirection.value)
 })
 
 onMounted(async () => {
@@ -185,43 +185,6 @@ function confirmDeleteTag(tag) {
 }
 
 button {
-  cursor: pointer;
-}
-
-.modal {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  position: fixed;
-  z-index: 60;
-  left: 0;
-  top: 0;
-  width: 100%;
-  height: 100%;
-  overflow: auto;
-  background-color: rgba(0, 0, 0, 0.4);
-}
-
-.modal-content {
-  background-color: var(--app-surface);
-  color: var(--app-text);
-  padding: 20px;
-  border: 1px solid var(--app-border);
-  border-radius: 0.75rem;
-  width: min(500px, calc(100% - 1.5rem));
-}
-
-.close {
-  color: #aaa;
-  float: right;
-  font-size: 28px;
-  font-weight: bold;
-}
-
-.close:hover,
-.close:focus {
-  color: black;
-  text-decoration: none;
   cursor: pointer;
 }
 

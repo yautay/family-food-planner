@@ -1,10 +1,12 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import CatalogSectionNav from '../components/navigation/CatalogSectionNav.vue'
+import AppModal from '../components/shared/AppModal.vue'
 import { usePackagesStore } from '../stores/packagesStore'
 import { useIngredientStore } from '../stores/ingredientsStore'
 import { useAuthStore } from '../stores/authStore'
 import { useI18n } from '../composables/useI18n'
+import { filterBySearch, sortByField } from '../utils/listUtils'
 
 const packagesStore = usePackagesStore()
 const ingredientStore = useIngredientStore()
@@ -34,44 +36,10 @@ const ingredients = computed(() => ingredientStore.ingredients)
 const canWrite = computed(() => authStore.can('catalog.write'))
 
 const filteredAndSortedRows = computed(() => {
-  const needle = search.value.trim().toLowerCase()
-  const direction = sortDirection.value === 'desc' ? -1 : 1
-
-  const filtered = packageRows.value.filter((row) => {
-    if (!needle) {
-      return true
-    }
-
-    const searchable = [row.product_name, row.package_type_name, row.source]
-      .filter(Boolean)
-      .join(' | ')
-      .toLowerCase()
-
-    return searchable.includes(needle)
+  const filtered = filterBySearch(packageRows.value, search.value, (row) => {
+    return [row.product_name, row.package_type_name, row.source].filter(Boolean).join(' | ')
   })
-
-  return [...filtered].sort((left, right) => {
-    const leftValue = left[sortBy.value] ?? ''
-    const rightValue = right[sortBy.value] ?? ''
-
-    const leftNumber = Number(leftValue)
-    const rightNumber = Number(rightValue)
-    const numbersComparable = Number.isFinite(leftNumber) && Number.isFinite(rightNumber)
-
-    if (numbersComparable) {
-      if (leftNumber === rightNumber) {
-        return 0
-      }
-      return leftNumber > rightNumber ? direction : -direction
-    }
-
-    return (
-      String(leftValue).localeCompare(String(rightValue), undefined, {
-        sensitivity: 'base',
-        numeric: true,
-      }) * direction
-    )
-  })
+  return sortByField(filtered, sortBy.value, sortDirection.value)
 })
 
 function normalizePayload(payload) {
@@ -227,11 +195,13 @@ onMounted(async () => {
       <button class="button is-primary" @click="showAddModal">{{ t('packages.addButton') }}</button>
     </div>
 
-    <div v-if="canWrite && isAddModalVisible" class="modal">
-      <div class="modal-content">
-        <span class="close" @click="closeAddModal">&times;</span>
-        <h2>{{ t('packages.addTitle') }}</h2>
-
+    <div v-if="canWrite && isAddModalVisible">
+      <AppModal
+        :title="t('packages.addTitle')"
+        :close-label="t('common.close')"
+        width="560px"
+        @close="closeAddModal"
+      >
         <form class="form-grid" @submit.prevent="addMapping">
           <label>
             {{ t('packages.ingredientColumn') }}
@@ -276,14 +246,16 @@ onMounted(async () => {
 
           <button class="button is-primary" type="submit">{{ t('packages.addSubmit') }}</button>
         </form>
-      </div>
+      </AppModal>
     </div>
 
-    <div v-if="canWrite && isEditModalVisible" class="modal">
-      <div class="modal-content">
-        <span class="close" @click="closeEditModal">&times;</span>
-        <h2>{{ t('packages.editTitle') }}</h2>
-
+    <div v-if="canWrite && isEditModalVisible">
+      <AppModal
+        :title="t('packages.editTitle')"
+        :close-label="t('common.close')"
+        width="560px"
+        @close="closeEditModal"
+      >
         <form class="form-grid" @submit.prevent="editMapping">
           <label>
             {{ t('packages.ingredientColumn') }}
@@ -328,7 +300,7 @@ onMounted(async () => {
 
           <button class="button is-primary" type="submit">{{ t('packages.updateButton') }}</button>
         </form>
-      </div>
+      </AppModal>
     </div>
   </section>
 </template>
@@ -362,43 +334,6 @@ onMounted(async () => {
 .actions-cell {
   display: flex;
   gap: 0.35rem;
-}
-
-.modal {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  position: fixed;
-  z-index: 60;
-  left: 0;
-  top: 0;
-  width: 100%;
-  height: 100%;
-  overflow: auto;
-  background-color: rgba(0, 0, 0, 0.4);
-}
-
-.modal-content {
-  background-color: var(--app-surface);
-  color: var(--app-text);
-  padding: 20px;
-  border: 1px solid var(--app-border);
-  border-radius: 0.75rem;
-  width: min(560px, calc(100% - 1.5rem));
-}
-
-.close {
-  color: #aaa;
-  float: right;
-  font-size: 28px;
-  font-weight: bold;
-}
-
-.close:hover,
-.close:focus {
-  color: black;
-  text-decoration: none;
-  cursor: pointer;
 }
 
 @media (min-width: 900px) {

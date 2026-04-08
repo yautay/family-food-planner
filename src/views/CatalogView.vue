@@ -163,6 +163,7 @@ import {
   isPhysicalUnit,
   shouldHideDefaultPhysicalQuantity,
 } from '../utils/ingredientAmount'
+import { sortByField } from '../utils/listUtils'
 
 const catalogStore = useCatalogStore()
 const authStore = useAuthStore()
@@ -186,57 +187,11 @@ const recipeForm = ref({
 const ingredientsText = ref('')
 
 const products = computed(() => {
-  const direction = productSortDirection.value === 'desc' ? -1 : 1
-
-  return [...catalogStore.products].sort((left, right) => {
-    const leftValue = left[productSortBy.value] ?? ''
-    const rightValue = right[productSortBy.value] ?? ''
-
-    const leftNumber = Number(leftValue)
-    const rightNumber = Number(rightValue)
-    const numbersComparable = Number.isFinite(leftNumber) && Number.isFinite(rightNumber)
-
-    if (numbersComparable) {
-      if (leftNumber === rightNumber) {
-        return 0
-      }
-      return leftNumber > rightNumber ? direction : -direction
-    }
-
-    return (
-      String(leftValue).localeCompare(String(rightValue), undefined, {
-        sensitivity: 'base',
-        numeric: true,
-      }) * direction
-    )
-  })
+  return sortByField(catalogStore.products, productSortBy.value, productSortDirection.value)
 })
 
 const recipes = computed(() => {
-  const direction = recipeSortDirection.value === 'desc' ? -1 : 1
-
-  return [...catalogStore.recipes].sort((left, right) => {
-    const leftValue = left[recipeSortBy.value] ?? ''
-    const rightValue = right[recipeSortBy.value] ?? ''
-
-    const leftNumber = Number(leftValue)
-    const rightNumber = Number(rightValue)
-    const numbersComparable = Number.isFinite(leftNumber) && Number.isFinite(rightNumber)
-
-    if (numbersComparable) {
-      if (leftNumber === rightNumber) {
-        return 0
-      }
-      return leftNumber > rightNumber ? direction : -direction
-    }
-
-    return (
-      String(leftValue).localeCompare(String(rightValue), undefined, {
-        sensitivity: 'base',
-        numeric: true,
-      }) * direction
-    )
-  })
+  return sortByField(catalogStore.recipes, recipeSortBy.value, recipeSortDirection.value)
 })
 const activeRecipe = computed(() => catalogStore.activeRecipe)
 const activeRecipeIngredients = computed(() => catalogStore.activeRecipeIngredients)

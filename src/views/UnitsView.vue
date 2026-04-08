@@ -47,28 +47,34 @@
       </div>
     </div>
 
-    <div v-if="isEditModalVisible" class="modal">
-      <div class="modal-content">
-        <span class="close" @click="closeEditModal">&times;</span>
-        <h2>{{ t('units.editTitle') }}</h2>
+    <div v-if="isEditModalVisible">
+      <AppModal
+        :title="t('units.editTitle')"
+        :close-label="t('common.close')"
+        width="500px"
+        @close="closeEditModal"
+      >
         <form @submit.prevent="editUnit" class="form-grid">
           <label for="edit-unit-name">{{ t('units.name') }}</label>
           <input type="text" id="edit-unit-name" v-model="editUnitRef.name" required />
           <button class="button is-primary" type="submit">{{ t('units.updateButton') }}</button>
         </form>
-      </div>
+      </AppModal>
     </div>
 
-    <div v-if="isAddModalVisible" class="modal">
-      <div class="modal-content">
-        <span class="close" @click="closeAddModal">&times;</span>
-        <h2>{{ t('units.addTitle') }}</h2>
+    <div v-if="isAddModalVisible">
+      <AppModal
+        :title="t('units.addTitle')"
+        :close-label="t('common.close')"
+        width="500px"
+        @close="closeAddModal"
+      >
         <form @submit.prevent="addUnit" class="form-grid">
           <label for="new-unit-name">{{ t('units.name') }}</label>
           <input type="text" id="new-unit-name" v-model="newUnitRef.name" required />
           <button class="button is-primary" type="submit">{{ t('units.addSubmit') }}</button>
         </form>
-      </div>
+      </AppModal>
     </div>
   </section>
 </template>
@@ -76,9 +82,11 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import CatalogSectionNav from '../components/navigation/CatalogSectionNav.vue'
+import AppModal from '../components/shared/AppModal.vue'
 import { useUnitStore } from '@stores/unitsStore'
 import { useAuthStore } from '@stores/authStore'
 import { useI18n } from '../composables/useI18n'
+import { filterBySearch, sortByField } from '../utils/listUtils'
 
 const unitStore = useUnitStore()
 const authStore = useAuthStore()
@@ -95,16 +103,8 @@ const units = computed(() => unitStore.units)
 const canWrite = computed(() => authStore.can('catalog.write'))
 
 const filteredAndSortedUnits = computed(() => {
-  const needle = search.value.trim().toLowerCase()
-  const direction = sortDirection.value === 'desc' ? -1 : 1
-
-  return [...units.value]
-    .filter((unit) => unit.name.toLowerCase().includes(needle))
-    .sort(
-      (left, right) =>
-        left.name.localeCompare(right.name, undefined, { sensitivity: 'base', numeric: true }) *
-        direction,
-    )
+  const filtered = filterBySearch(units.value, search.value, (unit) => unit.name)
+  return sortByField(filtered, 'name', sortDirection.value)
 })
 
 onMounted(async () => {
@@ -185,43 +185,6 @@ function confirmDeleteUnit(unit) {
 }
 
 button {
-  cursor: pointer;
-}
-
-.modal {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  position: fixed;
-  z-index: 60;
-  left: 0;
-  top: 0;
-  width: 100%;
-  height: 100%;
-  overflow: auto;
-  background-color: rgba(0, 0, 0, 0.4);
-}
-
-.modal-content {
-  background-color: var(--app-surface);
-  color: var(--app-text);
-  padding: 20px;
-  border: 1px solid var(--app-border);
-  border-radius: 0.75rem;
-  width: min(500px, calc(100% - 1.5rem));
-}
-
-.close {
-  color: #aaa;
-  float: right;
-  font-size: 28px;
-  font-weight: bold;
-}
-
-.close:hover,
-.close:focus {
-  color: black;
-  text-decoration: none;
   cursor: pointer;
 }
 

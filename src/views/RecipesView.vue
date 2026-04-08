@@ -5,6 +5,7 @@ import CatalogSectionNav from '../components/navigation/CatalogSectionNav.vue'
 import { useCatalogStore } from '../stores/catalogStore'
 import { useI18n } from '../composables/useI18n'
 import { formatIngredientAmount } from '../utils/ingredientAmount'
+import { filterBySearch, sortByField } from '../utils/listUtils'
 
 const catalogStore = useCatalogStore()
 const { t } = useI18n()
@@ -14,44 +15,11 @@ const sortBy = ref('name')
 const sortDirection = ref('asc')
 
 const recipes = computed(() => {
-  const needle = search.value.trim().toLowerCase()
-  const direction = sortDirection.value === 'desc' ? -1 : 1
-
-  const filtered = catalogStore.recipes.filter((recipe) => {
-    if (!needle) {
-      return true
-    }
-
-    const searchable = [recipe.name, recipe.owner_username]
-      .filter(Boolean)
-      .join(' | ')
-      .toLowerCase()
-
-    return searchable.includes(needle)
+  const filtered = filterBySearch(catalogStore.recipes, search.value, (recipe) => {
+    return [recipe.name, recipe.owner_username].filter(Boolean).join(' | ')
   })
 
-  return [...filtered].sort((left, right) => {
-    const leftValue = left[sortBy.value] ?? ''
-    const rightValue = right[sortBy.value] ?? ''
-
-    const leftNumber = Number(leftValue)
-    const rightNumber = Number(rightValue)
-    const numbersComparable = Number.isFinite(leftNumber) && Number.isFinite(rightNumber)
-
-    if (numbersComparable) {
-      if (leftNumber === rightNumber) {
-        return 0
-      }
-      return leftNumber > rightNumber ? direction : -direction
-    }
-
-    return (
-      String(leftValue).localeCompare(String(rightValue), undefined, {
-        sensitivity: 'base',
-        numeric: true,
-      }) * direction
-    )
-  })
+  return sortByField(filtered, sortBy.value, sortDirection.value)
 })
 const activeRecipe = computed(() => catalogStore.activeRecipe)
 const activeRecipeIngredients = computed(() => catalogStore.activeRecipeIngredients)
