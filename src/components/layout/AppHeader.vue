@@ -5,6 +5,8 @@ import { useAuthStore } from '../../stores/authStore'
 import { useUiStore } from '../../stores/uiStore'
 import { useI18n } from '../../composables/useI18n'
 import { catalogNavigationItems, primaryNavigationItems } from '../../config/navigation'
+import AppHeaderNavigationPanel from './header/AppHeaderNavigationPanel.vue'
+import AppHeaderUserPanel from './header/AppHeaderUserPanel.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -33,6 +35,20 @@ const catalogItems = computed(() =>
     label: t(item.labelKey),
   })),
 )
+
+const userMenuLabels = computed(() => ({
+  loggedAs: t('header.loggedAs'),
+  language: t('common.language'),
+  theme: t('common.theme'),
+  light: t('common.light'),
+  dark: t('common.dark'),
+  system: t('common.system'),
+  account: t('nav.account'),
+  accessControl: t('nav.accessControl'),
+  logout: t('nav.logout'),
+  login: t('nav.login'),
+  register: t('nav.register'),
+}))
 
 watch(
   () => route.fullPath,
@@ -100,107 +116,30 @@ async function logout() {
   </header>
 
   <transition name="slide-down">
-    <div v-if="isNavigationMenuOpen" class="menu-panel navigation-panel">
-      <div class="app-panel-content">
-        <nav class="menu-list-block" :aria-label="t('header.navigationMenu')">
-          <RouterLink
-            v-for="item in navItems"
-            :key="item.key"
-            class="menu-link"
-            :to="item.to"
-            @click="closeAllMenus"
-          >
-            {{ item.label }}
-          </RouterLink>
-
-          <div class="catalog-group" tabindex="0">
-            <div class="menu-link menu-expand">
-              <span>{{ t('nav.catalog') }}</span>
-              <span class="expand-indicator" aria-hidden="true">v</span>
-            </div>
-
-            <div class="submenu-block">
-              <RouterLink
-                v-for="item in catalogItems"
-                :key="item.key"
-                class="submenu-link"
-                :to="item.to"
-                @click="closeAllMenus"
-              >
-                {{ item.label }}
-              </RouterLink>
-            </div>
-          </div>
-        </nav>
-      </div>
-    </div>
+    <AppHeaderNavigationPanel
+      v-if="isNavigationMenuOpen"
+      :nav-items="navItems"
+      :catalog-items="catalogItems"
+      :catalog-label="t('nav.catalog')"
+      :navigation-menu-label="t('header.navigationMenu')"
+      @close="closeAllMenus"
+    />
   </transition>
 
   <transition name="slide-down">
-    <div v-if="isUserMenuOpen" class="menu-panel user-panel">
-      <div class="container app-panel-content user-panel-content">
-        <div class="user-summary">{{ t('header.loggedAs') }}: {{ userName }}</div>
-
-        <div class="field-grid">
-          <label>
-            {{ t('common.language') }}
-            <div class="select is-small">
-              <select
-                :aria-label="t('common.language')"
-                :value="uiStore.locale"
-                @change="uiStore.setLocale($event.target.value)"
-              >
-                <option value="pl">PL</option>
-                <option value="en">EN</option>
-              </select>
-            </div>
-          </label>
-
-          <label>
-            {{ t('common.theme') }}
-            <div class="select is-small">
-              <select
-                :aria-label="t('common.theme')"
-                :value="uiStore.theme"
-                @change="uiStore.setTheme($event.target.value)"
-              >
-                <option value="light">{{ t('common.light') }}</option>
-                <option value="dark">{{ t('common.dark') }}</option>
-                <option value="system">{{ t('common.system') }}</option>
-              </select>
-            </div>
-          </label>
-        </div>
-
-        <div class="actions-row">
-          <template v-if="isLoggedIn">
-            <RouterLink class="button is-small" to="/account" @click="closeAllMenus">{{
-              t('nav.account')
-            }}</RouterLink>
-            <RouterLink
-              v-if="canManagePermissions"
-              class="button is-small"
-              to="/access-control"
-              @click="closeAllMenus"
-            >
-              {{ t('nav.accessControl') }}
-            </RouterLink>
-            <button type="button" class="button is-small is-danger is-light" @click="logout">
-              {{ t('nav.logout') }}
-            </button>
-          </template>
-
-          <template v-else>
-            <RouterLink class="button is-small" to="/login" @click="closeAllMenus">{{
-              t('nav.login')
-            }}</RouterLink>
-            <RouterLink class="button is-small is-primary" to="/register" @click="closeAllMenus">{{
-              t('nav.register')
-            }}</RouterLink>
-          </template>
-        </div>
-      </div>
-    </div>
+    <AppHeaderUserPanel
+      v-if="isUserMenuOpen"
+      :user-name="userName"
+      :is-logged-in="isLoggedIn"
+      :can-manage-permissions="canManagePermissions"
+      :locale="uiStore.locale"
+      :theme="uiStore.theme"
+      :labels="userMenuLabels"
+      @close="closeAllMenus"
+      @set-locale="uiStore.setLocale"
+      @set-theme="uiStore.setTheme"
+      @logout="logout"
+    />
   </transition>
 </template>
 
@@ -264,124 +203,6 @@ async function logout() {
   display: block;
 }
 
-.menu-panel {
-  position: sticky;
-  top: 3.65rem;
-  z-index: 45;
-  background: var(--app-surface);
-  border-bottom: 1px solid var(--app-border);
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
-}
-
-.navigation-panel {
-  width: min(25vw, 420px);
-  margin-right: auto;
-  border-right: 1px solid var(--app-border);
-}
-
-.app-panel-content {
-  padding-top: 0.75rem;
-  padding-bottom: 0.75rem;
-}
-
-.navigation-panel .app-panel-content {
-  padding-left: 0.75rem;
-  padding-right: 0.75rem;
-}
-
-.menu-list-block {
-  display: grid;
-  gap: 0.35rem;
-}
-
-.menu-link,
-.submenu-link {
-  border: 1px solid var(--app-border);
-  border-radius: 0.7rem;
-  color: var(--app-text);
-  background: var(--app-surface);
-  min-height: 2.45rem;
-  padding: 0.55rem 0.75rem;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.menu-expand {
-  cursor: default;
-}
-
-.catalog-group {
-  display: grid;
-  gap: 0.35rem;
-}
-
-.submenu-block {
-  padding-left: 0.65rem;
-  display: grid;
-  gap: 0.35rem;
-  max-height: 0;
-  opacity: 0;
-  overflow: hidden;
-  visibility: hidden;
-  transition:
-    max-height 0.22s ease,
-    opacity 0.2s ease;
-}
-
-.catalog-group:hover .submenu-block,
-.catalog-group:focus-within .submenu-block {
-  max-height: 18rem;
-  opacity: 1;
-  visibility: visible;
-}
-
-.submenu-link {
-  background: var(--app-surface-alt);
-}
-
-.expand-indicator {
-  font-weight: 700;
-  transition: transform 0.2s ease;
-}
-
-.catalog-group:hover .expand-indicator,
-.catalog-group:focus-within .expand-indicator {
-  transform: rotate(180deg);
-}
-
-.user-panel {
-  top: calc(3.65rem + 0.1rem);
-}
-
-.user-panel-content {
-  display: grid;
-  gap: 0.75rem;
-}
-
-.user-summary {
-  font-weight: 600;
-}
-
-.field-grid {
-  display: grid;
-  gap: 0.7rem;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-}
-
-.field-grid label {
-  display: grid;
-  gap: 0.35rem;
-  font-size: 0.9rem;
-  font-weight: 500;
-}
-
-.actions-row {
-  display: flex;
-  gap: 0.55rem;
-  flex-wrap: wrap;
-}
-
 .slide-down-enter-active,
 .slide-down-leave-active {
   transition:
@@ -393,20 +214,5 @@ async function logout() {
 .slide-down-leave-to {
   opacity: 0;
   transform: translateY(-6px);
-}
-
-@media (min-width: 900px) {
-  .app-panel-content {
-    max-width: 1180px;
-  }
-
-  .navigation-panel .app-panel-content {
-    max-width: 100%;
-  }
-
-  .user-panel-content {
-    margin-left: auto;
-    width: min(460px, 100%);
-  }
 }
 </style>
