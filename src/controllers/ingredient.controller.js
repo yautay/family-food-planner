@@ -1,4 +1,6 @@
-import catalogDb from '../db/catalog.js'
+import { Op, literal } from 'sequelize'
+import sequelize from '../db/client.js'
+import models from '../models/index.js'
 
 function normalizeName(name) {
   return name
@@ -50,6 +52,14 @@ function calculatePer100ml(valuePer100g, row) {
 }
 
 function mapIngredientRow(row) {
+  const tagIds = Array.isArray(row?.tag_id)
+    ? row.tag_id
+    : Array.isArray(row?.tags)
+      ? row.tags
+          .map((item) => Number(item?.id))
+          .filter((item) => Number.isInteger(item) && item > 0)
+      : []
+
   const mapped = {
     id: row.id,
     name: row.name,
@@ -65,12 +75,7 @@ function mapIngredientRow(row) {
     fat_per_100g: row.fat_per_100g,
     protein_per_100g: row.protein_per_100g,
     fiber_per_100g: row.fiber_per_100g,
-    tag_id: row.tag_ids
-      ? row.tag_ids
-          .split(',')
-          .map((item) => Number(item))
-          .filter((item) => Number.isInteger(item) && item > 0)
-      : [],
+    tag_id: tagIds,
   }
 
   return {
@@ -84,20 +89,16 @@ function mapIngredientRow(row) {
   }
 }
 
-function getUnitMeta(unitId) {
+async function getUnitMeta(unitId, transaction = undefined) {
   if (!Number.isInteger(unitId) || unitId <= 0) {
     return null
   }
 
-  return catalogDb
-    .prepare(
-      `
-      SELECT id, name, unit_type, to_grams_factor, to_ml_factor
-      FROM units
-      WHERE id = ?
-      `,
-    )
-    .get(unitId)
+  return models.unit.findByPk(unitId, {
+    attributes: ['id', 'name', 'unit_type', 'to_grams_factor', 'to_ml_factor'],
+    raw: true,
+    transaction,
+  })
 }
 
 function normalizeUnitToMl(value, unitMeta) {
@@ -110,7 +111,7 @@ function normalizeUnitToMl(value, unitMeta) {
   return fromUnit !== null ? fromUnit : null
 }
 
-function upsertDefaultPackageConversion(productId, payload) {
+async function upsertDefaultPackageConversion(productId, payload, transaction = undefined) {
   const packageTypeId = Number(payload?.packageTypeId)
   const quantityPerPackage = parsePositiveNumber(payload?.quantityPerPackage)
   const unitMeta = payload?.unitMeta ?? null
@@ -126,124 +127,143 @@ function upsertDefaultPackageConversion(productId, payload) {
 
   const gramsPerPackage = Number((quantityPerPackage * gramsPerUnit).toFixed(2))
 
-  const existing = catalogDb
-    .prepare(
-      `
-      SELECT id
-      FROM ingredient_package_conversions
-      WHERE product_id = ? AND package_type_id = ?
-      `,
-    )
-    .get(productId, packageTypeId)
+  const existing = await models.ingredientPackageConversion.findOne({
+    where: {
+      product_id: productId,
+      package_type_id: packageTypeId,
+    },
+    attributes: ['id', 'samples_count'],
+    raw: true,
+    transaction,
+  })
 
   if (existing) {
-    catalogDb
-      .prepare(
-        `
-        UPDATE ingredient_package_conversions
-        SET
-          grams_per_package = ?,
-          source = ?,
-          samples_count = CASE WHEN samples_count < 1 THEN 1 ELSE samples_count END,
-          updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-        `,
-      )
-      .run(gramsPerPackage, 'ingredient-default-package', existing.id)
+    await models.ingredientPackageConversion.update(
+      {
+        grams_per_package: gramsPerPackage,
+        source: 'ingredient-default-package',
+        samples_count: Math.max(1, Number(existing.samples_count) || 1),
+        updated_at: new Date().toISOString(),
+      },
+      {
+        where: { id: existing.id },
+        transaction,
+      },
+    )
     return
   }
 
-  catalogDb
-    .prepare(
-      `
-      INSERT INTO ingredient_package_conversions(
-        product_id,
-        package_type_id,
-        grams_per_package,
-        source,
-        samples_count
-      )
-      VALUES (?, ?, ?, ?, ?)
-      `,
-    )
-    .run(productId, packageTypeId, gramsPerPackage, 'ingredient-default-package', 1)
+  await models.ingredientPackageConversion.create(
+    {
+      product_id: productId,
+      package_type_id: packageTypeId,
+      grams_per_package: gramsPerPackage,
+      source: 'ingredient-default-package',
+      samples_count: 1,
+    },
+    { transaction },
+  )
 }
 
-function replaceProductTags(productId, tagIds) {
-  catalogDb.prepare('DELETE FROM product_tags WHERE product_id = ?').run(productId)
+async function replaceProductTags(productId, tagIds, transaction = undefined) {
+  await models.productTag.destroy({ where: { product_id: productId }, transaction })
 
-  const insertTag = catalogDb.prepare('INSERT INTO product_tags(product_id, tag_id) VALUES (?, ?)')
-  for (const tagId of tagIds) {
-    insertTag.run(productId, tagId)
+  if (tagIds.length === 0) {
+    return
   }
+
+  await models.productTag.bulkCreate(
+    tagIds.map((tagId) => ({
+      product_id: productId,
+      tag_id: tagId,
+    })),
+    { transaction },
+  )
 }
 
-function getIngredientById(productId) {
-  const row = catalogDb
-    .prepare(
-      `
-      SELECT
-        p.id,
-        p.name,
-        p.comment,
-        p.default_unit_id AS unit_id,
-        p.unit_to_ml,
-        p.default_package_type_id AS package_type_id,
-        dpt.name AS package_type_name,
-        p.quantity_per_package,
-        p.calories_per_100g,
-        p.carbohydrates_per_100g,
-        p.sugars_per_100g,
-        p.fat_per_100g,
-        p.protein_per_100g,
-        p.fiber_per_100g,
-        u.to_grams_factor AS unit_to_grams_factor,
-        GROUP_CONCAT(pt.tag_id) AS tag_ids
-      FROM products p
-      LEFT JOIN units u ON u.id = p.default_unit_id
-      LEFT JOIN package_types dpt ON dpt.id = p.default_package_type_id
-      LEFT JOIN product_tags pt ON pt.product_id = p.id
-      WHERE p.id = ?
-      GROUP BY p.id
-      `,
-    )
-    .get(productId)
+function mapProductToIngredient(product) {
+  const row = {
+    id: product.id,
+    name: product.name,
+    comment: product.comment,
+    unit_id: product.default_unit_id,
+    unit_to_ml: product.unit_to_ml,
+    package_type_id: product.default_package_type_id,
+    package_type_name: product.defaultPackageType?.name ?? null,
+    quantity_per_package: product.quantity_per_package,
+    calories_per_100g: product.calories_per_100g,
+    carbohydrates_per_100g: product.carbohydrates_per_100g,
+    sugars_per_100g: product.sugars_per_100g,
+    fat_per_100g: product.fat_per_100g,
+    protein_per_100g: product.protein_per_100g,
+    fiber_per_100g: product.fiber_per_100g,
+    unit_to_grams_factor: product.defaultUnit?.to_grams_factor ?? null,
+    tags: product.tags ?? [],
+  }
 
-  return row ? mapIngredientRow(row) : null
+  return mapIngredientRow(row)
+}
+
+async function getIngredientById(productId, transaction = undefined) {
+  const product = await models.product.findByPk(productId, {
+    include: [
+      {
+        model: models.unit,
+        as: 'defaultUnit',
+        attributes: ['to_grams_factor'],
+        required: false,
+      },
+      {
+        model: models.packageType,
+        as: 'defaultPackageType',
+        attributes: ['name'],
+        required: false,
+      },
+      {
+        model: models.tag,
+        as: 'tags',
+        attributes: ['id'],
+        through: { attributes: [] },
+        required: false,
+      },
+    ],
+    transaction,
+  })
+
+  if (!product) {
+    return null
+  }
+
+  return mapProductToIngredient(product.get({ plain: true }))
 }
 
 async function getIngredients() {
-  const rows = catalogDb
-    .prepare(
-      `
-      SELECT
-        p.id,
-        p.name,
-        p.comment,
-        p.default_unit_id AS unit_id,
-        p.unit_to_ml,
-        p.default_package_type_id AS package_type_id,
-        dpt.name AS package_type_name,
-        p.quantity_per_package,
-        p.calories_per_100g,
-        p.carbohydrates_per_100g,
-        p.sugars_per_100g,
-        p.fat_per_100g,
-        p.protein_per_100g,
-        p.fiber_per_100g,
-        u.to_grams_factor AS unit_to_grams_factor,
-        GROUP_CONCAT(pt.tag_id) AS tag_ids
-      FROM products p
-      LEFT JOIN units u ON u.id = p.default_unit_id
-      LEFT JOIN package_types dpt ON dpt.id = p.default_package_type_id
-      LEFT JOIN product_tags pt ON pt.product_id = p.id
-      GROUP BY p.id
-      ORDER BY p.name COLLATE NOCASE ASC
-      `,
-    )
-    .all()
+  const products = await models.product.findAll({
+    include: [
+      {
+        model: models.unit,
+        as: 'defaultUnit',
+        attributes: ['to_grams_factor'],
+        required: false,
+      },
+      {
+        model: models.packageType,
+        as: 'defaultPackageType',
+        attributes: ['name'],
+        required: false,
+      },
+      {
+        model: models.tag,
+        as: 'tags',
+        attributes: ['id'],
+        through: { attributes: [] },
+        required: false,
+      },
+    ],
+    order: [[literal('Product.name COLLATE NOCASE'), 'ASC']],
+  })
 
-  return rows.map(mapIngredientRow)
+  return products.map((product) => mapProductToIngredient(product.get({ plain: true })))
 }
 
 async function addIngredient(item) {
@@ -260,125 +280,93 @@ async function addIngredient(item) {
     throw new Error('Unit is required')
   }
 
-  const unitMeta = getUnitMeta(unitId)
-  if (!unitMeta) {
-    throw new Error('Unit is invalid')
-  }
+  return sequelize.transaction(async (transaction) => {
+    const unitMeta = await getUnitMeta(unitId, transaction)
+    if (!unitMeta) {
+      throw new Error('Unit is invalid')
+    }
 
-  const payload = {
-    packageTypeId: parseNullableNumber(item?.package_type_id),
-    quantityPerPackage: parseNullableNumber(item?.quantity_per_package),
-    unitToMl: normalizeUnitToMl(item?.unit_to_ml, unitMeta),
-    calories: parseNullableNumber(item?.calories_per_100g),
-    carbohydrates: parseNullableNumber(item?.carbohydrates_per_100g),
-    sugars: parseNullableNumber(item?.sugars_per_100g),
-    fat: parseNullableNumber(item?.fat_per_100g),
-    protein: parseNullableNumber(item?.protein_per_100g),
-    fiber: parseNullableNumber(item?.fiber_per_100g),
-  }
+    const payload = {
+      packageTypeId: parseNullableNumber(item?.package_type_id),
+      quantityPerPackage: parseNullableNumber(item?.quantity_per_package),
+      unitToMl: normalizeUnitToMl(item?.unit_to_ml, unitMeta),
+      calories: parseNullableNumber(item?.calories_per_100g),
+      carbohydrates: parseNullableNumber(item?.carbohydrates_per_100g),
+      sugars: parseNullableNumber(item?.sugars_per_100g),
+      fat: parseNullableNumber(item?.fat_per_100g),
+      protein: parseNullableNumber(item?.protein_per_100g),
+      fiber: parseNullableNumber(item?.fiber_per_100g),
+    }
 
-  const tagIds = normalizeTagIds(item?.tag_id)
+    const tagIds = normalizeTagIds(item?.tag_id)
+    const existing = await models.product.findOne({
+      where: { normalized_name: normalizedName },
+      attributes: ['id'],
+      raw: true,
+      transaction,
+    })
 
-  const productId = catalogDb.transaction(() => {
-    const existing = catalogDb
-      .prepare('SELECT id FROM products WHERE normalized_name = ?')
-      .get(normalizedName)
+    let productId
 
     if (existing) {
-      catalogDb
-        .prepare(
-          `
-          UPDATE products
-          SET
-            name = ?,
-            comment = ?,
-            default_unit_id = ?,
-            default_package_type_id = ?,
-            quantity_per_package = ?,
-            unit_to_ml = ?,
-            calories_per_100g = ?,
-            carbohydrates_per_100g = ?,
-            sugars_per_100g = ?,
-            fat_per_100g = ?,
-            protein_per_100g = ?,
-            fiber_per_100g = ?,
-            updated_at = CURRENT_TIMESTAMP
-          WHERE id = ?
-          `,
-        )
-        .run(
+      productId = existing.id
+      await models.product.update(
+        {
           name,
           comment,
-          unitId,
-          payload.packageTypeId,
-          payload.quantityPerPackage,
-          payload.unitToMl,
-          payload.calories,
-          payload.carbohydrates,
-          payload.sugars,
-          payload.fat,
-          payload.protein,
-          payload.fiber,
-          existing.id,
-        )
+          default_unit_id: unitId,
+          default_package_type_id: payload.packageTypeId,
+          quantity_per_package: payload.quantityPerPackage,
+          unit_to_ml: payload.unitToMl,
+          calories_per_100g: payload.calories,
+          carbohydrates_per_100g: payload.carbohydrates,
+          sugars_per_100g: payload.sugars,
+          fat_per_100g: payload.fat,
+          protein_per_100g: payload.protein,
+          fiber_per_100g: payload.fiber,
+          updated_at: new Date().toISOString(),
+        },
+        {
+          where: { id: productId },
+          transaction,
+        },
+      )
+    } else {
+      const created = await models.product.create(
+        {
+          name,
+          normalized_name: normalizedName,
+          default_unit_id: unitId,
+          default_package_type_id: payload.packageTypeId,
+          comment,
+          quantity_per_package: payload.quantityPerPackage,
+          unit_to_ml: payload.unitToMl,
+          calories_per_100g: payload.calories,
+          carbohydrates_per_100g: payload.carbohydrates,
+          sugars_per_100g: payload.sugars,
+          fat_per_100g: payload.fat,
+          protein_per_100g: payload.protein,
+          fiber_per_100g: payload.fiber,
+        },
+        { transaction },
+      )
 
-      replaceProductTags(existing.id, tagIds)
-      upsertDefaultPackageConversion(existing.id, {
+      productId = created.id
+    }
+
+    await replaceProductTags(productId, tagIds, transaction)
+    await upsertDefaultPackageConversion(
+      productId,
+      {
         packageTypeId: payload.packageTypeId,
         quantityPerPackage: payload.quantityPerPackage,
         unitMeta,
-      })
-      return existing.id
-    }
+      },
+      transaction,
+    )
 
-    const created = catalogDb
-      .prepare(
-        `
-        INSERT INTO products(
-          name,
-          normalized_name,
-          default_unit_id,
-          default_package_type_id,
-          comment,
-          quantity_per_package,
-          unit_to_ml,
-          calories_per_100g,
-          carbohydrates_per_100g,
-          sugars_per_100g,
-          fat_per_100g,
-          protein_per_100g,
-          fiber_per_100g
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `,
-      )
-      .run(
-        name,
-        normalizedName,
-        unitId,
-        payload.packageTypeId,
-        comment,
-        payload.quantityPerPackage,
-        payload.unitToMl,
-        payload.calories,
-        payload.carbohydrates,
-        payload.sugars,
-        payload.fat,
-        payload.protein,
-        payload.fiber,
-      )
-
-    const newProductId = Number(created.lastInsertRowid)
-    replaceProductTags(newProductId, tagIds)
-    upsertDefaultPackageConversion(newProductId, {
-      packageTypeId: payload.packageTypeId,
-      quantityPerPackage: payload.quantityPerPackage,
-      unitMeta,
-    })
-    return newProductId
-  })()
-
-  return getIngredientById(productId)
+    return getIngredientById(productId, transaction)
+  })
 }
 
 async function updateIngredient(item) {
@@ -387,100 +375,100 @@ async function updateIngredient(item) {
     throw new Error('Ingredient id is invalid')
   }
 
-  const existing = catalogDb.prepare('SELECT id FROM products WHERE id = ?').get(productId)
-  if (!existing) {
-    return 0
-  }
+  return sequelize.transaction(async (transaction) => {
+    const existing = await models.product.findByPk(productId, {
+      attributes: ['id'],
+      transaction,
+    })
 
-  const name = typeof item?.name === 'string' ? item.name.trim() : ''
-  if (!name) {
-    throw new Error('Ingredient name is required')
-  }
+    if (!existing) {
+      return 0
+    }
 
-  const normalizedName = normalizeName(name)
-  const comment = typeof item?.comment === 'string' ? item.comment.trim() : ''
-  const unitId = parseNullableNumber(item?.unit_id)
+    const name = typeof item?.name === 'string' ? item.name.trim() : ''
+    if (!name) {
+      throw new Error('Ingredient name is required')
+    }
 
-  if (!Number.isInteger(unitId) || unitId <= 0) {
-    throw new Error('Unit is required')
-  }
+    const normalizedName = normalizeName(name)
+    const comment = typeof item?.comment === 'string' ? item.comment.trim() : ''
+    const unitId = parseNullableNumber(item?.unit_id)
 
-  const unitMeta = getUnitMeta(unitId)
-  if (!unitMeta) {
-    throw new Error('Unit is invalid')
-  }
+    if (!Number.isInteger(unitId) || unitId <= 0) {
+      throw new Error('Unit is required')
+    }
 
-  const payload = {
-    packageTypeId: parseNullableNumber(item?.package_type_id),
-    quantityPerPackage: parseNullableNumber(item?.quantity_per_package),
-    unitToMl: normalizeUnitToMl(item?.unit_to_ml, unitMeta),
-    calories: parseNullableNumber(item?.calories_per_100g),
-    carbohydrates: parseNullableNumber(item?.carbohydrates_per_100g),
-    sugars: parseNullableNumber(item?.sugars_per_100g),
-    fat: parseNullableNumber(item?.fat_per_100g),
-    protein: parseNullableNumber(item?.protein_per_100g),
-    fiber: parseNullableNumber(item?.fiber_per_100g),
-  }
+    const unitMeta = await getUnitMeta(unitId, transaction)
+    if (!unitMeta) {
+      throw new Error('Unit is invalid')
+    }
 
-  const tagIds = normalizeTagIds(item?.tag_id)
+    const payload = {
+      packageTypeId: parseNullableNumber(item?.package_type_id),
+      quantityPerPackage: parseNullableNumber(item?.quantity_per_package),
+      unitToMl: normalizeUnitToMl(item?.unit_to_ml, unitMeta),
+      calories: parseNullableNumber(item?.calories_per_100g),
+      carbohydrates: parseNullableNumber(item?.carbohydrates_per_100g),
+      sugars: parseNullableNumber(item?.sugars_per_100g),
+      fat: parseNullableNumber(item?.fat_per_100g),
+      protein: parseNullableNumber(item?.protein_per_100g),
+      fiber: parseNullableNumber(item?.fiber_per_100g),
+    }
 
-  return catalogDb.transaction(() => {
-    const nameCollision = catalogDb
-      .prepare('SELECT id FROM products WHERE normalized_name = ? AND id <> ?')
-      .get(normalizedName, productId)
+    const tagIds = normalizeTagIds(item?.tag_id)
+
+    const nameCollision = await models.product.findOne({
+      where: {
+        normalized_name: normalizedName,
+        id: {
+          [Op.ne]: productId,
+        },
+      },
+      attributes: ['id'],
+      raw: true,
+      transaction,
+    })
 
     if (nameCollision) {
       throw new Error('Ingredient with this name already exists')
     }
 
-    const changes = catalogDb
-      .prepare(
-        `
-        UPDATE products
-        SET
-          name = ?,
-          normalized_name = ?,
-          default_unit_id = ?,
-          default_package_type_id = ?,
-          comment = ?,
-          quantity_per_package = ?,
-          unit_to_ml = ?,
-          calories_per_100g = ?,
-          carbohydrates_per_100g = ?,
-          sugars_per_100g = ?,
-          fat_per_100g = ?,
-          protein_per_100g = ?,
-          fiber_per_100g = ?,
-          updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-        `,
-      )
-      .run(
+    const [changes] = await models.product.update(
+      {
         name,
-        normalizedName,
-        unitId,
-        payload.packageTypeId,
+        normalized_name: normalizedName,
+        default_unit_id: unitId,
+        default_package_type_id: payload.packageTypeId,
         comment,
-        payload.quantityPerPackage,
-        payload.unitToMl,
-        payload.calories,
-        payload.carbohydrates,
-        payload.sugars,
-        payload.fat,
-        payload.protein,
-        payload.fiber,
-        productId,
-      ).changes
+        quantity_per_package: payload.quantityPerPackage,
+        unit_to_ml: payload.unitToMl,
+        calories_per_100g: payload.calories,
+        carbohydrates_per_100g: payload.carbohydrates,
+        sugars_per_100g: payload.sugars,
+        fat_per_100g: payload.fat,
+        protein_per_100g: payload.protein,
+        fiber_per_100g: payload.fiber,
+        updated_at: new Date().toISOString(),
+      },
+      {
+        where: { id: productId },
+        transaction,
+      },
+    )
 
-    replaceProductTags(productId, tagIds)
-    upsertDefaultPackageConversion(productId, {
-      packageTypeId: payload.packageTypeId,
-      quantityPerPackage: payload.quantityPerPackage,
-      unitMeta,
-    })
+    await replaceProductTags(productId, tagIds, transaction)
+    await upsertDefaultPackageConversion(
+      productId,
+      {
+        packageTypeId: payload.packageTypeId,
+        quantityPerPackage: payload.quantityPerPackage,
+        unitMeta,
+      },
+      transaction,
+    )
 
     return changes
-  })()
+  })
 }
 
 async function deleteIngredient(id) {
@@ -489,22 +477,40 @@ async function deleteIngredient(id) {
     throw new Error('Ingredient id is invalid')
   }
 
-  const usage = catalogDb
-    .prepare('SELECT COUNT(*) AS count FROM recipe_ingredients WHERE product_id = ?')
-    .get(productId)
+  const usageCount = await models.recipeIngredient.count({
+    where: {
+      product_id: productId,
+    },
+  })
 
-  if ((usage?.count ?? 0) > 0) {
+  if (usageCount > 0) {
     throw new Error('Ingredient is used in recipes and cannot be deleted')
   }
 
-  return catalogDb.transaction(() => {
-    catalogDb.prepare('DELETE FROM product_tags WHERE product_id = ?').run(productId)
-    catalogDb
-      .prepare('DELETE FROM ingredient_package_conversions WHERE product_id = ? AND source = ?')
-      .run(productId, 'ingredient-default-package')
-    catalogDb.prepare('DELETE FROM product_packages WHERE product_id = ?').run(productId)
-    return catalogDb.prepare('DELETE FROM products WHERE id = ?').run(productId).changes
-  })()
+  return sequelize.transaction(async (transaction) => {
+    await models.productTag.destroy({
+      where: { product_id: productId },
+      transaction,
+    })
+
+    await models.ingredientPackageConversion.destroy({
+      where: {
+        product_id: productId,
+        source: 'ingredient-default-package',
+      },
+      transaction,
+    })
+
+    await models.productPackage.destroy({
+      where: { product_id: productId },
+      transaction,
+    })
+
+    return models.product.destroy({
+      where: { id: productId },
+      transaction,
+    })
+  })
 }
 
 export default {
