@@ -17,6 +17,10 @@ const RecipeIngredientModel = sequelize.define(
       type: DataTypes.INTEGER,
       allowNull: false,
     },
+    ingredient_package_conversion_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
   },
   {
     tableName: 'recipe_ingredients',

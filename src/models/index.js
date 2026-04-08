@@ -13,6 +13,8 @@ import userRoleModel from './user-role.model.js'
 import userPermissionModel from './user-permission.model.js'
 import authSessionModel from './auth-session.model.js'
 import passwordResetTokenModel from './password-reset-token.model.js'
+import packageTypeModel from './package-type.model.js'
+import ingredientPackageConversionModel from './ingredient-package-conversion.model.js'
 
 const models = {}
 
@@ -30,6 +32,8 @@ models.userRole = userRoleModel
 models.userPermission = userPermissionModel
 models.authSession = authSessionModel
 models.passwordResetToken = passwordResetTokenModel
+models.packageType = packageTypeModel
+models.ingredientPackageConversion = ingredientPackageConversionModel
 
 models.product.belongsTo(models.unit, {
   foreignKey: 'default_unit_id',
@@ -41,9 +45,19 @@ models.product.hasMany(models.recipeIngredient, {
   as: 'recipeIngredients',
 })
 
+models.product.hasMany(models.ingredientPackageConversion, {
+  foreignKey: 'product_id',
+  as: 'ingredientPackageConversions',
+})
+
 models.recipeIngredient.belongsTo(models.product, {
   foreignKey: 'product_id',
   as: 'product',
+})
+
+models.recipeIngredient.belongsTo(models.ingredientPackageConversion, {
+  foreignKey: 'ingredient_package_conversion_id',
+  as: 'ingredientPackageConversion',
 })
 
 models.auditLog.belongsTo(models.user, {
@@ -69,6 +83,16 @@ models.user.hasMany(models.passwordResetToken, {
 models.passwordResetToken.belongsTo(models.user, {
   foreignKey: 'user_id',
   as: 'user',
+})
+
+models.ingredientPackageConversion.belongsTo(models.product, {
+  foreignKey: 'product_id',
+  as: 'product',
+})
+
+models.ingredientPackageConversion.belongsTo(models.packageType, {
+  foreignKey: 'package_type_id',
+  as: 'packageType',
 })
 
 models.user.belongsToMany(models.role, {

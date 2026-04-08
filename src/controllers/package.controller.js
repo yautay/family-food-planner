@@ -1,4 +1,5 @@
-import catalogDb from '../db/catalog.js'
+import { Op, literal } from 'sequelize'
+import models from '../models/index.js'
 
 function normalizeName(name) {
   return name
@@ -15,7 +16,26 @@ function parsePositiveNumber(value) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null
 }
 
-function resolvePackageTypeId(payload) {
+function mapConversion(row) {
+  if (!row) {
+    return null
+  }
+
+  return {
+    id: row.id,
+    product_id: row.product_id,
+    product_name: row.product_name ?? row.product?.name ?? null,
+    package_type_id: row.package_type_id,
+    package_type_name: row.package_type_name ?? row.packageType?.name ?? null,
+    grams_per_package: row.grams_per_package,
+    samples_count: row.samples_count,
+    source: row.source,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  }
+}
+
+async function resolvePackageTypeId(payload) {
   const packageTypeId = Number(payload?.package_type_id)
   if (Number.isInteger(packageTypeId) && packageTypeId > 0) {
     return packageTypeId
@@ -29,82 +49,74 @@ function resolvePackageTypeId(payload) {
   }
 
   const normalizedName = normalizeName(packageTypeName)
-  const existing = catalogDb
-    .prepare('SELECT id FROM package_types WHERE normalized_name = ?')
-    .get(normalizedName)
+  const existing = await models.packageType.findOne({
+    where: { normalized_name: normalizedName },
+    attributes: ['id'],
+    raw: true,
+  })
 
   if (existing) {
     return existing.id
   }
 
-  const created = catalogDb
-    .prepare('INSERT INTO package_types(name, normalized_name) VALUES (?, ?)')
-    .run(packageTypeName, normalizedName)
+  const created = await models.packageType.create({
+    name: packageTypeName,
+    normalized_name: normalizedName,
+  })
 
-  return Number(created.lastInsertRowid)
+  return created.id
 }
 
-function getConversionById(conversionId) {
-  return catalogDb
-    .prepare(
-      `
-      SELECT
-        ipc.id,
-        ipc.product_id,
-        p.name AS product_name,
-        ipc.package_type_id,
-        pt.name AS package_type_name,
-        ipc.grams_per_package,
-        ipc.samples_count,
-        ipc.source,
-        ipc.created_at,
-        ipc.updated_at
-      FROM ingredient_package_conversions ipc
-      INNER JOIN products p ON p.id = ipc.product_id
-      INNER JOIN package_types pt ON pt.id = ipc.package_type_id
-      WHERE ipc.id = ?
-      `,
-    )
-    .get(conversionId)
+async function getConversionById(conversionId) {
+  const row = await models.ingredientPackageConversion.findByPk(conversionId, {
+    include: [
+      {
+        model: models.product,
+        as: 'product',
+        attributes: ['name'],
+      },
+      {
+        model: models.packageType,
+        as: 'packageType',
+        attributes: ['name'],
+      },
+    ],
+  })
+
+  return mapConversion(row?.get({ plain: true }))
 }
 
 async function getPackageTypes() {
-  return catalogDb
-    .prepare(
-      `
-      SELECT
-        id,
-        name,
-        normalized_name
-      FROM package_types
-      ORDER BY name COLLATE NOCASE ASC
-      `,
-    )
-    .all()
+  return models.packageType.findAll({
+    attributes: ['id', 'name', 'normalized_name'],
+    order: [[literal('name COLLATE NOCASE'), 'ASC']],
+    raw: true,
+  })
 }
 
 async function getPackages() {
-  return catalogDb
-    .prepare(
-      `
-      SELECT
-        ipc.id,
-        ipc.product_id,
-        p.name AS product_name,
-        ipc.package_type_id,
-        pt.name AS package_type_name,
-        ipc.grams_per_package,
-        ipc.samples_count,
-        ipc.source,
-        ipc.created_at,
-        ipc.updated_at
-      FROM ingredient_package_conversions ipc
-      INNER JOIN products p ON p.id = ipc.product_id
-      INNER JOIN package_types pt ON pt.id = ipc.package_type_id
-      ORDER BY p.name COLLATE NOCASE ASC, pt.name COLLATE NOCASE ASC
-      `,
-    )
-    .all()
+  const rows = await models.ingredientPackageConversion.findAll({
+    include: [
+      {
+        model: models.product,
+        as: 'product',
+        attributes: ['name'],
+        required: true,
+      },
+      {
+        model: models.packageType,
+        as: 'packageType',
+        attributes: ['name'],
+        required: true,
+      },
+    ],
+    order: [
+      [literal('product.name COLLATE NOCASE'), 'ASC'],
+      [literal('packageType.name COLLATE NOCASE'), 'ASC'],
+    ],
+  })
+
+  return rows.map((row) => mapConversion(row.get({ plain: true })))
 }
 
 async function addPackage(payload) {
@@ -118,52 +130,42 @@ async function addPackage(payload) {
     throw new Error('grams_per_package must be a positive number')
   }
 
-  const packageTypeId = resolvePackageTypeId(payload)
+  const packageTypeId = await resolvePackageTypeId(payload)
   const source = typeof payload?.source === 'string' ? payload.source.trim() : 'manual'
 
-  const existing = catalogDb
-    .prepare(
-      `
-      SELECT id
-      FROM ingredient_package_conversions
-      WHERE product_id = ? AND package_type_id = ?
-      `,
-    )
-    .get(productId, packageTypeId)
+  const existing = await models.ingredientPackageConversion.findOne({
+    where: {
+      product_id: productId,
+      package_type_id: packageTypeId,
+    },
+    attributes: ['id'],
+    raw: true,
+  })
 
   if (existing) {
-    catalogDb
-      .prepare(
-        `
-        UPDATE ingredient_package_conversions
-        SET
-          grams_per_package = ?,
-          source = ?,
-          updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-        `,
-      )
-      .run(gramsPerPackage, source || 'manual', existing.id)
+    await models.ingredientPackageConversion.update(
+      {
+        grams_per_package: gramsPerPackage,
+        source: source || 'manual',
+        updated_at: new Date().toISOString(),
+      },
+      {
+        where: { id: existing.id },
+      },
+    )
 
     return getConversionById(existing.id)
   }
 
-  const created = catalogDb
-    .prepare(
-      `
-      INSERT INTO ingredient_package_conversions(
-        product_id,
-        package_type_id,
-        grams_per_package,
-        source,
-        samples_count
-      )
-      VALUES (?, ?, ?, ?, ?)
-      `,
-    )
-    .run(productId, packageTypeId, gramsPerPackage, source || 'manual', 1)
+  const created = await models.ingredientPackageConversion.create({
+    product_id: productId,
+    package_type_id: packageTypeId,
+    grams_per_package: gramsPerPackage,
+    source: source || 'manual',
+    samples_count: 1,
+  })
 
-  return getConversionById(Number(created.lastInsertRowid))
+  return getConversionById(created.id)
 }
 
 async function updatePackage(payload) {
@@ -172,9 +174,9 @@ async function updatePackage(payload) {
     throw new Error('Package mapping id is invalid')
   }
 
-  const existing = catalogDb
-    .prepare('SELECT id FROM ingredient_package_conversions WHERE id = ?')
-    .get(conversionId)
+  const existing = await models.ingredientPackageConversion.findByPk(conversionId, {
+    attributes: ['id'],
+  })
 
   if (!existing) {
     return 0
@@ -190,23 +192,23 @@ async function updatePackage(payload) {
     throw new Error('grams_per_package must be a positive number')
   }
 
-  const packageTypeId = resolvePackageTypeId(payload)
+  const packageTypeId = await resolvePackageTypeId(payload)
   const source = typeof payload?.source === 'string' ? payload.source.trim() : 'manual'
 
-  return catalogDb
-    .prepare(
-      `
-      UPDATE ingredient_package_conversions
-      SET
-        product_id = ?,
-        package_type_id = ?,
-        grams_per_package = ?,
-        source = ?,
-        updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-      `,
-    )
-    .run(productId, packageTypeId, gramsPerPackage, source || 'manual', conversionId).changes
+  const [changes] = await models.ingredientPackageConversion.update(
+    {
+      product_id: productId,
+      package_type_id: packageTypeId,
+      grams_per_package: gramsPerPackage,
+      source: source || 'manual',
+      updated_at: new Date().toISOString(),
+    },
+    {
+      where: { id: conversionId },
+    },
+  )
+
+  return changes
 }
 
 async function deletePackage(conversionId) {
@@ -215,18 +217,19 @@ async function deletePackage(conversionId) {
     throw new Error('Package mapping id is invalid')
   }
 
-  const usage = catalogDb
-    .prepare(
-      'SELECT COUNT(*) AS count FROM recipe_ingredients WHERE ingredient_package_conversion_id = ?',
-    )
-    .get(id)
+  const usageCount = await models.recipeIngredient.count({
+    where: {
+      ingredient_package_conversion_id: id,
+    },
+  })
 
-  if ((usage?.count ?? 0) > 0) {
+  if (usageCount > 0) {
     throw new Error('Package mapping is used in recipes and cannot be deleted')
   }
 
-  return catalogDb.prepare('DELETE FROM ingredient_package_conversions WHERE id = ?').run(id)
-    .changes
+  return models.ingredientPackageConversion.destroy({
+    where: { id },
+  })
 }
 
 export default {
