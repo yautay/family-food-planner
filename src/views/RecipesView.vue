@@ -4,6 +4,7 @@ import { RouterLink } from 'vue-router'
 import CatalogSectionNav from '../components/navigation/CatalogSectionNav.vue'
 import { useCatalogStore } from '../stores/catalogStore'
 import { useI18n } from '../composables/useI18n'
+import { formatIngredientAmount } from '../utils/ingredientAmount'
 
 const catalogStore = useCatalogStore()
 const { t } = useI18n()
@@ -55,54 +56,6 @@ const recipes = computed(() => {
 const activeRecipe = computed(() => catalogStore.activeRecipe)
 const activeRecipeIngredients = computed(() => catalogStore.activeRecipeIngredients)
 const activeRecipeNutrition = computed(() => catalogStore.activeRecipeNutrition)
-
-const PHYSICAL_UNITS = new Set([
-  'mg',
-  'g',
-  'gram',
-  'gramy',
-  'dag',
-  'kg',
-  'kilogram',
-  'kilogramy',
-  'ml',
-  'mililitr',
-  'mililitry',
-  'l',
-  'litr',
-  'litry',
-])
-
-function normalizeUnitName(value) {
-  return String(value)
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .trim()
-}
-
-function formatIngredientAmount(ingredient) {
-  const unit = ingredient?.unit_name ? String(ingredient.unit_name).trim() : ''
-  const hasQuantity = ingredient?.quantity !== null && ingredient?.quantity !== undefined
-  const numericQuantity = Number(ingredient?.quantity)
-  const isPhysicalUnit = unit && PHYSICAL_UNITS.has(normalizeUnitName(unit))
-  const noPackageMapping = !ingredient?.ingredient_package_conversion_id
-
-  if (hasQuantity) {
-    if (
-      noPackageMapping &&
-      isPhysicalUnit &&
-      Number.isFinite(numericQuantity) &&
-      numericQuantity === 1
-    ) {
-      return unit || '-'
-    }
-
-    return unit ? `${ingredient.quantity} ${unit}` : String(ingredient.quantity)
-  }
-
-  return unit || '-'
-}
 
 async function refreshRecipes() {
   await catalogStore.fetchRecipes(search.value)
