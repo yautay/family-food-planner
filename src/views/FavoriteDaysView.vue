@@ -7,6 +7,7 @@ import { useCatalogStore } from '../stores/catalogStore'
 import { useMealPlannerStore } from '../stores/mealPlannerStore'
 import { useI18n } from '../composables/useI18n'
 import DayMealsBuilder from '../components/planning/DayMealsBuilder.vue'
+import { cloneMeals } from '../utils/mealPlanHelpers'
 
 const authStore = useAuthStore()
 const catalogStore = useCatalogStore()
@@ -42,19 +43,6 @@ const visibleDayPlans = computed(() => {
     return `${dayPlan.name} ${dayPlan.note}`.toLowerCase().includes(needle)
   })
 })
-
-function cloneMeals(meals) {
-  if (!Array.isArray(meals)) {
-    return []
-  }
-
-  return meals.map((meal) => ({
-    recipe_id: meal.recipe_id,
-    servings: meal.servings ?? null,
-    portions: meal.portions ?? 1,
-    note: meal.note ?? '',
-  }))
-}
 
 function applyDayPlanState(dayPlan) {
   editingDayPlanId.value = dayPlan.id

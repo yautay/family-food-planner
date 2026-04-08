@@ -273,52 +273,27 @@
         </div>
       </div>
 
-      <div v-if="favoriteImportModal" class="modal" @click.self="closeFavoriteImportModal">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h4 class="title is-6">{{ t('meals.favoriteOverflowTitle') }}</h4>
-            <button class="button is-small" type="button" @click="closeFavoriteImportModal">
-              {{ t('common.close') }}
-            </button>
-          </div>
-
-          <p class="muted">
-            {{
-              t('meals.favoriteOverflowHint', {
-                name: favoriteImportModal.dayPlanName,
-                selected: favoriteImportSelection.length,
-                limit: favoriteImportModal.limit,
-              })
-            }}
-          </p>
-
-          <ul class="picker-list">
-            <li v-for="(meal, index) in favoriteImportModal.meals" :key="`overflow-meal-${index}`">
-              <label class="overflow-option">
-                <input
-                  type="checkbox"
-                  :checked="favoriteImportSelection.includes(index)"
-                  :disabled="
-                    !favoriteImportSelection.includes(index) &&
-                    favoriteImportSelection.length >= favoriteImportModal.limit
-                  "
-                  @change="toggleFavoriteImportSelection(index)"
-                />
-                <span>{{ recipeName(meal.recipe_id) }}</span>
-              </label>
-            </li>
-          </ul>
-
-          <div class="actions-row">
-            <button class="button is-primary" type="button" @click="confirmFavoriteImportSelection">
-              {{ t('meals.importSelectedMeals') }}
-            </button>
-            <button class="button" type="button" @click="closeFavoriteImportModal">
-              {{ t('common.cancel') }}
-            </button>
-          </div>
-        </div>
-      </div>
+      <FavoriteImportModal
+        :visible="Boolean(favoriteImportModal)"
+        :title="t('meals.favoriteOverflowTitle')"
+        :close-label="t('common.close')"
+        :cancel-label="t('common.cancel')"
+        :confirm-label="t('meals.importSelectedMeals')"
+        :hint="
+          t('meals.favoriteOverflowHint', {
+            name: favoriteImportModal?.dayPlanName ?? '',
+            selected: favoriteImportSelection.length,
+            limit: favoriteImportModal?.limit ?? 0,
+          })
+        "
+        :meals="favoriteImportModal?.meals ?? []"
+        :selected-indexes="favoriteImportSelection"
+        :limit="favoriteImportModal?.limit ?? 0"
+        :resolve-recipe-name="recipeName"
+        @close="closeFavoriteImportModal"
+        @toggle="toggleFavoriteImportSelection"
+        @confirm="confirmFavoriteImportSelection"
+      />
     </article>
 
     <article v-if="activeMealPlan" class="surface-card section-stack totals-card">
@@ -345,8 +320,17 @@ import { useCatalogStore } from '../stores/catalogStore'
 import { useMealPlannerStore } from '../stores/mealPlannerStore'
 import { useI18n } from '../composables/useI18n'
 import DayMealsBuilder from '../components/planning/DayMealsBuilder.vue'
+import FavoriteImportModal from '../components/planning/FavoriteImportModal.vue'
 import NutritionTotalsInline from '../components/planning/NutritionTotalsInline.vue'
 import SlotTimeClock from '../components/planning/SlotTimeClock.vue'
+import {
+  cloneMeals,
+  cloneMealSlots,
+  daySummaryLineOne,
+  daySummaryLineTwo,
+  daySummaryLineThree,
+  mapImportedMeals,
+} from '../utils/mealPlanHelpers'
 
 const authStore = useAuthStore()
 const catalogStore = useCatalogStore()
@@ -405,30 +389,6 @@ const visibleMealPlans = computed(() => {
     return `${plan.name} ${plan.start_date} ${plan.end_date}`.toLowerCase().includes(needle)
   })
 })
-
-function cloneMeals(meals) {
-  if (!Array.isArray(meals)) {
-    return []
-  }
-
-  return meals.map((meal) => ({
-    recipe_id: meal.recipe_id,
-    servings: meal.servings ?? null,
-    portions: meal.portions ?? 1,
-    note: meal.note ?? '',
-  }))
-}
-
-function cloneMealSlots(slots) {
-  if (!Array.isArray(slots)) {
-    return []
-  }
-
-  return slots.map((slot) => ({
-    slot_name: slot.slot_name,
-    slot_time: slot.slot_time ?? '',
-  }))
-}
 
 function applyMealPlanState(plan) {
   editingMealPlanId.value = plan.id
@@ -642,33 +602,6 @@ function matrixMealServings(daySlot, rowIndex) {
   return `${t('meals.servingsLabel')}: ${effectiveServings}`
 }
 
-function summaryValue(totals, field) {
-  const parsed = Number(totals?.[field])
-  return Number.isFinite(parsed) ? Number(parsed.toFixed(2)) : 0
-}
-
-function formatMassFromGrams(value) {
-  const parsed = Number(value)
-  const grams = Number.isFinite(parsed) ? Number(parsed.toFixed(2)) : 0
-  if (grams >= 1000) {
-    return `${Number((grams / 1000).toFixed(2))} kg`
-  }
-
-  return `${grams} g`
-}
-
-function daySummaryLineOne(totals) {
-  return `kcal ${summaryValue(totals, 'calories')}`
-}
-
-function daySummaryLineTwo(totals) {
-  return `B ${summaryValue(totals, 'protein')}g | T ${summaryValue(totals, 'fat')}g | W ${summaryValue(totals, 'carbohydrates')}g`
-}
-
-function daySummaryLineThree(totals) {
-  return `M ${formatMassFromGrams(totals?.total_mass_grams)}`
-}
-
 function recipeName(recipeId) {
   return recipesById.value.get(recipeId)?.name ?? `#${recipeId}`
 }
@@ -693,15 +626,6 @@ function toggleFavoriteImportSelection(index) {
   }
 
   favoriteImportSelection.value = [...favoriteImportSelection.value, index].sort((a, b) => a - b)
-}
-
-function mapImportedMeals(dayPlanMeals) {
-  return dayPlanMeals.map((meal) => ({
-    recipe_id: meal.recipe_id,
-    servings: meal.servings ?? null,
-    portions: meal.portions ?? 1,
-    note: meal.note ?? '',
-  }))
 }
 
 async function importMealsIntoDaySlot(plannedDate, meals, dayPlanName) {
@@ -1102,49 +1026,6 @@ onMounted(async () => {
 .date-meta {
   display: grid;
   gap: 0.35rem;
-}
-
-.modal {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  position: fixed;
-  inset: 0;
-  z-index: 70;
-  background-color: rgba(0, 0, 0, 0.42);
-}
-
-.modal-content {
-  width: min(720px, calc(100% - 1.25rem));
-  background: var(--app-surface);
-  border: 1px solid var(--app-border);
-  border-radius: 0.75rem;
-  padding: 0.75rem;
-  display: grid;
-  gap: 0.55rem;
-  max-height: calc(100vh - 3rem);
-  overflow: auto;
-}
-
-.modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.55rem;
-}
-
-.picker-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 0.35rem;
-}
-
-.overflow-option {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
 }
 
 .totals-card {
