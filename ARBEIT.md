@@ -203,3 +203,22 @@ Do zrobienia jutro (proponowany start):
 2. Dodac testy integracyjne dla `portions` i fallbacku effective servings.
 3. Dodac test e2e/smoke dla importu ulubionego dnia z overflow modalem.
 4. Dopracowac copy i placeholdery w plannerze dla day title i portions (PL/EN).
+
+## Aktualizacja techniczna (2026-04-08)
+
+Najwazniejsze zmiany backend/security po tej serii prac:
+
+1. Runtime backend (kontrolery i serwisy) zostal przeniesiony na Sequelize ORM.
+2. Usunieto runtime klient `better-sqlite3` (`src/db/catalog.js`).
+3. Skrypty DB (`scripts/*.mjs`) zostaly przepisane na Sequelize.
+4. Dodano hardening API:
+   - Helmet + CSP,
+   - rate limiting dla endpointow auth,
+   - CORS allowlist z env,
+   - limit rozmiaru JSON body.
+5. Dodano walidacje Zod dla route-level `params/query/body`.
+6. Integracyjne i jednostkowe testy przechodza po migracji.
+
+Uwaga praktyczna:
+
+- `better-sqlite3` zostalo jako devDependency dla helperow testow integracyjnych.

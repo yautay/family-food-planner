@@ -40,6 +40,7 @@ Uwaga:
   `register` i `forgot/reset password`,
 - pozostale scenariusze akceptacyjne (logowanie, planner, listy zakupowe, RBAC)
   mozna uruchomic na koncie domyslnym.
+- runtime backend i skrypty DB dzialaja na Sequelize ORM; `better-sqlite3` zostalo tylko dla helperow testow integracyjnych.
 
 ## 4. Przygotowanie bazy danych
 
@@ -117,7 +118,8 @@ npm run test:integration
    - zwykle oznacza stary Node,
    - przelacz na Node 22: `nvm use 22`.
 
-3. `better-sqlite3 ... compiled against a different Node.js version`
+3. `better-sqlite3 ... compiled against a different Node.js version` (dotyczy glownie testow integracyjnych)
+   - helpery testow integracyjnych korzystaja z `better-sqlite3`,
    - zaleznosci byly budowane pod inna wersje Node,
    - wykonaj:
 

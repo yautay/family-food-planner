@@ -6,7 +6,7 @@
 [![Progress](https://img.shields.io/badge/progress-95%25-yellow)](https://github.com/yautay/family-food-planner/blob/master/docs/release-checklist.md)
 [![Last Commit](https://img.shields.io/github/last-commit/yautay/family-food-planner)](https://github.com/yautay/family-food-planner/commits/master)
 
-A web app for family meal planning, recipe/product catalog management, and shopping list generation.
+A web app for family meal planning, recipe/product catalog management, and shopping list generation with hardened API defaults.
 
 ## Current Scope
 
@@ -27,6 +27,10 @@ A web app for family meal planning, recipe/product catalog management, and shopp
 - private shopping lists (`shopping_lists`, `shopping_list_items`),
 - shopping list generation from meal plans (ingredient aggregation + effective servings logic),
 - ACL audit logs (`audit_logs`),
+- backend data layer migrated to Sequelize ORM across runtime controllers/services,
+- maintenance scripts (`scripts/*.mjs`) migrated to Sequelize (no runtime `better-sqlite3` usage),
+- request validation with Zod on API routes,
+- API hardening: Helmet+CSP, auth rate limiting, CORS allowlist, JSON payload limits,
 - themed UI (light/dark/system), PL/EN localization,
 - Bulma-based UI styling (global styles + form/navigation components).
 
@@ -46,7 +50,7 @@ After each pull with backend/schema changes, run `npm run db:migrate` before sta
 - `npm run dev` - frontend + backend locally
 - `PORT=3001 npm run dev` - frontend + backend with backend on custom port
 - `npm run start:server` - backend only
-- `npm run db:migrate` - run SQL migrations
+- `npm run db:migrate` - apply SQL migration files via Sequelize migration runner
 - `npm run db:import:diets` - import PDFs into catalog
 - `npm run db:rebuild:conversions` - rebuild ingredient-package conversion links from recipes
 - `npm run db:enrich:nutrition` - fill nutritional values from OpenFoodFacts
@@ -102,6 +106,12 @@ Copy `.env.example` to `.env` and fill in values:
 Changing the password after first login is recommended.
 
 ## Migrations and Database
+
+### Data Access Layer
+
+- application runtime (`src/controllers`, `src/services`) uses Sequelize models/relations,
+- migration sources stay in `db/migrations/*.sql` and are executed by `scripts/run-migrations.mjs` through Sequelize,
+- `better-sqlite3` is no longer used in runtime code and remains only as a dev dependency for integration-test helpers.
 
 ### Key Migrations
 
@@ -239,11 +249,13 @@ Shopping-list generator behavior:
 - security headers: Helmet (including CSP)
 - rate limiting for auth endpoints
 - CORS allowlist via `CORS_ALLOWED_ORIGINS`
+- request schema validation via Zod middleware (`params`, `query`, `body`)
 
 ## Integration Tests
 
 - run integration tests with: `npm run test:integration`,
 - suite creates an isolated SQLite DB via `DATABASE_PATH`,
+- integration test helpers still use `better-sqlite3` directly for deterministic setup/inspection,
 - Turnstile and email sending are mocked to avoid external dependencies,
 - covered areas: auth, RBAC, and shopping-list generation endpoint.
 
