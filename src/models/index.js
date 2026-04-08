@@ -17,6 +17,10 @@ import packageTypeModel from './package-type.model.js'
 import ingredientPackageConversionModel from './ingredient-package-conversion.model.js'
 import productTagModel from './product-tag.model.js'
 import productPackageModel from './product-package.model.js'
+import recipeModel from './recipe.model.js'
+import recipeNutritionSummaryModel from './recipe-nutrition-summary.model.js'
+import dayPlanModel from './day-plan.model.js'
+import dayPlanMealModel from './day-plan-meal.model.js'
 
 const models = {}
 
@@ -38,6 +42,10 @@ models.packageType = packageTypeModel
 models.ingredientPackageConversion = ingredientPackageConversionModel
 models.productTag = productTagModel
 models.productPackage = productPackageModel
+models.recipe = recipeModel
+models.recipeNutritionSummary = recipeNutritionSummaryModel
+models.dayPlan = dayPlanModel
+models.dayPlanMeal = dayPlanMealModel
 
 models.product.belongsTo(models.unit, {
   foreignKey: 'default_unit_id',
@@ -54,6 +62,11 @@ models.product.hasMany(models.recipeIngredient, {
   as: 'recipeIngredients',
 })
 
+models.recipe.hasMany(models.recipeIngredient, {
+  foreignKey: 'recipe_id',
+  as: 'ingredients',
+})
+
 models.product.hasMany(models.ingredientPackageConversion, {
   foreignKey: 'product_id',
   as: 'ingredientPackageConversions',
@@ -62,6 +75,11 @@ models.product.hasMany(models.ingredientPackageConversion, {
 models.recipeIngredient.belongsTo(models.product, {
   foreignKey: 'product_id',
   as: 'product',
+})
+
+models.recipeIngredient.belongsTo(models.recipe, {
+  foreignKey: 'recipe_id',
+  as: 'recipe',
 })
 
 models.recipeIngredient.belongsTo(models.ingredientPackageConversion, {
@@ -158,6 +176,26 @@ models.permission.belongsToMany(models.user, {
   foreignKey: 'permission_id',
   otherKey: 'user_id',
   as: 'usersWithDirectPermission',
+})
+
+models.dayPlan.belongsTo(models.user, {
+  foreignKey: 'owner_user_id',
+  as: 'owner',
+})
+
+models.dayPlan.hasMany(models.dayPlanMeal, {
+  foreignKey: 'day_plan_id',
+  as: 'meals',
+})
+
+models.dayPlanMeal.belongsTo(models.dayPlan, {
+  foreignKey: 'day_plan_id',
+  as: 'dayPlan',
+})
+
+models.dayPlanMeal.belongsTo(models.recipe, {
+  foreignKey: 'recipe_id',
+  as: 'recipe',
 })
 
 models.userRole.belongsTo(models.role, {

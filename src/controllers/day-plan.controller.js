@@ -1,4 +1,6 @@
-import catalogDb from '../db/catalog.js'
+import { Op, fn, col } from 'sequelize'
+import sequelize from '../db/client.js'
+import models from '../models/index.js'
 
 function roundNutrition(value) {
   if (!Number.isFinite(value)) {
@@ -79,43 +81,49 @@ function normalizeDayMealsPayload(rawMeals) {
   })
 }
 
-function getOwnedDayPlanById(dayPlanId, ownerUserId) {
-  return catalogDb
-    .prepare(
-      `
-      SELECT id, owner_user_id, name, note, created_at, updated_at
-      FROM day_plans
-      WHERE id = ? AND owner_user_id = ?
-      `,
-    )
-    .get(dayPlanId, ownerUserId)
+async function getOwnedDayPlanById(dayPlanId, ownerUserId, transaction = undefined) {
+  return models.dayPlan.findOne({
+    where: {
+      id: dayPlanId,
+      owner_user_id: ownerUserId,
+    },
+    raw: true,
+    transaction,
+  })
 }
 
-function getDayPlanMeals(dayPlanId) {
-  return catalogDb
-    .prepare(
-      `
-      SELECT
-        m.id,
-        m.day_plan_id,
-        m.recipe_id,
-        r.name AS recipe_name,
-        m.servings,
-        m.portions,
-        m.note,
-        m.meal_order,
-        m.created_at,
-        m.updated_at
-      FROM day_plan_meals m
-      INNER JOIN recipes r ON r.id = m.recipe_id
-      WHERE m.day_plan_id = ?
-      ORDER BY m.meal_order ASC
-      `,
-    )
-    .all(dayPlanId)
+async function getDayPlanMeals(dayPlanId, transaction = undefined) {
+  const rows = await models.dayPlanMeal.findAll({
+    where: { day_plan_id: dayPlanId },
+    include: [
+      {
+        model: models.recipe,
+        as: 'recipe',
+        attributes: ['name'],
+        required: true,
+      },
+    ],
+    order: [['meal_order', 'ASC']],
+  })
+
+  return rows.map((row) => {
+    const plain = row.get({ plain: true })
+    return {
+      id: plain.id,
+      day_plan_id: plain.day_plan_id,
+      recipe_id: plain.recipe_id,
+      recipe_name: plain.recipe?.name ?? null,
+      servings: plain.servings,
+      portions: plain.portions,
+      note: plain.note,
+      meal_order: plain.meal_order,
+      created_at: plain.created_at,
+      updated_at: plain.updated_at,
+    }
+  })
 }
 
-function getRecipeNutritionMap(recipeIds) {
+async function getRecipeNutritionMap(recipeIds, transaction = undefined) {
   if (!Array.isArray(recipeIds) || recipeIds.length === 0) {
     return new Map()
   }
@@ -127,30 +135,24 @@ function getRecipeNutritionMap(recipeIds) {
     return new Map()
   }
 
-  const placeholders = uniqueRecipeIds.map(() => '?').join(', ')
-  const rows = catalogDb
-    .prepare(
-      `
-      SELECT
-        recipe_id,
-        total_grams,
-        calories,
-        carbohydrates,
-        sugars,
-        fat,
-        protein,
-        fiber
-      FROM recipe_nutrition_summary
-      WHERE recipe_id IN (${placeholders})
-      `,
-    )
-    .all(...uniqueRecipeIds)
+  const rows = await models.recipeNutritionSummary.findAll({
+    where: {
+      recipe_id: {
+        [Op.in]: uniqueRecipeIds,
+      },
+    },
+    raw: true,
+    transaction,
+  })
 
   return new Map(rows.map((row) => [row.recipe_id, row]))
 }
 
-function hydrateMealsWithNutrition(meals) {
-  const nutritionMap = getRecipeNutritionMap(meals.map((meal) => meal.recipe_id))
+async function hydrateMealsWithNutrition(meals, transaction = undefined) {
+  const nutritionMap = await getRecipeNutritionMap(
+    meals.map((meal) => meal.recipe_id),
+    transaction,
+  )
   let cumulativeMass = 0
 
   const hydratedMeals = meals.map((meal) => {
@@ -206,36 +208,51 @@ function hydrateMealsWithNutrition(meals) {
 }
 
 async function listDayPlans(user) {
-  return catalogDb
-    .prepare(
-      `
-      SELECT
-        d.id,
-        d.owner_user_id,
-        d.name,
-        d.note,
-        d.created_at,
-        d.updated_at,
-        (
-          SELECT COUNT(*)
-          FROM day_plan_meals m
-          WHERE m.day_plan_id = d.id
-        ) AS meals_count
-      FROM day_plans d
-      WHERE d.owner_user_id = ?
-      ORDER BY d.updated_at DESC, d.created_at DESC
-      `,
-    )
-    .all(user.id)
+  const rows = await models.dayPlan.findAll({
+    where: {
+      owner_user_id: user.id,
+    },
+    order: [
+      ['updated_at', 'DESC'],
+      ['created_at', 'DESC'],
+    ],
+    raw: true,
+  })
+
+  if (rows.length === 0) {
+    return []
+  }
+
+  const ids = rows.map((row) => row.id)
+  const counts = await models.dayPlanMeal.findAll({
+    attributes: ['day_plan_id', [fn('COUNT', col('id')), 'meals_count']],
+    where: {
+      day_plan_id: {
+        [Op.in]: ids,
+      },
+    },
+    group: ['day_plan_id'],
+    raw: true,
+  })
+
+  const countByDayPlanId = new Map(
+    counts.map((row) => [row.day_plan_id, Number(row.meals_count) || 0]),
+  )
+
+  return rows.map((row) => ({
+    ...row,
+    meals_count: countByDayPlanId.get(row.id) ?? 0,
+  }))
 }
 
-async function getDayPlanById(dayPlanId, user) {
-  const dayPlan = getOwnedDayPlanById(dayPlanId, user.id)
+async function getDayPlanById(dayPlanId, user, transaction = undefined) {
+  const dayPlan = await getOwnedDayPlanById(dayPlanId, user.id, transaction)
   if (!dayPlan) {
     return null
   }
 
-  const hydrated = hydrateMealsWithNutrition(getDayPlanMeals(dayPlanId))
+  const meals = await getDayPlanMeals(dayPlanId, transaction)
+  const hydrated = await hydrateMealsWithNutrition(meals, transaction)
 
   return {
     ...dayPlan,
@@ -247,82 +264,92 @@ async function getDayPlanById(dayPlanId, user) {
 async function createDayPlan(payload, user) {
   const normalized = validateDayPlanPayload(payload)
 
-  const result = catalogDb
-    .prepare(
-      `
-      INSERT INTO day_plans(owner_user_id, name, note)
-      VALUES (?, ?, ?)
-      `,
-    )
-    .run(user.id, normalized.name, normalized.note)
+  const created = await models.dayPlan.create({
+    owner_user_id: user.id,
+    name: normalized.name,
+    note: normalized.note,
+  })
 
-  return getDayPlanById(Number(result.lastInsertRowid), user)
+  return getDayPlanById(created.id, user)
 }
 
 async function updateDayPlan(dayPlanId, payload, user) {
-  const existing = getOwnedDayPlanById(dayPlanId, user.id)
+  const existing = await getOwnedDayPlanById(dayPlanId, user.id)
   if (!existing) {
     return null
   }
 
   const normalized = validateDayPlanPayload(payload)
 
-  catalogDb
-    .prepare(
-      `
-      UPDATE day_plans
-      SET name = ?, note = ?, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ? AND owner_user_id = ?
-      `,
-    )
-    .run(normalized.name, normalized.note, dayPlanId, user.id)
+  await models.dayPlan.update(
+    {
+      name: normalized.name,
+      note: normalized.note,
+      updated_at: new Date().toISOString(),
+    },
+    {
+      where: {
+        id: dayPlanId,
+        owner_user_id: user.id,
+      },
+    },
+  )
 
   return getDayPlanById(dayPlanId, user)
 }
 
 async function deleteDayPlan(dayPlanId, user) {
-  const deleted = catalogDb
-    .prepare('DELETE FROM day_plans WHERE id = ? AND owner_user_id = ?')
-    .run(dayPlanId, user.id)
+  const deleted = await models.dayPlan.destroy({
+    where: {
+      id: dayPlanId,
+      owner_user_id: user.id,
+    },
+  })
 
-  return deleted.changes > 0
+  return deleted > 0
 }
 
 async function replaceDayPlanMeals(dayPlanId, meals, user) {
-  const existing = getOwnedDayPlanById(dayPlanId, user.id)
+  const existing = await getOwnedDayPlanById(dayPlanId, user.id)
   if (!existing) {
     return null
   }
 
   const normalizedMeals = normalizeDayMealsPayload(meals)
 
-  catalogDb.transaction(() => {
-    catalogDb.prepare('DELETE FROM day_plan_meals WHERE day_plan_id = ?').run(dayPlanId)
+  await sequelize.transaction(async (transaction) => {
+    await models.dayPlanMeal.destroy({
+      where: { day_plan_id: dayPlanId },
+      transaction,
+    })
 
-    const insertMeal = catalogDb.prepare(
-      `
-      INSERT INTO day_plan_meals(day_plan_id, recipe_id, servings, portions, note, meal_order)
-      VALUES (?, ?, ?, ?, ?, ?)
-      `,
-    )
-
-    for (const meal of normalizedMeals) {
-      insertMeal.run(
-        dayPlanId,
-        meal.recipe_id,
-        meal.servings,
-        meal.portions,
-        meal.note,
-        meal.meal_order,
+    if (normalizedMeals.length > 0) {
+      await models.dayPlanMeal.bulkCreate(
+        normalizedMeals.map((meal) => ({
+          day_plan_id: dayPlanId,
+          recipe_id: meal.recipe_id,
+          servings: meal.servings,
+          portions: meal.portions,
+          note: meal.note,
+          meal_order: meal.meal_order,
+        })),
+        { transaction },
       )
     }
 
-    catalogDb
-      .prepare(
-        'UPDATE day_plans SET updated_at = CURRENT_TIMESTAMP WHERE id = ? AND owner_user_id = ?',
-      )
-      .run(dayPlanId, user.id)
-  })()
+    await models.dayPlan.update(
+      {
+        updated_at: new Date().toISOString(),
+      },
+      {
+        where: {
+          id: dayPlanId,
+          owner_user_id: user.id,
+        },
+        transaction,
+      },
+    )
+  })
 
   return getDayPlanById(dayPlanId, user)
 }
