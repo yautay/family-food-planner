@@ -1,1 +1,4 @@
-Stage 1: Added Helmet, CORS allowlist config, JSON body limit, auth rate limits.\nStage 2: Added Zod-based request validation middleware and route schemas across API endpoints.\nStage 3: Migrated tag/unit/product controllers and audit service to Sequelize models; disabled sequelize.sync in runtime init.\nVerification: npm run test:unit && npm run test:integration passed.
+Stage 1: Added Helmet, CORS allowlist config, JSON body limit, auth rate limits.
+Stage 2: Added Zod-based request validation middleware and route schemas across API endpoints.
+Stage 3: Migrated tag/unit/product controllers and audit service to Sequelize models; disabled sequelize.sync in runtime init.
+Verification: npm run test:unit && npm run test:integration passed.
