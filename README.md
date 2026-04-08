@@ -81,6 +81,12 @@ Copy `.env.example` to `.env` and fill in values:
 - `SMTP_FROM`
 - `APP_BASE_URL`
 - `DATABASE_PATH` (optional, default: `database.db`)
+- `CORS_ALLOWED_ORIGINS` (comma-separated allowlist, optional)
+- `API_JSON_BODY_LIMIT` (optional, default: `100kb`)
+- `AUTH_RATE_LIMIT_WINDOW_MS` (optional)
+- `AUTH_RATE_LIMIT_MAX` (optional)
+- `AUTH_LOGIN_RATE_LIMIT_WINDOW_MS` (optional)
+- `AUTH_LOGIN_RATE_LIMIT_MAX` (optional)
 
 `APP_BASE_URL` should point to the frontend app (for example: `http://localhost:5173`) because password-reset links are generated with that base URL.
 
@@ -230,6 +236,9 @@ Shopping-list generator behavior:
 - sessions: opaque tokens hashed in DB (`auth_sessions`)
 - password reset: single-use token with expiration
 - CAPTCHA: server-side Turnstile verification
+- security headers: Helmet (including CSP)
+- rate limiting for auth endpoints
+- CORS allowlist via `CORS_ALLOWED_ORIGINS`
 
 ## Integration Tests
 

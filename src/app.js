@@ -1,13 +1,36 @@
 import express from 'express'
 import cors from 'cors'
+import helmet from 'helmet'
 import routes from './routes/index.js'
 import { authOptional } from './middleware/auth.middleware.js'
+import { getCorsOptions, getJsonBodyLimit } from './config/security.config.js'
 
 export function createApp() {
   const app = express()
 
-  app.use(cors())
-  app.use(express.json())
+  app.disable('x-powered-by')
+
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          connectSrc: ["'self'", 'http://localhost:3000', 'http://127.0.0.1:3000'],
+          imgSrc: ["'self'", 'data:'],
+          styleSrc: ["'self'", "'unsafe-inline'"],
+          scriptSrc: ["'self'"],
+          objectSrc: ["'none'"],
+          frameAncestors: ["'none'"],
+          baseUri: ["'self'"],
+          formAction: ["'self'"],
+        },
+      },
+      crossOriginEmbedderPolicy: false,
+    }),
+  )
+
+  app.use(cors(getCorsOptions()))
+  app.use(express.json({ limit: getJsonBodyLimit() }))
   app.use(authOptional)
 
   app.use('/api/auth', routes.auth)
@@ -20,6 +43,10 @@ export function createApp() {
   app.use('/api/meal-plans', routes.mealPlans)
   app.use('/api/day-plans', routes.dayPlans)
   app.use('/api/shopping-lists', routes.shoppingLists)
+
+  app.use((_req, res) => {
+    res.status(404).json({ error: 'Not found' })
+  })
 
   return app
 }
