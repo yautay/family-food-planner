@@ -1,19 +1,23 @@
 import { DataTypes } from 'sequelize'
 import sequelize from '../db/client.js'
 
-const RecipeIngredientModel = sequelize.define(
-  'RecipeIngredient',
+const PackageModel = sequelize.define(
+  'Package',
   {
     id: {
       type: DataTypes.INTEGER,
       primaryKey: true,
       autoIncrement: true,
     },
-    recipe_id: {
-      type: DataTypes.INTEGER,
+    name: {
+      type: DataTypes.STRING,
       allowNull: false,
     },
-    product_id: {
+    normalized_name: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
+    unit_id: {
       type: DataTypes.INTEGER,
       allowNull: false,
     },
@@ -21,20 +25,8 @@ const RecipeIngredientModel = sequelize.define(
       type: DataTypes.FLOAT,
       allowNull: true,
     },
-    unit_id: {
-      type: DataTypes.INTEGER,
-      allowNull: true,
-    },
-    package_id: {
-      type: DataTypes.INTEGER,
-      allowNull: true,
-    },
     grams: {
       type: DataTypes.FLOAT,
-      allowNull: true,
-    },
-    ingredient_package_conversion_id: {
-      type: DataTypes.INTEGER,
       allowNull: true,
     },
     note: {
@@ -42,19 +34,19 @@ const RecipeIngredientModel = sequelize.define(
       allowNull: false,
       defaultValue: '',
     },
-    source_file: {
+    created_at: {
       type: DataTypes.STRING,
       allowNull: true,
     },
-    created_at: {
+    updated_at: {
       type: DataTypes.STRING,
       allowNull: true,
     },
   },
   {
-    tableName: 'recipe_ingredients',
+    tableName: 'packages',
     timestamps: false,
   },
 )
 
-export default RecipeIngredientModel
+export default PackageModel

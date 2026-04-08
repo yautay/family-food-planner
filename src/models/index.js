@@ -27,6 +27,7 @@ import mealPlanDaySlotModel from './meal-plan-day-slot.model.js'
 import mealPlanDaySlotMealModel from './meal-plan-day-slot-meal.model.js'
 import shoppingListModel from './shopping-list.model.js'
 import shoppingListItemModel from './shopping-list-item.model.js'
+import packageModel from './package.model.js'
 
 const models = {}
 
@@ -58,6 +59,7 @@ models.mealPlanDaySlot = mealPlanDaySlotModel
 models.mealPlanDaySlotMeal = mealPlanDaySlotMealModel
 models.shoppingList = shoppingListModel
 models.shoppingListItem = shoppingListItemModel
+models.package = packageModel
 
 models.product.belongsTo(models.unit, {
   foreignKey: 'default_unit_id',
@@ -79,6 +81,11 @@ models.recipe.hasMany(models.recipeIngredient, {
   as: 'ingredients',
 })
 
+models.recipe.belongsTo(models.user, {
+  foreignKey: 'owner_user_id',
+  as: 'owner',
+})
+
 models.product.hasMany(models.ingredientPackageConversion, {
   foreignKey: 'product_id',
   as: 'ingredientPackageConversions',
@@ -92,6 +99,16 @@ models.recipeIngredient.belongsTo(models.product, {
 models.recipeIngredient.belongsTo(models.recipe, {
   foreignKey: 'recipe_id',
   as: 'recipe',
+})
+
+models.recipeIngredient.belongsTo(models.unit, {
+  foreignKey: 'unit_id',
+  as: 'unit',
+})
+
+models.recipeIngredient.belongsTo(models.package, {
+  foreignKey: 'package_id',
+  as: 'legacyPackage',
 })
 
 models.recipeIngredient.belongsTo(models.ingredientPackageConversion, {
@@ -286,6 +303,11 @@ models.shoppingListItem.belongsTo(models.product, {
 })
 
 models.shoppingListItem.belongsTo(models.unit, {
+  foreignKey: 'unit_id',
+  as: 'unit',
+})
+
+models.package.belongsTo(models.unit, {
   foreignKey: 'unit_id',
   as: 'unit',
 })

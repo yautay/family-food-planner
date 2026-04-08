@@ -1,4 +1,6 @@
-import catalogDb from '../db/catalog.js'
+import { Op, fn, col, where, literal } from 'sequelize'
+import sequelize from '../db/client.js'
+import models from '../models/index.js'
 
 function normalizeSearch(search) {
   const value = typeof search === 'string' ? search.trim() : ''
@@ -22,6 +24,14 @@ function parseNullableNumber(value) {
 
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed : null
+}
+
+function round2(value) {
+  if (!Number.isFinite(value)) {
+    return 0
+  }
+
+  return Number(value.toFixed(2))
 }
 
 const MASS_ALIAS_FACTORS = new Map([
@@ -78,44 +88,39 @@ function inferPhysicalUnitSpec(unitName) {
   return null
 }
 
-function recipeSelectSql() {
-  return `
-    SELECT
-      r.id,
-      r.name,
-      r.normalized_name,
-      r.source_file,
-      r.instructions,
-      r.owner_user_id,
-      r.is_system,
-      r.is_editable,
-      owner.username AS owner_username,
-      COUNT(ri.id) AS ingredients_count
-    FROM recipes r
-    LEFT JOIN users owner ON owner.id = r.owner_user_id
-    LEFT JOIN recipe_ingredients ri ON ri.recipe_id = r.id
-  `
+function hasPermission(user, permissionName) {
+  if (!user?.permissions) {
+    return false
+  }
+
+  if (typeof user.permissions.has === 'function') {
+    return user.permissions.has(permissionName)
+  }
+
+  if (Array.isArray(user.permissions)) {
+    return user.permissions.includes(permissionName)
+  }
+
+  return false
 }
 
 function recipeAccessWhere(user) {
   if (!user) {
     return {
-      sql: 'WHERE (r.is_system = 1 OR r.owner_user_id IS NULL)',
-      params: [],
+      [Op.or]: [{ is_system: 1 }, { owner_user_id: null }],
     }
   }
 
-  if (user.permissions.has('recipes.manage')) {
-    return { sql: '', params: [] }
+  if (hasPermission(user, 'recipes.manage')) {
+    return {}
   }
 
   return {
-    sql: 'WHERE (r.is_system = 1 OR r.owner_user_id IS NULL OR r.owner_user_id = ?)',
-    params: [user.id],
+    [Op.or]: [{ is_system: 1 }, { owner_user_id: null }, { owner_user_id: user.id }],
   }
 }
 
-function resolveUnit(unitName) {
+async function resolveUnit(unitName, transaction = undefined) {
   if (!unitName) {
     return null
   }
@@ -125,9 +130,11 @@ function resolveUnit(unitName) {
     return null
   }
 
-  const existing = catalogDb
-    .prepare('SELECT id, name, unit_type, to_grams_factor FROM units WHERE lower(name) = lower(?)')
-    .get(trimmed)
+  const existing = await models.unit.findOne({
+    where: where(fn('lower', col('name')), trimmed.toLowerCase()),
+    raw: true,
+    transaction,
+  })
 
   if (existing && (existing.unit_type === 'mass' || existing.unit_type === 'volume')) {
     return existing
@@ -138,30 +145,21 @@ function resolveUnit(unitName) {
     return null
   }
 
-  const inserted = catalogDb
-    .prepare(
-      `
-      INSERT INTO units(name, symbol, unit_type, to_grams_factor, to_ml_factor)
-      VALUES (?, ?, ?, ?, ?)
-      `,
-    )
-    .run(
-      trimmed,
-      inferred.symbol,
-      inferred.unit_type,
-      inferred.to_grams_factor,
-      inferred.to_ml_factor,
-    )
+  const inserted = await models.unit.create(
+    {
+      name: trimmed,
+      symbol: inferred.symbol,
+      unit_type: inferred.unit_type,
+      to_grams_factor: inferred.to_grams_factor,
+      to_ml_factor: inferred.to_ml_factor,
+    },
+    { transaction },
+  )
 
-  return {
-    id: Number(inserted.lastInsertRowid),
-    name: trimmed,
-    unit_type: inferred.unit_type,
-    to_grams_factor: inferred.to_grams_factor,
-  }
+  return inserted.get({ plain: true })
 }
 
-function resolvePackageTypeId(packageTypeName) {
+async function resolvePackageTypeId(packageTypeName, transaction = undefined) {
   if (!packageTypeName) {
     return null
   }
@@ -172,22 +170,29 @@ function resolvePackageTypeId(packageTypeName) {
   }
 
   const normalizedName = normalizeRecipeName(name)
-  const existing = catalogDb
-    .prepare('SELECT id FROM package_types WHERE normalized_name = ?')
-    .get(normalizedName)
+  const existing = await models.packageType.findOne({
+    where: { normalized_name: normalizedName },
+    attributes: ['id'],
+    raw: true,
+    transaction,
+  })
 
   if (existing) {
     return existing.id
   }
 
-  const inserted = catalogDb
-    .prepare('INSERT INTO package_types(name, normalized_name) VALUES (?, ?)')
-    .run(name, normalizedName)
+  const inserted = await models.packageType.create(
+    {
+      name,
+      normalized_name: normalizedName,
+    },
+    { transaction },
+  )
 
-  return Number(inserted.lastInsertRowid)
+  return inserted.id
 }
 
-function resolveProductId(productId, productName) {
+async function resolveProductId(productId, productName, transaction = undefined) {
   if (productId) {
     return Number(productId)
   }
@@ -197,24 +202,26 @@ function resolveProductId(productId, productName) {
   }
 
   const normalizedName = normalizeRecipeName(productName)
-  const existing = catalogDb
-    .prepare('SELECT id FROM products WHERE normalized_name = ?')
-    .get(normalizedName)
+  const existing = await models.product.findOne({
+    where: { normalized_name: normalizedName },
+    attributes: ['id'],
+    raw: true,
+    transaction,
+  })
 
   if (existing) {
     return existing.id
   }
 
-  const created = catalogDb
-    .prepare(
-      `
-      INSERT INTO products(name, normalized_name)
-      VALUES (?, ?)
-      `,
-    )
-    .run(productName, normalizedName)
+  const created = await models.product.create(
+    {
+      name: productName,
+      normalized_name: normalizedName,
+    },
+    { transaction },
+  )
 
-  return Number(created.lastInsertRowid)
+  return created.id
 }
 
 function deriveGramsPerPackage(quantity, grams) {
@@ -232,12 +239,23 @@ function deriveGramsPerPackage(quantity, grams) {
   return Number(gramsNumber.toFixed(2))
 }
 
-function resolveIngredientPackageConversion(ingredient, productId, unitMeta) {
+async function resolveIngredientPackageConversion(
+  ingredient,
+  productId,
+  unitMeta,
+  transaction = undefined,
+) {
   const conversionId = parseNullableNumber(ingredient?.ingredient_package_conversion_id)
   if (conversionId !== null) {
-    const existingById = catalogDb
-      .prepare('SELECT id FROM ingredient_package_conversions WHERE id = ? AND product_id = ?')
-      .get(conversionId, productId)
+    const existingById = await models.ingredientPackageConversion.findOne({
+      where: {
+        id: conversionId,
+        product_id: productId,
+      },
+      attributes: ['id'],
+      raw: true,
+      transaction,
+    })
 
     if (existingById) {
       return existingById.id
@@ -259,49 +277,49 @@ function resolveIngredientPackageConversion(ingredient, productId, unitMeta) {
     return null
   }
 
-  const packageTypeId = resolvePackageTypeId(inferredName)
+  const packageTypeId = await resolvePackageTypeId(inferredName, transaction)
   if (!packageTypeId) {
     return null
   }
 
   const gramsPerPackage = deriveGramsPerPackage(ingredient?.quantity, ingredient?.grams)
 
-  const existing = catalogDb
-    .prepare(
-      `
-      SELECT id, grams_per_package, samples_count
-      FROM ingredient_package_conversions
-      WHERE product_id = ? AND package_type_id = ?
-      `,
-    )
-    .get(productId, packageTypeId)
+  const existing = await models.ingredientPackageConversion.findOne({
+    where: {
+      product_id: productId,
+      package_type_id: packageTypeId,
+    },
+    attributes: ['id', 'grams_per_package', 'samples_count'],
+    raw: true,
+    transaction,
+  })
 
   if (existing) {
     if (
       gramsPerPackage !== null &&
-      Math.abs(existing.grams_per_package - gramsPerPackage) > 0.001
+      Math.abs(Number(existing.grams_per_package) - Number(gramsPerPackage)) > 0.001
     ) {
-      const nextSamples = Number(existing.samples_count) + 1
+      const existingSamples = Number(existing.samples_count) || 0
+      const nextSamples = existingSamples + 1
       const nextAverage = Number(
         (
-          (existing.grams_per_package * existing.samples_count + gramsPerPackage) /
+          (Number(existing.grams_per_package) * existingSamples + gramsPerPackage) /
           nextSamples
         ).toFixed(2),
       )
 
-      catalogDb
-        .prepare(
-          `
-          UPDATE ingredient_package_conversions
-          SET
-            grams_per_package = ?,
-            samples_count = ?,
-            source = ?,
-            updated_at = CURRENT_TIMESTAMP
-          WHERE id = ?
-          `,
-        )
-        .run(nextAverage, nextSamples, 'recipe-derived:auto-avg', existing.id)
+      await models.ingredientPackageConversion.update(
+        {
+          grams_per_package: nextAverage,
+          samples_count: nextSamples,
+          source: 'recipe-derived:auto-avg',
+          updated_at: new Date().toISOString(),
+        },
+        {
+          where: { id: existing.id },
+          transaction,
+        },
+      )
     }
 
     return existing.id
@@ -311,113 +329,270 @@ function resolveIngredientPackageConversion(ingredient, productId, unitMeta) {
     return null
   }
 
-  const inserted = catalogDb
-    .prepare(
-      `
-      INSERT INTO ingredient_package_conversions(
-        product_id,
-        package_type_id,
-        grams_per_package,
-        source,
-        samples_count
-      )
-      VALUES (?, ?, ?, ?, ?)
-      `,
-    )
-    .run(productId, packageTypeId, gramsPerPackage, 'recipe-derived:first-sample', 1)
+  const inserted = await models.ingredientPackageConversion.create(
+    {
+      product_id: productId,
+      package_type_id: packageTypeId,
+      grams_per_package: gramsPerPackage,
+      source: 'recipe-derived:first-sample',
+      samples_count: 1,
+    },
+    { transaction },
+  )
 
-  return Number(inserted.lastInsertRowid)
+  return inserted.id
 }
 
-function effectiveGramsSql() {
-  return `
-    COALESCE(
-      ri.grams,
-      CASE
-        WHEN ri.quantity IS NOT NULL AND ipc.grams_per_package IS NOT NULL
-          THEN ri.quantity * ipc.grams_per_package
-        ELSE NULL
-      END,
-      CASE
-        WHEN ri.quantity IS NOT NULL AND ri.package_id IS NOT NULL AND pkg.grams IS NOT NULL
-          THEN ri.quantity * pkg.grams
-        ELSE NULL
-      END,
-      CASE
-        WHEN ri.quantity IS NOT NULL AND u.to_grams_factor IS NOT NULL
-          THEN ri.quantity * u.to_grams_factor
-        ELSE NULL
-      END,
-      CASE
-        WHEN ri.quantity IS NOT NULL
-             AND u.to_ml_factor IS NOT NULL
-             AND p.unit_to_ml IS NOT NULL
-             AND p.unit_to_ml > 0
-             AND du.to_grams_factor IS NOT NULL
-          THEN ri.quantity * u.to_ml_factor * du.to_grams_factor / p.unit_to_ml
-        ELSE NULL
-      END
-    )
-  `
+function computeEffectiveGrams(ingredient) {
+  const grams = parseNullableNumber(ingredient.grams)
+  if (grams !== null) {
+    return grams
+  }
+
+  const quantity = parseNullableNumber(ingredient.quantity)
+  if (quantity === null) {
+    return null
+  }
+
+  const conversionGrams = parseNullableNumber(
+    ingredient.ingredientPackageConversion?.grams_per_package,
+  )
+  if (conversionGrams !== null) {
+    return quantity * conversionGrams
+  }
+
+  const packageGrams = parseNullableNumber(ingredient.legacyPackage?.grams)
+  if (packageGrams !== null) {
+    return quantity * packageGrams
+  }
+
+  const unitToGrams = parseNullableNumber(ingredient.unit?.to_grams_factor)
+  if (unitToGrams !== null) {
+    return quantity * unitToGrams
+  }
+
+  const unitToMl = parseNullableNumber(ingredient.unit?.to_ml_factor)
+  const productUnitToMl = parsePositiveNumber(ingredient.product?.unit_to_ml)
+  const defaultUnitToGrams = parseNullableNumber(ingredient.product?.defaultUnit?.to_grams_factor)
+
+  if (
+    unitToMl !== null &&
+    productUnitToMl !== null &&
+    productUnitToMl > 0 &&
+    defaultUnitToGrams !== null
+  ) {
+    return (quantity * unitToMl * defaultUnitToGrams) / productUnitToMl
+  }
+
+  return null
+}
+
+function parsePositiveNumber(value) {
+  const parsed = parseNullableNumber(value)
+  if (parsed === null || parsed <= 0) {
+    return null
+  }
+
+  return parsed
+}
+
+async function getRecipeIngredientRows(recipeId) {
+  const rows = await models.recipeIngredient.findAll({
+    where: { recipe_id: recipeId },
+    include: [
+      {
+        model: models.product,
+        as: 'product',
+        required: true,
+        attributes: [
+          'id',
+          'name',
+          'unit_to_ml',
+          'calories_per_100g',
+          'carbohydrates_per_100g',
+          'sugars_per_100g',
+          'fat_per_100g',
+          'protein_per_100g',
+          'fiber_per_100g',
+        ],
+        include: [
+          {
+            model: models.unit,
+            as: 'defaultUnit',
+            attributes: ['to_grams_factor'],
+            required: false,
+          },
+        ],
+      },
+      {
+        model: models.unit,
+        as: 'unit',
+        attributes: ['name', 'to_grams_factor', 'to_ml_factor'],
+        required: false,
+      },
+      {
+        model: models.ingredientPackageConversion,
+        as: 'ingredientPackageConversion',
+        attributes: ['id', 'grams_per_package'],
+        required: false,
+        include: [
+          {
+            model: models.packageType,
+            as: 'packageType',
+            attributes: ['name'],
+            required: false,
+          },
+        ],
+      },
+      {
+        model: models.package,
+        as: 'legacyPackage',
+        attributes: ['grams'],
+        required: false,
+      },
+    ],
+    order: [[literal('product.name COLLATE NOCASE'), 'ASC']],
+  })
+
+  return rows.map((row) => row.get({ plain: true }))
 }
 
 async function getRecipes(search, user) {
   const searchValue = normalizeSearch(search)
-  const access = recipeAccessWhere(user)
+  const whereAccess = recipeAccessWhere(user)
 
-  const baseWhere = access.sql.length > 0 ? `${access.sql} AND` : 'WHERE'
+  const whereClause = searchValue
+    ? {
+        [Op.and]: [
+          whereAccess,
+          {
+            [Op.or]: [
+              { name: { [Op.like]: searchValue } },
+              { normalized_name: { [Op.like]: searchValue } },
+            ],
+          },
+        ],
+      }
+    : whereAccess
 
-  return catalogDb
-    .prepare(
-      `
-      ${recipeSelectSql()}
-      ${baseWhere} (? IS NULL OR r.name LIKE ? OR r.normalized_name LIKE ?)
-      GROUP BY r.id
-      ORDER BY r.name COLLATE NOCASE ASC
-      `,
-    )
-    .all(...access.params, searchValue, searchValue, searchValue)
+  const recipes = await models.recipe.findAll({
+    where: whereClause,
+    include: [
+      {
+        model: models.user,
+        as: 'owner',
+        attributes: ['username'],
+        required: false,
+      },
+    ],
+    order: [[literal('Recipe.name COLLATE NOCASE'), 'ASC']],
+  })
+
+  const plainRecipes = recipes.map((recipe) => recipe.get({ plain: true }))
+  const recipeIds = plainRecipes.map((recipe) => recipe.id)
+  const counts =
+    recipeIds.length > 0
+      ? await models.recipeIngredient.findAll({
+          attributes: ['recipe_id', [fn('COUNT', col('id')), 'ingredients_count']],
+          where: {
+            recipe_id: {
+              [Op.in]: recipeIds,
+            },
+          },
+          group: ['recipe_id'],
+          raw: true,
+        })
+      : []
+
+  const countByRecipe = new Map(
+    counts.map((row) => [row.recipe_id, Number(row.ingredients_count) || 0]),
+  )
+
+  return plainRecipes.map((recipe) => ({
+    id: recipe.id,
+    name: recipe.name,
+    normalized_name: recipe.normalized_name,
+    source_file: recipe.source_file,
+    instructions: recipe.instructions,
+    owner_user_id: recipe.owner_user_id,
+    is_system: recipe.is_system,
+    is_editable: recipe.is_editable,
+    owner_username: recipe.owner?.username ?? null,
+    ingredients_count: countByRecipe.get(recipe.id) ?? 0,
+  }))
 }
 
 async function getRecipeNutritionSummaries(user) {
-  const access = recipeAccessWhere(user)
-  const whereClause = access.sql.length > 0 ? access.sql : ''
+  const recipes = await getRecipes(null, user)
+  if (recipes.length === 0) {
+    return []
+  }
 
-  return catalogDb
-    .prepare(
-      `
-      SELECT
-        r.id AS recipe_id,
-        r.name AS recipe_name,
-        COALESCE(n.total_grams, 0) AS total_grams,
-        COALESCE(n.calories, 0) AS calories,
-        COALESCE(n.carbohydrates, 0) AS carbohydrates,
-        COALESCE(n.sugars, 0) AS sugars,
-        COALESCE(n.fat, 0) AS fat,
-        COALESCE(n.protein, 0) AS protein,
-        COALESCE(n.fiber, 0) AS fiber
-      FROM recipes r
-      LEFT JOIN recipe_nutrition_summary n ON n.recipe_id = r.id
-      ${whereClause}
-      ORDER BY r.name COLLATE NOCASE ASC
-      `,
-    )
-    .all(...access.params)
+  const ids = recipes.map((recipe) => recipe.id)
+  const summaries = await models.recipeNutritionSummary.findAll({
+    where: {
+      recipe_id: {
+        [Op.in]: ids,
+      },
+    },
+    raw: true,
+  })
+
+  const summaryByRecipeId = new Map(summaries.map((summary) => [summary.recipe_id, summary]))
+
+  return recipes.map((recipe) => {
+    const summary = summaryByRecipeId.get(recipe.id)
+    return {
+      recipe_id: recipe.id,
+      recipe_name: recipe.name,
+      total_grams: summary?.total_grams ?? 0,
+      calories: summary?.calories ?? 0,
+      carbohydrates: summary?.carbohydrates ?? 0,
+      sugars: summary?.sugars ?? 0,
+      fat: summary?.fat ?? 0,
+      protein: summary?.protein ?? 0,
+      fiber: summary?.fiber ?? 0,
+    }
+  })
 }
 
 async function getRecipeById(id, user) {
-  const access = recipeAccessWhere(user)
-  const baseWhere = access.sql.length > 0 ? `${access.sql} AND` : 'WHERE'
+  const whereAccess = recipeAccessWhere(user)
+  const recipe = await models.recipe.findOne({
+    where: {
+      [Op.and]: [whereAccess, { id }],
+    },
+    include: [
+      {
+        model: models.user,
+        as: 'owner',
+        attributes: ['username'],
+        required: false,
+      },
+    ],
+  })
 
-  return catalogDb
-    .prepare(
-      `
-      ${recipeSelectSql()}
-      ${baseWhere} r.id = ?
-      GROUP BY r.id
-      `,
-    )
-    .get(...access.params, id)
+  if (!recipe) {
+    return null
+  }
+
+  const plain = recipe.get({ plain: true })
+  const ingredientsCount = await models.recipeIngredient.count({
+    where: { recipe_id: id },
+  })
+
+  return {
+    id: plain.id,
+    name: plain.name,
+    normalized_name: plain.normalized_name,
+    source_file: plain.source_file,
+    instructions: plain.instructions,
+    owner_user_id: plain.owner_user_id,
+    is_system: plain.is_system,
+    is_editable: plain.is_editable,
+    owner_username: plain.owner?.username ?? null,
+    ingredients_count: ingredientsCount,
+  }
 }
 
 async function getRecipeIngredients(recipeId, user) {
@@ -426,34 +601,27 @@ async function getRecipeIngredients(recipeId, user) {
     return null
   }
 
-  const ingredients = catalogDb
-    .prepare(
-      `
-      SELECT
-        ri.id,
-        ri.recipe_id,
-        p.id AS product_id,
-        p.name AS product_name,
-        ri.quantity,
-        COALESCE(u.name, pt.name) AS unit_name,
-        ri.ingredient_package_conversion_id,
-        pt.name AS package_type_name,
-        ipc.grams_per_package,
-        ri.grams,
-        ROUND(${effectiveGramsSql()}, 2) AS effective_grams,
-        ri.note
-      FROM recipe_ingredients ri
-      INNER JOIN products p ON p.id = ri.product_id
-      LEFT JOIN units u ON u.id = ri.unit_id
-      LEFT JOIN units du ON du.id = p.default_unit_id
-      LEFT JOIN ingredient_package_conversions ipc ON ipc.id = ri.ingredient_package_conversion_id
-      LEFT JOIN package_types pt ON pt.id = ipc.package_type_id
-      LEFT JOIN packages pkg ON pkg.id = ri.package_id
-      WHERE ri.recipe_id = ?
-      ORDER BY p.name COLLATE NOCASE ASC
-      `,
-    )
-    .all(recipeId)
+  const ingredientRows = await getRecipeIngredientRows(recipeId)
+
+  const ingredients = ingredientRows.map((ingredient) => {
+    const effectiveGrams = computeEffectiveGrams(ingredient)
+
+    return {
+      id: ingredient.id,
+      recipe_id: ingredient.recipe_id,
+      product_id: ingredient.product.id,
+      product_name: ingredient.product.name,
+      quantity: ingredient.quantity,
+      unit_name:
+        ingredient.unit?.name ?? ingredient.ingredientPackageConversion?.packageType?.name ?? null,
+      ingredient_package_conversion_id: ingredient.ingredient_package_conversion_id,
+      package_type_name: ingredient.ingredientPackageConversion?.packageType?.name ?? null,
+      grams_per_package: ingredient.ingredientPackageConversion?.grams_per_package ?? null,
+      grams: ingredient.grams,
+      effective_grams: effectiveGrams === null ? null : round2(effectiveGrams),
+      note: ingredient.note,
+    }
+  })
 
   return {
     recipe,
@@ -469,61 +637,61 @@ async function createRecipe(payload, user) {
 
   const recipeIngredients = Array.isArray(payload?.ingredients) ? payload.ingredients : []
 
-  const recipeId = catalogDb.transaction(() => {
+  const recipeId = await sequelize.transaction(async (transaction) => {
     const normalizedName = normalizeRecipeName(recipeName)
 
-    const created = catalogDb
-      .prepare(
-        `
-        INSERT INTO recipes(name, normalized_name, source_file, owner_user_id, is_system, is_editable)
-        VALUES (?, ?, ?, ?, 0, 1)
-        `,
-      )
-      .run(recipeName, normalizedName, payload?.source_file ?? null, user.id)
-
-    const newRecipeId = Number(created.lastInsertRowid)
+    const created = await models.recipe.create(
+      {
+        name: recipeName,
+        normalized_name: normalizedName,
+        source_file: payload?.source_file ?? null,
+        instructions: typeof payload?.instructions === 'string' ? payload.instructions.trim() : '',
+        owner_user_id: user.id,
+        is_system: 0,
+        is_editable: 1,
+      },
+      { transaction },
+    )
 
     for (const ingredient of recipeIngredients) {
-      const productId = resolveProductId(ingredient.product_id, ingredient.product_name)
-      const unitMeta = resolveUnit(ingredient.unit_name)
-      const conversionId = resolveIngredientPackageConversion(ingredient, productId, unitMeta)
+      const productId = await resolveProductId(
+        ingredient.product_id,
+        ingredient.product_name,
+        transaction,
+      )
+      const unitMeta = await resolveUnit(ingredient.unit_name, transaction)
+      const conversionId = await resolveIngredientPackageConversion(
+        ingredient,
+        productId,
+        unitMeta,
+        transaction,
+      )
 
-      catalogDb
-        .prepare(
-          `
-          INSERT INTO recipe_ingredients(
-            recipe_id,
-            product_id,
-            quantity,
-            unit_id,
-            grams,
-            ingredient_package_conversion_id,
-            note
-          )
-          VALUES (?, ?, ?, ?, ?, ?, ?)
-          `,
-        )
-        .run(
-          newRecipeId,
-          productId,
-          parseNullableNumber(ingredient.quantity),
-          unitMeta?.id ?? null,
-          parseNullableNumber(ingredient.grams),
-          conversionId,
-          ingredient.note ?? '',
-        )
+      await models.recipeIngredient.create(
+        {
+          recipe_id: created.id,
+          product_id: productId,
+          quantity: parseNullableNumber(ingredient.quantity),
+          unit_id: unitMeta?.id ?? null,
+          grams: parseNullableNumber(ingredient.grams),
+          ingredient_package_conversion_id: conversionId,
+          note: ingredient.note ?? '',
+        },
+        { transaction },
+      )
     }
 
-    return newRecipeId
-  })()
+    return created.id
+  })
 
   return getRecipeById(recipeId, user)
 }
 
 async function updateRecipe(recipeId, payload, user) {
-  const existing = catalogDb
-    .prepare('SELECT id, is_system, is_editable FROM recipes WHERE id = ?')
-    .get(recipeId)
+  const existing = await models.recipe.findByPk(recipeId, {
+    attributes: ['id', 'is_system', 'is_editable'],
+    raw: true,
+  })
 
   if (!existing) {
     return null
@@ -540,60 +708,65 @@ async function updateRecipe(recipeId, payload, user) {
 
   const recipeIngredients = Array.isArray(payload?.ingredients) ? payload.ingredients : []
 
-  catalogDb.transaction(() => {
+  await sequelize.transaction(async (transaction) => {
     const normalizedName = normalizeRecipeName(recipeName)
 
-    catalogDb
-      .prepare(
-        `
-        UPDATE recipes
-        SET name = ?, normalized_name = ?, source_file = ?, updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-        `,
-      )
-      .run(recipeName, normalizedName, payload?.source_file ?? null, recipeId)
+    await models.recipe.update(
+      {
+        name: recipeName,
+        normalized_name: normalizedName,
+        source_file: payload?.source_file ?? null,
+        instructions: typeof payload?.instructions === 'string' ? payload.instructions.trim() : '',
+        updated_at: new Date().toISOString(),
+      },
+      {
+        where: { id: recipeId },
+        transaction,
+      },
+    )
 
-    catalogDb.prepare('DELETE FROM recipe_ingredients WHERE recipe_id = ?').run(recipeId)
+    await models.recipeIngredient.destroy({
+      where: { recipe_id: recipeId },
+      transaction,
+    })
 
     for (const ingredient of recipeIngredients) {
-      const productId = resolveProductId(ingredient.product_id, ingredient.product_name)
-      const unitMeta = resolveUnit(ingredient.unit_name)
-      const conversionId = resolveIngredientPackageConversion(ingredient, productId, unitMeta)
+      const productId = await resolveProductId(
+        ingredient.product_id,
+        ingredient.product_name,
+        transaction,
+      )
+      const unitMeta = await resolveUnit(ingredient.unit_name, transaction)
+      const conversionId = await resolveIngredientPackageConversion(
+        ingredient,
+        productId,
+        unitMeta,
+        transaction,
+      )
 
-      catalogDb
-        .prepare(
-          `
-          INSERT INTO recipe_ingredients(
-            recipe_id,
-            product_id,
-            quantity,
-            unit_id,
-            grams,
-            ingredient_package_conversion_id,
-            note
-          )
-          VALUES (?, ?, ?, ?, ?, ?, ?)
-          `,
-        )
-        .run(
-          recipeId,
-          productId,
-          parseNullableNumber(ingredient.quantity),
-          unitMeta?.id ?? null,
-          parseNullableNumber(ingredient.grams),
-          conversionId,
-          ingredient.note ?? '',
-        )
+      await models.recipeIngredient.create(
+        {
+          recipe_id: recipeId,
+          product_id: productId,
+          quantity: parseNullableNumber(ingredient.quantity),
+          unit_id: unitMeta?.id ?? null,
+          grams: parseNullableNumber(ingredient.grams),
+          ingredient_package_conversion_id: conversionId,
+          note: ingredient.note ?? '',
+        },
+        { transaction },
+      )
     }
-  })()
+  })
 
   return getRecipeById(recipeId, user)
 }
 
 async function deleteRecipe(recipeId) {
-  const existing = catalogDb
-    .prepare('SELECT id, is_system, is_editable FROM recipes WHERE id = ?')
-    .get(recipeId)
+  const existing = await models.recipe.findByPk(recipeId, {
+    attributes: ['id', 'is_system', 'is_editable'],
+    raw: true,
+  })
 
   if (!existing) {
     return null
@@ -603,7 +776,10 @@ async function deleteRecipe(recipeId) {
     throw new Error('This recipe is read-only')
   }
 
-  catalogDb.prepare('DELETE FROM recipes WHERE id = ?').run(recipeId)
+  await models.recipe.destroy({
+    where: { id: recipeId },
+  })
+
   return true
 }
 
@@ -614,47 +790,43 @@ async function getRecipeNutrition(recipeId, user) {
   }
 
   const summary =
-    catalogDb.prepare('SELECT * FROM recipe_nutrition_summary WHERE recipe_id = ?').get(recipeId) ??
-    null
+    (await models.recipeNutritionSummary.findOne({
+      where: { recipe_id: recipeId },
+      raw: true,
+    })) ?? null
 
-  const items = catalogDb
-    .prepare(
-      `
-      SELECT
-        ri.id,
-        p.id AS product_id,
-        p.name AS product_name,
-        ri.quantity,
-        COALESCE(u.name, pt.name) AS unit_name,
-        ri.ingredient_package_conversion_id,
-        pt.name AS package_type_name,
-        ipc.grams_per_package,
-        ri.grams,
-        ROUND(${effectiveGramsSql()}, 2) AS effective_grams,
-        p.calories_per_100g,
-        p.carbohydrates_per_100g,
-        p.sugars_per_100g,
-        p.fat_per_100g,
-        p.protein_per_100g,
-        p.fiber_per_100g,
-        ROUND(COALESCE(${effectiveGramsSql()}, 0) * COALESCE(p.calories_per_100g, 0) / 100.0, 2) AS calories,
-        ROUND(COALESCE(${effectiveGramsSql()}, 0) * COALESCE(p.carbohydrates_per_100g, 0) / 100.0, 2) AS carbohydrates,
-        ROUND(COALESCE(${effectiveGramsSql()}, 0) * COALESCE(p.sugars_per_100g, 0) / 100.0, 2) AS sugars,
-        ROUND(COALESCE(${effectiveGramsSql()}, 0) * COALESCE(p.fat_per_100g, 0) / 100.0, 2) AS fat,
-        ROUND(COALESCE(${effectiveGramsSql()}, 0) * COALESCE(p.protein_per_100g, 0) / 100.0, 2) AS protein,
-        ROUND(COALESCE(${effectiveGramsSql()}, 0) * COALESCE(p.fiber_per_100g, 0) / 100.0, 2) AS fiber
-      FROM recipe_ingredients ri
-      INNER JOIN products p ON p.id = ri.product_id
-      LEFT JOIN units u ON u.id = ri.unit_id
-      LEFT JOIN units du ON du.id = p.default_unit_id
-      LEFT JOIN ingredient_package_conversions ipc ON ipc.id = ri.ingredient_package_conversion_id
-      LEFT JOIN package_types pt ON pt.id = ipc.package_type_id
-      LEFT JOIN packages pkg ON pkg.id = ri.package_id
-      WHERE ri.recipe_id = ?
-      ORDER BY p.name COLLATE NOCASE ASC
-      `,
-    )
-    .all(recipeId)
+  const ingredientRows = await getRecipeIngredientRows(recipeId)
+  const items = ingredientRows.map((ingredient) => {
+    const effectiveGrams = computeEffectiveGrams(ingredient)
+    const gramsForMath = effectiveGrams ?? 0
+    const product = ingredient.product
+
+    return {
+      id: ingredient.id,
+      product_id: product.id,
+      product_name: product.name,
+      quantity: ingredient.quantity,
+      unit_name:
+        ingredient.unit?.name ?? ingredient.ingredientPackageConversion?.packageType?.name ?? null,
+      ingredient_package_conversion_id: ingredient.ingredient_package_conversion_id,
+      package_type_name: ingredient.ingredientPackageConversion?.packageType?.name ?? null,
+      grams_per_package: ingredient.ingredientPackageConversion?.grams_per_package ?? null,
+      grams: ingredient.grams,
+      effective_grams: effectiveGrams === null ? null : round2(effectiveGrams),
+      calories_per_100g: product.calories_per_100g,
+      carbohydrates_per_100g: product.carbohydrates_per_100g,
+      sugars_per_100g: product.sugars_per_100g,
+      fat_per_100g: product.fat_per_100g,
+      protein_per_100g: product.protein_per_100g,
+      fiber_per_100g: product.fiber_per_100g,
+      calories: round2((gramsForMath * (product.calories_per_100g ?? 0)) / 100),
+      carbohydrates: round2((gramsForMath * (product.carbohydrates_per_100g ?? 0)) / 100),
+      sugars: round2((gramsForMath * (product.sugars_per_100g ?? 0)) / 100),
+      fat: round2((gramsForMath * (product.fat_per_100g ?? 0)) / 100),
+      protein: round2((gramsForMath * (product.protein_per_100g ?? 0)) / 100),
+      fiber: round2((gramsForMath * (product.fiber_per_100g ?? 0)) / 100),
+    }
+  })
 
   return {
     recipe,
