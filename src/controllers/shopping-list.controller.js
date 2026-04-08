@@ -1,4 +1,6 @@
-import catalogDb from '../db/catalog.js'
+import { Op, fn, col } from 'sequelize'
+import sequelize from '../db/client.js'
+import models from '../models/index.js'
 
 const SHOPPING_LIST_STATUSES = new Set(['open', 'archived'])
 
@@ -28,19 +30,29 @@ function parseOptionalInteger(value) {
   return parsed
 }
 
-function getOwnedMealPlanById(mealPlanId, ownerUserId) {
-  return catalogDb
-    .prepare('SELECT id FROM meal_plans WHERE id = ? AND owner_user_id = ?')
-    .get(mealPlanId, ownerUserId)
+async function getOwnedMealPlanById(mealPlanId, ownerUserId) {
+  return models.mealPlan.findOne({
+    where: {
+      id: mealPlanId,
+      owner_user_id: ownerUserId,
+    },
+    attributes: ['id'],
+    raw: true,
+  })
 }
 
-function getOwnedMealPlanForGeneration(mealPlanId, ownerUserId) {
-  return catalogDb
-    .prepare('SELECT id, name, portions_count FROM meal_plans WHERE id = ? AND owner_user_id = ?')
-    .get(mealPlanId, ownerUserId)
+async function getOwnedMealPlanForGeneration(mealPlanId, ownerUserId) {
+  return models.mealPlan.findOne({
+    where: {
+      id: mealPlanId,
+      owner_user_id: ownerUserId,
+    },
+    attributes: ['id', 'name', 'portions_count'],
+    raw: true,
+  })
 }
 
-function validateShoppingListPayload(payload, ownerUserId) {
+async function validateShoppingListPayload(payload, ownerUserId) {
   const name = normalizeText(payload?.name)
   const status = normalizeText(payload?.status).toLowerCase() || 'open'
   const note = typeof payload?.note === 'string' ? payload.note.trim() : ''
@@ -54,7 +66,7 @@ function validateShoppingListPayload(payload, ownerUserId) {
     throw new Error('status must be one of: open, archived')
   }
 
-  if (mealPlanId && !getOwnedMealPlanById(mealPlanId, ownerUserId)) {
+  if (mealPlanId && !(await getOwnedMealPlanById(mealPlanId, ownerUserId))) {
     throw new Error('meal_plan_id does not belong to current user')
   }
 
@@ -97,56 +109,75 @@ function normalizeItemPayload(payload) {
   }
 }
 
-function getOwnedShoppingListById(shoppingListId, ownerUserId) {
-  return catalogDb
-    .prepare(
-      `
-      SELECT id, owner_user_id, meal_plan_id, name, status, note, created_at, updated_at
-      FROM shopping_lists
-      WHERE id = ? AND owner_user_id = ?
-      `,
-    )
-    .get(shoppingListId, ownerUserId)
+async function getOwnedShoppingListById(shoppingListId, ownerUserId) {
+  return models.shoppingList.findOne({
+    where: {
+      id: shoppingListId,
+      owner_user_id: ownerUserId,
+    },
+    raw: true,
+  })
 }
 
-function getShoppingListItems(shoppingListId) {
-  return catalogDb
-    .prepare(
-      `
-      SELECT
-        i.id,
-        i.shopping_list_id,
-        i.product_id,
-        p.name AS product_name,
-        i.custom_name,
-        i.quantity,
-        i.unit_id,
-        u.name AS unit_name,
-        i.is_checked,
-        i.note,
-        i.created_at,
-        i.updated_at
-      FROM shopping_list_items i
-      LEFT JOIN products p ON p.id = i.product_id
-      LEFT JOIN units u ON u.id = i.unit_id
-      WHERE i.shopping_list_id = ?
-      ORDER BY i.is_checked ASC, i.id ASC
-      `,
-    )
-    .all(shoppingListId)
+async function getShoppingListItems(shoppingListId) {
+  const rows = await models.shoppingListItem.findAll({
+    where: { shopping_list_id: shoppingListId },
+    include: [
+      {
+        model: models.product,
+        as: 'product',
+        attributes: ['name'],
+        required: false,
+      },
+      {
+        model: models.unit,
+        as: 'unit',
+        attributes: ['name'],
+        required: false,
+      },
+    ],
+    order: [
+      ['is_checked', 'ASC'],
+      ['id', 'ASC'],
+    ],
+  })
+
+  return rows.map((row) => {
+    const plain = row.get({ plain: true })
+    return {
+      id: plain.id,
+      shopping_list_id: plain.shopping_list_id,
+      product_id: plain.product_id,
+      product_name: plain.product?.name ?? null,
+      custom_name: plain.custom_name,
+      quantity: plain.quantity,
+      unit_id: plain.unit_id,
+      unit_name: plain.unit?.name ?? null,
+      is_checked: plain.is_checked,
+      note: plain.note,
+      created_at: plain.created_at,
+      updated_at: plain.updated_at,
+    }
+  })
 }
 
-function getOwnedShoppingListItem(shoppingListId, itemId, ownerUserId) {
-  return catalogDb
-    .prepare(
-      `
-      SELECT i.*
-      FROM shopping_list_items i
-      INNER JOIN shopping_lists s ON s.id = i.shopping_list_id
-      WHERE i.id = ? AND i.shopping_list_id = ? AND s.owner_user_id = ?
-      `,
-    )
-    .get(itemId, shoppingListId, ownerUserId)
+async function getOwnedShoppingListItem(shoppingListId, itemId, ownerUserId) {
+  return models.shoppingListItem.findOne({
+    where: {
+      id: itemId,
+      shopping_list_id: shoppingListId,
+    },
+    include: [
+      {
+        model: models.shoppingList,
+        as: 'shoppingList',
+        attributes: ['id', 'owner_user_id'],
+        where: { owner_user_id: ownerUserId },
+        required: true,
+      },
+    ],
+    raw: true,
+  })
 }
 
 function mergeGeneratedItem(targetMap, row) {
@@ -206,86 +237,198 @@ function mergeGeneratedItem(targetMap, row) {
   }
 }
 
-function buildGeneratedItems(mealPlanId, portionsCount = 1) {
-  const legacyRows = catalogDb
-    .prepare(
-      `
-      SELECT
-        e.recipe_id,
-        e.custom_name AS entry_custom_name,
-        e.servings,
-        ? AS portions_count,
-        1 AS meal_portions,
-        ri.product_id,
-        ri.quantity,
-        COALESCE(ri.unit_id, p.default_unit_id) AS unit_id
-      FROM meal_plan_entries e
-      LEFT JOIN recipe_ingredients ri ON ri.recipe_id = e.recipe_id
-      LEFT JOIN products p ON p.id = ri.product_id
-      WHERE e.meal_plan_id = ?
-      ORDER BY e.id ASC, ri.id ASC
-      `,
-    )
-    .all(portionsCount, mealPlanId)
+async function getRecipeIngredientRows(recipeIds) {
+  if (!Array.isArray(recipeIds) || recipeIds.length === 0) {
+    return []
+  }
 
-  const templateRows = catalogDb
-    .prepare(
-      `
-      SELECT
-        m.recipe_id,
-        NULL AS entry_custom_name,
-        m.servings,
-        COALESCE(mp.portions_count, 1) AS portions_count,
-        COALESCE(m.portions, 1) AS meal_portions,
-        ri.product_id,
-        ri.quantity,
-        COALESCE(ri.unit_id, p.default_unit_id) AS unit_id
-      FROM meal_plan_day_slots s
-      INNER JOIN meal_plans mp ON mp.id = s.meal_plan_id
-      INNER JOIN day_plan_meals m ON m.day_plan_id = s.day_plan_id
-      LEFT JOIN recipe_ingredients ri ON ri.recipe_id = m.recipe_id
-      LEFT JOIN products p ON p.id = ri.product_id
-      WHERE s.meal_plan_id = ?
-      ORDER BY s.planned_date ASC, m.meal_order ASC, ri.id ASC
-      `,
-    )
-    .all(mealPlanId)
+  const rows = await models.recipeIngredient.findAll({
+    where: {
+      recipe_id: {
+        [Op.in]: recipeIds,
+      },
+    },
+    include: [
+      {
+        model: models.product,
+        as: 'product',
+        attributes: ['default_unit_id'],
+        required: false,
+      },
+    ],
+    order: [['id', 'ASC']],
+  })
 
-  const customRows = catalogDb
-    .prepare(
-      `
-      SELECT
-        m.recipe_id,
-        NULL AS entry_custom_name,
-        m.servings,
-        COALESCE(mp.portions_count, 1) AS portions_count,
-        COALESCE(m.portions, 1) AS meal_portions,
-        ri.product_id,
-        ri.quantity,
-        COALESCE(ri.unit_id, p.default_unit_id) AS unit_id
-      FROM meal_plan_day_slots s
-      INNER JOIN meal_plans mp ON mp.id = s.meal_plan_id
-      INNER JOIN meal_plan_day_slot_meals m ON m.day_slot_id = s.id
-      LEFT JOIN recipe_ingredients ri ON ri.recipe_id = m.recipe_id
-      LEFT JOIN products p ON p.id = ri.product_id
-      WHERE s.meal_plan_id = ? AND s.day_plan_id IS NULL
-      ORDER BY s.planned_date ASC, m.meal_order ASC, ri.id ASC
-      `,
-    )
-    .all(mealPlanId)
+  return rows.map((row) => {
+    const plain = row.get({ plain: true })
+    return {
+      recipe_id: plain.recipe_id,
+      product_id: plain.product_id,
+      quantity: plain.quantity,
+      unit_id: plain.unit_id ?? plain.product?.default_unit_id ?? null,
+    }
+  })
+}
+
+async function buildGeneratedItems(mealPlanId, portionsCount = 1) {
+  const legacyEntries = await models.mealPlanEntry.findAll({
+    where: { meal_plan_id: mealPlanId },
+    order: [['id', 'ASC']],
+    raw: true,
+  })
+
+  const templateSlots = await models.mealPlanDaySlot.findAll({
+    where: {
+      meal_plan_id: mealPlanId,
+      day_plan_id: {
+        [Op.not]: null,
+      },
+    },
+    order: [['planned_date', 'ASC']],
+    raw: true,
+  })
+
+  const customSlots = await models.mealPlanDaySlot.findAll({
+    where: {
+      meal_plan_id: mealPlanId,
+      day_plan_id: null,
+    },
+    order: [['planned_date', 'ASC']],
+    raw: true,
+  })
+
+  const dayPlanIds = Array.from(
+    new Set(templateSlots.map((slot) => slot.day_plan_id).filter(Boolean)),
+  )
+  const dayPlanMeals =
+    dayPlanIds.length > 0
+      ? await models.dayPlanMeal.findAll({
+          where: {
+            day_plan_id: {
+              [Op.in]: dayPlanIds,
+            },
+          },
+          order: [['meal_order', 'ASC']],
+          raw: true,
+        })
+      : []
+
+  const customSlotIds = customSlots.map((slot) => slot.id)
+  const customSlotMeals =
+    customSlotIds.length > 0
+      ? await models.mealPlanDaySlotMeal.findAll({
+          where: {
+            day_slot_id: {
+              [Op.in]: customSlotIds,
+            },
+          },
+          order: [
+            ['day_slot_id', 'ASC'],
+            ['meal_order', 'ASC'],
+          ],
+          raw: true,
+        })
+      : []
+
+  const allRecipeIds = Array.from(
+    new Set(
+      [
+        ...legacyEntries.map((entry) => entry.recipe_id),
+        ...dayPlanMeals.map((meal) => meal.recipe_id),
+        ...customSlotMeals.map((meal) => meal.recipe_id),
+      ].filter((id) => Number.isInteger(id) && id > 0),
+    ),
+  )
+
+  const ingredientRows = await getRecipeIngredientRows(allRecipeIds)
+  const ingredientsByRecipeId = new Map()
+
+  for (const row of ingredientRows) {
+    if (!ingredientsByRecipeId.has(row.recipe_id)) {
+      ingredientsByRecipeId.set(row.recipe_id, [])
+    }
+
+    ingredientsByRecipeId.get(row.recipe_id).push(row)
+  }
+
+  const mealsByDayPlanId = new Map()
+  for (const meal of dayPlanMeals) {
+    if (!mealsByDayPlanId.has(meal.day_plan_id)) {
+      mealsByDayPlanId.set(meal.day_plan_id, [])
+    }
+    mealsByDayPlanId.get(meal.day_plan_id).push(meal)
+  }
+
+  const mealsByDaySlotId = new Map()
+  for (const meal of customSlotMeals) {
+    if (!mealsByDaySlotId.has(meal.day_slot_id)) {
+      mealsByDaySlotId.set(meal.day_slot_id, [])
+    }
+    mealsByDaySlotId.get(meal.day_slot_id).push(meal)
+  }
 
   const generatedItems = new Map()
 
-  for (const row of legacyRows) {
-    mergeGeneratedItem(generatedItems, row)
+  for (const entry of legacyEntries) {
+    if (!entry.recipe_id) {
+      mergeGeneratedItem(generatedItems, {
+        recipe_id: null,
+        entry_custom_name: entry.custom_name,
+      })
+      continue
+    }
+
+    const ingredients = ingredientsByRecipeId.get(entry.recipe_id) ?? []
+    for (const ingredient of ingredients) {
+      mergeGeneratedItem(generatedItems, {
+        recipe_id: entry.recipe_id,
+        entry_custom_name: null,
+        servings: entry.servings,
+        portions_count: portionsCount,
+        meal_portions: 1,
+        product_id: ingredient.product_id,
+        quantity: ingredient.quantity,
+        unit_id: ingredient.unit_id,
+      })
+    }
   }
 
-  for (const row of templateRows) {
-    mergeGeneratedItem(generatedItems, row)
+  for (const slot of templateSlots) {
+    const meals = mealsByDayPlanId.get(slot.day_plan_id) ?? []
+    for (const meal of meals) {
+      const ingredients = ingredientsByRecipeId.get(meal.recipe_id) ?? []
+      for (const ingredient of ingredients) {
+        mergeGeneratedItem(generatedItems, {
+          recipe_id: meal.recipe_id,
+          entry_custom_name: null,
+          servings: meal.servings,
+          portions_count: portionsCount,
+          meal_portions: meal.portions,
+          product_id: ingredient.product_id,
+          quantity: ingredient.quantity,
+          unit_id: ingredient.unit_id,
+        })
+      }
+    }
   }
 
-  for (const row of customRows) {
-    mergeGeneratedItem(generatedItems, row)
+  for (const slot of customSlots) {
+    const meals = mealsByDaySlotId.get(slot.id) ?? []
+    for (const meal of meals) {
+      const ingredients = ingredientsByRecipeId.get(meal.recipe_id) ?? []
+      for (const ingredient of ingredients) {
+        mergeGeneratedItem(generatedItems, {
+          recipe_id: meal.recipe_id,
+          entry_custom_name: null,
+          servings: meal.servings,
+          portions_count: portionsCount,
+          meal_portions: meal.portions,
+          product_id: ingredient.product_id,
+          quantity: ingredient.quantity,
+          unit_id: ingredient.unit_id,
+        })
+      }
+    }
   }
 
   return Array.from(generatedItems.values()).map((item) => ({
@@ -299,64 +442,84 @@ function buildGeneratedItems(mealPlanId, portionsCount = 1) {
 }
 
 async function listShoppingLists(user) {
-  return catalogDb
-    .prepare(
-      `
-      SELECT
-        s.id,
-        s.owner_user_id,
-        s.meal_plan_id,
-        s.name,
-        s.status,
-        s.note,
-        s.created_at,
-        s.updated_at,
-        COUNT(i.id) AS items_count,
-        COALESCE(SUM(i.is_checked), 0) AS checked_count
-      FROM shopping_lists s
-      LEFT JOIN shopping_list_items i ON i.shopping_list_id = s.id
-      WHERE s.owner_user_id = ?
-      GROUP BY s.id
-      ORDER BY s.created_at DESC
-      `,
-    )
-    .all(user.id)
+  const rows = await models.shoppingList.findAll({
+    where: {
+      owner_user_id: user.id,
+    },
+    order: [['created_at', 'DESC']],
+    raw: true,
+  })
+
+  if (rows.length === 0) {
+    return []
+  }
+
+  const ids = rows.map((row) => row.id)
+  const statsRows = await models.shoppingListItem.findAll({
+    attributes: [
+      'shopping_list_id',
+      [fn('COUNT', col('id')), 'items_count'],
+      [fn('COALESCE', fn('SUM', col('is_checked')), 0), 'checked_count'],
+    ],
+    where: {
+      shopping_list_id: {
+        [Op.in]: ids,
+      },
+    },
+    group: ['shopping_list_id'],
+    raw: true,
+  })
+
+  const statsById = new Map(
+    statsRows.map((row) => [
+      row.shopping_list_id,
+      {
+        items_count: Number(row.items_count) || 0,
+        checked_count: Number(row.checked_count) || 0,
+      },
+    ]),
+  )
+
+  return rows.map((row) => ({
+    ...row,
+    items_count: statsById.get(row.id)?.items_count ?? 0,
+    checked_count: statsById.get(row.id)?.checked_count ?? 0,
+  }))
 }
 
 async function getShoppingListById(shoppingListId, user) {
-  const shoppingList = getOwnedShoppingListById(shoppingListId, user.id)
+  const shoppingList = await getOwnedShoppingListById(shoppingListId, user.id)
   if (!shoppingList) {
     return null
   }
 
   return {
     ...shoppingList,
-    items: getShoppingListItems(shoppingListId),
+    items: await getShoppingListItems(shoppingListId),
   }
 }
 
 async function createShoppingList(payload, user) {
-  const normalized = validateShoppingListPayload(payload, user.id)
+  const normalized = await validateShoppingListPayload(payload, user.id)
 
-  const result = catalogDb
-    .prepare(
-      `
-      INSERT INTO shopping_lists(owner_user_id, meal_plan_id, name, status, note)
-      VALUES (?, ?, ?, ?, ?)
-      `,
-    )
-    .run(user.id, normalized.meal_plan_id, normalized.name, normalized.status, normalized.note)
+  const created = await models.shoppingList.create({
+    owner_user_id: user.id,
+    meal_plan_id: normalized.meal_plan_id,
+    name: normalized.name,
+    status: normalized.status,
+    note: normalized.note,
+  })
 
-  return getShoppingListById(Number(result.lastInsertRowid), user)
+  return getShoppingListById(created.id, user)
 }
 
 async function updateShoppingList(shoppingListId, payload, user) {
-  const existing = getOwnedShoppingListById(shoppingListId, user.id)
+  const existing = await getOwnedShoppingListById(shoppingListId, user.id)
   if (!existing) {
     return null
   }
 
-  const normalized = validateShoppingListPayload(
+  const normalized = await validateShoppingListPayload(
     {
       name: payload?.name ?? existing.name,
       status: payload?.status ?? existing.status,
@@ -366,72 +529,75 @@ async function updateShoppingList(shoppingListId, payload, user) {
     user.id,
   )
 
-  catalogDb
-    .prepare(
-      `
-      UPDATE shopping_lists
-      SET meal_plan_id = ?, name = ?, status = ?, note = ?, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ? AND owner_user_id = ?
-      `,
-    )
-    .run(
-      normalized.meal_plan_id,
-      normalized.name,
-      normalized.status,
-      normalized.note,
-      shoppingListId,
-      user.id,
-    )
+  await models.shoppingList.update(
+    {
+      meal_plan_id: normalized.meal_plan_id,
+      name: normalized.name,
+      status: normalized.status,
+      note: normalized.note,
+      updated_at: new Date().toISOString(),
+    },
+    {
+      where: {
+        id: shoppingListId,
+        owner_user_id: user.id,
+      },
+    },
+  )
 
   return getShoppingListById(shoppingListId, user)
 }
 
 async function deleteShoppingList(shoppingListId, user) {
-  const deleted = catalogDb
-    .prepare('DELETE FROM shopping_lists WHERE id = ? AND owner_user_id = ?')
-    .run(shoppingListId, user.id)
+  const deleted = await models.shoppingList.destroy({
+    where: {
+      id: shoppingListId,
+      owner_user_id: user.id,
+    },
+  })
 
-  return deleted.changes > 0
+  return deleted > 0
 }
 
 async function addShoppingListItem(shoppingListId, payload, user) {
-  const shoppingList = getOwnedShoppingListById(shoppingListId, user.id)
+  const shoppingList = await getOwnedShoppingListById(shoppingListId, user.id)
   if (!shoppingList) {
     return null
   }
 
   const item = normalizeItemPayload(payload)
 
-  catalogDb.transaction(() => {
-    catalogDb
-      .prepare(
-        `
-        INSERT INTO shopping_list_items(shopping_list_id, product_id, custom_name, quantity, unit_id, is_checked, note)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        `,
-      )
-      .run(
-        shoppingListId,
-        item.product_id,
-        item.custom_name,
-        item.quantity,
-        item.unit_id,
-        item.is_checked,
-        item.note,
-      )
+  await sequelize.transaction(async (transaction) => {
+    await models.shoppingListItem.create(
+      {
+        shopping_list_id: shoppingListId,
+        product_id: item.product_id,
+        custom_name: item.custom_name,
+        quantity: item.quantity,
+        unit_id: item.unit_id,
+        is_checked: item.is_checked,
+        note: item.note,
+      },
+      { transaction },
+    )
 
-    catalogDb
-      .prepare(
-        'UPDATE shopping_lists SET updated_at = CURRENT_TIMESTAMP WHERE id = ? AND owner_user_id = ?',
-      )
-      .run(shoppingListId, user.id)
-  })()
+    await models.shoppingList.update(
+      { updated_at: new Date().toISOString() },
+      {
+        where: {
+          id: shoppingListId,
+          owner_user_id: user.id,
+        },
+        transaction,
+      },
+    )
+  })
 
   return getShoppingListById(shoppingListId, user)
 }
 
 async function updateShoppingListItem(shoppingListId, itemId, payload, user) {
-  const existing = getOwnedShoppingListItem(shoppingListId, itemId, user.id)
+  const existing = await getOwnedShoppingListItem(shoppingListId, itemId, user.id)
   if (!existing) {
     return null
   }
@@ -445,100 +611,110 @@ async function updateShoppingListItem(shoppingListId, itemId, payload, user) {
     note: payload?.note ?? existing.note,
   })
 
-  catalogDb.transaction(() => {
-    catalogDb
-      .prepare(
-        `
-        UPDATE shopping_list_items
-        SET product_id = ?, custom_name = ?, quantity = ?, unit_id = ?, is_checked = ?, note = ?, updated_at = CURRENT_TIMESTAMP
-        WHERE id = ? AND shopping_list_id = ?
-        `,
-      )
-      .run(
-        item.product_id,
-        item.custom_name,
-        item.quantity,
-        item.unit_id,
-        item.is_checked,
-        item.note,
-        itemId,
-        shoppingListId,
-      )
+  await sequelize.transaction(async (transaction) => {
+    await models.shoppingListItem.update(
+      {
+        product_id: item.product_id,
+        custom_name: item.custom_name,
+        quantity: item.quantity,
+        unit_id: item.unit_id,
+        is_checked: item.is_checked,
+        note: item.note,
+        updated_at: new Date().toISOString(),
+      },
+      {
+        where: {
+          id: itemId,
+          shopping_list_id: shoppingListId,
+        },
+        transaction,
+      },
+    )
 
-    catalogDb
-      .prepare(
-        'UPDATE shopping_lists SET updated_at = CURRENT_TIMESTAMP WHERE id = ? AND owner_user_id = ?',
-      )
-      .run(shoppingListId, user.id)
-  })()
+    await models.shoppingList.update(
+      { updated_at: new Date().toISOString() },
+      {
+        where: {
+          id: shoppingListId,
+          owner_user_id: user.id,
+        },
+        transaction,
+      },
+    )
+  })
 
   return getShoppingListById(shoppingListId, user)
 }
 
 async function deleteShoppingListItem(shoppingListId, itemId, user) {
-  const existing = getOwnedShoppingListItem(shoppingListId, itemId, user.id)
+  const existing = await getOwnedShoppingListItem(shoppingListId, itemId, user.id)
   if (!existing) {
     return false
   }
 
-  catalogDb.transaction(() => {
-    catalogDb
-      .prepare('DELETE FROM shopping_list_items WHERE id = ? AND shopping_list_id = ?')
-      .run(itemId, shoppingListId)
+  await sequelize.transaction(async (transaction) => {
+    await models.shoppingListItem.destroy({
+      where: {
+        id: itemId,
+        shopping_list_id: shoppingListId,
+      },
+      transaction,
+    })
 
-    catalogDb
-      .prepare(
-        'UPDATE shopping_lists SET updated_at = CURRENT_TIMESTAMP WHERE id = ? AND owner_user_id = ?',
-      )
-      .run(shoppingListId, user.id)
-  })()
+    await models.shoppingList.update(
+      { updated_at: new Date().toISOString() },
+      {
+        where: {
+          id: shoppingListId,
+          owner_user_id: user.id,
+        },
+        transaction,
+      },
+    )
+  })
 
   return true
 }
 
 async function generateShoppingListFromMealPlan(mealPlanId, payload, user) {
-  const mealPlan = getOwnedMealPlanForGeneration(mealPlanId, user.id)
+  const mealPlan = await getOwnedMealPlanForGeneration(mealPlanId, user.id)
   if (!mealPlan) {
     return null
   }
 
   const providedName = normalizeText(payload?.name)
   const shoppingListName = providedName || `Zakupy: ${mealPlan.name}`
-  const generatedItems = buildGeneratedItems(mealPlanId, mealPlan.portions_count ?? 1)
+  const generatedItems = await buildGeneratedItems(mealPlanId, mealPlan.portions_count ?? 1)
 
-  const shoppingListId = catalogDb.transaction(() => {
-    const created = catalogDb
-      .prepare(
-        `
-        INSERT INTO shopping_lists(owner_user_id, meal_plan_id, name, status, note)
-        VALUES (?, ?, ?, 'open', ?)
-        `,
-      )
-      .run(user.id, mealPlan.id, shoppingListName, 'Wygenerowano z planu okresu')
-
-    const nextShoppingListId = Number(created.lastInsertRowid)
-
-    const insertItem = catalogDb.prepare(
-      `
-      INSERT INTO shopping_list_items(shopping_list_id, product_id, custom_name, quantity, unit_id, is_checked, note)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-      `,
+  const shoppingListId = await sequelize.transaction(async (transaction) => {
+    const created = await models.shoppingList.create(
+      {
+        owner_user_id: user.id,
+        meal_plan_id: mealPlan.id,
+        name: shoppingListName,
+        status: 'open',
+        note: 'Wygenerowano z planu okresu',
+      },
+      { transaction },
     )
 
-    for (const item of generatedItems) {
-      insertItem.run(
-        nextShoppingListId,
-        item.product_id,
-        item.custom_name,
-        item.quantity,
-        item.unit_id,
-        item.is_checked,
-        item.note,
+    if (generatedItems.length > 0) {
+      await models.shoppingListItem.bulkCreate(
+        generatedItems.map((item) => ({
+          shopping_list_id: created.id,
+          product_id: item.product_id,
+          custom_name: item.custom_name,
+          quantity: item.quantity,
+          unit_id: item.unit_id,
+          is_checked: item.is_checked,
+          note: item.note,
+        })),
+        { transaction },
       )
     }
 
-    return nextShoppingListId
-  })()
+    return created.id
+  })
 
   return getShoppingListById(shoppingListId, user)
 }

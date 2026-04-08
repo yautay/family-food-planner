@@ -1,43 +1,44 @@
 import { DataTypes } from 'sequelize'
 import sequelize from '../db/client.js'
 
-const RecipeIngredientModel = sequelize.define(
-  'RecipeIngredient',
+const MealPlanDaySlotModel = sequelize.define(
+  'MealPlanDaySlot',
   {
     id: {
       type: DataTypes.INTEGER,
       primaryKey: true,
       autoIncrement: true,
     },
-    recipe_id: {
+    meal_plan_id: {
       type: DataTypes.INTEGER,
       allowNull: false,
     },
-    product_id: {
-      type: DataTypes.INTEGER,
+    planned_date: {
+      type: DataTypes.STRING,
       allowNull: false,
     },
-    quantity: {
-      type: DataTypes.FLOAT,
-      allowNull: true,
-    },
-    unit_id: {
+    day_plan_id: {
       type: DataTypes.INTEGER,
       allowNull: true,
     },
-    grams: {
-      type: DataTypes.FLOAT,
+    note: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      defaultValue: '',
+    },
+    created_at: {
+      type: DataTypes.STRING,
       allowNull: true,
     },
-    ingredient_package_conversion_id: {
-      type: DataTypes.INTEGER,
+    updated_at: {
+      type: DataTypes.STRING,
       allowNull: true,
     },
   },
   {
-    tableName: 'recipe_ingredients',
+    tableName: 'meal_plan_day_slots',
     timestamps: false,
   },
 )
 
-export default RecipeIngredientModel
+export default MealPlanDaySlotModel

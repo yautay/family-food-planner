@@ -21,6 +21,12 @@ import recipeModel from './recipe.model.js'
 import recipeNutritionSummaryModel from './recipe-nutrition-summary.model.js'
 import dayPlanModel from './day-plan.model.js'
 import dayPlanMealModel from './day-plan-meal.model.js'
+import mealPlanModel from './meal-plan.model.js'
+import mealPlanEntryModel from './meal-plan-entry.model.js'
+import mealPlanDaySlotModel from './meal-plan-day-slot.model.js'
+import mealPlanDaySlotMealModel from './meal-plan-day-slot-meal.model.js'
+import shoppingListModel from './shopping-list.model.js'
+import shoppingListItemModel from './shopping-list-item.model.js'
 
 const models = {}
 
@@ -46,6 +52,12 @@ models.recipe = recipeModel
 models.recipeNutritionSummary = recipeNutritionSummaryModel
 models.dayPlan = dayPlanModel
 models.dayPlanMeal = dayPlanMealModel
+models.mealPlan = mealPlanModel
+models.mealPlanEntry = mealPlanEntryModel
+models.mealPlanDaySlot = mealPlanDaySlotModel
+models.mealPlanDaySlotMeal = mealPlanDaySlotMealModel
+models.shoppingList = shoppingListModel
+models.shoppingListItem = shoppingListItemModel
 
 models.product.belongsTo(models.unit, {
   foreignKey: 'default_unit_id',
@@ -196,6 +208,86 @@ models.dayPlanMeal.belongsTo(models.dayPlan, {
 models.dayPlanMeal.belongsTo(models.recipe, {
   foreignKey: 'recipe_id',
   as: 'recipe',
+})
+
+models.mealPlan.belongsTo(models.user, {
+  foreignKey: 'owner_user_id',
+  as: 'owner',
+})
+
+models.mealPlan.hasMany(models.mealPlanEntry, {
+  foreignKey: 'meal_plan_id',
+  as: 'entries',
+})
+
+models.mealPlanEntry.belongsTo(models.mealPlan, {
+  foreignKey: 'meal_plan_id',
+  as: 'mealPlan',
+})
+
+models.mealPlanEntry.belongsTo(models.recipe, {
+  foreignKey: 'recipe_id',
+  as: 'recipe',
+})
+
+models.mealPlan.hasMany(models.mealPlanDaySlot, {
+  foreignKey: 'meal_plan_id',
+  as: 'daySlots',
+})
+
+models.mealPlanDaySlot.belongsTo(models.mealPlan, {
+  foreignKey: 'meal_plan_id',
+  as: 'mealPlan',
+})
+
+models.mealPlanDaySlot.belongsTo(models.dayPlan, {
+  foreignKey: 'day_plan_id',
+  as: 'dayPlan',
+})
+
+models.mealPlanDaySlot.hasMany(models.mealPlanDaySlotMeal, {
+  foreignKey: 'day_slot_id',
+  as: 'meals',
+})
+
+models.mealPlanDaySlotMeal.belongsTo(models.mealPlanDaySlot, {
+  foreignKey: 'day_slot_id',
+  as: 'daySlot',
+})
+
+models.mealPlanDaySlotMeal.belongsTo(models.recipe, {
+  foreignKey: 'recipe_id',
+  as: 'recipe',
+})
+
+models.shoppingList.belongsTo(models.user, {
+  foreignKey: 'owner_user_id',
+  as: 'owner',
+})
+
+models.shoppingList.belongsTo(models.mealPlan, {
+  foreignKey: 'meal_plan_id',
+  as: 'mealPlan',
+})
+
+models.shoppingList.hasMany(models.shoppingListItem, {
+  foreignKey: 'shopping_list_id',
+  as: 'items',
+})
+
+models.shoppingListItem.belongsTo(models.shoppingList, {
+  foreignKey: 'shopping_list_id',
+  as: 'shoppingList',
+})
+
+models.shoppingListItem.belongsTo(models.product, {
+  foreignKey: 'product_id',
+  as: 'product',
+})
+
+models.shoppingListItem.belongsTo(models.unit, {
+  foreignKey: 'unit_id',
+  as: 'unit',
 })
 
 models.userRole.belongsTo(models.role, {
