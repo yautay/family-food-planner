@@ -1,10 +1,6 @@
-import Database from 'better-sqlite3'
-import path from 'node:path'
-import { fileURLToPath } from 'node:url'
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const projectRoot = path.resolve(__dirname, '..')
-const databasePath = path.resolve(projectRoot, process.env.DATABASE_PATH ?? 'database.db')
+import { Op } from 'sequelize'
+import sequelize from '../src/db/client.js'
+import models from '../src/models/index.js'
 
 const args = process.argv.slice(2)
 const options = {
@@ -193,43 +189,26 @@ async function fetchBestNutritionForProduct(productName) {
   return best
 }
 
-const db = new Database(databasePath)
-db.pragma('foreign_keys = ON')
+await sequelize.authenticate()
 
-const baseQuery = options.overwrite
-  ? `
-    SELECT id, name
-    FROM products
-    ORDER BY name COLLATE NOCASE ASC
-  `
-  : `
-    SELECT id, name
-    FROM products
-    WHERE calories_per_100g IS NULL
-      OR carbohydrates_per_100g IS NULL
-      OR fat_per_100g IS NULL
-      OR protein_per_100g IS NULL
-    ORDER BY name COLLATE NOCASE ASC
-  `
+const whereClause = options.overwrite
+  ? {}
+  : {
+      [Op.or]: [
+        { calories_per_100g: null },
+        { carbohydrates_per_100g: null },
+        { fat_per_100g: null },
+        { protein_per_100g: null },
+      ],
+    }
 
-const products = db.prepare(baseQuery).all().slice(0, options.limit)
-
-const updateProduct = db.prepare(
-  `
-  UPDATE products
-  SET
-    calories_per_100g = ?,
-    carbohydrates_per_100g = ?,
-    sugars_per_100g = ?,
-    fat_per_100g = ?,
-    protein_per_100g = ?,
-    fiber_per_100g = ?,
-    nutrition_source = ?,
-    nutrition_updated_at = CURRENT_TIMESTAMP,
-    updated_at = CURRENT_TIMESTAMP
-  WHERE id = ?
-  `,
-)
+const products = await models.product.findAll({
+  attributes: ['id', 'name'],
+  where: whereClause,
+  order: [['name', 'ASC']],
+  limit: Number.isFinite(options.limit) ? options.limit : undefined,
+  raw: true,
+})
 
 let updated = 0
 let skipped = 0
@@ -264,7 +243,22 @@ for (const product of products) {
       best.nutrition.protein ?? (options.forceFillMissing ? 0 : best.nutrition.protein)
     const fiber = best.nutrition.fiber ?? (options.forceFillMissing ? 0 : best.nutrition.fiber)
 
-    updateProduct.run(calories, carbohydrates, sugars, fat, protein, fiber, source, product.id)
+    await models.product.update(
+      {
+        calories_per_100g: calories,
+        carbohydrates_per_100g: carbohydrates,
+        sugars_per_100g: sugars,
+        fat_per_100g: fat,
+        protein_per_100g: protein,
+        fiber_per_100g: fiber,
+        nutrition_source: source,
+        nutrition_updated_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      {
+        where: { id: product.id },
+      },
+    )
 
     updated += 1
     console.log(`OK    ${product.name} -> ${best.candidateName} (score: ${best.score.toFixed(2)})`)
@@ -278,27 +272,19 @@ for (const product of products) {
   }
 }
 
-const coverage = db
-  .prepare(
-    `
-    SELECT
-      COUNT(*) AS total,
-      SUM(
-        CASE
-          WHEN calories_per_100g IS NOT NULL
-               AND carbohydrates_per_100g IS NOT NULL
-               AND fat_per_100g IS NOT NULL
-               AND protein_per_100g IS NOT NULL
-            THEN 1
-          ELSE 0
-        END
-      ) AS complete
-    FROM products
-    `,
-  )
-  .get()
+const coverage = {
+  total: await models.product.count(),
+  complete: await models.product.count({
+    where: {
+      calories_per_100g: { [Op.not]: null },
+      carbohydrates_per_100g: { [Op.not]: null },
+      fat_per_100g: { [Op.not]: null },
+      protein_per_100g: { [Op.not]: null },
+    },
+  }),
+}
 
-db.close()
+await sequelize.close()
 
 console.log('---')
 console.log(`Updated: ${updated}`)

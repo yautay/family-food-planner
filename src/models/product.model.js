@@ -62,6 +62,14 @@ const ProductModel = sequelize.define(
       type: DataTypes.FLOAT,
       allowNull: true,
     },
+    nutrition_source: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    nutrition_updated_at: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
     created_at: {
       type: DataTypes.STRING,
       allowNull: true,

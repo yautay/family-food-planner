@@ -1,30 +1,107 @@
-import Database from 'better-sqlite3'
 import { readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { QueryTypes } from 'sequelize'
+import sequelize from '../src/db/client.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const projectRoot = path.resolve(__dirname, '..')
 const migrationsDir = path.join(projectRoot, 'db', 'migrations')
-const databasePath = path.resolve(projectRoot, process.env.DATABASE_PATH ?? 'database.db')
 
-const db = new Database(databasePath)
-db.pragma('foreign_keys = ON')
+function splitSqlStatements(sql) {
+  const statements = []
+  let current = ''
+  let inSingle = false
+  let inDouble = false
+  let inLineComment = false
+  let inBlockComment = false
 
-db.exec(`
+  for (let index = 0; index < sql.length; index += 1) {
+    const char = sql[index]
+    const next = sql[index + 1] ?? ''
+
+    if (inLineComment) {
+      current += char
+      if (char === '\n') {
+        inLineComment = false
+      }
+      continue
+    }
+
+    if (inBlockComment) {
+      current += char
+      if (char === '*' && next === '/') {
+        current += next
+        index += 1
+        inBlockComment = false
+      }
+      continue
+    }
+
+    if (!inSingle && !inDouble) {
+      if (char === '-' && next === '-') {
+        current += char
+        inLineComment = true
+        continue
+      }
+
+      if (char === '/' && next === '*') {
+        current += char
+        inBlockComment = true
+        continue
+      }
+    }
+
+    if (char === "'" && !inDouble) {
+      inSingle = !inSingle
+      current += char
+      continue
+    }
+
+    if (char === '"' && !inSingle) {
+      inDouble = !inDouble
+      current += char
+      continue
+    }
+
+    if (char === ';' && !inSingle && !inDouble) {
+      const trimmed = current.trim()
+      if (trimmed.length > 0) {
+        statements.push(trimmed)
+      }
+      current = ''
+      continue
+    }
+
+    current += char
+  }
+
+  const trailing = current.trim()
+  if (trailing.length > 0) {
+    statements.push(trailing)
+  }
+
+  return statements
+}
+
+await sequelize.authenticate()
+
+await sequelize.query(
+  `
   CREATE TABLE IF NOT EXISTS schema_migrations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     filename TEXT NOT NULL UNIQUE,
     applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   )
-`)
-
-const applied = new Set(
-  db
-    .prepare('SELECT filename FROM schema_migrations ORDER BY filename')
-    .all()
-    .map((row) => row.filename),
+  `,
 )
+
+const appliedRows = await sequelize.query(
+  'SELECT filename FROM schema_migrations ORDER BY filename',
+  { type: QueryTypes.SELECT },
+)
+
+const applied = new Set(appliedRows.map((row) => row.filename))
 
 const migrationFiles = readdirSync(migrationsDir)
   .filter((filename) => filename.endsWith('.sql'))
@@ -32,11 +109,9 @@ const migrationFiles = readdirSync(migrationsDir)
 
 if (migrationFiles.length === 0) {
   console.log('No migration files found.')
-  db.close()
+  await sequelize.close()
   process.exit(0)
 }
-
-const recordMigration = db.prepare('INSERT INTO schema_migrations (filename) VALUES (?)')
 
 for (const filename of migrationFiles) {
   if (applied.has(filename)) {
@@ -46,15 +121,21 @@ for (const filename of migrationFiles) {
 
   const migrationPath = path.join(migrationsDir, filename)
   const sql = readFileSync(migrationPath, 'utf8')
+  const statements = splitSqlStatements(sql)
 
-  const applyMigration = db.transaction(() => {
-    db.exec(sql)
-    recordMigration.run(filename)
+  await sequelize.transaction(async (transaction) => {
+    for (const statement of statements) {
+      await sequelize.query(statement, { transaction })
+    }
+
+    await sequelize.query('INSERT INTO schema_migrations (filename) VALUES (?)', {
+      replacements: [filename],
+      transaction,
+    })
   })
 
-  applyMigration()
   console.log(`Applied migration: ${filename}`)
 }
 
-db.close()
+await sequelize.close()
 console.log('Migrations finished successfully.')

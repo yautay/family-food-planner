@@ -1,13 +1,13 @@
-import Database from 'better-sqlite3'
 import { execFileSync } from 'node:child_process'
 import { readdirSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import sequelize from '../src/db/client.js'
+import models from '../src/models/index.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const projectRoot = path.resolve(__dirname, '..')
 const coreRecipesDir = path.join(projectRoot, 'core_recipes')
-const databasePath = path.resolve(projectRoot, process.env.DATABASE_PATH ?? 'database.db')
 
 const dayHeaderRegex =
   /^(Poniedzialek|Wtorek|Sroda|Czwartek|Piatek|Sobota|Niedziela|Poniedzialek|Sroda)$/i
@@ -418,12 +418,13 @@ function pickDefaultUnit(product) {
   return units[0][0]
 }
 
-function tableExists(db, tableName) {
-  const row = db
-    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name = ?")
-    .get(tableName)
-
-  return Boolean(row)
+async function tableExists(tableName) {
+  try {
+    await sequelize.getQueryInterface().describeTable(tableName)
+    return true
+  } catch {
+    return false
+  }
 }
 
 const pdfFiles = readdirSync(coreRecipesDir)
@@ -440,112 +441,51 @@ for (const fileName of pdfFiles) {
   parsePdf(filePath, fileName)
 }
 
-const db = new Database(databasePath)
-db.pragma('foreign_keys = ON')
+await sequelize.authenticate()
 
 if (
-  !tableExists(db, 'products') ||
-  !tableExists(db, 'recipes') ||
-  !tableExists(db, 'recipe_ingredients')
+  !(await tableExists('products')) ||
+  !(await tableExists('recipes')) ||
+  !(await tableExists('recipe_ingredients'))
 ) {
   console.error('Missing catalog tables. Run npm run db:migrate first.')
-  db.close()
+  await sequelize.close()
   process.exit(1)
 }
-
-const insertUnit = db.prepare('INSERT OR IGNORE INTO units(name) VALUES (?)')
-const selectUnits = db.prepare('SELECT id, name FROM units')
-
-const insertProduct = db.prepare(`
-  INSERT INTO products(name, normalized_name, default_unit_id)
-  VALUES (@name, @normalizedName, @defaultUnitId)
-  ON CONFLICT(normalized_name)
-  DO UPDATE SET
-    name = excluded.name,
-    default_unit_id = COALESCE(products.default_unit_id, excluded.default_unit_id),
-    updated_at = CURRENT_TIMESTAMP
-`)
-
-const selectProducts = db.prepare('SELECT id, normalized_name FROM products')
-
-const insertRecipe = db.prepare(`
-  INSERT INTO recipes(name, normalized_name, source_file, instructions)
-  VALUES (@name, @normalizedName, @sourceFile, @instructions)
-  ON CONFLICT(normalized_name)
-  DO UPDATE SET
-    name = excluded.name,
-    source_file = excluded.source_file,
-    instructions = excluded.instructions,
-    updated_at = CURRENT_TIMESTAMP
-`)
-
-const insertSystemRecipe = db.prepare(`
-  INSERT INTO recipes(name, normalized_name, source_file, instructions, owner_user_id, is_system, is_editable)
-  VALUES (@name, @normalizedName, @sourceFile, @instructions, NULL, 1, 0)
-  ON CONFLICT(normalized_name)
-  DO UPDATE SET
-    name = excluded.name,
-    source_file = excluded.source_file,
-    instructions = excluded.instructions,
-    owner_user_id = NULL,
-    is_system = 1,
-    is_editable = 0,
-    updated_at = CURRENT_TIMESTAMP
-`)
-
-const selectRecipes = db.prepare('SELECT id, normalized_name FROM recipes')
-
-const insertPackageType = db.prepare(`
-  INSERT OR IGNORE INTO package_types(name, normalized_name)
-  VALUES (?, ?)
-`)
-
-const selectPackageTypes = db.prepare('SELECT id, normalized_name FROM package_types')
-
-const upsertIngredientPackageConversion = db.prepare(`
-  INSERT INTO ingredient_package_conversions(product_id, package_type_id, grams_per_package, source, samples_count)
-  VALUES (?, ?, ?, ?, ?)
-  ON CONFLICT(product_id, package_type_id)
-  DO UPDATE SET
-    grams_per_package = excluded.grams_per_package,
-    source = excluded.source,
-    samples_count = excluded.samples_count,
-    updated_at = CURRENT_TIMESTAMP
-`)
-
-const selectIngredientPackageConversion = db.prepare(`
-  SELECT id
-  FROM ingredient_package_conversions
-  WHERE product_id = ? AND package_type_id = ?
-`)
-
-const insertRecipeIngredient = db.prepare(`
-  INSERT INTO recipe_ingredients(
-    recipe_id,
-    product_id,
-    quantity,
-    unit_id,
-    grams,
-    ingredient_package_conversion_id,
-    note,
-    source_file
-  )
-  VALUES (@recipeId, @productId, @quantity, @unitId, @grams, @ingredientPackageConversionId, @note, @sourceFile)
-`)
-
-const persistData = db.transaction(() => {
-  const recipeTableInfo = db.prepare('PRAGMA table_info(recipes)').all()
-  const hasRecipeAclColumns = recipeTableInfo.some((column) => column.name === 'is_system')
+await sequelize.transaction(async (transaction) => {
+  const recipeTableInfo = await sequelize.getQueryInterface().describeTable('recipes')
+  const hasRecipeAclColumns = Object.hasOwn(recipeTableInfo, 'is_system')
 
   if (hasRecipeAclColumns) {
-    db.exec(`
-      DELETE FROM recipe_ingredients
-      WHERE recipe_id IN (SELECT id FROM recipes WHERE is_system = 1)
-    `)
-    db.exec('DELETE FROM recipes WHERE is_system = 1')
+    const systemRecipes = await models.recipe.findAll({
+      attributes: ['id'],
+      where: { is_system: 1 },
+      raw: true,
+      transaction,
+    })
+
+    const systemRecipeIds = systemRecipes.map((row) => row.id)
+    if (systemRecipeIds.length > 0) {
+      await models.recipeIngredient.destroy({
+        where: {
+          recipe_id: {
+            [models.Op.in]: systemRecipeIds,
+          },
+        },
+        transaction,
+      })
+      await models.recipe.destroy({
+        where: {
+          id: {
+            [models.Op.in]: systemRecipeIds,
+          },
+        },
+        transaction,
+      })
+    }
   } else {
-    db.exec('DELETE FROM recipe_ingredients')
-    db.exec('DELETE FROM recipes')
+    await models.recipeIngredient.destroy({ where: {}, transaction })
+    await models.recipe.destroy({ where: {}, transaction })
   }
 
   const allUnitKeys = new Set()
@@ -573,21 +513,52 @@ const persistData = db.transaction(() => {
 
   for (const unitKey of allUnitKeys) {
     const unitName = canonicalUnitNames.get(unitKey)
-    if (unitName && isPhysicalUnitName(unitName)) {
-      insertUnit.run(unitName)
+    if (!unitName || !isPhysicalUnitName(unitName)) {
+      continue
     }
+
+    await models.unit.findOrCreate({
+      where: { name: unitName },
+      defaults: { name: unitName },
+      transaction,
+    })
   }
 
-  const units = selectUnits.all()
+  const units = await models.unit.findAll({
+    attributes: ['id', 'name'],
+    raw: true,
+    transaction,
+  })
   const unitIdByKey = new Map(units.map((row) => [normalizeKey(row.name), row.id]))
 
   for (const product of productCatalog.values()) {
     const defaultUnitKey = pickDefaultUnit(product)
-    insertProduct.run({
-      name: product.name,
-      normalizedName: product.normalizedName,
-      defaultUnitId: defaultUnitKey ? (unitIdByKey.get(defaultUnitKey) ?? null) : null,
+    const defaultUnitId = defaultUnitKey ? (unitIdByKey.get(defaultUnitKey) ?? null) : null
+
+    const existing = await models.product.findOne({
+      where: { normalized_name: product.normalizedName },
+      transaction,
     })
+
+    if (existing) {
+      await existing.update(
+        {
+          name: product.name,
+          default_unit_id: existing.default_unit_id ?? defaultUnitId,
+          updated_at: new Date().toISOString(),
+        },
+        { transaction },
+      )
+    } else {
+      await models.product.create(
+        {
+          name: product.name,
+          normalized_name: product.normalizedName,
+          default_unit_id: defaultUnitId,
+        },
+        { transaction },
+      )
+    }
   }
 
   for (const recipe of recipeCatalog.values()) {
@@ -606,22 +577,59 @@ const persistData = db.transaction(() => {
 
     const payload = {
       name: recipe.name,
-      normalizedName: recipe.normalizedName,
-      sourceFile: Array.from(recipe.sourceFiles)
+      normalized_name: recipe.normalizedName,
+      source_file: Array.from(recipe.sourceFiles)
         .sort((left, right) => left.localeCompare(right))
         .join(', '),
       instructions: uniqueInstructions.join(' '),
+      updated_at: new Date().toISOString(),
     }
 
-    if (hasRecipeAclColumns) {
-      insertSystemRecipe.run(payload)
+    const existing = await models.recipe.findOne({
+      where: { normalized_name: recipe.normalizedName },
+      transaction,
+    })
+
+    if (existing) {
+      await existing.update(
+        hasRecipeAclColumns
+          ? {
+              ...payload,
+              owner_user_id: null,
+              is_system: 1,
+              is_editable: 0,
+            }
+          : payload,
+        { transaction },
+      )
     } else {
-      insertRecipe.run(payload)
+      await models.recipe.create(
+        hasRecipeAclColumns
+          ? {
+              ...payload,
+              owner_user_id: null,
+              is_system: 1,
+              is_editable: 0,
+            }
+          : payload,
+        { transaction },
+      )
     }
   }
 
-  const productIdByKey = new Map(selectProducts.all().map((row) => [row.normalized_name, row.id]))
-  const recipeIdByKey = new Map(selectRecipes.all().map((row) => [row.normalized_name, row.id]))
+  const products = await models.product.findAll({
+    attributes: ['id', 'normalized_name'],
+    raw: true,
+    transaction,
+  })
+  const recipes = await models.recipe.findAll({
+    attributes: ['id', 'normalized_name'],
+    raw: true,
+    transaction,
+  })
+
+  const productIdByKey = new Map(products.map((row) => [row.normalized_name, row.id]))
+  const recipeIdByKey = new Map(recipes.map((row) => [row.normalized_name, row.id]))
 
   const packageTypeNameByKey = new Map()
   for (const relation of relationRows) {
@@ -630,15 +638,27 @@ const persistData = db.transaction(() => {
     }
 
     const normalizedName = normalizeKey(relation.unitName)
-    if (!packageTypeNameByKey.has(normalizedName)) {
-      packageTypeNameByKey.set(normalizedName, cleanName(relation.unitName))
-      insertPackageType.run(cleanName(relation.unitName), normalizedName)
+    if (packageTypeNameByKey.has(normalizedName)) {
+      continue
     }
+
+    packageTypeNameByKey.set(normalizedName, cleanName(relation.unitName))
+    await models.packageType.findOrCreate({
+      where: { normalized_name: normalizedName },
+      defaults: {
+        name: cleanName(relation.unitName),
+        normalized_name: normalizedName,
+      },
+      transaction,
+    })
   }
 
-  const packageTypeIdByKey = new Map(
-    selectPackageTypes.all().map((row) => [row.normalized_name, row.id]),
-  )
+  const packageTypes = await models.packageType.findAll({
+    attributes: ['id', 'normalized_name'],
+    raw: true,
+    transaction,
+  })
+  const packageTypeIdByKey = new Map(packageTypes.map((row) => [row.normalized_name, row.id]))
 
   const conversionAggregates = new Map()
   for (const relation of relationRows) {
@@ -680,16 +700,65 @@ const persistData = db.transaction(() => {
 
   for (const aggregate of conversionAggregates.values()) {
     const averageGrams = Number((aggregate.gramsTotal / aggregate.samples).toFixed(2))
-    upsertIngredientPackageConversion.run(
-      aggregate.productId,
-      aggregate.packageTypeId,
-      averageGrams,
-      'import-diet-pdfs',
-      aggregate.samples,
-    )
+    const existing = await models.ingredientPackageConversion.findOne({
+      where: {
+        product_id: aggregate.productId,
+        package_type_id: aggregate.packageTypeId,
+      },
+      transaction,
+    })
+
+    if (existing) {
+      await existing.update(
+        {
+          grams_per_package: averageGrams,
+          source: 'import-diet-pdfs',
+          samples_count: aggregate.samples,
+          updated_at: new Date().toISOString(),
+        },
+        { transaction },
+      )
+    } else {
+      await models.ingredientPackageConversion.create(
+        {
+          product_id: aggregate.productId,
+          package_type_id: aggregate.packageTypeId,
+          grams_per_package: averageGrams,
+          source: 'import-diet-pdfs',
+          samples_count: aggregate.samples,
+        },
+        { transaction },
+      )
+    }
+  }
+
+  const allConversions = await models.ingredientPackageConversion.findAll({
+    attributes: ['id', 'product_id', 'package_type_id'],
+    raw: true,
+    transaction,
+  })
+
+  const conversionIdByPair = new Map(
+    allConversions.map((row) => [`${row.product_id}|${row.package_type_id}`, row.id]),
+  )
+
+  const importedRecipeIds = Array.from(
+    new Set(relationRows.map((row) => recipeIdByKey.get(row.recipeKey))),
+  ).filter((value) => Number.isInteger(value) && value > 0)
+
+  if (importedRecipeIds.length > 0) {
+    await models.recipeIngredient.destroy({
+      where: {
+        recipe_id: {
+          [models.Op.in]: importedRecipeIds,
+        },
+      },
+      transaction,
+    })
   }
 
   const relationDedup = new Set()
+  const ingredientRows = []
 
   for (const relation of relationRows) {
     const recipeId = recipeIdByKey.get(relation.recipeKey)
@@ -702,7 +771,7 @@ const persistData = db.transaction(() => {
 
     const ingredientPackageConversionId =
       packageTypeId && productId
-        ? (selectIngredientPackageConversion.get(productId, packageTypeId)?.id ?? null)
+        ? (conversionIdByPair.get(`${productId}|${packageTypeId}`) ?? null)
         : null
 
     const unitId = relation.unitName
@@ -729,26 +798,28 @@ const persistData = db.transaction(() => {
     }
     relationDedup.add(dedupKey)
 
-    insertRecipeIngredient.run({
-      recipeId,
-      productId,
+    ingredientRows.push({
+      recipe_id: recipeId,
+      product_id: productId,
       quantity: relation.quantity,
-      unitId,
+      unit_id: unitId,
       grams: relation.grams,
-      ingredientPackageConversionId,
+      ingredient_package_conversion_id: ingredientPackageConversionId,
       note: '',
-      sourceFile: relation.sourceFile,
+      source_file: relation.sourceFile,
     })
+  }
+
+  if (ingredientRows.length > 0) {
+    await models.recipeIngredient.bulkCreate(ingredientRows, { transaction })
   }
 })
 
-persistData()
+const productCount = await models.product.count()
+const recipeCount = await models.recipe.count()
+const relationCount = await models.recipeIngredient.count()
 
-const productCount = db.prepare('SELECT COUNT(*) AS count FROM products').get().count
-const recipeCount = db.prepare('SELECT COUNT(*) AS count FROM recipes').get().count
-const relationCount = db.prepare('SELECT COUNT(*) AS count FROM recipe_ingredients').get().count
-
-db.close()
+await sequelize.close()
 
 console.log(`Imported files: ${pdfFiles.length}`)
 console.log(`Products in catalog: ${productCount}`)

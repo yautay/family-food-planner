@@ -167,6 +167,16 @@ models.tag.belongsToMany(models.product, {
   as: 'products',
 })
 
+models.productTag.belongsTo(models.product, {
+  foreignKey: 'product_id',
+  as: 'product',
+})
+
+models.productTag.belongsTo(models.tag, {
+  foreignKey: 'tag_id',
+  as: 'tag',
+})
+
 models.user.belongsToMany(models.role, {
   through: models.userRole,
   foreignKey: 'user_id',

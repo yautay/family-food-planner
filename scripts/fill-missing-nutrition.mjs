@@ -1,120 +1,153 @@
-import Database from 'better-sqlite3'
-import path from 'node:path'
-import { fileURLToPath } from 'node:url'
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const projectRoot = path.resolve(__dirname, '..')
-const databasePath = path.resolve(projectRoot, process.env.DATABASE_PATH ?? 'database.db')
+import { Op } from 'sequelize'
+import sequelize from '../src/db/client.js'
+import models from '../src/models/index.js'
 
 function round2(value) {
   return Number(value.toFixed(2))
 }
 
-const db = new Database(databasePath)
-db.pragma('foreign_keys = ON')
+function average(values) {
+  if (values.length === 0) {
+    return null
+  }
 
-const tagAverages = db
-  .prepare(
-    `
-    SELECT
-      pt.tag_id,
-      t.name AS tag_name,
-      COUNT(*) AS samples,
-      AVG(p.calories_per_100g) AS calories,
-      AVG(p.carbohydrates_per_100g) AS carbohydrates,
-      AVG(p.sugars_per_100g) AS sugars,
-      AVG(p.fat_per_100g) AS fat,
-      AVG(p.protein_per_100g) AS protein,
-      AVG(p.fiber_per_100g) AS fiber
-    FROM products p
-    INNER JOIN product_tags pt ON pt.product_id = p.id
-    INNER JOIN tags t ON t.id = pt.tag_id
-    WHERE p.nutrition_source LIKE 'openfoodfacts:%'
-      AND p.calories_per_100g IS NOT NULL
-      AND p.carbohydrates_per_100g IS NOT NULL
-      AND p.fat_per_100g IS NOT NULL
-      AND p.protein_per_100g IS NOT NULL
-    GROUP BY pt.tag_id
-    HAVING COUNT(*) >= 2
-    `,
-  )
-  .all()
+  return values.reduce((accumulator, value) => accumulator + value, 0) / values.length
+}
 
-const globalAverage = db
-  .prepare(
-    `
-    SELECT
-      AVG(calories_per_100g) AS calories,
-      AVG(carbohydrates_per_100g) AS carbohydrates,
-      AVG(sugars_per_100g) AS sugars,
-      AVG(fat_per_100g) AS fat,
-      AVG(protein_per_100g) AS protein,
-      AVG(fiber_per_100g) AS fiber
-    FROM products
-    WHERE nutrition_source LIKE 'openfoodfacts:%'
-      AND calories_per_100g IS NOT NULL
-      AND carbohydrates_per_100g IS NOT NULL
-      AND fat_per_100g IS NOT NULL
-      AND protein_per_100g IS NOT NULL
-    `,
-  )
-  .get()
+await sequelize.authenticate()
 
-const missingProducts = db
-  .prepare(
-    `
-    SELECT
-      p.id,
-      p.name,
-      p.calories_per_100g,
-      p.carbohydrates_per_100g,
-      p.sugars_per_100g,
-      p.fat_per_100g,
-      p.protein_per_100g,
-      p.fiber_per_100g,
-      GROUP_CONCAT(pt.tag_id) AS tag_ids
-    FROM products p
-    LEFT JOIN product_tags pt ON pt.product_id = p.id
-    WHERE p.calories_per_100g IS NULL
-      OR p.carbohydrates_per_100g IS NULL
-      OR p.fat_per_100g IS NULL
-      OR p.protein_per_100g IS NULL
-    GROUP BY p.id
-    ORDER BY p.name COLLATE NOCASE ASC
-    `,
-  )
-  .all()
+const sourceProducts = await models.product.findAll({
+  attributes: [
+    'id',
+    'calories_per_100g',
+    'carbohydrates_per_100g',
+    'sugars_per_100g',
+    'fat_per_100g',
+    'protein_per_100g',
+    'fiber_per_100g',
+  ],
+  where: {
+    nutrition_source: {
+      [Op.like]: 'openfoodfacts:%',
+    },
+    calories_per_100g: {
+      [Op.not]: null,
+    },
+    carbohydrates_per_100g: {
+      [Op.not]: null,
+    },
+    fat_per_100g: {
+      [Op.not]: null,
+    },
+    protein_per_100g: {
+      [Op.not]: null,
+    },
+  },
+  include: [
+    {
+      model: models.tag,
+      as: 'tags',
+      attributes: ['id', 'name'],
+      through: { attributes: [] },
+      required: false,
+    },
+  ],
+})
 
-const updateProduct = db.prepare(
-  `
-  UPDATE products
-  SET
-    calories_per_100g = ?,
-    carbohydrates_per_100g = ?,
-    sugars_per_100g = ?,
-    fat_per_100g = ?,
-    protein_per_100g = ?,
-    fiber_per_100g = ?,
-    nutrition_source = ?,
-    nutrition_updated_at = CURRENT_TIMESTAMP,
-    updated_at = CURRENT_TIMESTAMP
-  WHERE id = ?
-  `,
-)
+const tagAccumulator = new Map()
+
+for (const productRow of sourceProducts) {
+  const product = productRow.get({ plain: true })
+  for (const tag of product.tags ?? []) {
+    if (!tagAccumulator.has(tag.id)) {
+      tagAccumulator.set(tag.id, {
+        tag_name: tag.name,
+        samples: 0,
+        calories: [],
+        carbohydrates: [],
+        sugars: [],
+        fat: [],
+        protein: [],
+        fiber: [],
+      })
+    }
+
+    const aggregate = tagAccumulator.get(tag.id)
+    aggregate.samples += 1
+    aggregate.calories.push(product.calories_per_100g)
+    aggregate.carbohydrates.push(product.carbohydrates_per_100g)
+    if (product.sugars_per_100g !== null) {
+      aggregate.sugars.push(product.sugars_per_100g)
+    }
+    aggregate.fat.push(product.fat_per_100g)
+    aggregate.protein.push(product.protein_per_100g)
+    if (product.fiber_per_100g !== null) {
+      aggregate.fiber.push(product.fiber_per_100g)
+    }
+  }
+}
+
+const tagAverages = new Map()
+for (const [tagId, aggregate] of tagAccumulator.entries()) {
+  if (aggregate.samples < 2) {
+    continue
+  }
+
+  tagAverages.set(tagId, {
+    tag_name: aggregate.tag_name,
+    samples: aggregate.samples,
+    calories: average(aggregate.calories),
+    carbohydrates: average(aggregate.carbohydrates),
+    sugars: average(aggregate.sugars),
+    fat: average(aggregate.fat),
+    protein: average(aggregate.protein),
+    fiber: average(aggregate.fiber),
+  })
+}
+
+const globalAverage = {
+  calories: average(sourceProducts.map((item) => item.calories_per_100g)),
+  carbohydrates: average(sourceProducts.map((item) => item.carbohydrates_per_100g)),
+  sugars: average(
+    sourceProducts.map((item) => item.sugars_per_100g).filter((value) => value !== null),
+  ),
+  fat: average(sourceProducts.map((item) => item.fat_per_100g)),
+  protein: average(sourceProducts.map((item) => item.protein_per_100g)),
+  fiber: average(
+    sourceProducts.map((item) => item.fiber_per_100g).filter((value) => value !== null),
+  ),
+}
+
+const missingProducts = await models.product.findAll({
+  where: {
+    [Op.or]: [
+      { calories_per_100g: null },
+      { carbohydrates_per_100g: null },
+      { fat_per_100g: null },
+      { protein_per_100g: null },
+    ],
+  },
+  include: [
+    {
+      model: models.tag,
+      as: 'tags',
+      attributes: ['id'],
+      through: { attributes: [] },
+      required: false,
+    },
+  ],
+  order: [['name', 'ASC']],
+})
 
 let updated = 0
 
-for (const product of missingProducts) {
-  const tagIds = product.tag_ids
-    ? product.tag_ids
-        .split(',')
-        .map((value) => Number(value))
-        .filter((value) => Number.isInteger(value) && value > 0)
-    : []
+for (const productRow of missingProducts) {
+  const product = productRow.get({ plain: true })
+  const tagIds = (product.tags ?? []).map((tag) => tag.id)
 
   let selectedAverage = null
   for (const tagId of tagIds) {
-    const candidate = tagAverages.find((item) => item.tag_id === tagId)
+    const candidate = tagAverages.get(tagId)
     if (!candidate) {
       continue
     }
@@ -124,22 +157,23 @@ for (const product of missingProducts) {
     }
   }
 
-  const average = selectedAverage ?? globalAverage
-  if (!average) {
+  const averageSet = selectedAverage ?? globalAverage
+  if (!averageSet) {
     continue
   }
 
   const calories =
-    product.calories_per_100g ?? (average.calories === null ? null : round2(average.calories))
+    product.calories_per_100g ?? (averageSet.calories === null ? null : round2(averageSet.calories))
   const carbohydrates =
     product.carbohydrates_per_100g ??
-    (average.carbohydrates === null ? null : round2(average.carbohydrates))
+    (averageSet.carbohydrates === null ? null : round2(averageSet.carbohydrates))
   const sugars =
-    product.sugars_per_100g ?? (average.sugars === null ? null : round2(average.sugars))
-  const fat = product.fat_per_100g ?? (average.fat === null ? null : round2(average.fat))
+    product.sugars_per_100g ?? (averageSet.sugars === null ? null : round2(averageSet.sugars))
+  const fat = product.fat_per_100g ?? (averageSet.fat === null ? null : round2(averageSet.fat))
   const protein =
-    product.protein_per_100g ?? (average.protein === null ? null : round2(average.protein))
-  const fiber = product.fiber_per_100g ?? (average.fiber === null ? null : round2(average.fiber))
+    product.protein_per_100g ?? (averageSet.protein === null ? null : round2(averageSet.protein))
+  const fiber =
+    product.fiber_per_100g ?? (averageSet.fiber === null ? null : round2(averageSet.fiber))
 
   if (calories === null || carbohydrates === null || fat === null || protein === null) {
     continue
@@ -149,31 +183,39 @@ for (const product of missingProducts) {
     ? `openfoodfacts:tag-average:${selectedAverage.tag_name}`
     : 'openfoodfacts:global-average'
 
-  updateProduct.run(calories, carbohydrates, sugars, fat, protein, fiber, source, product.id)
+  await models.product.update(
+    {
+      calories_per_100g: calories,
+      carbohydrates_per_100g: carbohydrates,
+      sugars_per_100g: sugars,
+      fat_per_100g: fat,
+      protein_per_100g: protein,
+      fiber_per_100g: fiber,
+      nutrition_source: source,
+      nutrition_updated_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+    {
+      where: { id: product.id },
+    },
+  )
+
   updated += 1
 }
 
-const coverage = db
-  .prepare(
-    `
-    SELECT
-      COUNT(*) AS total,
-      SUM(
-        CASE
-          WHEN calories_per_100g IS NOT NULL
-               AND carbohydrates_per_100g IS NOT NULL
-               AND fat_per_100g IS NOT NULL
-               AND protein_per_100g IS NOT NULL
-            THEN 1
-          ELSE 0
-        END
-      ) AS complete
-    FROM products
-    `,
-  )
-  .get()
+const coverage = {
+  total: await models.product.count(),
+  complete: await models.product.count({
+    where: {
+      calories_per_100g: { [Op.not]: null },
+      carbohydrates_per_100g: { [Op.not]: null },
+      fat_per_100g: { [Op.not]: null },
+      protein_per_100g: { [Op.not]: null },
+    },
+  }),
+}
 
-db.close()
+await sequelize.close()
 
 console.log(`Filled products from averages: ${updated}`)
 console.log(`Coverage after fill: ${coverage.complete}/${coverage.total}`)

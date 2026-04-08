@@ -1,10 +1,6 @@
-import Database from 'better-sqlite3'
-import path from 'node:path'
-import { fileURLToPath } from 'node:url'
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const projectRoot = path.resolve(__dirname, '..')
-const databasePath = path.resolve(projectRoot, process.env.DATABASE_PATH ?? 'database.db')
+import { fn, col, literal } from 'sequelize'
+import sequelize from '../src/db/client.js'
+import models from '../src/models/index.js'
 
 function normalize(value) {
   return value
@@ -17,9 +13,6 @@ function normalize(value) {
 function includesAny(haystack, needles) {
   return needles.some((needle) => haystack.includes(needle))
 }
-
-const db = new Database(databasePath)
-db.pragma('foreign_keys = ON')
 
 const mealTagNames = new Set(['sniadanie', 'obiad', 'podwieczorek', 'kolacja'])
 
@@ -37,21 +30,6 @@ const tagNames = [
   'napoje',
   'dodatki',
 ]
-
-const ensureTag = db.prepare('INSERT OR IGNORE INTO tags(name) VALUES (?)')
-for (const name of tagNames) {
-  ensureTag.run(name)
-}
-
-const tags = db.prepare('SELECT id, name FROM tags ORDER BY name COLLATE NOCASE ASC').all()
-const tagIdByName = new Map(tags.map((tag) => [normalize(tag.name), tag.id]))
-
-const products = db.prepare('SELECT id, name FROM products ORDER BY name COLLATE NOCASE ASC').all()
-
-const deleteProductTags = db.prepare('DELETE FROM product_tags')
-const insertProductTag = db.prepare(
-  'INSERT OR IGNORE INTO product_tags(product_id, tag_id) VALUES (?, ?)',
-)
 
 function classifyProduct(name) {
   const normalized = normalize(name)
@@ -230,9 +208,35 @@ function classifyProduct(name) {
   return Array.from(result)
 }
 
-db.transaction(() => {
-  deleteProductTags.run()
+await sequelize.authenticate()
 
+for (const name of tagNames) {
+  await models.tag.findOrCreate({
+    where: {
+      name,
+    },
+    defaults: { name },
+  })
+}
+
+const tags = await models.tag.findAll({
+  attributes: ['id', 'name'],
+  order: [[literal('name COLLATE NOCASE'), 'ASC']],
+  raw: true,
+})
+
+const tagIdByName = new Map(tags.map((tag) => [normalize(tag.name), tag.id]))
+
+const products = await models.product.findAll({
+  attributes: ['id', 'name'],
+  order: [[literal('name COLLATE NOCASE'), 'ASC']],
+  raw: true,
+})
+
+await sequelize.transaction(async (transaction) => {
+  await models.productTag.destroy({ where: {}, transaction })
+
+  const rows = []
   for (const product of products) {
     const classes = classifyProduct(product.name)
 
@@ -247,35 +251,57 @@ db.transaction(() => {
         continue
       }
 
-      insertProductTag.run(product.id, tagId)
+      rows.push({
+        product_id: product.id,
+        tag_id: tagId,
+      })
     }
   }
-})()
 
-const totals = db
-  .prepare(
-    `
-    SELECT
-      COUNT(*) AS products,
-      (SELECT COUNT(*) FROM product_tags) AS tag_links
-    FROM products
-    `,
-  )
-  .get()
+  if (rows.length > 0) {
+    await models.productTag.bulkCreate(rows, {
+      ignoreDuplicates: true,
+      transaction,
+    })
+  }
+})
 
-const topTags = db
-  .prepare(
-    `
-    SELECT t.name, COUNT(*) AS links
-    FROM product_tags pt
-    INNER JOIN tags t ON t.id = pt.tag_id
-    GROUP BY t.id
-    ORDER BY links DESC, t.name COLLATE NOCASE ASC
-    `,
-  )
-  .all()
+const totals = {
+  products: await models.product.count(),
+  tag_links: await models.productTag.count(),
+}
 
-db.close()
+const topTagsRaw = await models.productTag.findAll({
+  attributes: ['tag_id', [fn('COUNT', col('tag_id')), 'links']],
+  group: ['tag_id'],
+  order: [[literal('links'), 'DESC']],
+  raw: true,
+})
+
+const topTags = []
+for (const item of topTagsRaw) {
+  const tag = await models.tag.findByPk(item.tag_id, {
+    attributes: ['name'],
+    raw: true,
+  })
+
+  if (tag) {
+    topTags.push({
+      name: tag.name,
+      links: Number(item.links) || 0,
+    })
+  }
+}
+
+topTags.sort((left, right) => {
+  if (right.links !== left.links) {
+    return right.links - left.links
+  }
+
+  return left.name.localeCompare(right.name, 'pl')
+})
+
+await sequelize.close()
 
 console.log(`Tagged products: ${totals.products}`)
 console.log(`Created tag links: ${totals.tag_links}`)
