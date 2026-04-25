@@ -3,6 +3,7 @@ import rateLimit from 'express-rate-limit'
 import controllers from '../controllers/index.js'
 import authService from '../services/auth.service.js'
 import auditService from '../services/audit.service.js'
+import { isTurnstileEnabled } from '../lib/captcha.js'
 import { requireAuth, requirePermission } from '../middleware/auth.middleware.js'
 import { validate } from '../middleware/validate.middleware.js'
 import { schemas } from '../validation/schemas.js'
@@ -26,8 +27,11 @@ const loginLimiter = rateLimit({
 })
 
 apiRouter.get('/captcha-config', (req, res) => {
+  const captchaEnabled = isTurnstileEnabled()
+
   res.json({
-    turnstile_site_key: process.env.TURNSTILE_SITE_KEY ?? '',
+    captcha_enabled: captchaEnabled,
+    turnstile_site_key: captchaEnabled ? (process.env.TURNSTILE_SITE_KEY ?? '') : '',
   })
 })
 

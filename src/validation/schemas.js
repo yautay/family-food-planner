@@ -74,7 +74,7 @@ const registerBody = z
     username: trimmedString.min(3).max(60),
     email: trimmedString.email().max(254),
     password: z.string().min(8).max(128),
-    captcha_token: trimmedString.min(1).max(2048),
+    captcha_token: trimmedString.min(1).max(2048).optional(),
   })
   .passthrough()
 
@@ -95,7 +95,7 @@ const changePasswordBody = z
 const forgotPasswordBody = z
   .object({
     email: trimmedString.email().max(254),
-    captcha_token: trimmedString.min(1).max(2048),
+    captcha_token: trimmedString.min(1).max(2048).optional(),
   })
   .passthrough()
 

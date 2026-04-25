@@ -36,14 +36,17 @@ const { t } = useI18n()
 const email = ref('')
 const captchaToken = ref('')
 const captchaSiteKey = ref('')
+const captchaEnabled = ref(false)
 const message = ref('')
 const errorMessage = ref('')
 
 onMounted(async () => {
   try {
     const config = await authStore.getCaptchaConfig()
-    captchaSiteKey.value = config.turnstile_site_key
+    captchaEnabled.value = Boolean(config.captcha_enabled)
+    captchaSiteKey.value = config.turnstile_site_key ?? ''
   } catch (_error) {
+    captchaEnabled.value = false
     captchaSiteKey.value = ''
   }
 })
@@ -52,13 +55,16 @@ async function onSubmit() {
   message.value = ''
   errorMessage.value = ''
 
-  if (!captchaToken.value) {
+  if (captchaEnabled.value && !captchaToken.value) {
     errorMessage.value = t('auth.captchaRequired')
     return
   }
 
   try {
-    await authStore.forgotPassword(email.value, captchaToken.value)
+    await authStore.forgotPassword(
+      email.value,
+      captchaEnabled.value ? captchaToken.value : undefined,
+    )
     message.value = t('auth.forgotSuccess')
   } catch (error) {
     errorMessage.value = error?.response?.data?.error ?? t('auth.requestFailed')

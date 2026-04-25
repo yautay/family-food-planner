@@ -55,13 +55,16 @@ const email = ref('')
 const password = ref('')
 const captchaToken = ref('')
 const captchaSiteKey = ref('')
+const captchaEnabled = ref(false)
 const errorMessage = ref('')
 
 onMounted(async () => {
   try {
     const config = await authStore.getCaptchaConfig()
-    captchaSiteKey.value = config.turnstile_site_key
+    captchaEnabled.value = Boolean(config.captcha_enabled)
+    captchaSiteKey.value = config.turnstile_site_key ?? ''
   } catch (_error) {
+    captchaEnabled.value = false
     captchaSiteKey.value = ''
   }
 })
@@ -69,18 +72,23 @@ onMounted(async () => {
 async function onSubmit() {
   errorMessage.value = ''
 
-  if (!captchaToken.value) {
+  if (captchaEnabled.value && !captchaToken.value) {
     errorMessage.value = t('auth.captchaRequired')
     return
   }
 
   try {
-    await authStore.register({
+    const payload = {
       username: username.value,
       email: email.value,
       password: password.value,
-      captcha_token: captchaToken.value,
-    })
+    }
+
+    if (captchaEnabled.value) {
+      payload.captcha_token = captchaToken.value
+    }
+
+    await authStore.register(payload)
     await router.push('/catalog')
   } catch (error) {
     errorMessage.value = error?.response?.data?.error ?? t('auth.registrationFailed')

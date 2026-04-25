@@ -177,7 +177,9 @@ async function createAdminSession() {
   }
 
   if (!adminLogin.body.permissions.includes('permissions.manage')) {
-    throw new Error(`Admin login missing permissions.manage: ${JSON.stringify(adminLogin.body.permissions)}`)
+    throw new Error(
+      `Admin login missing permissions.manage: ${JSON.stringify(adminLogin.body.permissions)}`,
+    )
   }
 
   return {
@@ -191,6 +193,7 @@ beforeAll(async () => {
   databasePath = path.join(databaseDir, 'integration.db')
 
   process.env.DATABASE_PATH = databasePath
+  process.env.TURNSTILE_ENABLED = 'true'
   process.env.TURNSTILE_SECRET_KEY = 'test-secret'
   process.env.APP_BASE_URL = 'http://localhost:5173'
 
@@ -241,7 +244,10 @@ describe('Auth + RBAC integration', () => {
   })
 
   it('rejects registration when captcha fails', async () => {
-    verifyTurnstileTokenMock.mockResolvedValueOnce({ success: false, errors: ['invalid-input-response'] })
+    verifyTurnstileTokenMock.mockResolvedValueOnce({
+      success: false,
+      errors: ['invalid-input-response'],
+    })
 
     const username = nextValue('captcha_fail')
     const response = await api('/auth/register', {
@@ -398,7 +404,9 @@ describe('Auth + RBAC integration', () => {
     })
     expect(auditLogs.status).toBe(200)
     expect(
-      auditLogs.body.some((entry) => entry.action === 'acl.roles.updated' && entry.target_id === String(userId)),
+      auditLogs.body.some(
+        (entry) => entry.action === 'acl.roles.updated' && entry.target_id === String(userId),
+      ),
     ).toBe(true)
     expect(
       auditLogs.body.some(

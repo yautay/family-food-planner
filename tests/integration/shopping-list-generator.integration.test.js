@@ -177,7 +177,9 @@ async function createAdminSession() {
   }
 
   if (!adminLogin.body.permissions.includes('recipes.manage')) {
-    throw new Error(`Admin login missing recipes.manage: ${JSON.stringify(adminLogin.body.permissions)}`)
+    throw new Error(
+      `Admin login missing recipes.manage: ${JSON.stringify(adminLogin.body.permissions)}`,
+    )
   }
 
   return {
@@ -190,6 +192,7 @@ beforeAll(async () => {
   databasePath = path.join(databaseDir, 'integration.db')
 
   process.env.DATABASE_PATH = databasePath
+  process.env.TURNSTILE_ENABLED = 'true'
   process.env.TURNSTILE_SECRET_KEY = 'test-secret'
   process.env.APP_BASE_URL = 'http://localhost:5173'
 
