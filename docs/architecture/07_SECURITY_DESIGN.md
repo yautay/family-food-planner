@@ -21,8 +21,13 @@ publiczne linki i błędami aplikacyjnymi (IDOR/XSS/CSRF/upload).
   sesji ma być natychmiastowe).
 - Brak samorejestracji; konta tworzy ADMIN. Pierwszy admin: CLI
   `task create-admin` (nigdy seed z hasłem w repo — lekcja netQArnera).
-- Rate limit (slowapi): `/auth/login` 5/min/IP + wykładniczy backoff po
-  10 nieudanych na konto (blokada 15 min, komunikat neutralny).
+- Rate limit (slowapi): `/auth/login` 5/min/IP + blokada konta po 10 nieudanych
+  próbach (komunikat neutralny — identyczny jak przy złym haśle).
+  Stan faktyczny (BATCH_02, `app/core/security.py`): blokada jest **stała,
+  15-minutowa**, a licznik porażek zeruje się w momencie założenia blokady —
+  nie ma backoffu wykładniczego. Wystarcza na model zagrożeń z §1 (≈10 prób
+  na 15 min na konto, przy jednoczesnym limicie 5/min/IP); zaostrzenie
+  parametrów wraca do przeglądu w BATCH_17 razem z parametrami argon2 i TTL.
 
 ## 3. CSRF, CORS, nagłówki
 
@@ -30,6 +35,11 @@ publiczne linki i błędami aplikacyjnymi (IDOR/XSS/CSRF/upload).
   nagłówek `X-CSRF-Token` dla POST/PUT/PATCH/DELETE; porównanie
   `hmac.compare_digest`. Publiczne PATCH-e checkboxów (token listy) —
   wyłączone z CSRF (autoryzuje token w URL), ale rate-limited.
+  Drugi wyjątek (BATCH_02, `CSRF_EXEMPT_PREFIXES`): **`POST /auth/login`** —
+  przed zalogowaniem nie istnieje jeszcze cookie `csrf_token`, z którym można
+  by porównać nagłówek. Żądanie chroni rate limit i blokada konta (§2);
+  ryzykiem jest wyłącznie „login CSRF" (wmuszenie ofierze cudzej sesji), a bez
+  samorejestracji i przy jednym origin jest ono w tym modelu zagrożeń pomijalne.
 - CORS: brak (SPA serwowana z tego samego origin). Nie włączamy „na zapas".
 - Nagłówki (middleware): `X-Content-Type-Options: nosniff`,
   `Referrer-Policy: same-origin`, `X-Frame-Options: DENY`,

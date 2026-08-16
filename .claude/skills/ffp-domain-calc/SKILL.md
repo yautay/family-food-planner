@@ -3,10 +3,11 @@ name: ffp-domain-calc
 description: Reguły logiki obliczeniowej Family Food Planner — Decimal end-to-end, normalizacja jednostek, wzory nutrition (kcal/makro/IG→ŁG), determinizm silnika zakupowego, zaokrąglenia, property-based testy. Ładuj przy każdym batchu liczącym ilości lub wartości.
 ---
 
-<!-- verified: 2026-08-16 (przegląd w BATCH_01: kodu obliczeniowego jeszcze nie
-     ma, więc treść bez zmian; realne uzgodnienie z kodem robią R2/R3)
-     stack: Python 3.13 · Decimal (stdlib) · hypothesis dołoży batch z pierwszym
-            silnikiem (B04/B05)
+<!-- verified: 2026-08-16 (REVIEW R1 — uzgodnione z kodem B04: units.py
+     + nutrition_adapter.py; silniki nutrition/shopping dalej nie istnieją)
+     stack: Python 3.13 · Decimal (stdlib) · hypothesis NIE JEST jeszcze
+            zależnością — dokłada ją do `[dependency-groups] dev` batch
+            z pierwszym silnikiem (B05)
      źródła nadrzędne: ADR-004, ADR-005, ADR-008, 02_DOMAIN §6 i §9, 08_TESTING §2
      uruchamianie testów: `task test-unit` (silniki nie dotykają bazy) -->
 
@@ -23,15 +24,26 @@ description: Reguły logiki obliczeniowej Family Food Planner — Decimal end-to
   zero I/O, zero ORM, zero `datetime.now()`/losowości — czas i dane wchodzą
   parametrami. Wejścia/wyjścia: dataclassy, nie modele ORM.
 
-## Jednostki (ADR-005)
+## Jednostki (ADR-005) — kod jest w `app/modules/catalog/units.py`
 
-- Osie ilości: masa → g, objętość → ml, sztuki → szt. (waga sztuki
-  z `piece_weight_g` produktu). Ilość bez jednoznacznej reprezentacji
-  na osi NIE ISTNIEJE w danych — zapis odrzucany w serwisie.
+- Konwersje mają JEDNO miejsce (`normalize_amount`, `to_grams`,
+  `to_basis_amount`) i nie wolno ich powtarzać w silniku. Ilość bez
+  jednoznacznej reprezentacji NIE ISTNIEJE w danych: `UnitConversionError`
+  (AppError → 422) i zapis pada.
+- **Dwie różne osie, nie mieszać** (ustalenie R1): `base_unit` = oś
+  PRZECHOWYWANIA ilości podanej w jednostce produktu (masa → g, objętość → ml,
+  sztuki → szt.), `basis_unit` = oś WARTOŚCI „na 100" (objętość → ml,
+  **masa i sztuki → g**). Przelicznik jednostki domowej daje ilość na osi
+  `basis_unit`, więc dla produktu w sztukach — gramy.
+- Wartości odżywcze czyta WYŁĄCZNIE adapter `ProductNutrition`
+  (`catalog/nutrition_adapter.py`: `nutrition_for`, `measure_for`,
+  `digestible_carbs_100`); silnik nie zna kolumn `canonical_products`.
+  `measure_for` przyjmuje dataclassy `UnitWeight`, nie wiersze ORM.
 - Jednostki domowe (łyżka/garść/plaster/opakowanie) są WŁASNOŚCIĄ produktu
   (`product_unit_weights`); nigdy globalna tabela przeliczników. Próbki
   z importu → mediana + samples_count.
-- Prezentacja (kg dla ≥1000 g) to sprawa frontendu — silniki zawsze w g/ml.
+- Prezentacja (kg dla ≥1000 g) to sprawa frontendu (`src/lib/format.ts`) —
+  silniki zawsze w g/ml.
 
 ## Wzory nutrition (02_DOMAIN §6)
 

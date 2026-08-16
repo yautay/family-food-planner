@@ -3,14 +3,15 @@ name: ffp-backend
 description: Kontrakt backendu Family Food Planner — wzorzec modułu FastAPI (router→service→models), SQLAlchemy 2.0 typed, Alembic, Pydantic v2, ScopedQuery, pytest. Ładuj przed pracą nad plikami w backend/**.
 ---
 
-<!-- verified: 2026-08-16 (BATCH_01 — uzgodnione z kodem w repo)
+<!-- verified: 2026-08-16 (REVIEW R1 — uzgodnione z kodem po B01–B04)
      stack: Python 3.13 · FastAPI 0.141 · SQLAlchemy 2.0.52 · Pydantic 2.13
-            · Alembic 1.19 · psycopg 3.3 (async) · pytest 9.1 · PG 17 · uv
+            · Alembic 1.19 · psycopg 3.3 (async) · pytest 9.1 · mypy 2.3
+            · argon2-cffi 25 · slowapi 0.1.10 · PG 17 · uv
      hierarchia: ADR i docs/architecture NADRZĘDNE wobec tego skilla -->
 
 # FFP — kontrakt backendu
 
-## Fundament z BATCH_01 (istnieje, nie pisz tego od nowa)
+## Fundament z BATCH_01–04 (istnieje, nie pisz tego od nowa)
 
 - `app/core/config.py` — `Settings` (pydantic-settings), `get_settings()`
   z cache, `ConfigurationError` po polsku przy brakach. Nowa zmienna =
@@ -25,6 +26,23 @@ description: Kontrakt backendu Family Food Planner — wzorzec modułu FastAPI (
 - `app/main.py` — `create_app(settings)`; aplikacji NIE ma na poziomie
   modułu (uruchomienie: `uvicorn app.main:create_app --factory`).
   Nowy moduł rejestruje router właśnie tutaj.
+- `app/core/deps.py` — JEDYNE wejście autoryzacji: `CurrentUser`, `AdminUser`,
+  `require_admin` (+ fabryki serwisów). Router nie czyta cookie sam.
+- `app/core/{security,cookies,middleware}.py` — argon2id, tokeny, TTL sesji,
+  atrybuty cookies, CSRF double-submit i nagłówki bezpieczeństwa. Szczegóły:
+  skill `ffp-security`.
+- `app/core/scope.py` — `ScopedMixin` + `ScopedQuery` (patrz §Autoryzacja).
+- `app/core/deletion.py` — `UsedInRef`, `assert_deletable`,
+  `conflict_from_integrity_error`: kontrakt 409 z `details.used_in`. FK
+  domenowe mają RESTRICT, więc `IntegrityError` z commita łapiesz jako drugą
+  linię obrony — inaczej użytkownik dostanie 500 zamiast 409.
+- `app/core/schemas.py` — `DecimalString` dla KAŻDEGO pola NUMERIC w odpowiedzi.
+- `app/modules/catalog/` — `units.py` (jedyne konwersje ilości),
+  `nutrition_adapter.py` (jedyne wejście silników do wartości, ADR-004),
+  `naming.normalize_name` (klucz tożsamości produktu).
+- `app/modules/audit/service.py` — `record()` bez commita; wpis powstaje
+  w transakcji operacji. Nowa akcja = wpis w `AuditAction`/`AuditEntity`
+  (`<encja>.<czasownik>`); Decimal w payloadzie przez `format(value, "f")`.
 
 ## Wzorzec modułu (ADR-001, 01_ARCHITECTURE §2)
 
@@ -96,8 +114,12 @@ nie ma.
   marker (`pytestmark = pytest.mark.unit|integration|api`) — bez markera
   test nie wejdzie do żadnego targetu Taskfile'a.
 - Fixture'y w `tests/conftest.py`: `settings`, `app`, `client`
-  (httpx AsyncClient + ASGITransport), `test_database_url` (db-test).
-  Fabryki danych → `tests/factories.py` (od pierwszego modułu z modelami).
+  (httpx AsyncClient + ASGITransport), `db_session`/`db_client` (baza),
+  `test_database_url` (db-test). Fabryki danych → `tests/factories.py`,
+  logowanie i nagłówek CSRF → `tests/helpers.py`.
+- **Nowa tabela = wpis w DWÓCH miejscach**: `DB_TABLES` (conftest, TRUNCATE)
+  i `EXPECTED_TABLES` (`tests/integration/test_migrations.py`); nowy typ
+  enumowy dopisz do `EXPECTED_ENUM_TYPES` tam samo.
 - Testy integracyjne dostają `DATABASE_URL` = `TEST_DATABASE_URL`; baza dev
   jest nietykalna.
 - Testy nazywają scenariusz po polsku w docstringu.

@@ -30,7 +30,13 @@ from app.modules.catalog.models import (
     ProductNutrientValue,
     VerificationStatus,
 )
-from app.modules.catalog.units import AmountUnit, MeasureKind, ProductMeasure, UnitWeight
+from app.modules.catalog.units import (
+    AmountUnit,
+    MeasureKind,
+    ProductMeasure,
+    UnitWeight,
+    basis_unit,
+)
 
 #: Opisy braków po polsku — trafiają wprost do `nutrition.missing` (04_API §1).
 CORE_LABELS: tuple[tuple[str, str], ...] = (
@@ -116,12 +122,12 @@ def nutrition_for(
 ) -> ProductNutrition:
     """Zbuduj adapter z encji produktu i (już wczytanych) wartości rozszerzonych."""
     measure_kind = product.measure_kind
-    basis_unit = AmountUnit.MILLILITER if measure_kind is MeasureKind.VOLUME else AmountUnit.GRAM
     return ProductNutrition(
         product_id=product.id,
         name=product.name,
         measure_kind=measure_kind,
-        basis_unit=basis_unit,
+        # Jedna definicja osi wartości dla adaptera i dla konwersji (units.basis_unit).
+        basis_unit=basis_unit(measure_kind),
         piece_weight_g=product.piece_weight_g,
         kcal_100=product.kcal_100,
         protein_100=product.protein_100,

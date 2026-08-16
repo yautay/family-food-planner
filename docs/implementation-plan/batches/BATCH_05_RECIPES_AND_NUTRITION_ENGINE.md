@@ -59,11 +59,30 @@ Batch zastaje po B01–B04 + R1 (stan faktyczny sprawdź w `PROGRESS.md`):
     `to_grams(...)`, `to_basis_amount(...)` (ilość na osi, w której podane są
     wartości „na 100"), `UnitConversionError` (AppError → 422). Nieprzeliczalna
     ilość MUSI wysadzić zapis składnika — to niezmiennik 02_DOMAIN §13.1.
+
+    **DWIE osie, nie jedna (naprawa w R1 — nie odwracaj jej!)**:
+    `base_unit(measure_kind)` = oś przechowywania ilości podanej w jednostce
+    produktu (masa → `g`, objętość → `ml`, sztuki → `piece`);
+    `basis_unit(measure_kind)` = oś wartości „na 100" (objętość → `ml`,
+    **masa i sztuki → `g`**). Przelicznik jednostki domowej
+    (`product_unit_weights.grams_per_unit`) zwraca ilość na osi `basis_unit`,
+    więc dla produktu w sztukach daje GRAMY. Konsekwencja dla schematu
+    `recipe_ingredients`: `amount_unit` dla produktu `measure_kind=piece` bywa
+    `g` (gdy użyto jednostki domowej) albo `piece` (gdy użyto `szt.`) — oba
+    zapisy są legalne i `to_basis_amount` obsługuje oba.
   - **Adapter `ProductNutrition` JUŻ ISTNIEJE**
     (`catalog/nutrition_adapter.py`: `nutrition_for(product, extras)`,
     `measure_for(product, unit_weights)`) — silnik B05 konsumuje go, a NIE tworzy
     drugiego. Ma `is_complete`, `has_core_macros`, `has_glycemic_index`,
-    `missing` (komunikaty PL) i `digestible_carbs_100`.
+    `missing` (komunikaty PL), `digestible_carbs_100` i `basis_unit`.
+    Uwagi z R1: (a) `measure_for` przyjmuje dataclassy `UnitWeight`
+    z `units.py`, NIE wiersze ORM `ProductUnitWeight` — serwis musi je
+    przepakować; (b) jedynym miejscem poza adapterem, które czyta kolumny
+    wartości, jest schemat ODPOWIEDZI `ProductNutritionRead`
+    (`catalog/router.py`) — to prezentacja formularza admina, nie wejście
+    obliczeń; silnik nie ma prawa dołożyć drugiego takiego czytnika;
+    (c) `hypothesis` NIE jest jeszcze zależnością — B05 dopisuje ją do
+    `[dependency-groups] dev` w `backend/pyproject.toml` (`uv sync`).
   - **Wartości rdzenia są NULLOWALNE** — produkt po inline create nie ma kcal
     ani makro. Silnik musi to unieść flagą `complete=False`, nigdy zerem.
   - **Blokada usuwania**: `app/core/deletion.py` (`UsedInRef`, `assert_deletable`,
@@ -287,6 +306,27 @@ diffie przed commitem (krok 11).
 
 - Kolejność twarda: silnik + testy PRZED endpointami — endpointy tylko
   konsumują gotowy, przetestowany silnik.
+- **Ustalenia review R1 do domknięcia w tym batchu** (pełna lista w dzienniku
+  `PROGRESS.md`, wpis R1):
+  1. `ProduktFormPage.vue` pokazuje przeliczniki jednostek zawsze w gramach
+     („1 szklanka = 250 g" dla mleka) i etykietę „Gramów na jednostkę" — dla
+     produktu VOLUME wartość leży na osi ml. Poprawić przy okazji dotykania
+     `AmountInput`/jednostek: użyć `basisUnit` (już policzone w tym pliku)
+     i neutralnej etykiety. R1 tego nie ruszał, bo zmienia to, co widzi
+     użytkownik.
+  2. `ProductCreateDrawer.vue` nie czyści `measureKind`/`pieceWeight` przy
+     ponownym otwarciu — po dodaniu produktu „w sztukach" następny inline
+     create startuje z `sztuki` i starą wagą sztuki. Reset w tym samym
+     `watch`, który czyści `name`.
+  3. **D15** (02_DECISIONS): zmiana `measure_kind` nie unieważnia weryfikacji
+     wartości. Zanim silnik zacznie liczyć na tych danych, wdrożyć
+     rekomendację (zbicie do UNVERIFIED + audyt) albo odnotować decyzję
+     właściciela.
+  4. **D16** (02_DECISIONS): `/recipes` to PIERWSZA encja ze scope, więc ten
+     batch rozstrzyga w kodzie, czy ADMIN widzi na liście cudze przepisy.
+     Bez odpowiedzi właściciela: zostaje stan faktyczny `ScopedQuery`
+     (ADMIN widzi wszystko, macierz 08_TESTING §4) — i wtedy test API musi
+     to jawnie asercjonować, żeby decyzja była widoczna w kodzie.
 - Granica ADR-008: service pobiera produkty i buduje `ProductNutrition`,
   silnik nie zna ORM. Nie przenosić Decimal→float nigdzie po drodze; w JSON
   ilości/wartości jako stringi dziesiętne (04_API §1).

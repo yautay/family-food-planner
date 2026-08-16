@@ -12,8 +12,8 @@ commit wykonany). Kolumna „Blokery" = zależności + decyzje z 02_DECISIONS.
 | 02 AUTH_AND_ACCOUNTS | [x] | — | `batch(02)` na master (hash wpisać po push) |
 | 03 HOUSEHOLDS_AND_SCOPE | [x] | — | `batch(03)` na master (hash wpisać po push) |
 | 04 UNITS_AND_CANONICAL_PRODUCTS | [x] | — | `batch(04)` na master (hash wpisać po push) |
-| R1 REVIEW_FOUNDATIONS | [ ] | 01–04 | |
-| 05 RECIPES_AND_NUTRITION_ENGINE | [ ] | 04, R1 | |
+| R1 REVIEW_FOUNDATIONS | [x] | — | `batch(R1)` na master (hash wpisać po push) |
+| 05 RECIPES_AND_NUTRITION_ENGINE | [ ] | 04, R1 **(PASS z warunkami — patrz dziennik)** | |
 | 06 GOALS_AND_DAY_PLAN | [ ] | 05 | |
 | 07 WEEK_TEMPLATES_AND_CYCLES | [ ] | 06 | |
 | R2 REVIEW_PLANNING_CORE | [ ] | 05–07 | |
@@ -40,6 +40,156 @@ zmiany dotykające przyszłych batchy trzeba wpisać do ich kart
 (00_MASTER_PLAN §8); dziennik to indeks, nie schowek.
 
 ---
+
+**2026-08-16 — REVIEW R1 (REVIEW_FOUNDATIONS) — WERDYKT: PASS Z WARUNKAMI**
+
+B05 może startować, o ile domknie ustalenia wpisane do swojej karty (sekcja
+„Implementation Notes" → „Ustalenia review R1 do domknięcia w tym batchu").
+Audyt objął cały kod od `0c872b4` do `833b4d1` (B01–B04) w jednej sesji:
+wzorzec modułu, `ScopedQuery`, sesje/CSRF/rate limit, migracje, katalog
+i wartości odżywcze, frontend, kontrakt komend.
+
+**Warunki werdyktu:**
+
+1. **Nie odwracać naprawy `basis_unit`** w `catalog/units.py` — silnik B05
+   stoi na rozdzieleniu osi przechowywania (`base_unit`) i osi wartości
+   „na 100" (`basis_unit`).
+2. B05 wykonuje ustalenia U9, U10 i rozstrzyga w kodzie D15 + D16 (karta B05).
+3. **D15 i D16 w 02_DECISIONS są OPEN** — decyzja właściciela najpóźniej
+   w trakcie B05; bez odpowiedzi B05 utrzymuje stan faktyczny i asercjonuje
+   go testem, żeby wybór był widoczny w kodzie, nie domyślny.
+4. Przed R2: uruchomić E2E (`households.spec.ts`, `produkty.spec.ts`) i
+   `task secrets-scan` na maszynie z Docker Desktop i wpisać wynik tutaj
+   (dług wisi od B03).
+
+**Ustalenia NAPRAWIONE w commicie review:**
+
+- **U1 (blokujące dla B05)** `backend/app/modules/catalog/units.py:191` —
+  konwersja jednostki domowej mnożyła ilość przez `grams_per_unit`, ale
+  oznaczała wynik osią `base_unit`, czyli dla produktu `measure_kind=piece`
+  „sztukami". `to_grams`/`to_basis_amount` mnożyły to po raz drugi przez
+  `piece_weight_g`: dla jajka (105 g) „1 opakowanie = 600 g" dawało 63 000 g.
+  Sprzeczne z docstringiem tej samej funkcji, z ADR-004 (wartości na 100 g)
+  i z dziennikiem B04 pkt 3; niepokryte testem, choć `tests/unit/
+  test_product_nutrition.py:153` buduje dokładnie taki produkt. Naprawa: nowa
+  czysta funkcja `basis_unit(measure_kind)` (objętość → ml, masa i sztuki → g),
+  użyta też przez `nutrition_adapter.nutrition_for` (jedna definicja osi) +
+  dwa testy regresyjne. **Silnik B05 dostaje poprawną podstawę obliczeń.**
+- **U2** `backend/migrations/versions/0005_seed_product_categories.py:82` —
+  `downgrade()` kasował kategorie bez sprawdzenia referencji, więc na bazie
+  z JAKIMKOLWIEK produktem kończył się `ForeignKeyViolation` (FK
+  `canonical_products.category_id` ma RESTRICT). Odtworzone realnie na db-test.
+  03_DATABASE §1 wymaga cyklu up/down/up na kopii REALNEJ bazy, a 09_DEPLOYMENT
+  §4 dopuszcza migracje w dół „tylko gdy downgrade przetestowany" — test
+  sprawdzał wyłącznie pustą bazę. Naprawa: `DELETE ... AND NOT EXISTS
+  (SELECT 1 FROM canonical_products ...)` + test
+  `test_downgrade_seedu_przechodzi_na_bazie_z_produktami`.
+- **U3** `docker/compose.dev.yml:110` — warunek `[ -d node_modules/vite ]`
+  nie odświeżał wolumenu po zmianie zależności (follow-up otwarty od B02).
+  Teraz `npm ci` wykonuje się, gdy `package-lock.json` różni się od stempla
+  w wolumenie. Logika `sh` przetestowana lokalnie (5 scenariuszy), YAML
+  zwalidowany; **w kontenerze NIEURUCHOMIONE — brak Dockera w tej sesji.**
+- **U4** `CLAUDE.md` — `task check` w tabeli komend pomijał `fe-build`;
+  sekcja §4 („Fundament") kończyła się na B02, więc nie wymieniała
+  `core/scope.py`, `core/deletion.py`, `core/schemas.py`, `catalog/units.py`,
+  `catalog/nutrition_adapter.py` ani kontraktu `AuditService.record()`;
+  akapit o testach mówił o JEDNYM miejscu na nową tabelę, a są DWA
+  (`DB_TABLES` + `EXPECTED_TABLES`, plus `EXPECTED_ENUM_TYPES` dla enumów).
+- **U5** `07_SECURITY §2` — dokument obiecywał „wykładniczy backoff po 10
+  nieudanych", kod ma stałą blokadę 15 min z zerowaniem licznika
+  (`core/security.py:153`). Kod ma rację (wystarcza na model zagrożeń §1),
+  więc doprecyzowany dokument + wskazanie B17 jako miejsca rewizji parametrów.
+- **U6** `07_SECURITY §3` — nieopisany drugi wyjątek CSRF: `POST /auth/login`
+  (przed logowaniem nie ma cookie `csrf_token`, z którym można porównać
+  nagłówek). Kod ma rację, dokument uzupełniony wraz z granicami ryzyka.
+- **U7** `.claude/skills/ffp-{backend,frontend,security,domain-calc}` —
+  wszystkie cztery opisywały stan „po B01" (ffp-security twierdził, że
+  argon2/slowapi „dokłada B02" i że nagłówki CSP należą do B17, a już są;
+  ffp-frontend, że LoginPage jest placeholderem; ffp-domain-calc, że kodu
+  obliczeniowego nie ma). Nagłówki `verified` i inwentarze uzgodnione ze
+  stanem repo; dopisany rozdział o dwóch osiach jednostek i o adapterze
+  wartości. To domyka follow-up B02 pkt 4 (03_AI_SKILLS §8).
+- **U8** karta `BATCH_R1` odwoływała się w trzech miejscach do nieistniejącego
+  skilla `ffp-framework` — poprawione na cztery realne skille `ffp-*`.
+
+**Ustalenia PRZEKAZANE dalej (follow-up z miejscem docelowym):**
+
+- **U9 → karta B05** `frontend/src/pages/produkty/ProduktFormPage.vue:707`
+  + `frontend/src/lib/texts.ts:117` — przeliczniki jednostek renderują się
+  zawsze w gramach („1 szklanka = 250 g" dla mleka, mimo że wartość leży na
+  osi ml — patrz `scripts/seed_demo.py:181`), a etykieta „Gramów na jednostkę"
+  zachęca do wpisania gramów przy produkcie liczonym na 100 ml. R1 tego nie
+  ruszał: zmienia zachowanie widoczne dla użytkownika (granica z karty).
+- **U10 → karta B05** `frontend/src/components/domain/ProductCreateDrawer.vue:52`
+  — ponowne otwarcie drawera nie czyści `measureKind`/`pieceWeight`, więc po
+  dodaniu produktu „w sztukach" następny inline create startuje z tą miarą
+  i starą wagą sztuki.
+- **U11 → karta B05** `backend/scripts/seed_demo.py:288` — seed normalizuje
+  etykiety jednostek przez `normalize_unit_label`, a serwis przez
+  `canonical_unit_label` (`catalog/service.py:813`), który dodatkowo scala
+  „opak." → „opakowanie" i odrzuca zarezerwowane „szt.". Dla dzisiejszych 15
+  produktów wynik jest identyczny; to pułapka na rosnący seed.
+- **U12 → karta B17** `task check` nie bramkuje świeżości `backend/openapi.json`
+  i `frontend/src/api/generated.ts` (follow-up B01 pkt 1). W R1 sprawdzone
+  realnie: `task fe-types` dał zerowy diff, więc kontrakt jest zgodny z kodem.
+- **U13 → karta B17** `SECRET_KEY` jest wymaganą zmienną konfiguracji, ale
+  żaden kod jej nie używa (sesje i CSRF biorą entropię z `secrets`).
+  Do decyzji: zostawić jako zarezerwowaną i opisać, albo przestać wymagać.
+- **U14 → karta B17** `backend/app/modules/accounts/service.py:178`
+  i `backend/app/modules/households/service.py:154` — `ilike(f"%{query}%")`
+  bez `autoescape=True`, czyli dokładnie ten błąd, który B04 naprawił
+  w katalogu. Wyszukiwarki ADMIN-a, więc niski priorytet.
+- **U15 → sesja z Docker Desktop, przed R2** E2E `households.spec.ts`
+  i `produkty.spec.ts` nadal NIEURUCHOMIONE, `task secrets-scan` (gitleaks
+  w kontenerze) NIEWYKONANY — w tym środowisku nie ma `docker` w PATH.
+  Substytut wykonany w R1: `git ls-files` bez `.env`, grep sekretów po
+  plikach śledzonych (0 trafień) i statyczna weryfikacja, że wszystkie
+  `data-testid` używane w testach E2E istnieją w `frontend/src`.
+
+**Decyzje OPEN dla właściciela (02_DECISIONS):**
+
+- **D15** `backend/app/modules/catalog/service.py:451` — zmiana `measure_kind`
+  przez USERA nie unieważnia weryfikacji, a przestawia podstawę wartości
+  („na 100 g" ⇄ „na 100 ml"). Rekomendacja: zbijać do UNVERIFIED + audyt.
+- **D16** `backend/app/core/scope.py:160` — `visible_condition` daje ADMIN-owi
+  `true()` (macierz 08_TESTING §4: ADMIN ma 200 w każdym wierszu), a 04_API §3
+  pkt 2 i 07_SECURITY §4 mówią, że ADMIN nie jest wyjątkiem na ścieżkach
+  użytkownika — i tak działa `member_profiles` (jest na to test!). Dwa
+  dokumenty nadrzędne mówią co innego, więc R1 nie rozstrzyga tego sam.
+  Zmiana jest tania dopóki nie ma encji produkcyjnych ze scope, czyli do B05.
+
+**Co sprawdzone i CZYSTE (bez ustaleń):** wzorzec modułu (żaden router nie
+dotyka sesji DB — grep po `AsyncSession`/`get_session`/`session.`; brak logiki
+w importach krzyżowych), kontrakt błędu 04_API §1 wraz z kodami 401/403/404/
+409/422/429, macierz uprawnień 08 §4 per zasób z asertami (anty-IDOR: cudzy
+profil i cudza notatka scope'owana → 404; `nutrition` produktu: anonim 401 /
+USER 403 / ADMIN 200; D13: USER dostaje 403 z podpowiedzią archiwizacji),
+CSRF (mutacja bez nagłówka → 403, także dla anonima przed routingiem), rate
+limit (szósta próba w minucie → 429) i blokada konta (10 porażek → neutralne
+401), cookies (HttpOnly/SameSite=Lax/Secure w prod, logout usuwa wiersz, TTL
+przesuwne odświeża też cookie), argon2id + rehash, brak `Float` w modelach
+i schematach, każdy `ForeignKey` z jawnym `ON DELETE` (8/8 w migracjach),
+CHECK `scope_requires_household` egzekwowany przez bazę, adapter
+`ProductNutrition` jako jedyne wejście obliczeń, zero kopii stanu serwera
+w Pinia (jedyny store to sesja), zero wartości hex w komponentach, typy FE
+wyłącznie z `generated.ts`.
+
+**Wyniki uruchomień (realne):** `task check` zielony na wejściu (exit 0) i po
+naprawach — 3 migrations-check / **146** unit / **65** int / 157 api / 141
+vitest / mypy 73 pliki / vue-tsc / ruff / eslint / ruff format 79 plików /
+prettier / vite build (przed R1 było 143 unit / 64 int; +3 testy do
+`test_units.py` i +1 do `test_catalog_seed.py`). `task test-be` przed
+naprawami: 363 testy zielone. `alembic heads` = `0005` (jedna głowa);
+pełny cykl `upgrade head → downgrade base → upgrade head` wykonany na db-test
+DWA razy: na bazie z produktem ujawnił U2 (`ForeignKeyViolation`), a po
+naprawie przechodzi w tym samym scenariuszu i kończy na `0005 (head)`;
+`task audit` —
+pip-audit „No known vulnerabilities found", `npm audit --audit-level=high`
+„found 0 vulnerabilities"; `/security-review` na całości zmian — **zero
+ustaleń HIGH/MEDIUM** (39 route'ów przejrzanych po dependency, brak surowego
+SQL, brak wycieku PII w schematach odpowiedzi), cztery obserwacje poniżej
+progu, z których dwie weszły jako U5 i U13; `/code-review` — 6 ustaleń
+(U1, U2, U9, U10, U11 + D15).
 
 **2026-08-16 — BATCH_04 (UNITS_AND_CANONICAL_PRODUCTS)**: jest fundament danych.
 Migracje `0004` (5 tabel katalogu + `pg_trgm` + indeks GIN trigram + CHECK-i)

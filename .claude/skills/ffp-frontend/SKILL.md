@@ -3,21 +3,34 @@ name: ffp-frontend
 description: Kontrakt frontendu Family Food Planner — Vue 3 script setup + TS strict, TanStack Query vs Pinia, shadcn-vue, tokens Tailwind, wzorce UX (create-in-context, mobile-first, PL-only). Ładuj przed pracą nad plikami w frontend/src/**.
 ---
 
-<!-- verified: 2026-08-16 (BATCH_01 — uzgodnione z kodem w repo)
+<!-- verified: 2026-08-16 (REVIEW R1 — uzgodnione z kodem po B01–B04)
      stack: Vue 3.5 · TypeScript 5.9 strict · Vite 8 · Tailwind 4.3 · shadcn-vue
             (reka-ui) · Pinia 4 · vue-router 5 · TanStack Query 5 · vitest 4
-            · Playwright 1.62 · vite-plugin-pwa 1.3
+            · Playwright 1.62 · vite-plugin-pwa 1.3 · @lucide/vue · zod 3
      hierarchia: ADR i docs/architecture NADRZĘDNE wobec tego skilla -->
 
 # FFP — kontrakt frontendu
 
-## Co już stoi (BATCH_01)
+## Co już stoi (BATCH_01–04)
 
-`src/main.ts` (Pinia + VueQueryPlugin + router) · `src/router.ts` ·
-`src/layouts/AppShell.vue` · `src/pages/LoginPage.vue` (placeholder bez
-logiki) · `src/api/{client.ts,queryKeys.ts,generated.ts}` ·
-`src/components/ui/{button,card,input}` · `src/lib/utils.ts` (`cn`) ·
+`src/main.ts` (Pinia + VueQueryPlugin + router) · `src/router.ts` z guardem ·
+`src/layouts/AppShell.vue` (sidebar + bottom-nav) · `src/lib/navigation.ts`
+(jeden wpis = oba menu) · `src/pages/LoginPage.vue` (vee-validate + zod) ·
+`src/stores/auth.ts` (JEDYNY store — sesja) · `src/api/{client.ts,queryKeys.ts,
+generated.ts}` + moduły `auth/adminUsers/households/adminHouseholds/catalog` ·
+`src/components/ui/{button,card,input}` · `src/lib/{utils,texts,decimal,format}.ts` ·
 `src/assets/tailwind.css` (tokens). Alias `@/` → `src/`.
+
+**Komponenty domenowe z B04 są OBOWIĄZKOWE do reużycia** (własny picker albo
+select produktu w kolejnym batchu = błąd review):
+`components/domain/ProductPicker.vue` (props `modelValue`/`label`/`limit`/
+`disabled`/`debounceMs`, emits `update:modelValue` i `selected`; testid
+`picker-input`, `picker-option-{id}`, `picker-create`, `picker-selected`),
+`ProductCreateDrawer.vue` (create-in-context + obsługa 409 `details.existing`),
+`AmountInput.vue` (`modelValue` to STRING dziesiętny; emituje też
+`update:valid`). Strony: `pages/produkty/*`, `pages/UstawieniaPage.vue`,
+`pages/admin/*`. Batch domenowy PODMIENIA `component` istniejącej trasy
+z `PlaceholderPage`, nie dokłada nowego wpisu nawigacji.
 
 ## Podstawy
 

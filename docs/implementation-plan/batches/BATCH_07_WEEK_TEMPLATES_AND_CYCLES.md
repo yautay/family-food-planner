@@ -26,6 +26,18 @@ Batch zastaje po B06 (stan faktyczny sprawdź w `PROGRESS.md`):
   (05_FRONTEND §3), strona jeszcze nie istnieje.
 - Brak: tabel szablonów/cykli, widoku tygodnia, `BarChart`, kopiowania bloku.
 
+Konwencje potwierdzone w review R1 (te same, co dla B06 — powtórzone, bo karta
+musi być samowystarczalna):
+
+- Tabele ze scope używają `ScopedMixin` + `postgresql.ENUM(..., name=
+  "entity_scope", create_type=False)` — typ tworzy migracja `recipes` (B05).
+- **Nowa tabela = wpis w `DB_TABLES` (conftest) I w `EXPECTED_TABLES`
+  (`tests/integration/test_migrations.py`)**; nowy enum → `EXPECTED_ENUM_TYPES`.
+- Pola NUMERIC w odpowiedziach: `DecimalString` (`app/core/schemas.py`).
+- Referencje z payloadów JSONB liczy się przez rejestr z `catalog`/`recipes`
+  (kontrakt `UsedInRef` w `app/core/deletion.py`), a `IntegrityError` z commita
+  zostaje drugą linią obrony — inaczej użytkownik dostanie 500 zamiast 409.
+
 Wymagane lektury przed startem:
 
 - `00_MASTER_PLAN.md` §6–8 · `02_DOMAIN_MODEL.md` §7 (szablony = zamrożona

@@ -29,6 +29,29 @@ Batch zastaje po B05 (stan faktyczny sprawdź w `PROGRESS.md`):
 - Brak: tabel goals/plan, stron `/plan-dnia` i sekcji celów w ustawieniach,
   komponentów charts.
 
+Konwencje potwierdzone w review R1 (obowiązują od pierwszej linii tego batcha):
+
+- **Typ enumowy `entity_scope` tworzy migracja B05** (`recipes`). Każda
+  kolejna tabela ze scope — a więc wszystkie tabele planningu — używa
+  `postgresql.ENUM("private", "household", name="entity_scope",
+  create_type=False)`, inaczej migracja wywali się na „type already exists".
+  Kolumny wzorca dostajesz z `ScopedMixin`, nie deklarujesz ich ponownie;
+  model z własnymi `__table_args__` musi dołożyć `scope_check_constraint()`.
+- **Nowa tabela = wpis w DWÓCH miejscach testowych**: `DB_TABLES`
+  (`tests/conftest.py`) i `EXPECTED_TABLES`
+  (`tests/integration/test_migrations.py`); nowy typ enumowy dopisz do
+  `EXPECTED_ENUM_TYPES` tam samo. Bez tego `task check` pada na asercji
+  zestawu tabel.
+- **Każde pole NUMERIC w odpowiedzi to `DecimalString`** (`app/core/schemas.py`)
+  — cele kcal, mnożniki porcji i wartości wychodzą jako stringi dziesiętne;
+  po stronie FE parser jest jeden (`src/lib/decimal.ts`), formatowanie jedno
+  (`src/lib/format.ts`).
+- Mnożniki i ilości przechodzą przez `catalog/units.py`; uwaga na dwie osie
+  (`base_unit` vs `basis_unit` — patrz karta B05, naprawa z R1).
+- Widoczność planów: `ScopedQuery` bez wyjątków. Jeśli właściciel rozstrzygnie
+  **D16** (czy ADMIN widzi cudze encje na ścieżkach użytkownika), B06 idzie za
+  rozstrzygnięciem — mechanizm jest w jednym miejscu (`app/core/scope.py`).
+
 Wymagane lektury przed startem:
 
 - `00_MASTER_PLAN.md` §6–8 · `02_DOMAIN_MODEL.md` §6 (cele, progi, „dopasuj

@@ -132,3 +132,41 @@ def test_downgrade_seedu_usuwa_kategorie_i_da_sie_powtorzyc(
 
     command.upgrade(alembic_config, "head")
     assert _categories(engine) == EXPECTED_CATEGORIES
+
+
+@pytest.mark.usefixtures("seeded")
+def test_downgrade_seedu_przechodzi_na_bazie_z_produktami(
+    alembic_config: Config, engine: Engine
+) -> None:
+    """Ustalenie review R1: downgrade musi przejść też na KOPII REALNEJ bazy.
+
+    Bez warunku `NOT EXISTS` w migracji `0005` rollback na bazie z jakimkolwiek
+    produktem kończył się `ForeignKeyViolation` (FK `canonical_products.category_id`
+    ma ON DELETE RESTRICT), więc procedura rollbacku z 09_DEPLOYMENT §4 była
+    niewykonalna, a poprzedni test tego nie łapał — sprawdzał wyłącznie pustą bazę.
+    """
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO canonical_products (name, normalized_name, category_id, measure_kind)"
+                " SELECT 'Cebula', 'cebula', id, 'mass'"
+                " FROM product_categories WHERE name = 'Warzywa'"
+            )
+        )
+
+    try:
+        command.downgrade(alembic_config, "0004")
+
+        # Kategoria w użyciu zostaje (zniknie razem z całą tabelą w `downgrade`
+        # migracji `0004`), nieużywane znikają.
+        assert _categories(engine) == {"Warzywa": "fresh"}
+    finally:
+        # Produkt nie może przeżyć testu: zostawiony wysadziłby `downgrade base`
+        # w `test_migrations.py`, gdyby wypadł po tym pliku.
+        with engine.begin() as connection:
+            connection.execute(
+                text("DELETE FROM canonical_products WHERE normalized_name = 'cebula'")
+            )
+        command.upgrade(alembic_config, "head")
+
+    assert _categories(engine) == EXPECTED_CATEGORIES

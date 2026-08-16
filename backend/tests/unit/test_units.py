@@ -21,6 +21,7 @@ from app.modules.catalog.units import (
     UnitConversionError,
     UnitWeight,
     base_unit,
+    basis_unit,
     canonical_unit_label,
     find_unit_weight,
     normalize_amount,
@@ -142,6 +143,25 @@ def test_ten_sam_przelicznik_moze_znaczyc_co_innego_dla_innego_produktu() -> Non
     assert normalize_amount(Decimal("1"), "łyżka", cream).amount == Decimal("25.00")
 
 
+def test_jednostka_domowa_produktu_w_sztukach_daje_gramy() -> None:
+    """Regresja z review R1: przelicznik jednostki domowej daje GRAMY, nie sztuki.
+
+    Wynik oznaczony jako `piece` kazałby `to_grams` pomnożyć go po raz drugi przez
+    `piece_weight_g` — dla jajka po 105 g „1 opakowanie = 600 g" wyszłoby 63 000 g.
+    """
+    eggs = ProductMeasure(
+        measure_kind=MeasureKind.PIECE,
+        piece_weight_g=Decimal("105.00"),
+        unit_weights=(UnitWeight(unit_label="opakowanie", grams_per_unit=Decimal("600.00")),),
+    )
+
+    amount = normalize_amount(Decimal("1"), "opakowanie", eggs)
+
+    assert amount == NormalizedAmount(Decimal("600.00"), AmountUnit.GRAM)
+    assert to_grams(amount, eggs) == Decimal("600.00")
+    assert to_basis_amount(amount, eggs) == Decimal("600.00")
+
+
 def test_jednostka_domowa_produktu_objetosciowego_daje_mililitry() -> None:
     """Produkt liczony na 100 ml musi dostać ilość w ml, inaczej silnik policzy bzdurę."""
     oil = ProductMeasure(
@@ -222,6 +242,21 @@ def test_gramy_dla_produktu_objetosciowego_sa_odrzucane_jako_baza() -> None:
 )
 def test_os_produktu_wynika_z_typu_miary(measure_kind: MeasureKind, expected: AmountUnit) -> None:
     assert base_unit(measure_kind) is expected
+
+
+@pytest.mark.parametrize(
+    ("measure_kind", "expected"),
+    [
+        (MeasureKind.MASS, AmountUnit.GRAM),
+        (MeasureKind.VOLUME, AmountUnit.MILLILITER),
+        # Sztuki mają wartości na 100 g, więc oś WARTOŚCI to gramy, nie sztuki.
+        (MeasureKind.PIECE, AmountUnit.GRAM),
+    ],
+)
+def test_os_wartosci_odzywczych_rozni_sie_od_osi_przechowywania(
+    measure_kind: MeasureKind, expected: AmountUnit
+) -> None:
+    assert basis_unit(measure_kind) is expected
 
 
 # --- normalizacja etykiet i nazw ----------------------------------------------------

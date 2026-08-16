@@ -3,12 +3,11 @@ name: ffp-security
 description: Reguły bezpieczeństwa Family Food Planner — sesje/CSRF/rate-limit, scope household, publiczne tokeny list, walidacja uploadów, higiena logów i sekretów. Ładuj przy batchach dotykających auth, tokenów, uploadów, eksportu danych lub deploymentu.
 ---
 
-<!-- verified: 2026-08-16 (BATCH_01 — uzgodnione z kodem w repo; R1/R3/R4 dalej)
-     stack: FastAPI 0.141 · structlog 26 · PG 17; argon2-cffi i slowapi
-            dokłada BATCH_02 (nie ma ich jeszcze w pyproject)
+<!-- verified: 2026-08-16 (REVIEW R1 — uzgodnione z kodem po B01–B04; R3/R4 dalej)
+     stack: FastAPI 0.141 · structlog 26 · argon2-cffi 25 · slowapi 0.1.10 · PG 17
      źródła nadrzędne: 07_SECURITY, ADR-003, ADR-006, ADR-010, ADR-011 -->
 
-## Co już jest w kodzie (BATCH_01)
+## Co już jest w kodzie (BATCH_01–04)
 
 - Konfiguracja i sekrety: `app/core/config.py` + `.env.example`; `.env`
   w `.gitignore`. Brak wymaganej zmiennej = twardy błąd startu.
@@ -18,8 +17,21 @@ description: Reguły bezpieczeństwa Family Food Planner — sesje/CSRF/rate-lim
   z `details.error_id`, stacktrace wyłącznie do logów.
 - Compose dev publikuje porty tylko na 127.0.0.1; prod (B18) nie publikuje
   portów bazy w ogóle.
-- Do dostarczenia: sesje/CSRF/rate limit (B02), `ScopedQuery` (B03),
-  nagłówki bezpieczeństwa i CSP (B17).
+- **Sesje i hasła (B02)**: `app/core/security.py` (argon2id + rehash,
+  `generate_token`, `tokens_match`, TTL 30 dni przesuwne, blokada konta
+  10 porażek / 15 min), `app/core/cookies.py` (`ffp_session` HttpOnly +
+  `csrf_token` dla JS; `Secure` gdy `APP_ENV=prod`), `app/core/deps.py`
+  (jedyne wejście autoryzacji). Logowanie: rate limit 5/min/IP, jeden
+  komunikat 401 na wszystkie powody odmowy (anty-enumeracja).
+- **CSRF i nagłówki (B02, NIE B17)**: `app/core/middleware.py` —
+  `CsrfMiddleware` (`CSRF_EXEMPT_PREFIXES`: `/auth/login`, `/public/`) oraz
+  `SecurityHeadersMiddleware` z CSP. B17 je PRZEGLĄDA, nie tworzy.
+- **Scope (B03)**: `app/core/scope.py` — `ScopedQuery` (cudza encja = 404).
+  Encje bez kolumn scope (`member_profiles`) filtruje się porównaniem
+  `household_id` — identyczne 404 dla cudzego i nieistniejącego (04_API §2a).
+- Do dostarczenia: publiczne tokeny list i rate limit `/public/*` (B11),
+  uploady (B05 `core/uploads.py`), przegląd parametrów argon2/TTL i IP za
+  reverse proxy (B17).
 
 # FFP — kontrakt bezpieczeństwa
 
@@ -33,6 +45,8 @@ description: Reguły bezpieczeństwa Family Food Planner — sesje/CSRF/rate-lim
    nie wartość). Klucz Anthropic tylko server-side. Żadnych haseł
    w seedach/testach commitowanych z realną wartością.
 4. Hasła: argon2id; rehash przy logowaniu po zmianie parametrów; min. 10 zn.
+   Blokada konta jest STAŁA (15 min po 10 porażkach), nie wykładnicza —
+   parametry wracają do przeglądu w B17 (07_SECURITY §2 doprecyzowane w R1).
 
 ## CSRF / nagłówki / CORS
 

@@ -73,14 +73,24 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """Usuwa dokładnie te kategorie, które wstawił upgrade — po nazwach.
+    """Usuwa te kategorie, które wstawił upgrade — po nazwach i tylko NIEUŻYWANE.
 
-    Kategoria z produktami nie zniknie: FK `canonical_products.category_id` ma
-    ON DELETE RESTRICT (ADR-012), więc rollback na bazie z danymi zatrzyma się
-    z błędem zamiast osierocić produkty. To zachowanie zamierzone.
+    Warunek `NOT EXISTS` nie jest ostrożnością na wszelki wypadek (ustalenie
+    review R1): FK `canonical_products.category_id` ma ON DELETE RESTRICT
+    (ADR-012), więc bez niego rollback na bazie z JAKIMKOLWIEK produktem kończył
+    się `ForeignKeyViolation` — a 03_DATABASE §1 i 09_DEPLOYMENT §4 wymagają
+    downgrade'u przechodzącego na kopii REALNEJ bazy, nie tylko na pustej.
+    Kategoria z produktami zostaje; i tak zniknie razem z całą tabelą
+    w `downgrade` migracji `0004`, więc nic nie osieroci.
     """
     op.get_bind().execute(
-        sa.text("DELETE FROM product_categories WHERE name IN :names").bindparams(
+        sa.text(
+            "DELETE FROM product_categories pc"
+            " WHERE pc.name IN :names"
+            "   AND NOT EXISTS ("
+            "     SELECT 1 FROM canonical_products cp WHERE cp.category_id = pc.id"
+            "   )"
+        ).bindparams(
             sa.bindparam("names", value=tuple(name for name, _ in CATEGORIES), expanding=True)
         )
     )

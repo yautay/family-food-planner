@@ -45,6 +45,23 @@ Konkrety z B01 do wykorzystania/uzupełnienia:
      blokady konta (10 porażek / 15 min) — stałe w `app/core/security.py`.
 - `task audit` i `task secrets-scan` istnieją w Taskfile (nieuruchamiane
   w `task check`).
+- **Do przeglądu z R1** (ustalenia review fundamentów, patrz dziennik
+  `PROGRESS.md`):
+  1. **Świeżość kontraktu API nie jest bramkowana**: `task check` nie
+     sprawdza, czy `backend/openapi.json` i `frontend/src/api/generated.ts`
+     odpowiadają kodowi (w R1 były zgodne — regeneracja dała zerowy diff).
+     Kandydat na bramkę: `task fe-types` + `git diff --exit-code` na obu
+     plikach (03_AI_SKILLS §9 przypisuje bramki jakości do B01/B17).
+  2. **`SECRET_KEY` jest wymagane w konfiguracji, ale nieużywane w kodzie**
+     — sesje i tokeny CSRF pochodzą z `secrets`, nie z podpisu tym kluczem.
+     Decyzja do podjęcia tutaj: zostawić jako zarezerwowane (i dopisać to
+     wprost w `.env.example` + 07_SECURITY §7) albo usunąć z wymaganych.
+  3. **Wyszukiwarki ADMIN-a nie escapują `%`/`_`**: `list_users`
+     i `list_households` (`accounts/service.py:178`,
+     `households/service.py:154`) budują `ilike(f"%{query}%")` bez
+     `autoescape=True` — B04 naprawił dokładnie to w katalogu produktów.
+     Skutek: szukanie „50%" zwraca wszystko od „50". Niski priorytet, ale
+     ta sama pułapka wraca w każdej nowej wyszukiwarce.
 
 Wymagane lektury przed startem:
 

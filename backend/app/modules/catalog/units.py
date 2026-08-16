@@ -136,12 +136,26 @@ def canonical_unit_label(label: str) -> str:
 
 
 def base_unit(measure_kind: MeasureKind) -> AmountUnit:
-    """Oś, na której trzymamy ilości danego produktu."""
+    """Oś, na której trzymamy ilości danego produktu podane w JEGO jednostce.
+
+    Dotyczy jednostek systemowych: `g`/`kg` → g, `ml`/`l` → ml, `szt.` → sztuki.
+    Dla wartości odżywczych („na 100") oś jest inna — patrz `basis_unit`.
+    """
     if measure_kind is MeasureKind.VOLUME:
         return AmountUnit.MILLILITER
     if measure_kind is MeasureKind.PIECE:
         return AmountUnit.PIECE
     return AmountUnit.GRAM
+
+
+def basis_unit(measure_kind: MeasureKind) -> AmountUnit:
+    """Oś, w której podane są wartości „na 100": ml dla objętości, g dla reszty.
+
+    To NIE to samo co `base_unit`: produkt mierzony w sztukach trzyma własne
+    ilości w sztukach, ale wartości odżywcze ma na 100 **gramów** (ADR-004),
+    więc przelicznik jednostki domowej (`grams_per_unit`) daje dla niego gramy.
+    """
+    return AmountUnit.MILLILITER if measure_kind is MeasureKind.VOLUME else AmountUnit.GRAM
 
 
 def find_unit_weight(unit_weights: Iterable[UnitWeight], label: str) -> UnitWeight | None:
@@ -159,10 +173,10 @@ def normalize_amount(
     """(ilość, jednostka) → ilość na osi produktu. Nieprzeliczalne = wyjątek.
 
     Kolejność rozstrzygania: jednostki masy → objętości → sztuki → przeliczniki
-    domowe produktu. Jednostka domowa daje ilość na osi BAZOWEJ produktu
-    (gramy dla masy i sztuk, mililitry dla objętości) — inaczej „łyżka mleka"
-    wylądowałaby w gramach, a wartości odżywcze produktu VOLUME są liczone
-    na 100 ml i wynik byłby cichym błędem silnika.
+    domowe produktu. Jednostka domowa daje ilość na osi WARTOŚCI produktu
+    (`basis_unit`: gramy dla masy i sztuk, mililitry dla objętości) — inaczej
+    „łyżka mleka" wylądowałaby w gramach, a wartości odżywcze produktu VOLUME
+    są liczone na 100 ml i wynik byłby cichym błędem silnika.
     """
     if quantity <= 0:
         raise UnitConversionError("Ilość musi być liczbą większą od zera.")
@@ -188,7 +202,10 @@ def normalize_amount(
             f"Nie znam przelicznika jednostki „{unit_label.strip()}” dla tego produktu. "
             "Dodaj go w sekcji przeliczników jednostek domowych przy produkcie."
         )
-    return NormalizedAmount(quantity * weight.grams_per_unit, base_unit(product.measure_kind))
+    # `basis_unit`, NIE `base_unit`: dla produktu mierzonego w sztukach przelicznik
+    # daje GRAMY, więc oznaczenie wyniku jako „sztuki" kazałoby `to_grams` pomnożyć
+    # go jeszcze raz przez `piece_weight_g` (ustalenie review R1).
+    return NormalizedAmount(quantity * weight.grams_per_unit, basis_unit(product.measure_kind))
 
 
 def to_grams(amount: NormalizedAmount, product: ProductMeasure) -> Decimal:

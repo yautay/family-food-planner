@@ -47,7 +47,7 @@ Start od zera: `cp .env.example .env` → `task install` → `task dev`.
 | `task dev` | cały stack w Dockerze (app + frontend + db + db-test), hot reload |
 | `task dev-db` | same bazy (gdy testy uruchamiasz z hosta) |
 | `task down` / `task logs` | zatrzymanie / logi |
-| `task check` | **BRAMKA DoD**: migrations-check + unit + int + api + fe-test + typecheck + lint + format-check |
+| `task check` | **BRAMKA DoD**: migrations-check + unit + int + api + fe-test + typecheck + lint + format-check + fe-build |
 | `task test-unit` / `test-int` / `test-api` / `test-be` | pytest wg markerów |
 | `task fe-test` | vitest |
 | `task test-e2e` (+ `task e2e-install`) | Playwright, chromium |
@@ -100,13 +100,42 @@ Fundament dostarczony w BATCH_01 i BATCH_02:
   middleware, routery). Aplikacja NIE powstaje na poziomie modułu;
   uruchomienie: `uvicorn app.main:create_app --factory`.
 
+Dołożone w BATCH_03 i BATCH_04 (też fundament — nie pisz tego od nowa):
+
+- `app/core/scope.py` — `Scope`, `SCOPE_ENUM`, `ScopedMixin` (kolumny wzorca
+  scope + PK), `ScopedQuery` (`select_visible`, `get_or_404`,
+  `assert_can_manage`, `assert_scope_allowed`, `ownership_for_create`).
+  Własny filtr widoczności w serwisie = błąd review; cudza encja to **404**.
+  Typ enumowy `entity_scope` tworzy migracja PIERWSZEJ tabeli ze scope (B05).
+- `app/core/deletion.py` — kontrakt 409: `UsedInRef`, `assert_deletable`,
+  `conflict_from_integrity_error` (`details.used_in`). Moduł z FK do
+  `canonical_products` rejestruje licznik referencji przez
+  `catalog.service.register_product_reference_finder`.
+- `app/core/schemas.py` — `DecimalString`: każde pole NUMERIC w odpowiedzi
+  używa tego aliasu (OpenAPI `string` ⇒ `task fe-types` generuje `string`).
+- `app/modules/catalog/units.py` — JEDYNE miejsce konwersji ilości
+  (`normalize_amount`, `to_grams`, `to_basis_amount`, `base_unit` vs
+  `basis_unit`); nieprzeliczalna ilość rzuca `UnitConversionError` (422)
+  i zapis MUSI paść (02_DOMAIN §13.1).
+- `app/modules/catalog/nutrition_adapter.py` — `ProductNutrition` /
+  `nutrition_for` / `measure_for`: jedyne wejście SILNIKÓW do wartości
+  odżywczych (ADR-004). Sięganie po kolumny `canonical_products`
+  z pominięciem adaptera = błąd review.
+- `app/modules/audit/service.py` — `AuditService.record()` NIE commituje
+  (wpis w tej samej transakcji co operacja); nowa akcja = wpis w
+  `AuditAction`/`AuditEntity`, konwencja `<encja>.<czasownik>`.
+
 Testy: `tests/{unit,integration,api}/` (pakiet — z `__init__.py`), markery
 `unit`/`integration`/`api` (wymagane — bez markera test nie wejdzie do
 żadnego targetu), docstring po polsku opisujący scenariusz. Fixture'y
 wspólne w `tests/conftest.py` (`app`, `client`, `settings`,
-`test_database_url`, `db_session`, `db_client`); nowa tabela = wpis w stałej
-`DB_TABLES`. Fabryki: `tests/factories.py`, logowanie i nagłówek CSRF
-w testach API: `tests/helpers.py`. Mutacja bez `X-CSRF-Token` = 403.
+`test_database_url`, `db_session`, `db_client`). **Nowa tabela = wpis w DWÓCH
+miejscach**: `DB_TABLES` (`tests/conftest.py` — TRUNCATE między testami) i
+`EXPECTED_TABLES` (`tests/integration/test_migrations.py` — asercja na dokładny
+zestaw tabel po `upgrade head`); migracja z nowym typem enumowym dopisuje go
+do `EXPECTED_ENUM_TYPES` w tym samym pliku. Fabryki: `tests/factories.py`,
+logowanie i nagłówek CSRF w testach API: `tests/helpers.py`. Mutacja bez
+`X-CSRF-Token` = 403.
 
 ## 5. Frontend — wzorzec kodu
 
