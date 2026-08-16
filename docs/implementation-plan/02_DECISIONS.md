@@ -14,6 +14,8 @@ wskazany batch — nie wolno go zlecić przed rozstrzygnięciem.
 | D4 | Zakres wartości odżywczych | **ZATWIERDZONE**: kcal, białko, tłuszcz, węglowodany, błonnik, cukry + **indeks glikemiczny produktu** (ŁG wyliczany per porcja/posiłek/dzień). Mikroelementy później przez rejestr nutrients (ADR-004) bez migracji łamiącej | 2026-08-16 |
 | D12 | Sposób wdrożenia na Odroida | **ZATWIERDZONE: bez Ansistrano** — zostaje procedura z 09_DEPLOYMENT §4 (`git pull` → build obrazów → backup → `alembic upgrade head` → `compose up -d`), rollback przez tagowane obrazy. B18 implementuje ją jako skrypt, nie wprowadza dodatkowego narzędzia wdrożeniowego | 2026-08-16 |
 | D5 | AI w imporcie PDF | **ZATWIERDZONE**: wolno wysyłać treść PDF-ów do Claude API („żaden sekret"); klucz server-side; AI tylko proponuje (ADR-011) | 2026-08-16 |
+| D13 | Kto usuwa produkt kanoniczny (słownik globalny) — B04 | **ZATWIERDZONE: wyłącznie ADMIN**, i tylko gdy produkt nieużywany (409 `used_in` w przeciwnym razie). USER, także twórca produktu, dostaje 403 — może wyłącznie archiwizować. Uzasadnienie: katalog jest globalny (02 §3.1 pkt 3), więc usunięcie przez jednego użytkownika uderza we wszystkie rodziny; ścieżką odwracalną dla USERa jest `is_archived` (ADR-012). Konsument: macierz uprawnień w testach API B04 | 2026-08-16 |
+| D14 | Nakładanie kategorii ZBOŻOWE vs PIECZYWO / MAKARONY-RYŻ-KASZE — B04 | **ZATWIERDZONE: dwie osobne kategorie — PIECZYWO i MAKARONY-RYŻ-KASZE; „ZBOŻOWE" nie wchodzi do słownika.** Uzasadnienie: kategorie niosą `perishability`, a te dwie mają różne wartości (pieczywo = fresh, makarony/ryż/kasze = durable) — wspólna kategoria „ZBOŻOWE" nie mogłaby unieść obu i zepsułaby tury silnika zakupowego (B10) | 2026-08-16 |
 
 ## Otwarte
 
