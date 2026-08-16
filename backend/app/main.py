@@ -17,6 +17,7 @@ from app.core.logging import RequestLoggingMiddleware, configure_logging
 from app.core.middleware import CsrfMiddleware, SecurityHeadersMiddleware
 from app.modules.accounts.router import build_admin_users_router, build_auth_router
 from app.modules.audit.router import build_audit_router
+from app.modules.catalog.router import build_categories_router, build_products_router
 from app.modules.households.router import build_admin_households_router, build_households_router
 
 API_V1_PREFIX = "/api/v1"
@@ -75,6 +76,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(build_admin_users_router(), prefix=API_V1_PREFIX)
     app.include_router(build_households_router(), prefix=API_V1_PREFIX)
     app.include_router(build_admin_households_router(), prefix=API_V1_PREFIX)
+    app.include_router(build_products_router(), prefix=API_V1_PREFIX)
+    app.include_router(build_categories_router(), prefix=API_V1_PREFIX)
     app.include_router(build_audit_router(), prefix=API_V1_PREFIX)
 
     return app

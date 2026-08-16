@@ -61,6 +61,11 @@ EXPECTED_TABLES = {
     "households",
     "member_profiles",
     "audit_entries",
+    "product_categories",
+    "canonical_products",
+    "product_unit_weights",
+    "nutrients",
+    "product_nutrient_values",
 }
 
 
@@ -73,7 +78,7 @@ def test_upgrade_downgrade_upgrade_na_czystej_bazie(
 
     command.upgrade(alembic_config, "head")
     after_upgrade = _current_revision(test_database_url)
-    assert after_upgrade == "0003"
+    assert after_upgrade == "0005"
 
     command.downgrade(alembic_config, "base")
     assert _current_revision(test_database_url) is None
@@ -98,8 +103,12 @@ def test_schemat_po_migracjach_zawiera_dokladnie_oczekiwane_tabele(
     assert tables == EXPECTED_TABLES, f"Nieoczekiwany zestaw tabel: {sorted(tables)}"
 
 
-def test_downgrade_usuwa_takze_typ_enumowy(alembic_config: Config, test_database_url: str) -> None:
-    """DROP TABLE nie kasuje typu `user_role` — bez jawnego DROP-a ponowny upgrade pada."""
+#: Typy enumowe tworzone przez migracje. Każda migracja z enumem dopisuje tu swój.
+EXPECTED_ENUM_TYPES = ("user_role", "perishability", "measure_kind", "verification_status")
+
+
+def test_downgrade_usuwa_takze_typy_enumowe(alembic_config: Config, test_database_url: str) -> None:
+    """DROP TABLE nie kasuje typów enumowych — bez jawnego DROP-a ponowny upgrade pada."""
     command.upgrade(alembic_config, "head")
     command.downgrade(alembic_config, "base")
 
@@ -107,11 +116,12 @@ def test_downgrade_usuwa_takze_typ_enumowy(alembic_config: Config, test_database
     try:
         with engine.connect() as connection:
             typy = connection.execute(
-                text("SELECT typname FROM pg_type WHERE typname = 'user_role'")
+                text("SELECT typname FROM pg_type WHERE typname = ANY(:names)"),
+                {"names": list(EXPECTED_ENUM_TYPES)},
             ).fetchall()
     finally:
         engine.dispose()
 
-    assert typy == [], "Typ user_role przetrwał downgrade — kolejny upgrade się wywali"
+    assert typy == [], f"Typy enumowe przetrwały downgrade: {typy}"
 
     command.upgrade(alembic_config, "head")

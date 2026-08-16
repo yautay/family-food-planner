@@ -56,7 +56,7 @@ Start od zera: `cp .env.example .env` → `task install` → `task dev`.
 | `task fe-types` | OpenAPI → `backend/openapi.json` → `frontend/src/api/generated.ts` (oba commitowane) |
 | `task audit` / `task secrets-scan` | Review batche i BATCH_17 |
 | `task create-admin` | tworzy konto ADMIN (prompt albo `FFP_ADMIN_*` z env; nigdy hasło w repo) |
-| `task db-seed-demo` | PLACEHOLDER — dostarczają batche domenowe |
+| `task db-seed-demo` | idempotentny seed demo (od B04: ~15 produktów; kolejne encje dokładają batche domenowe) |
 
 Nigdy nie wołaj gołego `pytest`/`vitest`/`alembic` — Taskfile wstrzykuje
 `.env` i właściwy interpreter.

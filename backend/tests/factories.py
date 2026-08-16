@@ -14,6 +14,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import generate_token, hash_password, session_expires_at, utcnow
 from app.modules.accounts.models import Session, User, UserRole
+from app.modules.catalog.models import (
+    CanonicalProduct,
+    MeasureKind,
+    Perishability,
+    ProductCategory,
+    ProductUnitWeight,
+    VerificationStatus,
+)
+from app.modules.catalog.naming import normalize_name
+from app.modules.catalog.units import normalize_unit_label
 from app.modules.households.models import Household, MemberProfile
 
 #: Hasło używane przez fabryki. Nie jest sekretem — istnieje wyłącznie w testach.
@@ -117,6 +127,86 @@ async def create_member_profile(
     await session.commit()
     await session.refresh(profile)
     return profile
+
+
+async def create_category(
+    session: AsyncSession,
+    *,
+    name: str = "Warzywa",
+    position: int = 1,
+    perishability: Perishability = Perishability.FRESH,
+) -> ProductCategory:
+    """Kategoria zakupowa. Testy zakładają własne — seed migracji jest czyszczony."""
+    category = ProductCategory(name=name, position=position, perishability=perishability)
+    session.add(category)
+    await session.commit()
+    await session.refresh(category)
+    return category
+
+
+async def create_product(
+    session: AsyncSession,
+    *,
+    category: ProductCategory,
+    name: str = "Cebula",
+    measure_kind: MeasureKind = MeasureKind.MASS,
+    piece_weight_g: Decimal | None = None,
+    kcal_100: Decimal | None = None,
+    protein_100: Decimal | None = None,
+    fat_100: Decimal | None = None,
+    carbs_100: Decimal | None = None,
+    fiber_100: Decimal | None = None,
+    sugars_100: Decimal | None = None,
+    glycemic_index: Decimal | None = None,
+    nutrition_source: str | None = None,
+    verification_status: VerificationStatus = VerificationStatus.UNVERIFIED,
+    is_archived: bool = False,
+) -> CanonicalProduct:
+    """Produkt kanoniczny; domyślnie bez wartości odżywczych (jak po inline create)."""
+    product = CanonicalProduct(
+        name=name,
+        normalized_name=normalize_name(name),
+        category_id=category.id,
+        measure_kind=measure_kind,
+        piece_weight_g=piece_weight_g,
+        kcal_100=kcal_100,
+        protein_100=protein_100,
+        fat_100=fat_100,
+        carbs_100=carbs_100,
+        fiber_100=fiber_100,
+        sugars_100=sugars_100,
+        glycemic_index=glycemic_index,
+        nutrition_source=nutrition_source,
+        verification_status=verification_status,
+        is_archived=is_archived,
+    )
+    session.add(product)
+    await session.commit()
+    await session.refresh(product)
+    return product
+
+
+async def create_unit_weight(
+    session: AsyncSession,
+    *,
+    product: CanonicalProduct,
+    unit_label: str = "łyżka",
+    grams_per_unit: Decimal = Decimal("15.00"),
+    source: str | None = None,
+    samples_count: int = 1,
+) -> ProductUnitWeight:
+    """Przelicznik jednostki domowej (etykieta znormalizowana jak w serwisie)."""
+    weight = ProductUnitWeight(
+        product_id=product.id,
+        unit_label=normalize_unit_label(unit_label),
+        grams_per_unit=grams_per_unit,
+        source=source,
+        samples_count=samples_count,
+    )
+    session.add(weight)
+    await session.commit()
+    await session.refresh(weight)
+    return weight
 
 
 async def assign_to_household(

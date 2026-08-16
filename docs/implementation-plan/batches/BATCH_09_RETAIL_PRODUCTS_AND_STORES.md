@@ -23,6 +23,16 @@ Co już istnieje (stan po R2):
 - `backend/app/modules/catalog/` — `canonical_products`, `product_categories`
   (z `perishability` i `position`), jednostki, wyszukiwarka trigram,
   wzorzec blokady usuwania ADR-012 (409 + `details.used_in`).
+
+  Konkrety z B04, których ten batch NIE powtarza: moduł `catalog` już istnieje
+  (models/schemas/service/router) — `retail_products` i `stores` DOKŁADASZ do
+  niego, a nie tworzysz drugiego modułu. `retail_products.canonical_product_id`
+  ma FK RESTRICT, więc `RetailProduct` musi zarejestrować licznik referencji:
+  `catalog.service.register_product_reference_finder(finder)` z
+  `finder(session, product_id) -> Sequence[UsedInRef]` (typy w
+  `app/core/deletion.py`) — inaczej 409 przy usuwaniu produktu kanonicznego
+  wyjdzie bez czytelnej listy użyć. Wielkości opakowań i ilości to `Decimal`
+  w bazie i **stringi dziesiętne** w JSON (`DecimalString` z `app/core/schemas.py`).
 - Infrastruktura uploadu zdjęć z BATCH_05 (Pillow re-encode, miniatury,
   losowe nazwy, bind mount `/data/uploads`, serwowanie przez endpoint
   z autoryzacją) — do PONOWNEGO UŻYCIA, nie kopiowania.

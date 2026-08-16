@@ -41,6 +41,12 @@ class Settings(BaseSettings):
     app_version: str = "0.1.0"
     log_level: str = "INFO"
 
+    #: Próg podobieństwa trigramowego w wyszukiwarce produktów (`?q=`, 04_API §1).
+    #: Niżej = więcej trafień przy literówkach, ale i więcej szumu. 0.25 to
+    #: wartość startowa dobrana empirycznie w BATCH_04 — do rewizji, gdy katalog
+    #: urośnie (pg_trgm domyślnie używa 0.3, co gubi krótkie polskie nazwy).
+    catalog_search_similarity_threshold: float = 0.25
+
 
 def _format_missing(exc: ValidationError) -> str:
     missing = sorted(

@@ -74,6 +74,82 @@ export const adminHouseholds = {
   usedInIntro: 'Rodzina jest w użyciu:',
 } as const
 
+export const products = {
+  title: 'Produkty',
+  subtitle:
+    'Wspólny słownik produktów. Wartości odżywcze podaje się na 100 g (dla płynów na 100 ml).',
+  addProduct: 'Dodaj produkt',
+  searchPlaceholder: 'Szukaj produktu…',
+  emptyState: 'Nie ma jeszcze żadnego produktu. Dodaj pierwszy.',
+  emptySearch: 'Nic nie znaleziono. Sprawdź pisownię albo dodaj nowy produkt.',
+  allCategories: 'Wszystkie kategorie',
+  showArchived: 'Pokaż archiwalne',
+  verified: 'Zweryfikowany',
+  unverified: 'Do weryfikacji',
+  archived: 'Archiwalny',
+  incompleteData: 'Niepełne dane',
+  nameLabel: 'Nazwa',
+  categoryLabel: 'Kategoria',
+  measureKindLabel: 'Sposób liczenia',
+  measureMass: 'Waga (g)',
+  measureVolume: 'Objętość (ml)',
+  measurePiece: 'Sztuki',
+  pieceWeightLabel: 'Waga jednej sztuki (g)',
+  perishabilityLabel: 'Trwałość',
+  perishabilityFromCategory: 'Jak kategoria',
+  perishabilityFresh: 'Świeży',
+  perishabilityDurable: 'Trwały',
+  nutritionTitle: 'Wartości odżywcze na 100',
+  nutritionAdminOnly: 'Wartości odżywcze edytuje administrator.',
+  nutritionSourceLabel: 'Źródło danych',
+  kcalLabel: 'Kalorie (kcal)',
+  proteinLabel: 'Białko (g)',
+  fatLabel: 'Tłuszcz (g)',
+  carbsLabel: 'Węglowodany (g)',
+  fiberLabel: 'Błonnik (g)',
+  sugarsLabel: 'Cukry (g)',
+  glycemicIndexLabel: 'Indeks glikemiczny',
+  unitWeightsTitle: 'Przeliczniki jednostek domowych',
+  unitWeightsSubtitle:
+    'Ile waży jedna łyżka, garść czy opakowanie TEGO produktu. Bez przelicznika nie da się zapisać ilości w takiej jednostce.',
+  unitWeightsEmpty: 'Brak przeliczników. Dodaj pierwszy, np. łyżka = 12 g.',
+  unitLabelLabel: 'Jednostka',
+  gramsPerUnitLabel: 'Gramów na jednostkę',
+  sourceLabel: 'Źródło',
+  addUnitWeight: 'Dodaj przelicznik',
+  archive: 'Archiwizuj',
+  restore: 'Przywróć z archiwum',
+  archiveInstead: 'Archiwizuj zamiast usuwać',
+  confirmDelete: 'Usunąć ten produkt na stałe? Operacji nie da się cofnąć.',
+  usedInIntro: 'Używane w:',
+  verify: 'Zweryfikuj',
+  verifyHint: 'Weryfikacja wymaga kalorii, makroskładników i źródła danych.',
+  createTitle: 'Nowy produkt',
+  editTitle: 'Edycja produktu',
+  backToList: 'Wróć do listy',
+} as const
+
+export const productPicker = {
+  label: 'Produkt',
+  placeholder: 'Wpisz nazwę produktu…',
+  noResults: 'Brak trafień.',
+  createPrefix: '+ Dodaj produkt',
+  drawerTitle: 'Nowy produkt',
+  drawerHint:
+    'Podaj minimum — wartości odżywcze uzupełni administrator. Produkt trafi do kolejki weryfikacji.',
+  selected: 'Wybrany produkt',
+  change: 'Zmień',
+} as const
+
+export const adminVerification = {
+  title: 'Weryfikacja produktów',
+  subtitle:
+    'Produkty dodane przez użytkowników czekają na uzupełnienie wartości. Najstarsze na górze.',
+  emptyState: 'Kolejka jest pusta — wszystkie produkty są zweryfikowane.',
+  openProduct: 'Uzupełnij wartości',
+  addedAt: 'Dodano',
+} as const
+
 export const admin = {
   usersTitle: 'Użytkownicy',
   usersSubtitle: 'Konta w tej instancji aplikacji. Nowe zakłada wyłącznie administrator.',

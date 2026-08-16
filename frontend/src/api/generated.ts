@@ -216,6 +216,167 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/products": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lista i wyszukiwanie produktów */
+        get: operations["list_products_api_v1_products_get"];
+        put?: never;
+        /** Dodanie produktu (powstaje jako niezweryfikowany) */
+        post: operations["create_product_api_v1_products_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/products/{product_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Szczegóły produktu */
+        get: operations["get_product_api_v1_products__product_id__get"];
+        put?: never;
+        post?: never;
+        /** Usunięcie produktu (ADMIN, tylko nieużywanego — 409 z listą użyć) */
+        delete: operations["delete_product_api_v1_products__product_id__delete"];
+        options?: never;
+        head?: never;
+        /** Edycja pól opisowych produktu */
+        patch: operations["update_product_api_v1_products__product_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/products/{product_id}/nutrition": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Wartości odżywcze i IG (ADMIN, wpis w dzienniku before/after) */
+        put: operations["set_nutrition_api_v1_products__product_id__nutrition_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/products/{product_id}/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Weryfikacja produktu (ADMIN, wymaga kompletu wartości) */
+        post: operations["verify_product_api_v1_products__product_id__verify_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/products/{product_id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Archiwizacja produktu (znika z list wyboru) */
+        post: operations["archive_product_api_v1_products__product_id__archive_post"];
+        /** Przywrócenie produktu z archiwum */
+        delete: operations["restore_product_api_v1_products__product_id__archive_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/products/{product_id}/unit-weights": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Przeliczniki jednostek domowych produktu */
+        get: operations["list_unit_weights_api_v1_products__product_id__unit_weights_get"];
+        put?: never;
+        /** Dodanie przelicznika jednostki domowej */
+        post: operations["create_unit_weight_api_v1_products__product_id__unit_weights_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/products/{product_id}/unit-weights/{unit_weight_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Usunięcie przelicznika jednostki domowej */
+        delete: operations["delete_unit_weight_api_v1_products__product_id__unit_weights__unit_weight_id__delete"];
+        options?: never;
+        head?: never;
+        /** Edycja przelicznika jednostki domowej */
+        patch: operations["update_unit_weight_api_v1_products__product_id__unit_weights__unit_weight_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Słownik kategorii zakupowych */
+        get: operations["list_categories_api_v1_categories_get"];
+        put?: never;
+        /** Dodanie kategorii (ADMIN) */
+        post: operations["create_category_api_v1_categories_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/categories/{category_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Usunięcie kategorii (ADMIN, tylko pustej — 409 z listą produktów) */
+        delete: operations["delete_category_api_v1_categories__category_id__delete"];
+        options?: never;
+        head?: never;
+        /** Edycja kategorii (ADMIN) */
+        patch: operations["update_category_api_v1_categories__category_id__patch"];
+        trace?: never;
+    };
     "/api/v1/audit": {
         parameters: {
             query?: never;
@@ -271,6 +432,55 @@ export interface components {
             items: components["schemas"]["AuditEntryRead"][];
             /** Total */
             total: number;
+        };
+        /**
+         * CategoryCreateRequest
+         * @description Nowa kategoria (ADMIN).
+         */
+        CategoryCreateRequest: {
+            /** Name */
+            name: string;
+            /**
+             * Position
+             * @default 0
+             */
+            position: number;
+            /** @default durable */
+            perishability: components["schemas"]["Perishability"];
+        };
+        /**
+         * CategoryListResponse
+         * @description Lista kategorii (04_API §1 — kształt `{items, total}` także bez paginacji).
+         */
+        CategoryListResponse: {
+            /** Items */
+            items: components["schemas"]["CategoryRead"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * CategoryRead
+         * @description Kategoria zakupowa ze słownika globalnego.
+         */
+        CategoryRead: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Position */
+            position: number;
+            perishability: components["schemas"]["Perishability"];
+        };
+        /**
+         * CategoryUpdateRequest
+         * @description Częściowa edycja kategorii; pole pominięte zostaje bez zmian.
+         */
+        CategoryUpdateRequest: {
+            /** Name */
+            name?: string | null;
+            /** Position */
+            position?: number | null;
+            perishability?: components["schemas"]["Perishability"] | null;
         };
         /**
          * CurrentUser
@@ -461,6 +671,12 @@ export interface components {
             password: string;
         };
         /**
+         * MeasureKind
+         * @description Bazowy typ miary produktu (02_DOMAIN §4.1). Wartości = typ enumowy w PG.
+         * @enum {string}
+         */
+        MeasureKind: "mass" | "volume" | "piece";
+        /**
          * MemberProfileCreateRequest
          * @description Nowy profil w rodzinie zalogowanego użytkownika.
          */
@@ -522,7 +738,11 @@ export interface components {
         };
         /**
          * MemberProfileUpdateRequest
-         * @description Częściowa edycja profilu. Pola pominięte pozostają bez zmian.
+         * @description Częściowa edycja profilu.
+         *
+         *     Pole POMINIĘTE zostaje bez zmian, a `kcal_goal: null` **czyści** cel —
+         *     rozróżnienie robi `model_fields_set` po stronie routera, bo samo `None`
+         *     nie niesie tej informacji.
          */
         MemberProfileUpdateRequest: {
             /** Name */
@@ -544,6 +764,258 @@ export interface components {
             members: components["schemas"]["HouseholdMember"][];
             /** Profiles */
             profiles: components["schemas"]["MemberProfileRead"][];
+        };
+        /**
+         * NutritionCompleteness
+         * @description Czy wartości wystarczą do policzenia czegokolwiek (04_API §1, 06_UIUX §3.5).
+         *
+         *     Liczone przez adapter `ProductNutrition` — UI pokazuje na tej podstawie
+         *     plakietkę „niepełne dane" z tooltipem `missing`.
+         */
+        NutritionCompleteness: {
+            /** Complete */
+            complete: boolean;
+            /** Has Core Macros */
+            has_core_macros: boolean;
+            /** Has Glycemic Index */
+            has_glycemic_index: boolean;
+            /** Missing */
+            missing: string[];
+        };
+        /**
+         * Perishability
+         * @description Trwałość — steruje podziałem na tury zakupowe (02_DOMAIN §9.2, B10).
+         * @enum {string}
+         */
+        Perishability: "fresh" | "durable";
+        /**
+         * ProductCreateRequest
+         * @description Nowy produkt. Wartości odżywcze NIE wchodzą tędy — mają własny endpoint.
+         *
+         *     Formularz inline (`ProductCreateDrawer`) wysyła dokładnie te pola: nazwa,
+         *     kategoria, typ miary i — dla sztuk — waga sztuki. Użytkownik dodający cebulę
+         *     w środku edycji przepisu nie zna jej kaloryczności i nie ma jej zgadywać
+         *     (02_DOMAIN §4.9).
+         */
+        ProductCreateRequest: {
+            /** Name */
+            name: string;
+            /** Category Id */
+            category_id: number;
+            /** @default mass */
+            measure_kind: components["schemas"]["MeasureKind"];
+            /** Piece Weight G */
+            piece_weight_g?: number | string | null;
+            perishability_override?: components["schemas"]["Perishability"] | null;
+        };
+        /**
+         * ProductDetail
+         * @description Szczegóły produktu — dodatkowo przeliczniki jednostek domowych.
+         */
+        ProductDetail: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Normalized Name */
+            normalized_name: string;
+            /** Category Id */
+            category_id: number;
+            /** Category Name */
+            category_name: string;
+            measure_kind: components["schemas"]["MeasureKind"];
+            /** Piece Weight G */
+            piece_weight_g: string | null;
+            verification_status: components["schemas"]["VerificationStatus"];
+            /** Verified At */
+            verified_at: string | null;
+            perishability: components["schemas"]["Perishability"];
+            perishability_override: components["schemas"]["Perishability"] | null;
+            /** Is Archived */
+            is_archived: boolean;
+            nutrition: components["schemas"]["ProductNutritionRead"];
+            completeness: components["schemas"]["NutritionCompleteness"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Unit Weights */
+            unit_weights: components["schemas"]["UnitWeightRead"][];
+        };
+        /**
+         * ProductListResponse
+         * @description Lista produktów z paginacją (04_API §1).
+         */
+        ProductListResponse: {
+            /** Items */
+            items: components["schemas"]["ProductRead"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * ProductNutritionRead
+         * @description Wartości odżywcze produktu na 100 g (VOLUME: na 100 ml) — ADR-004.
+         */
+        ProductNutritionRead: {
+            /** Kcal 100 */
+            kcal_100: string | null;
+            /** Protein 100 */
+            protein_100: string | null;
+            /** Fat 100 */
+            fat_100: string | null;
+            /** Carbs 100 */
+            carbs_100: string | null;
+            /** Fiber 100 */
+            fiber_100: string | null;
+            /** Sugars 100 */
+            sugars_100: string | null;
+            /** Glycemic Index */
+            glycemic_index: string | null;
+            /** Nutrition Source */
+            nutrition_source: string | null;
+        };
+        /**
+         * ProductNutritionRequest
+         * @description PEŁNA podmiana wartości odżywczych (PUT, wyłącznie ADMIN).
+         *
+         *     Pole pominięte znaczy „nie znamy tej wartości" i zostaje wyczyszczone — to
+         *     świadoma konsekwencja PUT-a: po operacji stan odpowiada dokładnie temu, co
+         *     przysłał administrator, bez resztek po poprzedniej wersji.
+         */
+        ProductNutritionRequest: {
+            /** Kcal 100 */
+            kcal_100?: number | string | null;
+            /** Protein 100 */
+            protein_100?: number | string | null;
+            /** Fat 100 */
+            fat_100?: number | string | null;
+            /** Carbs 100 */
+            carbs_100?: number | string | null;
+            /** Fiber 100 */
+            fiber_100?: number | string | null;
+            /** Sugars 100 */
+            sugars_100?: number | string | null;
+            /** Glycemic Index */
+            glycemic_index?: number | string | null;
+            /** Nutrition Source */
+            nutrition_source?: string | null;
+        };
+        /**
+         * ProductRead
+         * @description Produkt na liście — komplet potrzebny kafelkowi i pickerowi.
+         */
+        ProductRead: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Normalized Name */
+            normalized_name: string;
+            /** Category Id */
+            category_id: number;
+            /** Category Name */
+            category_name: string;
+            measure_kind: components["schemas"]["MeasureKind"];
+            /** Piece Weight G */
+            piece_weight_g: string | null;
+            verification_status: components["schemas"]["VerificationStatus"];
+            /** Verified At */
+            verified_at: string | null;
+            perishability: components["schemas"]["Perishability"];
+            perishability_override: components["schemas"]["Perishability"] | null;
+            /** Is Archived */
+            is_archived: boolean;
+            nutrition: components["schemas"]["ProductNutritionRead"];
+            completeness: components["schemas"]["NutritionCompleteness"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * ProductUpdateRequest
+         * @description Częściowa edycja pól opisowych produktu (USER).
+         */
+        ProductUpdateRequest: {
+            /** Name */
+            name?: string | null;
+            /** Category Id */
+            category_id?: number | null;
+            measure_kind?: components["schemas"]["MeasureKind"] | null;
+            /** Piece Weight G */
+            piece_weight_g?: number | string | null;
+            perishability_override?: components["schemas"]["Perishability"] | null;
+        };
+        /**
+         * UnitWeightCreateRequest
+         * @description Nowy przelicznik. Etykieta jest normalizowana w serwisie przed zapisem.
+         */
+        UnitWeightCreateRequest: {
+            /** Unit Label */
+            unit_label: string;
+            /** Grams Per Unit */
+            grams_per_unit: number | string;
+            /** Source */
+            source?: string | null;
+            /**
+             * Samples Count
+             * @default 1
+             */
+            samples_count: number;
+        };
+        /**
+         * UnitWeightListResponse
+         * @description Przeliczniki produktu.
+         */
+        UnitWeightListResponse: {
+            /** Items */
+            items: components["schemas"]["UnitWeightRead"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * UnitWeightRead
+         * @description Przelicznik jednostki domowej produktu (ADR-005).
+         */
+        UnitWeightRead: {
+            /** Id */
+            id: number;
+            /** Product Id */
+            product_id: number;
+            /** Unit Label */
+            unit_label: string;
+            /** Grams Per Unit */
+            grams_per_unit: string;
+            /** Source */
+            source: string | null;
+            /** Samples Count */
+            samples_count: number;
+        };
+        /**
+         * UnitWeightUpdateRequest
+         * @description Częściowa edycja przelicznika.
+         */
+        UnitWeightUpdateRequest: {
+            /** Unit Label */
+            unit_label?: string | null;
+            /** Grams Per Unit */
+            grams_per_unit?: number | string | null;
+            /** Source */
+            source?: string | null;
+            /** Samples Count */
+            samples_count?: number | null;
         };
         /**
          * UserCreateRequest
@@ -621,6 +1093,12 @@ export interface components {
             /** Password */
             password?: string | null;
         };
+        /**
+         * VerificationStatus
+         * @description Cykl weryfikacji produktu (02_DOMAIN §4.9).
+         * @enum {string}
+         */
+        VerificationStatus: "unverified" | "verified";
     };
     responses: never;
     parameters: never;
@@ -1247,6 +1725,556 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HouseholdDetail"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_products_api_v1_products_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+                q?: string | null;
+                category_id?: number | null;
+                verification_status?: components["schemas"]["VerificationStatus"] | null;
+                include_archived?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductListResponse"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_product_api_v1_products_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProductCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductDetail"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_product_api_v1_products__product_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductDetail"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_product_api_v1_products__product_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_product_api_v1_products__product_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProductUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductDetail"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    set_nutrition_api_v1_products__product_id__nutrition_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProductNutritionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductDetail"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    verify_product_api_v1_products__product_id__verify_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductDetail"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    archive_product_api_v1_products__product_id__archive_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductDetail"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    restore_product_api_v1_products__product_id__archive_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductDetail"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_unit_weights_api_v1_products__product_id__unit_weights_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnitWeightListResponse"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_unit_weight_api_v1_products__product_id__unit_weights_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UnitWeightCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnitWeightRead"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_unit_weight_api_v1_products__product_id__unit_weights__unit_weight_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product_id: number;
+                unit_weight_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_unit_weight_api_v1_products__product_id__unit_weights__unit_weight_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product_id: number;
+                unit_weight_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UnitWeightUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnitWeightRead"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_categories_api_v1_categories_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryListResponse"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_category_api_v1_categories_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CategoryCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryRead"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_category_api_v1_categories__category_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                category_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_category_api_v1_categories__category_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                category_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CategoryUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryRead"];
                 };
             };
             /** @description Błąd */

@@ -28,7 +28,7 @@ odpowiedzi API nie piszemy.
 /plan-dnia/:date?     PlanDniaPage        (widok 1 wizualizacji)
 /tydzien/:weekStart?  PlanTygodniaPage    (widok 4)
 /przepisy, /przepisy/:id, /przepisy/:id/edytuj   (widoki 2–3)
-/produkty, /produkty/:id/edytuj                  (widok 8)
+/produkty, /produkty/nowy, /produkty/:id/edytuj   (widok 8)
 /spizarnia            SpizarniaPage       (widok 6)
 /zakupy               ZakupyPage — konfig tur + generacja + preview
 /zakupy/listy/:id     ListaZakupowPage    (widok 5; wariant print)
@@ -53,6 +53,13 @@ Guard: brak sesji → `/login` (poza `/l/:token`). Layout: `AppShell`
     pozycja `+ Dodaj produkt "cebula"` otwierająca `ProductCreateDrawer`
     (create-in-context; po zapisie auto-wybór i powrót do edycji) — wzorzec
     obowiązkowy wszędzie, gdzie wybiera się produkt/przepis/tag/sklep.
+    Stan faktyczny (BATCH_04, `components/domain/ProductPicker.vue`):
+    props `modelValue: Product | ProductDetail | null`, `label?`, `limit?`
+    (domyślnie 8), `disabled?`, `debounceMs?` (250; testy podają 0);
+    emits `update:modelValue` i `selected(product)`. Obsługa klawiatury
+    (↑/↓/Enter/Escape) i `data-testid` (`picker-input`, `picker-option-{id}`,
+    `picker-create`, `picker-selected`) są częścią kontraktu — konsumenci
+    (B05/B06/B08/B09) opierają na nich E2E.
   - `NutritionBar` / `NutritionRing` — wskaźniki wartość/cel/status.
   - `MacroSummary`, `MealCard`, `RecipeCard`, `ShoppingItemRow`
     (duży checkbox ≥44px), `LeftoverBadge` („Zostanie: 150 g").

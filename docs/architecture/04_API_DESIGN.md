@@ -34,7 +34,9 @@ U      /households/my, /households/my/profiles — rodzina + profile członków
 U      /goals                              — cele żywieniowe (historia po valid_from)
 
 U      /products                           — kanoniczne: lista/szukaj/CRUD*
-A      /products/{id}/nutrition            — edycja wartości (audit!)
+A      /products/{id}/nutrition            — PUT wartości + IG (audit before/after)
+A      /products/{id}/verify               — UNVERIFIED → VERIFIED (komplet wymagany)
+U      /products/{id}/archive              — POST archiwizuj / DELETE przywróć
 U      /products/{id}/unit-weights         — przeliczniki jednostek domowych
 U      /categories, /stores, /stores/{id}/category-order
 U      /retail-products                    — CRUD + upload zdjęcia
@@ -74,6 +76,9 @@ GET    /health                             — bez auth: {status, version}
 
 \* tworzenie kanonicznego produktu: USER może (inline create, powstaje
 UNVERIFIED); edycja wartości odżywczych i statusu weryfikacji: ADMIN.
+**Fizyczne usunięcie produktu kanonicznego: wyłącznie ADMIN** (D13) i tylko
+gdy produkt jest nieużywany — inaczej 409 z `details.used_in`. USER dostaje 403
+z podpowiedzią archiwizacji. Mutacje `/categories`: ADMIN; odczyt: każdy.
 
 ## 3. Zasady autoryzacji w API
 

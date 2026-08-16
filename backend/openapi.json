@@ -845,6 +845,812 @@
         }
       }
     },
+    "/api/v1/products": {
+      "get": {
+        "tags": [
+          "catalog"
+        ],
+        "summary": "Lista i wyszukiwanie produktów",
+        "operationId": "list_products_api_v1_products_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "name": "category_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Category Id"
+            }
+          },
+          {
+            "name": "verification_status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/VerificationStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Verification Status"
+            }
+          },
+          {
+            "name": "include_archived",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Archived"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductListResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "catalog"
+        ],
+        "summary": "Dodanie produktu (powstaje jako niezweryfikowany)",
+        "operationId": "create_product_api_v1_products_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProductCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductDetail"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/products/{product_id}": {
+      "get": {
+        "tags": [
+          "catalog"
+        ],
+        "summary": "Szczegóły produktu",
+        "operationId": "get_product_api_v1_products__product_id__get",
+        "parameters": [
+          {
+            "name": "product_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Product Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductDetail"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "catalog"
+        ],
+        "summary": "Edycja pól opisowych produktu",
+        "operationId": "update_product_api_v1_products__product_id__patch",
+        "parameters": [
+          {
+            "name": "product_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Product Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProductUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductDetail"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "catalog"
+        ],
+        "summary": "Usunięcie produktu (ADMIN, tylko nieużywanego — 409 z listą użyć)",
+        "operationId": "delete_product_api_v1_products__product_id__delete",
+        "parameters": [
+          {
+            "name": "product_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Product Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/products/{product_id}/nutrition": {
+      "put": {
+        "tags": [
+          "catalog"
+        ],
+        "summary": "Wartości odżywcze i IG (ADMIN, wpis w dzienniku before/after)",
+        "operationId": "set_nutrition_api_v1_products__product_id__nutrition_put",
+        "parameters": [
+          {
+            "name": "product_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Product Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProductNutritionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductDetail"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/products/{product_id}/verify": {
+      "post": {
+        "tags": [
+          "catalog"
+        ],
+        "summary": "Weryfikacja produktu (ADMIN, wymaga kompletu wartości)",
+        "operationId": "verify_product_api_v1_products__product_id__verify_post",
+        "parameters": [
+          {
+            "name": "product_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Product Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductDetail"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/products/{product_id}/archive": {
+      "post": {
+        "tags": [
+          "catalog"
+        ],
+        "summary": "Archiwizacja produktu (znika z list wyboru)",
+        "operationId": "archive_product_api_v1_products__product_id__archive_post",
+        "parameters": [
+          {
+            "name": "product_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Product Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductDetail"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "catalog"
+        ],
+        "summary": "Przywrócenie produktu z archiwum",
+        "operationId": "restore_product_api_v1_products__product_id__archive_delete",
+        "parameters": [
+          {
+            "name": "product_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Product Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductDetail"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/products/{product_id}/unit-weights": {
+      "get": {
+        "tags": [
+          "catalog"
+        ],
+        "summary": "Przeliczniki jednostek domowych produktu",
+        "operationId": "list_unit_weights_api_v1_products__product_id__unit_weights_get",
+        "parameters": [
+          {
+            "name": "product_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Product Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnitWeightListResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "catalog"
+        ],
+        "summary": "Dodanie przelicznika jednostki domowej",
+        "operationId": "create_unit_weight_api_v1_products__product_id__unit_weights_post",
+        "parameters": [
+          {
+            "name": "product_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Product Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnitWeightCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnitWeightRead"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/products/{product_id}/unit-weights/{unit_weight_id}": {
+      "patch": {
+        "tags": [
+          "catalog"
+        ],
+        "summary": "Edycja przelicznika jednostki domowej",
+        "operationId": "update_unit_weight_api_v1_products__product_id__unit_weights__unit_weight_id__patch",
+        "parameters": [
+          {
+            "name": "product_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Product Id"
+            }
+          },
+          {
+            "name": "unit_weight_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Unit Weight Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnitWeightUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnitWeightRead"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "catalog"
+        ],
+        "summary": "Usunięcie przelicznika jednostki domowej",
+        "operationId": "delete_unit_weight_api_v1_products__product_id__unit_weights__unit_weight_id__delete",
+        "parameters": [
+          {
+            "name": "product_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Product Id"
+            }
+          },
+          {
+            "name": "unit_weight_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Unit Weight Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/categories": {
+      "get": {
+        "tags": [
+          "catalog"
+        ],
+        "summary": "Słownik kategorii zakupowych",
+        "operationId": "list_categories_api_v1_categories_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryListResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "catalog"
+        ],
+        "summary": "Dodanie kategorii (ADMIN)",
+        "operationId": "create_category_api_v1_categories_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CategoryCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryRead"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/categories/{category_id}": {
+      "patch": {
+        "tags": [
+          "catalog"
+        ],
+        "summary": "Edycja kategorii (ADMIN)",
+        "operationId": "update_category_api_v1_categories__category_id__patch",
+        "parameters": [
+          {
+            "name": "category_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Category Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CategoryUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryRead"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "catalog"
+        ],
+        "summary": "Usunięcie kategorii (ADMIN, tylko pustej — 409 z listą produktów)",
+        "operationId": "delete_category_api_v1_categories__category_id__delete",
+        "parameters": [
+          {
+            "name": "category_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Category Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/audit": {
       "get": {
         "tags": [
@@ -1036,6 +1842,126 @@
         ],
         "title": "AuditListResponse",
         "description": "Lista wpisów z paginacją (04_API §1)."
+      },
+      "CategoryCreateRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "position": {
+            "type": "integer",
+            "maximum": 9999.0,
+            "minimum": 0.0,
+            "title": "Position",
+            "default": 0
+          },
+          "perishability": {
+            "$ref": "#/components/schemas/Perishability",
+            "default": "durable"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "CategoryCreateRequest",
+        "description": "Nowa kategoria (ADMIN)."
+      },
+      "CategoryListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CategoryRead"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "CategoryListResponse",
+        "description": "Lista kategorii (04_API §1 — kształt `{items, total}` także bez paginacji)."
+      },
+      "CategoryRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "position": {
+            "type": "integer",
+            "title": "Position"
+          },
+          "perishability": {
+            "$ref": "#/components/schemas/Perishability"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "position",
+          "perishability"
+        ],
+        "title": "CategoryRead",
+        "description": "Kategoria zakupowa ze słownika globalnego."
+      },
+      "CategoryUpdateRequest": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 9999.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
+          "perishability": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Perishability"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "title": "CategoryUpdateRequest",
+        "description": "Częściowa edycja kategorii; pole pominięte zostaje bez zmian."
       },
       "CurrentUser": {
         "properties": {
@@ -1388,6 +2314,16 @@
         "title": "LoginRequest",
         "description": "Dane logowania. Hasło bez dolnego limitu — złe dane to 401, nie 422."
       },
+      "MeasureKind": {
+        "type": "string",
+        "enum": [
+          "mass",
+          "volume",
+          "piece"
+        ],
+        "title": "MeasureKind",
+        "description": "Bazowy typ miary produktu (02_DOMAIN §4.1). Wartości = typ enumowy w PG."
+      },
       "MemberProfileCreateRequest": {
         "properties": {
           "name": {
@@ -1603,7 +2539,7 @@
         },
         "type": "object",
         "title": "MemberProfileUpdateRequest",
-        "description": "Częściowa edycja profilu. Pola pominięte pozostają bez zmian."
+        "description": "Częściowa edycja profilu.\n\nPole POMINIĘTE zostaje bez zmian, a `kcal_goal: null` **czyści** cel —\nrozróżnienie robi `model_fields_set` po stronie routera, bo samo `None`\nnie niesie tej informacji."
       },
       "MyHouseholdResponse": {
         "properties": {
@@ -1640,6 +2576,837 @@
         ],
         "title": "MyHouseholdResponse",
         "description": "`GET /households/my` — brak rodziny to legalny stan, a nie 404."
+      },
+      "NutritionCompleteness": {
+        "properties": {
+          "complete": {
+            "type": "boolean",
+            "title": "Complete"
+          },
+          "has_core_macros": {
+            "type": "boolean",
+            "title": "Has Core Macros"
+          },
+          "has_glycemic_index": {
+            "type": "boolean",
+            "title": "Has Glycemic Index"
+          },
+          "missing": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Missing"
+          }
+        },
+        "type": "object",
+        "required": [
+          "complete",
+          "has_core_macros",
+          "has_glycemic_index",
+          "missing"
+        ],
+        "title": "NutritionCompleteness",
+        "description": "Czy wartości wystarczą do policzenia czegokolwiek (04_API §1, 06_UIUX §3.5).\n\nLiczone przez adapter `ProductNutrition` — UI pokazuje na tej podstawie\nplakietkę „niepełne dane\" z tooltipem `missing`."
+      },
+      "Perishability": {
+        "type": "string",
+        "enum": [
+          "fresh",
+          "durable"
+        ],
+        "title": "Perishability",
+        "description": "Trwałość — steruje podziałem na tury zakupowe (02_DOMAIN §9.2, B10)."
+      },
+      "ProductCreateRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "category_id": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Category Id"
+          },
+          "measure_kind": {
+            "$ref": "#/components/schemas/MeasureKind",
+            "default": "mass"
+          },
+          "piece_weight_g": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 999999.0,
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,6}|(?=[\\d.]{1,9}0*$)\\d{0,6}\\.\\d{0,2}0*$)"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Piece Weight G"
+          },
+          "perishability_override": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Perishability"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "category_id"
+        ],
+        "title": "ProductCreateRequest",
+        "description": "Nowy produkt. Wartości odżywcze NIE wchodzą tędy — mają własny endpoint.\n\nFormularz inline (`ProductCreateDrawer`) wysyła dokładnie te pola: nazwa,\nkategoria, typ miary i — dla sztuk — waga sztuki. Użytkownik dodający cebulę\nw środku edycji przepisu nie zna jej kaloryczności i nie ma jej zgadywać\n(02_DOMAIN §4.9)."
+      },
+      "ProductDetail": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "normalized_name": {
+            "type": "string",
+            "title": "Normalized Name"
+          },
+          "category_id": {
+            "type": "integer",
+            "title": "Category Id"
+          },
+          "category_name": {
+            "type": "string",
+            "title": "Category Name"
+          },
+          "measure_kind": {
+            "$ref": "#/components/schemas/MeasureKind"
+          },
+          "piece_weight_g": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Piece Weight G"
+          },
+          "verification_status": {
+            "$ref": "#/components/schemas/VerificationStatus"
+          },
+          "verified_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verified At"
+          },
+          "perishability": {
+            "$ref": "#/components/schemas/Perishability"
+          },
+          "perishability_override": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Perishability"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "is_archived": {
+            "type": "boolean",
+            "title": "Is Archived"
+          },
+          "nutrition": {
+            "$ref": "#/components/schemas/ProductNutritionRead"
+          },
+          "completeness": {
+            "$ref": "#/components/schemas/NutritionCompleteness"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "unit_weights": {
+            "items": {
+              "$ref": "#/components/schemas/UnitWeightRead"
+            },
+            "type": "array",
+            "title": "Unit Weights"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "normalized_name",
+          "category_id",
+          "category_name",
+          "measure_kind",
+          "piece_weight_g",
+          "verification_status",
+          "verified_at",
+          "perishability",
+          "perishability_override",
+          "is_archived",
+          "nutrition",
+          "completeness",
+          "created_at",
+          "updated_at",
+          "unit_weights"
+        ],
+        "title": "ProductDetail",
+        "description": "Szczegóły produktu — dodatkowo przeliczniki jednostek domowych."
+      },
+      "ProductListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ProductRead"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "ProductListResponse",
+        "description": "Lista produktów z paginacją (04_API §1)."
+      },
+      "ProductNutritionRead": {
+        "properties": {
+          "kcal_100": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kcal 100"
+          },
+          "protein_100": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Protein 100"
+          },
+          "fat_100": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fat 100"
+          },
+          "carbs_100": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Carbs 100"
+          },
+          "fiber_100": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fiber 100"
+          },
+          "sugars_100": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sugars 100"
+          },
+          "glycemic_index": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Glycemic Index"
+          },
+          "nutrition_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nutrition Source"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kcal_100",
+          "protein_100",
+          "fat_100",
+          "carbs_100",
+          "fiber_100",
+          "sugars_100",
+          "glycemic_index",
+          "nutrition_source"
+        ],
+        "title": "ProductNutritionRead",
+        "description": "Wartości odżywcze produktu na 100 g (VOLUME: na 100 ml) — ADR-004."
+      },
+      "ProductNutritionRequest": {
+        "properties": {
+          "kcal_100": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 99999.99,
+                "minimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,5}|(?=[\\d.]{1,8}0*$)\\d{0,5}\\.\\d{0,2}0*$)"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kcal 100"
+          },
+          "protein_100": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 100.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,4}|(?=[\\d.]{1,7}0*$)\\d{0,4}\\.\\d{0,2}0*$)"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Protein 100"
+          },
+          "fat_100": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 100.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,4}|(?=[\\d.]{1,7}0*$)\\d{0,4}\\.\\d{0,2}0*$)"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fat 100"
+          },
+          "carbs_100": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 100.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,4}|(?=[\\d.]{1,7}0*$)\\d{0,4}\\.\\d{0,2}0*$)"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Carbs 100"
+          },
+          "fiber_100": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 100.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,4}|(?=[\\d.]{1,7}0*$)\\d{0,4}\\.\\d{0,2}0*$)"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fiber 100"
+          },
+          "sugars_100": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 100.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,4}|(?=[\\d.]{1,7}0*$)\\d{0,4}\\.\\d{0,2}0*$)"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sugars 100"
+          },
+          "glycemic_index": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 110.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,4}|(?=[\\d.]{1,6}0*$)\\d{0,4}\\.\\d{0,1}0*$)"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Glycemic Index"
+          },
+          "nutrition_source": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nutrition Source"
+          }
+        },
+        "type": "object",
+        "title": "ProductNutritionRequest",
+        "description": "PEŁNA podmiana wartości odżywczych (PUT, wyłącznie ADMIN).\n\nPole pominięte znaczy „nie znamy tej wartości\" i zostaje wyczyszczone — to\nświadoma konsekwencja PUT-a: po operacji stan odpowiada dokładnie temu, co\nprzysłał administrator, bez resztek po poprzedniej wersji."
+      },
+      "ProductRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "normalized_name": {
+            "type": "string",
+            "title": "Normalized Name"
+          },
+          "category_id": {
+            "type": "integer",
+            "title": "Category Id"
+          },
+          "category_name": {
+            "type": "string",
+            "title": "Category Name"
+          },
+          "measure_kind": {
+            "$ref": "#/components/schemas/MeasureKind"
+          },
+          "piece_weight_g": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Piece Weight G"
+          },
+          "verification_status": {
+            "$ref": "#/components/schemas/VerificationStatus"
+          },
+          "verified_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verified At"
+          },
+          "perishability": {
+            "$ref": "#/components/schemas/Perishability"
+          },
+          "perishability_override": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Perishability"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "is_archived": {
+            "type": "boolean",
+            "title": "Is Archived"
+          },
+          "nutrition": {
+            "$ref": "#/components/schemas/ProductNutritionRead"
+          },
+          "completeness": {
+            "$ref": "#/components/schemas/NutritionCompleteness"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "normalized_name",
+          "category_id",
+          "category_name",
+          "measure_kind",
+          "piece_weight_g",
+          "verification_status",
+          "verified_at",
+          "perishability",
+          "perishability_override",
+          "is_archived",
+          "nutrition",
+          "completeness",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ProductRead",
+        "description": "Produkt na liście — komplet potrzebny kafelkowi i pickerowi."
+      },
+      "ProductUpdateRequest": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "category_id": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Id"
+          },
+          "measure_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MeasureKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "piece_weight_g": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 999999.0,
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,6}|(?=[\\d.]{1,9}0*$)\\d{0,6}\\.\\d{0,2}0*$)"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Piece Weight G"
+          },
+          "perishability_override": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Perishability"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "title": "ProductUpdateRequest",
+        "description": "Częściowa edycja pól opisowych produktu (USER)."
+      },
+      "UnitWeightCreateRequest": {
+        "properties": {
+          "unit_label": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Unit Label"
+          },
+          "grams_per_unit": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 999999.0,
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,6}|(?=[\\d.]{1,9}0*$)\\d{0,6}\\.\\d{0,2}0*$)"
+              }
+            ],
+            "title": "Grams Per Unit"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "samples_count": {
+            "type": "integer",
+            "maximum": 100000.0,
+            "minimum": 1.0,
+            "title": "Samples Count",
+            "default": 1
+          }
+        },
+        "type": "object",
+        "required": [
+          "unit_label",
+          "grams_per_unit"
+        ],
+        "title": "UnitWeightCreateRequest",
+        "description": "Nowy przelicznik. Etykieta jest normalizowana w serwisie przed zapisem."
+      },
+      "UnitWeightListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/UnitWeightRead"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "UnitWeightListResponse",
+        "description": "Przeliczniki produktu."
+      },
+      "UnitWeightRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "product_id": {
+            "type": "integer",
+            "title": "Product Id"
+          },
+          "unit_label": {
+            "type": "string",
+            "title": "Unit Label"
+          },
+          "grams_per_unit": {
+            "type": "string",
+            "title": "Grams Per Unit"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "samples_count": {
+            "type": "integer",
+            "title": "Samples Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "product_id",
+          "unit_label",
+          "grams_per_unit",
+          "source",
+          "samples_count"
+        ],
+        "title": "UnitWeightRead",
+        "description": "Przelicznik jednostki domowej produktu (ADR-005)."
+      },
+      "UnitWeightUpdateRequest": {
+        "properties": {
+          "unit_label": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit Label"
+          },
+          "grams_per_unit": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 999999.0,
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,6}|(?=[\\d.]{1,9}0*$)\\d{0,6}\\.\\d{0,2}0*$)"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grams Per Unit"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "samples_count": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 100000.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Samples Count"
+          }
+        },
+        "type": "object",
+        "title": "UnitWeightUpdateRequest",
+        "description": "Częściowa edycja przelicznika."
       },
       "UserCreateRequest": {
         "properties": {
@@ -1808,6 +3575,15 @@
         "type": "object",
         "title": "UserUpdateRequest",
         "description": "Częściowa edycja konta. Pola pominięte pozostają bez zmian."
+      },
+      "VerificationStatus": {
+        "type": "string",
+        "enum": [
+          "unverified",
+          "verified"
+        ],
+        "title": "VerificationStatus",
+        "description": "Cykl weryfikacji produktu (02_DOMAIN §4.9)."
       }
     }
   }

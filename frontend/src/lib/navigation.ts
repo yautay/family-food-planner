@@ -9,6 +9,7 @@
  */
 
 import {
+  BadgeCheck,
   CalendarDays,
   CalendarRange,
   ChartColumn,
@@ -61,6 +62,13 @@ export const NAV_ITEMS: readonly NavItem[] = [
     name: 'admin-households',
     label: 'Rodziny',
     icon: Users,
+    adminOnly: true,
+    group: ADMIN_GROUP,
+  },
+  {
+    name: 'admin-verification',
+    label: 'Weryfikacja',
+    icon: BadgeCheck,
     adminOnly: true,
     group: ADMIN_GROUP,
   },

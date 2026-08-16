@@ -21,10 +21,22 @@ dopiero BATCH_10 i tylko za jawnym pytaniem użytkownika.
 Co już istnieje (stan po R2):
 - `backend/app/modules/catalog/` — produkty kanoniczne, kategorie, jednostki
   (BATCH_04); serwis wyszukiwania (trigram), wzorzec blokady usuwania (ADR-012).
-- `backend/app/core/` — sesje, CSRF, `ScopedQuery` (mixin scope), deps.
+  Konkrety z B04: ilości normalizuje `catalog/units.py` (`normalize_amount`
+  → `NormalizedAmount(amount, unit ∈ g|ml|piece)`, `UnitConversionError` = 422),
+  a pozycja spiżarni MUSI dopiąć swój licznik referencji przez
+  `catalog.service.register_product_reference_finder(finder)` —
+  `finder(session, product_id) -> Sequence[UsedInRef]`. Bez tego usunięcie
+  używanego produktu da 409 bez listy „Używane w:" (kontrakt
+  `app/core/deletion.py`).
+- `backend/app/core/` — sesje, CSRF, `ScopedQuery` (mixin scope), deps,
+  `deletion.py` (`UsedInRef`, `assert_deletable`, `conflict_from_integrity_error`).
 - `frontend/src/components/domain/ProductPicker.vue` — command palette
-  z inline create (wzorzec obowiązkowy, 05_FRONTEND §4).
-- `frontend/src/components/domain/AmountInput.vue` — ilość + jednostka.
+  z inline create (wzorzec obowiązkowy, 05_FRONTEND §4): props `modelValue`,
+  `label?`, `limit?`, `disabled?`, `debounceMs?`; emits `update:modelValue`,
+  `selected(product)`.
+- `frontend/src/components/domain/AmountInput.vue` — ilość + jednostka;
+  `modelValue` to STRING dziesiętny (`"12.5"`), nigdy `Number`. Prezentacja
+  ilości wyłącznie przez `src/lib/format.ts` (`formatAmount`: g→kg ≥1000).
 - `AppShell` z nawigacją, TanStack Query + `queryKeys.ts`, klient API.
 
 Czego ten batch NIE zastaje: tabeli `retail_products` (tworzy ją BATCH_09,

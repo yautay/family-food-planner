@@ -48,8 +48,9 @@ product_categories (id, name UNIQUE, position INT,
 canonical_products (id, name, normalized_name UNIQUE, category_id FK RESTRICT,
        measure_kind ENUM(mass,volume,piece),
        piece_weight_g NUMERIC(8,2) NULL,          -- wymagane gdy piece
-       kcal_100 NUMERIC(7,2), protein_100 NUMERIC(6,2), fat_100 NUMERIC(6,2),
-       carbs_100 NUMERIC(6,2), fiber_100 NUMERIC(6,2) NULL,
+       kcal_100 NUMERIC(7,2) NULL, protein_100 NUMERIC(6,2) NULL,
+       fat_100 NUMERIC(6,2) NULL, carbs_100 NUMERIC(6,2) NULL,
+       fiber_100 NUMERIC(6,2) NULL,
        sugars_100 NUMERIC(6,2) NULL,
        glycemic_index NUMERIC(5,1) NULL CHECK (0<=glycemic_index<=110),
        verification_status ENUM(unverified,verified) DEFAULT unverified,
@@ -76,6 +77,33 @@ retail_products (id, canonical_product_id FK RESTRICT, name, brand NULL,
 
 Indeksy: `canonical_products(normalized_name)` (unique, trigram GIN na
 `name` dla wyszukiwarki), `retail_products(canonical_product_id)`.
+
+Stan faktyczny (BATCH_04, migracje `0004` + `0005`):
+
+- Powstały `product_categories`, `canonical_products`, `product_unit_weights`,
+  `nutrients`, `product_nutrient_values`. `stores`, `store_category_order`
+  i `retail_products` dokłada BATCH_09.
+- **Rdzeń wartości odżywczych jest NULLOWALNY** (`kcal_100` … `carbs_100`) —
+  poprawka wobec pierwotnego szkicu. USER tworzy produkt inline, nie znając
+  wartości (02_DOMAIN §4.9), a ADMIN uzupełnia je później; NOT NULL wymuszałby
+  wpisanie zer, czyli zapisanie nieprawdy. Brak wartości sygnalizuje adapter
+  `ProductNutrition` (`complete=False` + lista `missing`), nigdy zero (ADR-004).
+- CHECK-i: `piece_weight_matches_measure_kind` (waga sztuki istnieje dokładnie
+  dla `measure_kind='piece'` i jest dodatnia), `glycemic_index_range` (0..110),
+  `nutrition_non_negative`, `grams_per_unit_positive`, `samples_count_positive`,
+  `amount_per_100_non_negative`.
+- `product_unit_weights.unit_label` zapisywany jest ZNORMALIZOWANY
+  (`units.canonical_unit_label`: trim, zbicie spacji, lowercase, „opak." →
+  „opakowanie"), inaczej UNIQUE(product_id, unit_label) przepuszczałby
+  „Łyżka" obok „łyżka".
+- `product_nutrient_values.nutrient_code` ma FK → `nutrients.code`
+  ON DELETE RESTRICT; rejestr `nutrients` jest w MVP pusty (ADR-004).
+- Rozszerzenie `pg_trgm` tworzy migracja `0004`; jej `downgrade` świadomie go
+  NIE usuwa (rozszerzenie jest własnością bazy, nie jednego batcha).
+- Migracja danych `0005` seeduje 14 kategorii (01_PDF_AUDIT §5.5 + wymagania
+  02_DOMAIN §4.3), idempotentnie (`ON CONFLICT DO NOTHING`). „Zbożowe" nie
+  wchodzą (D14); „Przetwory" i „puszki-słoiki" scalono w jedną kategorię, bo
+  różniła je wyłącznie nazwa, a nie `perishability`.
 
 ## 4. Wzorzec scope (wspólny dla recipes/planning/pantry/shopping)
 

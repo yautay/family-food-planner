@@ -26,6 +26,8 @@ class AuditEntity(StrEnum):
     USER = "user"
     HOUSEHOLD = "household"
     MEMBER_PROFILE = "member_profile"
+    PRODUCT = "product"
+    PRODUCT_CATEGORY = "product_category"
 
 
 class AuditAction(StrEnum):
@@ -43,6 +45,24 @@ class AuditAction(StrEnum):
     MEMBER_PROFILE_CREATE = "member_profile.create"
     MEMBER_PROFILE_UPDATE = "member_profile.update"
     MEMBER_PROFILE_DELETE = "member_profile.delete"
+
+    # Katalog produktów (BATCH_04). `product.nutrition_update` i `product.verify`
+    # niosą payload {before, after} — to na tych danych liczy silnik nutrition.
+    PRODUCT_CREATE = "product.create"
+    PRODUCT_UPDATE = "product.update"
+    PRODUCT_NUTRITION_UPDATE = "product.nutrition_update"
+    PRODUCT_VERIFY = "product.verify"
+    PRODUCT_ARCHIVE = "product.archive"
+    PRODUCT_RESTORE = "product.restore"
+    PRODUCT_DELETE = "product.delete"
+
+    PRODUCT_UNIT_WEIGHT_CREATE = "product_unit_weight.create"
+    PRODUCT_UNIT_WEIGHT_UPDATE = "product_unit_weight.update"
+    PRODUCT_UNIT_WEIGHT_DELETE = "product_unit_weight.delete"
+
+    CATEGORY_CREATE = "product_category.create"
+    CATEGORY_UPDATE = "product_category.update"
+    CATEGORY_DELETE = "product_category.delete"
 
 
 class AuditService:

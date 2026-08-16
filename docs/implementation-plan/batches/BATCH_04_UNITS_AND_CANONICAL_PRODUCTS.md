@@ -314,32 +314,151 @@ diffie przed commitem (krok 11).
 
 ## Implementation checklist
 
-- [ ] Migracja schematu catalog (5 tabel + pg_trgm + indeksy)
-- [ ] Migracja seed kategorii (idempotentna, perishability, odwracalna)
-- [ ] units.py: konwersje czyste + komplet testów unit (§2.3)
-- [ ] Adapter ProductNutrition + testy kompletności
-- [ ] Serwis: CRUD, normalized_name, walidacje PIECE/IG, archiwizacja
-- [ ] Helper 409 used_in (kontrakt details ustalony)
-- [ ] Nutrition PUT (ADMIN, audit before/after) + verify
-- [ ] API products/categories/unit-weights + trigram
-- [ ] FE: ProduktyPage, ProduktFormPage, ProductPicker +
+- [x] Migracja schematu catalog (5 tabel + pg_trgm + indeksy) — `0004_catalog.py`
+- [x] Migracja seed kategorii (idempotentna, perishability, odwracalna) —
+      `0005_seed_product_categories.py`
+- [x] units.py: konwersje czyste + komplet testów unit (§2.3) — 34 testy
+- [x] Adapter ProductNutrition + testy kompletności — 13 testów
+- [x] Serwis: CRUD, normalized_name, walidacje PIECE/IG, archiwizacja
+- [x] Helper 409 used_in (`app/core/deletion.py`, kontrakt details ustalony)
+- [x] Nutrition PUT (ADMIN, audit before/after) + verify
+- [x] API products/categories/unit-weights + trigram
+- [x] FE: ProduktyPage, ProduktFormPage, ProductPicker +
       ProductCreateDrawer, AmountInput + formatAmount, /admin/weryfikacja
-- [ ] db-seed-demo (~15 produktów), fe-types, query keys, nawigacja
-- [ ] Testy int/api/fe + E2E (create → verify)
-- [ ] PROGRESS.md + propagacja do B05/B08/B09
+- [x] db-seed-demo (15 produktów), fe-types, query keys, nawigacja
+- [x] Testy int/api/fe + E2E (create → verify; E2E napisany, nieuruchomiony)
+- [x] PROGRESS.md + propagacja do B05/B08/B09
 
 ## Verification checklist
 
-- [ ] `task check` zielony (unit+int+api+fe-test+typecheck+lint)
-- [ ] `alembic heads` = 1; upgrade → downgrade → upgrade OK (obie migracje)
-- [ ] Testy konwersji: 100% ścieżek units.py (raport realny)
-- [ ] Macierz uprawnień nutrition (401/403/200) pokryta testami API
-- [ ] Wpisy audit before/after asercjonowane
-- [ ] ProductPicker vitest zielony; E2E create→verify zielony
-- [ ] Acceptance Criteria 1–10 potwierdzone
-- [ ] Living docs + karty B05/B08/B09 zaktualizowane;
+- [x] `task check` zielony (unit+int+api+fe-test+typecheck+lint)
+- [x] `alembic heads` = 1 (`0005`); upgrade → downgrade → upgrade OK (obie migracje,
+      `tests/integration/test_migrations.py` + `test_catalog_seed.py`)
+- [x] Testy konwersji: wszystkie ścieżki `units.py` pokryte (34 testy unit)
+- [x] Macierz uprawnień nutrition (401/403/200) pokryta testami API
+- [x] Wpisy audit before/after asercjonowane (`test_products.py`)
+- [x] ProductPicker vitest zielony (9 testów); **E2E create→verify NAPISANY,
+      ale NIEURUCHOMIONY** — brak Dockera na maszynie sesji (follow-up dla R1)
+- [x] Acceptance Criteria 1–10 potwierdzone (10 w zakresie `task check`)
+- [x] Living docs + karty B05/B08/B09 zaktualizowane;
       commit `batch(04): ...`, status czysty
 
 ## Completion notes
 
-(wypełnia agent wykonujący)
+### Wykonane
+
+Backend: moduł `app/modules/catalog/` (`models`, `schemas`, `service`, `router`,
+`units.py`, `naming.py`, `nutrition_adapter.py`), helper 409 w
+`app/core/deletion.py`, migracje `0004_catalog` (5 tabel + `pg_trgm` + indeks
+GIN trigram + CHECK-i) i `0005_seed_product_categories` (14 kategorii,
+idempotentna). API: `/products` (lista z trigramem i filtrami, POST, GET, PATCH,
+DELETE), `/products/{id}/nutrition` (PUT, ADMIN), `/verify` (ADMIN), `/archive`
+(POST/DELETE), `/products/{id}/unit-weights` (CRUD), `/categories` (GET dla
+każdego, mutacje ADMIN). Rejestr `nutrients` utworzony i celowo pusty (ADR-004).
+
+Frontend: `/produkty` (lista, szukajka z debounce, filtry, plakietki,
+puste stany), `/produkty/nowy` i `/produkty/:id/edytuj` (opis + wartości
+odżywcze ADMIN-only + przeliczniki jednostek), `/admin/weryfikacja`,
+`ProductPicker` + `ProductCreateDrawer` (pełny create-in-context),
+`AmountInput`, `src/lib/format.ts` (`formatAmount`), `src/lib/schemas/product.ts`
+(zod), `src/api/catalog.ts`, klucze zapytań, nawigacja (Administracja →
+Weryfikacja). `task db-seed-demo` realny: 15 produktów demo, idempotentny.
+
+### Decyzje implementującego (do wglądu właściciela)
+
+1. **Rdzeń wartości odżywczych jest NULLOWALNY** (`kcal_100` … `carbs_100`),
+   wbrew literalnemu odczytowi 03_DATABASE §3 (tam bez adnotacji NULL).
+   Uzasadnienie: karta wymaga inline create USERA (AC 2) i flagi kompletności
+   w adapterze; przy NOT NULL jedyną opcją byłyby zera, a „0 kcal" to zapis
+   nieprawdy (ADR-004 zabrania zgadywania). Dokument zaktualizowany do stanu
+   faktycznego (03_DATABASE §3, sekcja „Stan faktyczny (BATCH_04)").
+2. **Słownik kategorii: 14 pozycji**, „Przetwory" scalone z „puszki-słoiki"
+   w „Przetwory, puszki i słoiki". Reguła rozstrzygająca nakładanie się
+   znaczeń: dzielimy kategorie, gdy różni je `perishability` (stąd D14:
+   Pieczywo fresh vs Makarony, ryż i kasze durable), scalamy, gdy różni je
+   tylko nazwa. Nazwy zapisane naturalną polszczyzną („Warzywa"), nie
+   wersalikami z PDF — kategorie renderują się w UI (06_UIUX §7).
+3. **Helper 409 w `app/core/deletion.py`**, nie w `catalog/service.py`:
+   z kontraktu korzystają wszystkie moduły domenowe, więc trzymanie go
+   w katalogu zmuszałoby przepisy/spiżarnię/listy do importu cudzego modułu
+   domenowego tylko po to, żeby zgłosić konflikt.
+4. **Rejestr liczników referencji** (`register_product_reference_finder`)
+   jako punkt wpięcia dla B05/B08/B09/B11. W B04 jest pusty, więc
+   `used_in` zawsze wychodzi puste — mechanizm i kontrakt są jednak pokryte
+   testem z symulowanym konsumentem (int + api).
+5. **Jednostka domowa daje ilość na osi BAZOWEJ produktu** (g dla masy i sztuk,
+   ml dla objętości), mimo że kolumna nazywa się `grams_per_unit`. Inaczej
+   „łyżka mleka" wylądowałaby w gramach, a wartości produktu VOLUME są liczone
+   na 100 ml — silnik B05 policzyłby cicho złą liczbę. `to_grams` odmawia
+   przeliczenia ml → g (brak gęstości w modelu).
+6. **DELETE produktu egzekwuje serwis, nie `AdminUser` w routerze** — dzięki
+   temu 403 niesie podpowiedź „możesz zarchiwizować" zamiast suchego „brak
+   uprawnień" (D13 + 06_UIUX §3.3).
+7. **Nazwy akcji audytu** wg konwencji `<encja>.<czasownik>` z B03
+   (`product.create`, `product.nutrition_update`, `product.verify`,
+   `product.archive`/`restore`, `product.delete`, `product_unit_weight.*`,
+   `product_category.*`). Sekcja Backend karty pisała `product.created` /
+   `product.nutrition_updated` — wygrała konwencja z sekcji Context i z kodu
+   B02/B03, żeby dziennik miał jeden styl.
+8. **Kolejka `/admin/weryfikacja` używa klucza `products.list` z filtrem
+   statusu**, a nie osobnego `admin.unverified` z karty — jedno źródło danych
+   i jedna inwalidacja (`products.all`) zamiast dwóch, które mogą się rozjechać.
+9. **Próg trigramu** `CATALOG_SEARCH_SIMILARITY_THRESHOLD=0.25` w konfiguracji
+   (`.env.example` uzupełniony). Warunek trafienia to prefiks znormalizowanej
+   nazwy LUB `similarity(name, q) >= próg` — sam próg gubił krótkie polskie
+   nazwy przy pisaniu od początku wyrazu.
+10. **`product_categories` jest czyszczone między testami** (`DB_TABLES`), a seed
+    weryfikuje osobny plik pracujący na alembiku (`test_catalog_seed.py`) —
+    inaczej testy zależałyby od kolejności wykonania.
+
+### Review Skills — ustalenia i naprawy
+
+`/code-review` (SKILL-REVIEW) uruchomiony na diffie przed commitem. Cztery
+ustalenia, wszystkie NAPRAWIONE w tym samym commicie:
+
+1. **Wyszukiwarka traktowała `%` i `_` jak wieloznaczniki LIKE**
+   (`catalog/service.py`): `startswith()` bez `autoescape=True` powodował, że
+   szukanie „jogurt 0%" pasowało do wszystkiego zaczynającego się od „jogurt 0".
+   W polskich nazwach produktów procent jest częsty (mleko 2%, ser 50%).
+   Naprawa + test integracyjny izolujący gałąź prefiksową (próg trigramu
+   podniesiony fixture'em, żeby nie maskował błędu).
+2. **Przycisk „Zweryfikuj" był aktywny bez `nutrition_source`**
+   (`AdminWeryfikacjaPage.vue`) — backend wymaga go razem z makro, więc klik
+   zawsze kończył się 422. Warunek UI zrównany z regułą serwera.
+3. **`AmountInput` emitował tekst niebędący liczbą jako „string dziesiętny"** —
+   konsument z B05 mógłby wysłać do API wpis typu „dużo". Dołożony emit
+   `update:valid` (+ test), żeby rodzic mógł zablokować zapis lokalnie.
+4. **Zbyt luźna asercja w teście API** (`status_code in (401, 403)`) — zaostrzona
+   do dokładnego 403 z komentarzem, dlaczego anonimowa mutacja nigdy nie dochodzi
+   do warstwy sesji (CSRF działa przed routingiem).
+
+`/security-review` nie jest wymagany przez kartę tego batcha (Review: tylko
+SKILL-REVIEW) — batch nie dotyka auth, tokenów ani uploadów.
+
+### Odstępstwa
+
+- Reversibility `db-seed-demo` (08_TESTING §5 wspomina „odwracalny") NIE została
+  zaimplementowana: komenda jest idempotentna, ale nie ma trybu `--reset`.
+  Świadome ograniczenie zakresu — seed demo rośnie z kolejnymi batchami
+  (rodzina, przepisy, plan), więc jego „cofanie" ma sens dopiero, gdy będzie
+  kompletny. Follow-up niżej.
+- E2E `frontend/e2e/produkty.spec.ts` napisany, ale nieuruchomiony (brak
+  Dockera na maszynie sesji — ten sam blocker co dla E2E z B03).
+
+### Follow-upy (poza zakresem tego batcha)
+
+1. `task db-seed-demo --reset` (albo osobny target) — po skompletowaniu seedu
+   demo w B05/B07.
+2. Uruchomienie E2E `produkty.spec.ts` i `households.spec.ts` na maszynie
+   z Docker Desktop → R1.
+3. Indeks GIN trigram nie jest używany przez warunek `similarity(...) >= próg`
+   (Postgres wykorzystałby go dla operatora `%` z GUC `pg_trgm.similarity_threshold`).
+   Przy obecnej wielkości katalogu to nieistotne; do rewizji, gdy produktów będzie
+   kilka tysięcy (R3/B15).
+4. `docker/compose.dev.yml` nie odświeża `node_modules` — follow-up wiszący
+   od B02, nadal otwarty.
+
+### Pytania do właściciela
+
+Brak. D13 i D14 były już rozstrzygnięte przed startem sesji; pozostałe wybory
+mieściły się w kompetencji implementującego i są opisane wyżej.

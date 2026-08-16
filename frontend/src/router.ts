@@ -39,8 +39,22 @@ export const routes: RouteRecordRaw[] = [
       {
         path: 'produkty',
         name: 'produkty',
-        component: PlaceholderPage,
+        component: () => import('@/pages/produkty/ProduktyPage.vue'),
         meta: { title: 'Produkty' },
+      },
+      // Trasy formularza są dziećmi sekcji „Produkty" w sensie nawigacyjnym,
+      // ale pozycji w menu nie dokładają (jeden wpis = jedna sekcja).
+      {
+        path: 'produkty/nowy',
+        name: 'produkt-nowy',
+        component: () => import('@/pages/produkty/ProduktFormPage.vue'),
+        meta: { title: 'Nowy produkt' },
+      },
+      {
+        path: 'produkty/:id/edytuj',
+        name: 'produkt-edycja',
+        component: () => import('@/pages/produkty/ProduktFormPage.vue'),
+        meta: { title: 'Edycja produktu' },
       },
       {
         path: 'spizarnia',
@@ -72,6 +86,12 @@ export const routes: RouteRecordRaw[] = [
         name: 'admin-households',
         component: () => import('@/pages/admin/AdminHouseholdsPage.vue'),
         meta: { title: 'Rodziny', admin: true },
+      },
+      {
+        path: 'admin/weryfikacja',
+        name: 'admin-verification',
+        component: () => import('@/pages/admin/AdminWeryfikacjaPage.vue'),
+        meta: { title: 'Weryfikacja', admin: true },
       },
     ],
   },

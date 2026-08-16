@@ -241,14 +241,10 @@ tasks:
       - uv run python -m app.cli create-admin
 
   db-seed-demo:
-    desc: '[PLACEHOLDER] Deterministyczny seed demo — dostarczają batche domenowe'
-    silent: true
+    desc: 'Deterministyczny seed demo (idempotentny). Zakres rośnie z batchami domenowymi'
+    dir: backend
     cmds:
-      - |
-        echo "Komenda db-seed-demo nie jest jeszcze zaimplementowana."
-        echo "Dane demo (rodzina, produkty, przepisy, tydzien planu) pojawia sie"
-        echo "wraz z modulami domenowymi — 08_TESTING par. 5."
-        exit 1
+      - uv run python -m scripts.seed_demo
 
   # --- kontrakt API ---------------------------------------------------------
 

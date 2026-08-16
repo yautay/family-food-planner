@@ -18,7 +18,25 @@ export interface AdminHouseholdsFilters {
   q?: string
 }
 
+export interface ProductsFilters {
+  limit: number
+  offset: number
+  q?: string
+  category_id?: number
+  verification_status?: 'unverified' | 'verified'
+  include_archived?: boolean
+}
+
 export const queryKeys = {
+  products: {
+    all: ['products'] as const,
+    list: (filters: ProductsFilters) => ['products', 'list', filters] as const,
+    detail: (id: number) => ['products', 'detail', id] as const,
+    unitWeights: (id: number) => ['products', 'unit-weights', id] as const,
+  },
+  categories: {
+    all: ['categories'] as const,
+  },
   adminUsers: {
     all: ['admin', 'users'] as const,
     list: (filters: AdminUsersFilters) => ['admin', 'users', 'list', filters] as const,

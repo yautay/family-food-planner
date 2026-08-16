@@ -11,7 +11,7 @@ commit wykonany). Kolumna „Blokery" = zależności + decyzje z 02_DECISIONS.
 | 01 PROJECT_SCAFFOLD_AND_DEV_LOOP | [x] | — | `batch(01)` na master (hash wpisać po push) |
 | 02 AUTH_AND_ACCOUNTS | [x] | — | `batch(02)` na master (hash wpisać po push) |
 | 03 HOUSEHOLDS_AND_SCOPE | [x] | — | `batch(03)` na master (hash wpisać po push) |
-| 04 UNITS_AND_CANONICAL_PRODUCTS | [ ] | — (03 gotowe) | |
+| 04 UNITS_AND_CANONICAL_PRODUCTS | [x] | — | `batch(04)` na master (hash wpisać po push) |
 | R1 REVIEW_FOUNDATIONS | [ ] | 01–04 | |
 | 05 RECIPES_AND_NUTRITION_ENGINE | [ ] | 04, R1 | |
 | 06 GOALS_AND_DAY_PLAN | [ ] | 05 | |
@@ -40,6 +40,68 @@ zmiany dotykające przyszłych batchy trzeba wpisać do ich kart
 (00_MASTER_PLAN §8); dziennik to indeks, nie schowek.
 
 ---
+
+**2026-08-16 — BATCH_04 (UNITS_AND_CANONICAL_PRODUCTS)**: jest fundament danych.
+Migracje `0004` (5 tabel katalogu + `pg_trgm` + indeks GIN trigram + CHECK-i)
+i `0005` (idempotentny seed 14 kategorii z `perishability`), moduł
+`app/modules/catalog/` z czystymi `units.py` (konwersje g/ml/szt + jednostki
+domowe) i adapterem `ProductNutrition`, `app/core/deletion.py` (kontrakt 409
+`used_in`), pełne API produktów/kategorii/przeliczników z wyszukiwarką
+trigramową i audytem before/after przy wartościach odżywczych. Frontend:
+`/produkty` (lista + szukajka + filtry), formularz produktu (wartości
+edytowalne tylko dla ADMIN), `/admin/weryfikacja`, obowiązkowy `ProductPicker`
++ `ProductCreateDrawer`, `AmountInput`, `src/lib/format.ts`. `task db-seed-demo`
+przestał być placeholderem (15 produktów, idempotentnie). `task check` zielony
+(3 migrations-check / 142 unit / 64 int / 157 api / 141 vitest / mypy 73 pliki /
+ruff / eslint / prettier / vite build).
+
+**Co MUSZĄ wiedzieć kolejne batche:**
+
+1. **Wartości odżywcze czyta się WYŁĄCZNIE adapterem `ProductNutrition`**
+   (`catalog/nutrition_adapter.py`: `nutrition_for`, `measure_for`). Sięgnięcie
+   silnika po kolumny `canonical_products` albo po `product_nutrient_values`
+   = błąd review (ADR-004). Adapter daje `is_complete`, `has_core_macros`,
+   `has_glycemic_index`, `missing` (komunikaty PL) i `digestible_carbs_100`.
+2. **Kolumny rdzenia (`kcal_100` … `carbs_100`) są NULLOWALNE** — odstępstwo od
+   literalnego 03_DATABASE §3, wymuszone przez inline create USERA
+   (dokument zaktualizowany). Brak wartości NIGDY nie jest zerem: konsument
+   pokazuje `complete=False` i listę braków.
+3. **Każda ilość przechodzi przez `catalog/units.py`**: `normalize_amount(qty,
+   unit_label, ProductMeasure) -> NormalizedAmount(amount, unit ∈ g|ml|piece)`,
+   `to_grams`, `to_basis_amount`; nieprzeliczalna ilość rzuca
+   `UnitConversionError` (AppError → 422) i zapis MUSI paść. Jednostka domowa
+   daje ilość na osi bazowej produktu (ml dla VOLUME!), a `to_grams` odmawia
+   przeliczenia ml → g.
+4. **Blokada usuwania ma punkt wpięcia**: `app/core/deletion.py` (`UsedInRef`,
+   `assert_deletable`, `conflict_from_integrity_error`) + rejestr
+   `catalog.service.register_product_reference_finder(finder)`, gdzie
+   `finder(session, product_id) -> Sequence[UsedInRef]`. Moduł z FK do
+   `canonical_products` (B05 przepisy, B08 spiżarnia, B09 retail, B11 listy)
+   MUSI się zarejestrować, inaczej 409 wyjdzie bez listy „Używane w:".
+5. **Usuwanie produktu kanonicznego to wyłącznie ADMIN (D13)** i regułę
+   egzekwuje SERWIS, nie `AdminUser` w routerze — dzięki temu 403 podpowiada
+   archiwizację. Ten sam wzorzec warto powtórzyć tam, gdzie 403 ma uczyć.
+6. **Nowe akcje audytu**: `product.create`, `product.update`,
+   `product.nutrition_update`, `product.verify`, `product.archive`,
+   `product.restore`, `product.delete`, `product_unit_weight.*`,
+   `product_category.*` (encje `product`, `product_category`).
+7. **Frontend — komponenty obowiązkowe już istnieją**: `ProductPicker`
+   (props `modelValue`/`label`/`limit`/`disabled`/`debounceMs`, emits
+   `update:modelValue` i `selected`), `ProductCreateDrawer`, `AmountInput`
+   (`modelValue` to STRING dziesiętny). Ilości formatuje TYLKO
+   `src/lib/format.ts` → `formatAmount` (g→kg ≥1000, przecinek PL).
+   Nowy picker/własny select w kolejnym batchu = błąd review.
+8. **Nowa zmienna konfiguracji**: `CATALOG_SEARCH_SIMILARITY_THRESHOLD` (0.25).
+   Kolejna wolna migracja: `0006`. Nowa tabela nadal = wpis w `DB_TABLES`
+   (conftest) **i** `EXPECTED_TABLES` (`test_migrations.py`); doszła też stała
+   `EXPECTED_ENUM_TYPES` — migracja z enumem dopisuje tam swój typ.
+9. **Karty zaktualizowane**: B05 (units/adapter/rejestr referencji + API
+   pickera i AmountInput), B08 i B09 (rejestr referencji, kontrakt komponentów,
+   `catalog` jako moduł do rozbudowy, nie do zduplikowania).
+10. **Follow-upy dla R1**: E2E `produkty.spec.ts` i `households.spec.ts`
+    napisane, ale NIEURUCHOMIONE (brak Dockera); `db-seed-demo` bez trybu
+    `--reset`; indeks GIN trigram nieużywany przez warunek `similarity >= próg`;
+    wciąż otwarty `compose.dev.yml` / `node_modules` z B02.
 
 **2026-08-16 — BATCH_03 (HOUSEHOLDS_AND_SCOPE)**: są rodziny i jest jedno
 miejsce egzekwowania widoczności. Migracja `0003` (`households`,

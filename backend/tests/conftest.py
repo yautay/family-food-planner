@@ -56,7 +56,22 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 
 #: Tabele czyszczone między testami korzystającymi z bazy. Nowy moduł domenowy
 #: dopisuje tu swoje tabele (kolejność nieistotna — TRUNCATE ... CASCADE).
-DB_TABLES = ("audit_entries", "member_profiles", "sessions", "users", "households")
+DB_TABLES = (
+    "audit_entries",
+    "member_profiles",
+    "sessions",
+    "users",
+    "households",
+    "product_nutrient_values",
+    "nutrients",
+    "product_unit_weights",
+    "canonical_products",
+    # Kategorie też czyścimy, mimo że w normalnej bazie pochodzą z seedu migracji
+    # `0005`: test ma widzieć dokładnie te dane, które sam założył. Weryfikacją
+    # samego seedu zajmuje się `tests/integration/test_catalog_seed.py`, który
+    # pracuje na alembiku, a nie na tym fixture.
+    "product_categories",
+)
 
 
 def pytest_asyncio_loop_factories(

@@ -50,14 +50,41 @@ Batch zastaje po B01–B04 + R1 (stan faktyczny sprawdź w `PROGRESS.md`):
   Macierz uprawnień z 08_TESTING §4 jest już udowodniona na encji testowej
   (`tests/integration/test_scope_matrix.py`) — w B05 powtarzasz ją jako testy
   API `/recipes` (anonim 401 / obcy 404 / członek 200 / delete: członek 403).
-- `backend/app/modules/catalog/` — `canonical_products`,
-  `product_unit_weights`, `product_categories`, serwis normalizacji jednostek
-  (ADR-005) i blokada usuwania (ADR-012). Przepis dopisuje się do listy
-  referencji blokujących usunięcie produktu.
+- `backend/app/modules/catalog/` (BATCH_04, migracje `0004`+`0005`) — konkrety,
+  których NIE wymyślasz od nowa:
+
+  - **`catalog/units.py`** to jedyne miejsce konwersji ilości:
+    `normalize_amount(quantity: Decimal, unit_label: str, product: ProductMeasure)
+    -> NormalizedAmount(amount, unit)` (`AmountUnit` = `g` | `ml` | `piece`),
+    `to_grams(...)`, `to_basis_amount(...)` (ilość na osi, w której podane są
+    wartości „na 100"), `UnitConversionError` (AppError → 422). Nieprzeliczalna
+    ilość MUSI wysadzić zapis składnika — to niezmiennik 02_DOMAIN §13.1.
+  - **Adapter `ProductNutrition` JUŻ ISTNIEJE**
+    (`catalog/nutrition_adapter.py`: `nutrition_for(product, extras)`,
+    `measure_for(product, unit_weights)`) — silnik B05 konsumuje go, a NIE tworzy
+    drugiego. Ma `is_complete`, `has_core_macros`, `has_glycemic_index`,
+    `missing` (komunikaty PL) i `digestible_carbs_100`.
+  - **Wartości rdzenia są NULLOWALNE** — produkt po inline create nie ma kcal
+    ani makro. Silnik musi to unieść flagą `complete=False`, nigdy zerem.
+  - **Blokada usuwania**: `app/core/deletion.py` (`UsedInRef`, `assert_deletable`,
+    `conflict_from_integrity_error`). Przepisy dopinają się do rejestru
+    w `catalog/service.py`: `register_product_reference_finder(finder)`, gdzie
+    `finder(session, product_id) -> Sequence[UsedInRef]` zwraca CZYTELNE nazwy
+    („Gołąbki"). Bez tego użytkownik dostanie 409 bez listy „Używane w:".
+  - `normalize_name` (`catalog/naming.py`) liczy `normalized_name` — używaj tej
+    funkcji, nie własnej.
 - `frontend/src/components/domain/ProductPicker.vue` + `ProductCreateDrawer`
-  (create-in-context z B04), `AmountInput` (jeśli B04 go nie dostarczył —
-  powstaje w tym batchu wg 05_FRONTEND §4), klient API `src/api/client.ts`,
-  typy generowane (`task fe-types`).
+  + `AmountInput` (wszystkie z B04 — NIE piszesz ich drugi raz), klient API
+  `src/api/client.ts`, typy generowane (`task fe-types`).
+
+  `ProductPicker`: props `modelValue: Product | ProductDetail | null`, `label?`,
+  `limit?` (8), `disabled?`, `debounceMs?` (250); emits `update:modelValue`
+  i `selected(product)`; `data-testid`: `picker-input`, `picker-option-{id}`,
+  `picker-create`, `picker-selected`.
+  `AmountInput`: props `modelValue: string | null` (STRING dziesiętny, nie
+  `Number`), `unit?`, `units?`, `label?`, `decimalPlaces?`, `positive?`,
+  `required?`, `testid?`, `hint?`; emits `update:modelValue`, `update:unit`.
+  Formatowanie ilości wyłącznie przez `src/lib/format.ts` (`formatAmount`).
 - Brak: przepisów, tagów, ocen, silnika nutrition, uploadu zdjęć.
 
 Wymagane lektury przed startem:
