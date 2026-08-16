@@ -8,10 +8,14 @@ from __future__ import annotations
 
 from fastapi import APIRouter, FastAPI
 from pydantic import BaseModel
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from app.core.config import Settings, get_settings
-from app.core.errors import ErrorResponse, register_error_handlers
+from app.core.errors import ErrorResponse, register_error_handlers, register_rate_limit_handler
 from app.core.logging import RequestLoggingMiddleware, configure_logging
+from app.core.middleware import CsrfMiddleware, SecurityHeadersMiddleware
+from app.modules.accounts.router import build_admin_users_router, build_auth_router
 
 API_V1_PREFIX = "/api/v1"
 
@@ -50,10 +54,23 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.state.settings = settings
 
+    # Limiter per aplikacja (nie globalny): każda instancja ma własny licznik,
+    # więc testy nie zatruwają się nawzajem, a slowapi wymaga go w `app.state`.
+    limiter = Limiter(key_func=get_remote_address)
+    app.state.limiter = limiter
+
+    # Kolejność ma znaczenie: dodane później są bardziej „na zewnątrz". Nagłówki
+    # bezpieczeństwa muszą objąć także odpowiedzi odrzucone przez CSRF.
+    app.add_middleware(CsrfMiddleware)
     app.add_middleware(RequestLoggingMiddleware)
+    app.add_middleware(SecurityHeadersMiddleware)
+
     register_error_handlers(app)
+    register_rate_limit_handler(app)
 
     app.include_router(build_health_router(settings), prefix=API_V1_PREFIX)
+    app.include_router(build_auth_router(settings, limiter), prefix=API_V1_PREFIX)
+    app.include_router(build_admin_users_router(), prefix=API_V1_PREFIX)
 
     return app
 

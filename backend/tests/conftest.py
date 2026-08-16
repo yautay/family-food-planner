@@ -4,6 +4,11 @@ Poziomy (08_TESTING §1): `unit` (czyste funkcje), `integration` (baza db-test
 z compose), `api` (kontrakt HTTP przez httpx AsyncClient + ASGITransport).
 Uruchamiać przez `task test-unit|test-int|test-api|check` — Taskfile wstrzykuje
 zmienne z `.env` (m.in. TEST_DATABASE_URL).
+
+Od BATCH_02 część testów `api` dotyka bazy (logowanie, konta) — korzystają
+z fixture'u `db_client`, który podmienia dependency `get_session` na sesje
+wpięte w bazę db-test. Fixture `client` (bez bazy) zostaje dla endpointów
+publicznych typu `/health`.
 """
 
 from __future__ import annotations
@@ -12,10 +17,19 @@ import asyncio
 import os
 import sys
 from collections.abc import AsyncIterator, Callable
+from pathlib import Path
 
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
+from sqlalchemy.pool import NullPool
 
 # Środowisko testowe ustawiane PRZED importem aplikacji (config czyta env).
 os.environ.setdefault("APP_ENV", "test")
@@ -34,7 +48,14 @@ else:
     )
 
 from app.core.config import Settings, get_settings  # noqa: E402  (po ustawieniu env)
+from app.core.db import get_session, normalize_database_url  # noqa: E402
 from app.main import create_app  # noqa: E402
+
+BACKEND_DIR = Path(__file__).resolve().parents[1]
+
+#: Tabele czyszczone między testami korzystającymi z bazy. Nowy moduł domenowy
+#: dopisuje tu swoje tabele (kolejność nieistotna — TRUNCATE ... CASCADE).
+DB_TABLES = ("sessions", "users")
 
 
 def pytest_asyncio_loop_factories(
@@ -78,3 +99,60 @@ def test_database_url() -> str:
             "i uruchamiaj testy przez `task test-int`."
         )
     return url
+
+
+@pytest.fixture(scope="session")
+def migrated_database(test_database_url: str) -> str:
+    """Schemat bazy testowej doprowadzony do `head` raz na sesję testową."""
+    from alembic import command
+    from alembic.config import Config
+
+    config = Config(str(BACKEND_DIR / "alembic.ini"))
+    config.set_main_option("script_location", str(BACKEND_DIR / "migrations"))
+    # env.py bez `-x db_url` bierze DATABASE_URL, a ten wskazuje już db-test.
+    command.upgrade(config, "head")
+    return test_database_url
+
+
+@pytest.fixture
+async def db_engine(migrated_database: str) -> AsyncIterator[AsyncEngine]:
+    """Silnik na czas jednego testu — pula nie może przeżyć pętli zdarzeń."""
+    engine = create_async_engine(normalize_database_url(migrated_database), poolclass=NullPool)
+    try:
+        yield engine
+    finally:
+        await engine.dispose()
+
+
+@pytest.fixture
+async def db_sessions(db_engine: AsyncEngine) -> AsyncIterator[async_sessionmaker[AsyncSession]]:
+    """Fabryka sesji + czyszczenie tabel przed testem (izolacja bez współdzielonej transakcji)."""
+    async with db_engine.begin() as connection:
+        await connection.execute(
+            text(f"TRUNCATE TABLE {', '.join(DB_TABLES)} RESTART IDENTITY CASCADE")
+        )
+    yield async_sessionmaker(bind=db_engine, expire_on_commit=False, autoflush=False)
+
+
+@pytest.fixture
+async def db_session(db_sessions: async_sessionmaker[AsyncSession]) -> AsyncIterator[AsyncSession]:
+    """Sesja dla testów integracyjnych serwisów."""
+    async with db_sessions() as session:
+        yield session
+
+
+@pytest.fixture
+async def db_client(
+    app: FastAPI, db_sessions: async_sessionmaker[AsyncSession]
+) -> AsyncIterator[AsyncClient]:
+    """Klient HTTP aplikacji wpiętej w bazę testową (logowanie, konta)."""
+
+    async def override_get_session() -> AsyncIterator[AsyncSession]:
+        async with db_sessions() as session:
+            yield session
+
+    app.dependency_overrides[get_session] = override_get_session
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as http_client:
+        yield http_client
+    app.dependency_overrides.clear()

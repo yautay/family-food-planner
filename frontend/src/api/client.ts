@@ -7,11 +7,46 @@
  * - typy odpowiedzi pochodzą z `generated.ts` (task fe-types), nie z ręcznych
  *   interfejsów.
  *
- * BATCH_02 dopina tu nagłówek `X-CSRF-Token` (double-submit cookie,
- * 07_SECURITY §3) oraz obsługę 401 → przekierowanie na /login.
+ * Nagłówek `X-CSRF-Token` doklejany jest do metod zmieniających stan
+ * (double-submit cookie, 07_SECURITY §3); odpowiedź 401 zgłaszana jest
+ * zarejestrowanemu handlerowi (główna aplikacja czyści wtedy sesję).
  */
 
 export const API_PREFIX = '/api/v1'
+
+/** Cookie CSRF ustawiane przez backend — celowo bez HttpOnly. */
+export const CSRF_COOKIE = 'csrf_token'
+export const CSRF_HEADER = 'X-CSRF-Token'
+
+/** Metody wymagające tokenu CSRF (zgodnie z middleware backendu). */
+const UNSAFE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
+
+/** Odczyt cookie po nazwie; `document` może nie istnieć (SSR/testy node). */
+export function readCookie(name: string): string | undefined {
+  if (typeof document === 'undefined') {
+    return undefined
+  }
+  const prefix = `${name}=`
+  for (const part of document.cookie.split(';')) {
+    const trimmed = part.trim()
+    if (trimmed.startsWith(prefix)) {
+      return decodeURIComponent(trimmed.slice(prefix.length))
+    }
+  }
+  return undefined
+}
+
+type UnauthorizedHandler = () => void
+
+let unauthorizedHandler: UnauthorizedHandler | undefined
+
+/**
+ * Rejestruje reakcję na 401 (wywoływane raz, w `main.ts`). Dzięki temu klient
+ * HTTP nie musi znać routera ani store'ów.
+ */
+export function setUnauthorizedHandler(handler: UnauthorizedHandler | undefined): void {
+  unauthorizedHandler = handler
+}
 
 export interface ApiErrorBody {
   code: string
@@ -98,11 +133,18 @@ async function toApiError(response: Response): Promise<ApiError> {
  */
 export async function apiFetch<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
   const { json, query, headers, ...rest } = options
+  const method = (rest.method ?? 'GET').toUpperCase()
 
   const requestHeaders = new Headers(headers)
   requestHeaders.set('Accept', 'application/json')
   if (json !== undefined) {
     requestHeaders.set('Content-Type', 'application/json')
+  }
+  if (UNSAFE_METHODS.has(method) && !requestHeaders.has(CSRF_HEADER)) {
+    const token = readCookie(CSRF_COOKIE)
+    if (token) {
+      requestHeaders.set(CSRF_HEADER, token)
+    }
   }
 
   let response: Response
@@ -119,6 +161,10 @@ export async function apiFetch<T>(path: string, options: ApiRequestOptions = {})
       { code: 'network_error', message: FALLBACK_MESSAGE, details: {} },
       { cause },
     )
+  }
+
+  if (response.status === 401) {
+    unauthorizedHandler?.()
   }
 
   if (!response.ok) {

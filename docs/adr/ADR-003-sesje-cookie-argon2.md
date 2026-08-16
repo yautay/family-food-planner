@@ -15,6 +15,28 @@ administrator (rodzina). SPA i API na tym samym originie.
   przez CLI (`task create-admin`), nigdy seed z hasłem w repo.
 - Rate limit logowania (slowapi) + blokada konta po serii porażek.
 
+## Uszczegółowienia z implementacji (BATCH_02, 2026-08-16)
+
+- Cookies: `ffp_session` (HttpOnly) i `csrf_token` (czytelne dla JS),
+  `SameSite=Lax; Path=/`; flaga `Secure` włączana przez `APP_ENV=prod`
+  (na http://localhost nie ma TLS). Nazwy i atrybuty w `app/core/cookies.py`.
+- TTL przesuwne działa po OBU stronach: przy przesunięciu `sessions.expires_at`
+  (nie częściej niż raz na dobę) serwer wysyła ponownie oba cookies z nowym
+  `Max-Age`. Bez tego przeglądarka kasowałaby cookie 30 dni po logowaniu
+  niezależnie od aktywności.
+- Blokada konta: kolumny `users.failed_login_count` i `users.locked_until`
+  (10 porażek → 15 min). Stan w bazie, nie w pamięci procesu — restart
+  aplikacji nie może zerować blokady.
+- Nieistniejące konto, złe hasło, konto nieaktywne i konto zablokowane dają
+  identyczną odpowiedź 401 z tym samym komunikatem; ścieżka „nie ma takiego
+  konta" wykonuje pustą weryfikację argon2, żeby nie różnić się czasem.
+- Zmiana hasła i dezaktywacja konta przez ADMIN-a kasują wszystkie sesje
+  tego konta.
+- `DELETE /admin/users/{id}` usuwa konto fizycznie; konto z powiązanymi
+  danymi (FK RESTRICT z modułów domenowych) kończy się 409 z podpowiedzią
+  „dezaktywuj zamiast usuwać" (spójne z ADR-012). Własnego konta nie można
+  usunąć, zdegradować ani dezaktywować.
+
 ## Konsekwencje
 + Model prosty do audytu; wylogowanie/odwołanie = DELETE wiersza.
 − Sesje w DB = zapytanie na request (znikome przy tej skali).

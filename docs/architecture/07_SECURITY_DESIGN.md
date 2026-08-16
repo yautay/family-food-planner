@@ -36,6 +36,9 @@ publiczne linki i błędami aplikacyjnymi (IDOR/XSS/CSRF/upload).
   CSP: `default-src 'self'; img-src 'self' data: blob:; style-src 'self'
   'unsafe-inline'` (Tailwind inline styles), bez zewnętrznych źródeł.
   HSTS ustawia reverse proxy.
+  Jedyny wyjątek (BATCH_02): CSP nie jest wysyłane dla `/api/docs`
+  i `/api/openapi.json`, bo Swagger UI ładuje skrypty z CDN. W prod te
+  ścieżki nie istnieją (`docs_url=None`), więc wyjątek jest tam martwy.
 
 ## 4. Autoryzacja
 

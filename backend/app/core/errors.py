@@ -19,6 +19,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict
+from slowapi.errors import RateLimitExceeded
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 logger = structlog.get_logger(__name__)
@@ -182,9 +183,23 @@ async def unhandled_exception_handler(_request: Request, exc: Exception) -> JSON
     return error_response(500, "internal_error", DEFAULT_MESSAGES[500], {"error_id": error_id})
 
 
+async def rate_limit_exception_handler(_request: Request, exc: Exception) -> JSONResponse:
+    """429 ze slowapi — komunikat po polsku zamiast surowego opisu limitu.
+
+    `RateLimitExceeded` dziedziczy po `HTTPException`, więc bez tego handlera
+    użytkownik dostałby w `message` angielskie „5 per 1 minute".
+    """
+    return error_response(429, "rate_limited", DEFAULT_MESSAGES[429])
+
+
 def register_error_handlers(app: FastAPI) -> None:
     """Podłącz handlery do aplikacji (wołane z `create_app`)."""
     app.add_exception_handler(AppError, app_error_handler)
     app.add_exception_handler(StarletteHTTPException, http_exception_handler)
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
     app.add_exception_handler(Exception, unhandled_exception_handler)
+
+
+def register_rate_limit_handler(app: FastAPI) -> None:
+    """Handler 429 dla slowapi — osobno, bo ma sens tylko z zainstalowanym limiterem."""
+    app.add_exception_handler(RateLimitExceeded, rate_limit_exception_handler)

@@ -29,8 +29,20 @@ Konkrety z B01 do wykorzystania/uzupełnienia:
 - `/api/v1/health` zwraca wyłącznie `{status, version}`. Rozszerzenie
   o zgodność head↔DB i status `degraded` (09_DEPLOYMENT §2) to zadanie
   tego batcha — B01 świadomie tego nie robił (health bez dostępu do DB).
-- Nagłówki bezpieczeństwa i CSP (07_SECURITY §3) nie są jeszcze wpięte
-  w `create_app()` — dokłada je ten batch.
+- Nagłówki bezpieczeństwa i CSP (07_SECURITY §3) **są już wpięte** —
+  dostarczył je BATCH_02 (`app/core/middleware.py`, `SecurityHeadersMiddleware`,
+  test API sprawdza wartości). Ten batch je PRZEGLĄDA, nie tworzy od zera:
+  zweryfikuj wyjątek CSP dla `/api/docs` (w prod ścieżka nie istnieje) oraz
+  ewentualne domknięcie `base-uri`/`object-src`.
+- **Do przeglądu z B02** (follow-upy zgłoszone w Completion notes B02):
+  1. **IP za reverse proxy** — `get_remote_address` (slowapi) i
+     `sessions.ip` biorą adres bezpośredniego połączenia. Po wdrożeniu za
+     nginx wszystkie żądania wyglądają jak z jednego IP, więc limit
+     5/min/IP na `/auth/login` staje się limitem globalnym. Wymaga
+     `--proxy-headers` + `forwarded-allow-ips` (uvicorn) albo
+     `ProxyHeadersMiddleware`, spójnie z konfiguracją proxy z B18.
+  2. Parametry argon2 (domyślne biblioteki), TTL sesji 30 dni i próg
+     blokady konta (10 porażek / 15 min) — stałe w `app/core/security.py`.
 - `task audit` i `task secrets-scan` istnieją w Taskfile (nieuruchamiane
   w `task check`).
 

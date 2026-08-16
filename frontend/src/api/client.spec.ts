@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { ApiError, apiFetch } from './client'
+import { ApiError, apiFetch, setUnauthorizedHandler } from './client'
 
 function mockFetch(response: Response): void {
   vi.stubGlobal(
@@ -16,9 +16,17 @@ function jsonResponse(body: unknown, status = 200): Response {
   })
 }
 
+function requestHeaders(): Headers {
+  const mocked = fetch as unknown as ReturnType<typeof vi.fn>
+  const [, init] = mocked.mock.calls[0] as [string, RequestInit]
+  return init.headers as Headers
+}
+
 describe('apiFetch', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
+    setUnauthorizedHandler(undefined)
+    document.cookie = 'csrf_token=; Max-Age=0; path=/'
   })
 
   it('zwraca sparsowane ciało odpowiedzi 2xx', async () => {
@@ -72,5 +80,66 @@ describe('apiFetch', () => {
     )
 
     await expect(apiFetch('/health')).rejects.toMatchObject({ status: 0, code: 'network_error' })
+  })
+})
+
+describe('CSRF (double-submit cookie, 07_SECURITY §3)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    document.cookie = 'csrf_token=; Max-Age=0; path=/'
+  })
+
+  it('dokleja X-CSRF-Token z cookie do mutacji', async () => {
+    document.cookie = 'csrf_token=token-z-cookie'
+    mockFetch(jsonResponse({}))
+
+    await apiFetch('/auth/logout', { method: 'POST' })
+
+    expect(requestHeaders().get('X-CSRF-Token')).toBe('token-z-cookie')
+  })
+
+  it('nie dokleja nagłówka do zapytań odczytu', async () => {
+    document.cookie = 'csrf_token=token-z-cookie'
+    mockFetch(jsonResponse({ status: 'ok' }))
+
+    await apiFetch('/auth/me')
+
+    expect(requestHeaders().has('X-CSRF-Token')).toBe(false)
+  })
+
+  it('bez cookie nie wysyła pustego nagłówka', async () => {
+    mockFetch(jsonResponse({}))
+
+    await apiFetch('/auth/logout', { method: 'POST' })
+
+    expect(requestHeaders().has('X-CSRF-Token')).toBe(false)
+  })
+})
+
+describe('reakcja na 401', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    setUnauthorizedHandler(undefined)
+  })
+
+  it('woła zarejestrowany handler przy wygasłej sesji', async () => {
+    const onUnauthorized = vi.fn()
+    setUnauthorizedHandler(onUnauthorized)
+    mockFetch(
+      jsonResponse({ error: { code: 'unauthorized', message: 'Wymagane zalogowanie.' } }, 401),
+    )
+
+    await expect(apiFetch('/auth/me')).rejects.toBeInstanceOf(ApiError)
+    expect(onUnauthorized).toHaveBeenCalledOnce()
+  })
+
+  it('nie woła handlera przy odpowiedzi poprawnej', async () => {
+    const onUnauthorized = vi.fn()
+    setUnauthorizedHandler(onUnauthorized)
+    mockFetch(jsonResponse({ status: 'ok' }))
+
+    await apiFetch('/health')
+
+    expect(onUnauthorized).not.toHaveBeenCalled()
   })
 })

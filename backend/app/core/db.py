@@ -12,16 +12,17 @@ from __future__ import annotations
 import asyncio
 import sys
 from collections.abc import AsyncIterator, Callable
+from datetime import datetime
 from functools import lru_cache
 
-from sqlalchemy import MetaData
+from sqlalchemy import DateTime, MetaData, func
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
 )
-from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from app.core.config import get_settings
 
@@ -38,6 +39,24 @@ class Base(DeclarativeBase):
     """Wspólna baza modeli SQLAlchemy 2.0 (styl `Mapped[...]` / `mapped_column`)."""
 
     metadata = MetaData(naming_convention=NAMING_CONVENTION)
+
+
+class TimestampMixin:
+    """`created_at` / `updated_at` — konwencja 03_DATABASE dla wszystkich tabel.
+
+    Wartości nadaje baza (`now()` w UTC), więc są poprawne także dla wierszy
+    wstawianych migracją czy skryptem, nie tylko przez ORM.
+    """
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
 
 
 def selector_loop_factory() -> Callable[[], asyncio.AbstractEventLoop] | None:

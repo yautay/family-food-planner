@@ -285,31 +285,129 @@ diffie przed commitem (krok 11).
 
 ## Implementation checklist
 
-- [ ] Modele User+Session + migracja (up/down zweryfikowane)
-- [ ] core/security: argon2id, tokeny, compare_digest
-- [ ] core/deps: current_user (TTL przesuwny), require_admin
-- [ ] /auth/login, /auth/logout, /auth/me
-- [ ] Rate limit 5/min/IP + blokada konta po 10 porażkach / 15 min
-- [ ] Middleware CSRF double-submit + nagłówki bezpieczeństwa (07 §3)
-- [ ] CLI create-admin (Taskfile podmieniony, zero haseł w repo)
-- [ ] /admin/users CRUD + ochrona własnego konta admina
-- [ ] FE: client CSRF, authStore, guard, LoginPage, AppShell z nawigacją,
+- [x] Modele User+Session + migracja (up/down zweryfikowane)
+- [x] core/security: argon2id, tokeny, compare_digest
+- [x] core/deps: current_user (TTL przesuwny), require_admin
+- [x] /auth/login, /auth/logout, /auth/me
+- [x] Rate limit 5/min/IP + blokada konta po 10 porażkach / 15 min
+- [x] Middleware CSRF double-submit + nagłówki bezpieczeństwa (07 §3)
+- [x] CLI create-admin (Taskfile podmieniony, zero haseł w repo)
+- [x] /admin/users CRUD + ochrona własnego konta admina
+- [x] FE: client CSRF, authStore, guard, LoginPage, AppShell z nawigacją,
       PlaceholderPage, /admin/uzytkownicy
-- [ ] task fe-types zregenerowany
-- [ ] Testy unit/int/api/fe + E2E smoke
-- [ ] PROGRESS.md + korekta 03_DATABASE (id sesji) jeśli dotyczy
+- [x] task fe-types zregenerowany
+- [x] Testy unit/int/api/fe + E2E smoke
+- [x] PROGRESS.md + korekta 03_DATABASE (kolumny blokady, indeksy sesji)
 
 ## Verification checklist
 
-- [ ] `task check` zielony (unit+int+api+fe-test+typecheck+lint)
-- [ ] Migracja: `alembic heads` = 1; upgrade → downgrade → upgrade OK
-- [ ] E2E smoke login→plan-dnia→logout zielony na compose
-- [ ] Macierz ról (anonim/USER/ADMIN) pokryta testami API — realne wyniki
-- [ ] Nagłówki bezpieczeństwa i CSRF sprawdzone testem, nie ręcznie
-- [ ] `git ls-files`: żadnych haseł/sekretów
-- [ ] Acceptance Criteria 1–8 potwierdzone
-- [ ] Living docs zaktualizowane; commit `batch(02): ...`, status czysty
+- [x] `task check` zielony (unit+int+api+fe-test+typecheck+lint)
+- [x] Migracja: `alembic heads` = 1; upgrade → downgrade → upgrade OK
+- [x] E2E smoke login→plan-dnia→logout zielony na compose
+- [x] Macierz ról (anonim/USER/ADMIN) pokryta testami API — realne wyniki
+- [x] Nagłówki bezpieczeństwa i CSRF sprawdzone testem, nie ręcznie
+- [x] `git ls-files`: żadnych haseł/sekretów
+- [x] Acceptance Criteria 1–8 potwierdzone
+- [x] Living docs zaktualizowane; commit `batch(02): ...`, status czysty
 
 ## Completion notes
 
-(wypełnia agent wykonujący)
+**Wykonane** (2026-08-16)
+
+Backend: `app/core/{security,deps,cookies,middleware}.py`, moduł
+`app/modules/accounts/{models,schemas,service,router}.py`, `app/cli.py`,
+migracja `0002_users_sessions`, rejestr modeli `app/models.py`,
+`TimestampMixin` w `core/db.py`, handler 429 w `core/errors.py`, limiter
+slowapi + middleware w `create_app()`. Frontend: CSRF i handler 401
+w `api/client.ts`, `api/{auth,adminUsers}.ts`, `stores/auth.ts`,
+`router.ts` z guardem, `LoginPage`, `PlaceholderPage`, `AdminUsersPage`,
+AppShell (sidebar + bottom-nav), `lib/{navigation,texts}.ts`.
+Testy: 54 unit / 18 int / 55 api / 39 vitest / 4 E2E — wszystkie zielone,
+`task check` zielony.
+
+**Decyzje implementacyjne (uzasadnione)**
+
+1. **Blokada konta w kolumnach `users.failed_login_count` i
+   `users.locked_until`** (nie osobna tabela): jeden wiersz na konto, brak
+   przyrostu danych, stan przeżywa restart procesu — wymóg z karty. Logika
+   liczników to czyste funkcje w `core/security.py` (testy unit).
+2. **`DELETE /admin/users/{id}` = twarde usunięcie, ale tylko konta bez
+   danych.** Sesje giną kaskadą; przy FK RESTRICT z modułów domenowych
+   (od B03) `IntegrityError` mapowany na 409 z komunikatem „dezaktywuj
+   zamiast usuwać". Zgodne z ADR-012 (fizyczne usunięcie tylko dla encji
+   nieużywanych) i nie zostawia w bazie kont-widm. Dezaktywacja pozostaje
+   przez PATCH `is_active`.
+3. **Nazwy cookies**: `ffp_session` (HttpOnly) + `csrf_token` (dla JS).
+   Prefiks `ffp_` chroni przed kolizją z innymi aplikacjami na localhost
+   w dev.
+4. **`sessions` bez `updated_at`** — 03_DATABASE §2 wylicza kolumny tej
+   tabeli wprost; rolę znacznika ostatniego użycia pełni przesuwane
+   `expires_at`. Kolumny blokady i indeksy dopisane do §2 (living docs).
+5. **`email` w schematach ODPOWIEDZI jako `str`, nie `EmailStr`**
+   (walidacja `EmailStr` zostaje na wejściu). Wykryte na realnym stacku:
+   konto zapisane wcześniej, którego domenę `email-validator` odrzuca
+   (np. `.test`), wysadzało ODCZYT listy kont błędem 500. Test regresyjny:
+   `test_lista_nie_wywraca_sie_na_nietypowym_emailu`.
+6. **CLI waliduje email tym samym `EmailStr` co API** — inaczej dało się
+   założyć konto, którym nie da się zalogować (dokładnie to się wydarzyło
+   przy pierwszym uruchomieniu E2E).
+7. **CSP nie jest wysyłane dla `/api/docs` i `/api/openapi.json`**
+   (Swagger UI ładuje skrypty z CDN). W prod te ścieżki nie istnieją, więc
+   wyjątek jest tam martwy. Odnotowane w 07_SECURITY §3.
+8. **Limiter slowapi tworzony per aplikacja** w `create_app()` i przekazany
+   do buildera routera — każda instancja ma własny licznik, więc testy się
+   nie zatruwają, a produkcja działa tak samo (jeden proces = jeden limiter).
+
+**Odstępstwa od karty**
+
+- Karta zakładała `_set_session_cookies` w routerze; helpery wylądowały
+  w `app/core/cookies.py`, bo używa ich też `core/deps.py` (patrz niżej).
+- Test „405 dla niedozwolonej metody" w `tests/api/test_health.py` musiał
+  zmienić cel z `POST /health` na `GET /auth/login`: middleware CSRF działa
+  PRZED routingiem, więc POST bez tokenu daje 403, nie 405. Zachowanie jest
+  pożądane (nie zdradza istnienia tras) i ma własny test.
+- `frontend/e2e/login.spec.ts` (B01) zastąpiony przez `e2e/smoke.spec.ts` —
+  stary test asercjonował, że przycisk logowania jest WYŁĄCZONY.
+- `e2e/**/*.ts` przeniesione z projektu TS „app" do „node"
+  (`tsconfig.node.json`) — testy E2E używają `process.env`.
+- Katalog `tests/` stał się pakietem (`__init__.py`), bo `tests.factories`
+  i `tests.helpers` importowane z dwóch poziomów mylą mypy.
+
+**Ustalenia review**
+
+- `/security-review`: brak ustaleń o pewności ≥ 8/10. Sprawdzone: cykl
+  życia sesji, dopasowanie prefiksów CSRF, macierz ról, enumeracja kont,
+  wyciek tokenu CSRF na froncie, parametr `next` w LoginPage.
+- `/code-review` (high): **1 błąd naprawiony w tym batchu** — przesuwne TTL
+  działało tylko po stronie serwera; cookie zachowywało `Max-Age`
+  z logowania, więc przeglądarka kasowała sesję 30 dni po zalogowaniu mimo
+  aktywności. Naprawa: `resolve_session` zwraca flagę `refreshed`,
+  `get_current_user` ponownie wysyła oba cookies z nowym `Max-Age`
+  (testy `test_przesuniecie_ttl_odswieza_takze_cookies` i
+  `test_swieza_sesja_nie_odswieza_cookies`). Drugie ustalenie (IP za proxy)
+  przeniesione do follow-upów — nie da się go domknąć bez konfiguracji
+  reverse proxy z B18.
+
+**Follow-upy (poza zakresem tego batcha)**
+
+1. **IP za reverse proxy (B17/B18)**: `get_remote_address` slowapi
+   i `sessions.ip` widzą adres bezpośredniego połączenia. Po wdrożeniu za
+   nginx limit 5/min/IP na `/auth/login` stanie się limitem globalnym.
+   Wymaga `--proxy-headers` + `forwarded-allow-ips`. Wpisane do karty B17.
+2. **Wolumen `node_modules` w compose dev nie odświeża się** — serwis
+   `frontend` uruchamia `[ -d node_modules/vite ] || npm ci`, więc nowa
+   zależność frontendu wymaga ręcznego
+   `docker compose ... exec frontend npm ci` + restartu. Trafiło na to
+   pierwsze uruchomienie E2E. Do rozważenia w review R1 (poprawka jednej
+   linii w `docker/compose.dev.yml`) — świadomie NIE dotykane tutaj.
+3. Formularz tworzenia konta na `/admin/uzytkownicy` zakłada zawsze rolę
+   USER; nadanie roli ADMIN to osobna akcja na liście. Wystarczające dla
+   zakresu karty; ewentualny selektor roli w formularzu — przy B03.
+4. **Skille `ffp-security` i `ffp-backend` mają nieaktualne nagłówki**
+   („do dostarczenia: sesje/CSRF/rate limit (B02) … nagłówki i CSP (B17)"
+   — już są; `argon2-cffi`/`slowapi` są w `pyproject`). Świadomie NIE
+   aktualizowane tutaj: właścicielem aktualizacji skilli są batche review
+   (03_AI_SKILLS §8) — do zrobienia w R1.
+
+**Pytania do właściciela**: brak. Żaden wpis w `02_DECISIONS.md` nie był
+potrzebny.

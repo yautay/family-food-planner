@@ -20,9 +20,13 @@ FK z jawnym `ON DELETE`. Ilości i wartości odżywcze: `NUMERIC` (nigdy float).
 ```sql
 users (id, email UNIQUE, password_hash, display_name, role ENUM(admin,user),
        is_active BOOL, household_id FK→households NULL ON DELETE SET NULL,
-       ui_settings JSONB DEFAULT '{}')            -- progi wskaźników itp.
+       ui_settings JSONB DEFAULT '{}',            -- progi wskaźników itp.
+       failed_login_count INT DEFAULT 0,          -- blokada konta (07_SECURITY §2)
+       locked_until timestamptz NULL)             -- stan w bazie, nie w pamięci procesu
 sessions (id TEXT PK,        -- secrets.token_urlsafe(32), spójnie z 07_SECURITY §2
        user_id FK CASCADE, expires_at, created_at, ip, user_agent)
+       -- indeksy: expires_at (sprzątanie), user_id (odwołanie sesji konta);
+       -- bez updated_at — rolę znacznika ostatniego użycia pełni expires_at
 households (id, name)
 member_profiles (id, household_id FK CASCADE NULL, owner_user_id FK NULL,
        name, default_multiplier NUMERIC(4,2) DEFAULT 1.0,

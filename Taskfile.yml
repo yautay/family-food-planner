@@ -234,14 +234,11 @@ tasks:
       - '{{.COMPOSE}} exec db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
 
   create-admin:
-    desc: '[PLACEHOLDER] Tworzy pierwsze konto administratora — dostarcza BATCH_02'
-    silent: true
+    desc: 'Tworzy konto administratora (hasło z promptu albo FFP_ADMIN_PASSWORD)'
+    dir: backend
+    interactive: true
     cmds:
-      - |
-        echo "Komenda create-admin nie jest jeszcze zaimplementowana."
-        echo "Dostarcza ją BATCH_02 (AUTH_AND_ACCOUNTS): konta zakłada CLI,"
-        echo "nigdy seed z hasłem w repozytorium (07_SECURITY par. 2)."
-        exit 1
+      - uv run python -m app.cli create-admin
 
   db-seed-demo:
     desc: '[PLACEHOLDER] Deterministyczny seed demo — dostarczają batche domenowe'

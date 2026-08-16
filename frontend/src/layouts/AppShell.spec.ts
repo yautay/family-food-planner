@@ -1,14 +1,111 @@
+import { VueQueryPlugin } from '@tanstack/vue-query'
 import { mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { createPinia, setActivePinia } from 'pinia'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createMemoryHistory, createRouter, type Router } from 'vue-router'
+
+import { routes } from '@/router'
+import { useAuthStore } from '@/stores/auth'
 
 import AppShell from './AppShell.vue'
 
-describe('AppShell', () => {
-  it('renderuje szkielet aplikacji z nazwą produktu', () => {
-    const wrapper = mount(AppShell)
+const { fetchCurrentUser, logoutRequest } = vi.hoisted(() => ({
+  fetchCurrentUser: vi.fn(),
+  logoutRequest: vi.fn(),
+}))
 
-    expect(wrapper.text()).toContain('Family Food Planner')
-    expect(wrapper.find('header').exists()).toBe(true)
-    expect(wrapper.find('main').exists()).toBe(true)
+vi.mock('@/api/auth', () => ({
+  fetchCurrentUser,
+  loginRequest: vi.fn(),
+  logoutRequest,
+}))
+
+const USER = {
+  id: 1,
+  email: 'anna@example.com',
+  display_name: 'Anna',
+  role: 'user' as const,
+  ui_settings: {},
+  household: null,
+}
+
+async function mountShell(role: 'user' | 'admin' = 'user') {
+  const pinia = createPinia()
+  setActivePinia(pinia)
+  const auth = useAuthStore()
+  auth.user = { ...USER, role }
+
+  const router: Router = createRouter({ history: createMemoryHistory(), routes })
+  await router.push('/plan-dnia')
+  await router.isReady()
+
+  return mount(AppShell, { global: { plugins: [pinia, VueQueryPlugin, router] } })
+}
+
+describe('AppShell', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    fetchCurrentUser.mockResolvedValue(USER)
+  })
+
+  it('pokazuje pełną nawigację po polsku', async () => {
+    const wrapper = await mountShell()
+
+    for (const name of [
+      'plan-dnia',
+      'tydzien',
+      'przepisy',
+      'produkty',
+      'spizarnia',
+      'zakupy',
+      'statystyki',
+      'ustawienia',
+    ]) {
+      expect(wrapper.find(`[data-testid="nav-item-${name}"]`).exists()).toBe(true)
+    }
+    expect(wrapper.text()).toContain('Plan dnia')
+    expect(wrapper.text()).toContain('Spiżarnia')
+  })
+
+  it('ukrywa wpis Admin przed zwykłym użytkownikiem', async () => {
+    const wrapper = await mountShell('user')
+
+    expect(wrapper.find('[data-testid="nav-item-admin-users"]').exists()).toBe(false)
+  })
+
+  it('pokazuje wpis Admin administratorowi', async () => {
+    const wrapper = await mountShell('admin')
+
+    expect(wrapper.find('[data-testid="nav-item-admin-users"]').exists()).toBe(true)
+  })
+
+  it('bottom-nav ma trzy sekcje główne i przycisk Więcej', async () => {
+    const wrapper = await mountShell()
+
+    const bottom = wrapper.get('[data-testid="nav-bottom"]')
+    expect(bottom.find('[data-testid="nav-bottom-plan-dnia"]').exists()).toBe(true)
+    expect(bottom.find('[data-testid="nav-bottom-przepisy"]').exists()).toBe(true)
+    expect(bottom.find('[data-testid="nav-bottom-zakupy"]').exists()).toBe(true)
+    expect(bottom.find('[data-testid="nav-more-toggle"]').exists()).toBe(true)
+  })
+
+  it('Więcej rozwija pozostałe sekcje', async () => {
+    const wrapper = await mountShell()
+    expect(wrapper.find('[data-testid="nav-more-panel"]').exists()).toBe(false)
+
+    await wrapper.get('[data-testid="nav-more-toggle"]').trigger('click')
+
+    expect(wrapper.find('[data-testid="nav-more-panel"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="nav-more-item-spizarnia"]').exists()).toBe(true)
+  })
+
+  it('wylogowanie woła API i czyści sesję', async () => {
+    logoutRequest.mockResolvedValue(undefined)
+    const wrapper = await mountShell()
+
+    await wrapper.get('[data-testid="logout-button"]').trigger('click')
+    await vi.waitFor(() => expect(logoutRequest).toHaveBeenCalledOnce())
+
+    expect(useAuthStore().isAuthenticated).toBe(false)
   })
 })

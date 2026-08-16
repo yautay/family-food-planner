@@ -55,7 +55,8 @@ Start od zera: `cp .env.example .env` → `task install` → `task dev`.
 | `task db-migrate` / `db-heads` / `db-revision -- --rev-id 0002 -m "opis"` | Alembic |
 | `task fe-types` | OpenAPI → `backend/openapi.json` → `frontend/src/api/generated.ts` (oba commitowane) |
 | `task audit` / `task secrets-scan` | Review batche i BATCH_17 |
-| `task create-admin` / `db-seed-demo` | PLACEHOLDERY — dostarczają B02 / batche domenowe |
+| `task create-admin` | tworzy konto ADMIN (prompt albo `FFP_ADMIN_*` z env; nigdy hasło w repo) |
+| `task db-seed-demo` | PLACEHOLDER — dostarczają batche domenowe |
 
 Nigdy nie wołaj gołego `pytest`/`vitest`/`alembic` — Taskfile wstrzykuje
 `.env` i właściwy interpreter.
@@ -69,14 +70,17 @@ Router nigdy nie dotyka sesji DB; moduł→moduł wyłącznie przez service.
 Silniki obliczeń (`nutrition/engine.py`, `shopping/engine.py`) to czyste
 funkcje bez I/O (ADR-008). Katalogi modułów tworzy batch, który je zasiedla.
 
-Fundament dostarczony w BATCH_01:
+Fundament dostarczony w BATCH_01 i BATCH_02:
 
 - `app/core/config.py` — `Settings` (pydantic-settings). Nowa zmienna =
   wpis w `.env.example` w tym samym commicie. Brak wymaganej zmiennej =
   `ConfigurationError` z komunikatem po polsku.
-- `app/core/db.py` — `Base` (naming convention!), silnik async
-  (`postgresql+psycopg://`, ADR-015), `get_session` jako dependency,
-  `selector_loop_factory()` dla narzędzi uruchamianych na Windows.
+- `app/core/db.py` — `Base` (naming convention!), `TimestampMixin`
+  (`created_at`/`updated_at`), silnik async (`postgresql+psycopg://`,
+  ADR-015), `get_session` jako dependency, `selector_loop_factory()` dla
+  narzędzi uruchamianych na Windows.
+- `app/models.py` — rejestr modeli. Nowy moduł z tabelami = jedna linia
+  tutaj, inaczej Alembic nie widzi schematu.
 - `app/core/errors.py` — `AppError` + podklasy (`NotFoundError`,
   `ForbiddenError`, `ConflictError`, …) i handlery. Serwisy rzucają te
   wyjątki, NIE `HTTPException`. Kształt odpowiedzi:
@@ -84,14 +88,25 @@ Fundament dostarczony w BATCH_01:
 - `app/core/logging.py` — structlog + middleware requestów (request id,
   ścieżka maskowana dla `/public/lists/*`). Nigdy nie loguj haseł, tokenów
   ani payloadów (07_SECURITY §8).
-- `app/main.py` — `create_app()` jako composition root. Aplikacja NIE
-  powstaje na poziomie modułu; uruchomienie: `uvicorn app.main:create_app
-  --factory`.
+- `app/core/security.py` — argon2id (hash/verify/rehash), `generate_token`
+  (`secrets.token_urlsafe(32)`), `tokens_match` (`hmac.compare_digest`),
+  TTL sesji i czyste funkcje blokady konta. Żadnej własnej kryptografii.
+- `app/core/deps.py` — JEDYNE wejście autoryzacji: `CurrentUser`,
+  `AdminUser`, `require_admin`. Nowy moduł ich używa, nie czyta cookie sam.
+- `app/core/cookies.py` — nazwy i atrybuty cookies sesji/CSRF (jedno miejsce).
+- `app/core/middleware.py` — CSRF double-submit (`CSRF_EXEMPT_PREFIXES`)
+  + nagłówki bezpieczeństwa i CSP (07_SECURITY §3).
+- `app/main.py` — `create_app()` jako composition root (limiter slowapi,
+  middleware, routery). Aplikacja NIE powstaje na poziomie modułu;
+  uruchomienie: `uvicorn app.main:create_app --factory`.
 
-Testy: `tests/{unit,integration,api}/`, markery `unit`/`integration`/`api`
-(wymagane — bez markera test nie wejdzie do żadnego targetu), docstring po
-polsku opisujący scenariusz. Fixture'y wspólne w `tests/conftest.py`
-(`app`, `client`, `settings`, `test_database_url`).
+Testy: `tests/{unit,integration,api}/` (pakiet — z `__init__.py`), markery
+`unit`/`integration`/`api` (wymagane — bez markera test nie wejdzie do
+żadnego targetu), docstring po polsku opisujący scenariusz. Fixture'y
+wspólne w `tests/conftest.py` (`app`, `client`, `settings`,
+`test_database_url`, `db_session`, `db_client`); nowa tabela = wpis w stałej
+`DB_TABLES`. Fabryki: `tests/factories.py`, logowanie i nagłówek CSRF
+w testach API: `tests/helpers.py`. Mutacja bez `X-CSRF-Token` = 403.
 
 ## 5. Frontend — wzorzec kodu
 
@@ -104,6 +119,14 @@ Kolory wyłącznie przez tokens z `src/assets/tailwind.css` (06_UIUX §1) —
 domenowe w `src/components/domain/`. Teksty po polsku, wielokrotnego użytku
 w `src/lib/texts.ts`. Mobile-first, cele dotykowe ≥44 px, `aria-label` dla
 elementów bez tekstu, selektory E2E przez `data-testid`.
+
+Sesja: `src/stores/auth.ts` (jedyny stan sesji w Pinia), guard w
+`src/router.ts`, pozycje menu w `src/lib/navigation.ts` (jeden wpis =
+sidebar + bottom-nav). Batch domenowy podmienia `component` istniejącej
+trasy z `PlaceholderPage`, nie dokłada nowego wpisu nawigacji.
+Nowa zależność npm wymaga odświeżenia `node_modules` w kontenerze:
+`docker compose --env-file .env -f docker/compose.dev.yml exec frontend
+npm ci` + restart serwisu.
 
 ## 6. Migracje
 

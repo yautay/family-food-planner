@@ -19,6 +19,35 @@ AppShell z nawigacją (Ustawienia i Admin jako placeholdery), authStore.
 `users` NIE ma jeszcze `household_id` (dodaje ten batch). `/auth/me`
 zwraca `household: null` (kontrakt do wypełnienia).
 
+Konkrety z wykonanego B02 (2026-08-16) — czytaj przed pisaniem kodu:
+
+- **Autoryzacja**: `app/core/deps.py` → `CurrentUser` / `AdminUser`
+  (aliasy `Annotated[User, Depends(...)]`) i `require_admin`. Nowe routery
+  ich UŻYWAJĄ, nie duplikują odczytu cookie. `ScopedQuery` (ten batch)
+  dokładasz obok, w `app/core/`, nie w module domenowym.
+- **Migracja**: pierwsza wolna to `0003`, `down_revision = "0002"`
+  (potwierdź `task db-heads`). `users.household_id` dokładasz ALTER-em;
+  typ enumowy usuwany jest w `downgrade` jawnie (wzór: `0002`).
+- **Rejestr modeli**: nowy moduł z tabelami = jedna linia w
+  `backend/app/models.py`, inaczej Alembic nie widzi schematu.
+- **Testy z bazą**: fixture'y `db_session` (serwisy) i `db_client` (HTTP)
+  w `tests/conftest.py`; dopisz swoje tabele do stałej `DB_TABLES`
+  (TRUNCATE między testami). Fabryki: `tests/factories.py`
+  (`create_user`, `create_admin`, `create_session`), pomocnicze logowanie
+  i nagłówek CSRF: `tests/helpers.py` (`login`, `csrf_headers`).
+- **Mutacje w testach API wymagają nagłówka CSRF** — bez niego 403.
+- **`/auth/me`**: pole `household` jest w `CurrentUser`
+  (`app/modules/accounts/schemas.py`) jako `None`; podmieniasz typ na realny
+  schemat rodziny i regenerujesz `task fe-types`.
+- **Frontend**: `src/stores/auth.ts` (jedyny stan sesji), guard
+  `authGuard` w `src/router.ts`, nawigacja w `src/lib/navigation.ts`
+  (dodanie pozycji = jeden wpis), teksty PL w `src/lib/texts.ts`,
+  strona admina: `src/pages/admin/AdminUsersPage.vue` (sekcję rodzin
+  dokładasz obok, wg karty).
+- **Nowa zależność frontendu wymaga odświeżenia node_modules w kontenerze**
+  (`docker compose ... exec frontend npm ci` + restart) — wolumen nazwany
+  nie aktualizuje się sam.
+
 Wymagane lektury przed startem:
 
 - `docs/implementation-plan/implementation_prompt.md` + PROGRESS.md

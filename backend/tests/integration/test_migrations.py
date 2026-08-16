@@ -50,6 +50,11 @@ def _current_revision(url: str) -> str | None:
         engine.dispose()
 
 
+#: Tabele oczekiwane po `upgrade head`. Batch dodający migrację dopisuje swoje —
+#: dzięki temu „przypadkowa" tabela albo zapomniany downgrade są widoczne od razu.
+EXPECTED_TABLES = {"alembic_version", "users", "sessions"}
+
+
 def test_upgrade_downgrade_upgrade_na_czystej_bazie(
     alembic_config: Config, test_database_url: str
 ) -> None:
@@ -59,7 +64,7 @@ def test_upgrade_downgrade_upgrade_na_czystej_bazie(
 
     command.upgrade(alembic_config, "head")
     after_upgrade = _current_revision(test_database_url)
-    assert after_upgrade == "0001"
+    assert after_upgrade == "0002"
 
     command.downgrade(alembic_config, "base")
     assert _current_revision(test_database_url) is None
@@ -68,10 +73,10 @@ def test_upgrade_downgrade_upgrade_na_czystej_bazie(
     assert _current_revision(test_database_url) == after_upgrade
 
 
-def test_migracja_bazowa_nie_tworzy_tabel_domenowych(
+def test_schemat_po_migracjach_zawiera_dokladnie_oczekiwane_tabele(
     alembic_config: Config, test_database_url: str
 ) -> None:
-    """BATCH_01 nie wnosi schematu — poza tabelą wersji baza jest pusta."""
+    """Po `head` w bazie stoją wyłącznie tabele wynikające z migracji."""
     command.upgrade(alembic_config, "head")
 
     engine = create_engine(normalize_database_url(test_database_url))
@@ -81,4 +86,23 @@ def test_migracja_bazowa_nie_tworzy_tabel_domenowych(
     finally:
         engine.dispose()
 
-    assert tables == {"alembic_version"}, f"Nieoczekiwane tabele w bazie: {sorted(tables)}"
+    assert tables == EXPECTED_TABLES, f"Nieoczekiwany zestaw tabel: {sorted(tables)}"
+
+
+def test_downgrade_usuwa_takze_typ_enumowy(alembic_config: Config, test_database_url: str) -> None:
+    """DROP TABLE nie kasuje typu `user_role` — bez jawnego DROP-a ponowny upgrade pada."""
+    command.upgrade(alembic_config, "head")
+    command.downgrade(alembic_config, "base")
+
+    engine = create_engine(normalize_database_url(test_database_url))
+    try:
+        with engine.connect() as connection:
+            typy = connection.execute(
+                text("SELECT typname FROM pg_type WHERE typname = 'user_role'")
+            ).fetchall()
+    finally:
+        engine.dispose()
+
+    assert typy == [], "Typ user_role przetrwał downgrade — kolejny upgrade się wywali"
+
+    command.upgrade(alembic_config, "head")

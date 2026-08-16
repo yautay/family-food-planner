@@ -87,6 +87,13 @@ Zasady:
   z jawną białą listą pól (nie `from_orm` pełnego modelu).
 - Publiczny PATCH: wyłączony z CSRF (autoryzuje token w URL — 07 §3),
   rate limit; lookup tylko po pełnym tokenie (unique index, 07 §5).
+  **Wyjątek CSRF jest już gotowy** — B02 wpisał prefiks `/api/v1/public/`
+  do `CSRF_EXEMPT_PREFIXES` w `app/core/middleware.py`; router publiczny
+  musi więc siedzieć dokładnie pod tym prefiksem (nic do zmiany w middleware).
+  Rate limit: limiter slowapi jest w `app.state.limiter`, tworzony
+  w `create_app()` i wstrzykiwany do buildera routera (wzór:
+  `build_auth_router(settings, limiter)`); handler 429 w kształcie 04_API §1
+  jest już zarejestrowany (`register_rate_limit_handler`).
 - Rozszerzenie blokady usuwania sklepu (z B09): store referencowany przez
   `shopping_lists.store_id` → 409 z `used_in` (Cross-Batch Impact B09).
 

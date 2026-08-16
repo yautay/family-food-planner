@@ -4,8 +4,10 @@ import { VueQueryPlugin } from '@tanstack/vue-query'
 import { createPinia } from 'pinia'
 import { createApp } from 'vue'
 
+import { setUnauthorizedHandler } from './api/client'
 import App from './App.vue'
 import { router } from './router'
+import { useAuthStore } from './stores/auth'
 
 const app = createApp(App)
 
@@ -28,4 +30,15 @@ app.use(VueQueryPlugin, {
 })
 
 app.use(router)
+
+// Sesja wygasła albo została odwołana z innego urządzenia: czyścimy stan i
+// pozwalamy guardowi routera odesłać użytkownika na /login (ADR-003).
+setUnauthorizedHandler(() => {
+  const auth = useAuthStore()
+  if (auth.isAuthenticated) {
+    auth.clear()
+    void router.push({ name: 'login' })
+  }
+})
+
 app.mount('#app')

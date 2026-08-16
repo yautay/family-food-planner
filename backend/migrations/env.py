@@ -20,7 +20,11 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from app.core.config import get_settings
-from app.core.db import Base, normalize_database_url, selector_loop_factory
+from app.core.db import normalize_database_url, selector_loop_factory
+
+# Import rejestru modeli (nie samego `Base`) — bez niego `Base.metadata` jest
+# pusta i autogenerate „nie widzi" istniejących tabel.
+from app.models import Base
 
 config = context.config
 

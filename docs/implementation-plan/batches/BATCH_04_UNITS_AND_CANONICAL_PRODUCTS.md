@@ -15,7 +15,9 @@ adapter `ProductNutrition` — jedyne wejście silnika (B05) do wartości.
 ## Context
 
 Zastaje: auth (B02), households + `ScopedQuery` (`app/core/scope.py`) +
-audit (`audit.service.record`) z B03; AppShell z placeholderem „Produkty";
+audit (`audit.service.record`) z B03; AppShell z placeholderem „Produkty"
+(trasa `produkty` w `src/router.ts` — podmieniasz `component`, wpis
+nawigacji w `src/lib/navigation.ts` zostaje bez zmian);
 panele admin (Użytkownicy/Rodziny). Produkty są GLOBALNE (02 §3.1 pkt 3) —
 ScopedQuery NIE dotyczy encji katalogu; z B03 bierzemy audit i prototyp
 409 used_in (DELETE rodziny).
