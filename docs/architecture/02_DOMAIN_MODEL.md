@@ -1,0 +1,288 @@
+# 02 — Model domenowy
+
+Język domeny jest polski (nazwy encji w kodzie — angielskie). Dokument
+definiuje pojęcia i reguły; fizyczny schemat: `03_DATABASE_DESIGN.md`.
+
+## 1. Mapa modułów domenowych
+
+```
+accounts     — użytkownicy, sesje, role (ADMIN/USER)
+households   — rodziny, członkostwo, profile członków (skalowanie porcji)
+catalog      — produkty kanoniczne, wartości odżywcze, jednostki, kategorie,
+               produkty sklepowe (retail), sklepy i profile sklepów
+recipes      — przepisy/dania, składniki, tagi, oceny
+nutrition    — deterministyczny silnik obliczeń (kcal/makro/IG→ŁG), cele
+planning     — plan dnia, plan tygodnia, szablony, cykle, historia
+pantry       — spiżarnia (stan domowy)
+shopping     — silnik zakupowy, tury, listy zakupowe, publiczne linki
+importer     — import PDF (staging, review, zatwierdzanie)
+transfer     — pełny eksport/import logiczny
+audit        — dziennik istotnych operacji
+```
+
+Granice modułów = granice pakietów Pythona w backendzie (ADR-001).
+Moduł może czytać encje innych modułów przez serwis, nie przez „sięganie
+w tabele" (import modeli dozwolony, logika biznesowa — tylko przez serwisy).
+
+## 2. Accounts
+
+- **User**: login (email), hasło (argon2id), rola `ADMIN` | `USER`,
+  `is_active`. Konta zakłada wyłącznie ADMIN (brak samorejestracji).
+- **Session**: server-side, cookie HttpOnly; wygaśnięcie przesuwne.
+- ADMIN może wszystko, w szczególności: zarządza użytkownikami, rodzinami,
+  produktami kanonicznymi i ich wartościami, danymi referencyjnymi,
+  importem/eksportem. USER działa w swoim zakresie + zakresie rodziny.
+
+## 3. Households (Rodzina)
+
+- **Household**: nazwa; tworzy i przypisuje ADMIN.
+- Użytkownik należy do **maksymalnie jednej** rodziny (upraszczające
+  założenie domowe; zmiana wymagałaby rewizji scope'ów — ADR-006).
+- **MemberProfile** (profil członka rodziny): imię, opcjonalne powiązanie
+  z kontem User (profil może istnieć bez konta — np. dzieci), domyślny
+  mnożnik porcji (np. 0.8), opcjonalny dzienny cel kcal. Używany przez
+  skalowanie rodzinne i cele.
+
+### 3.1 Zakres widoczności (scope)
+
+Encje współdzielne (Recipe, DayPlan/WeekPlan, szablony, listy zakupowe,
+spiżarnia) mają scope:
+
+- `PRIVATE` — widzi tylko właściciel (owner_user_id),
+- `HOUSEHOLD` — widzą wszyscy członkowie rodziny właściciela.
+
+Reguły:
+
+1. Spiżarnia jest **zawsze HOUSEHOLD** (jeden stan domowy na rodzinę);
+   użytkownik bez rodziny ma spiżarnię osobistą (household „wirtualny" nie
+   istnieje — pantry wisi wtedy na userze; szczegół w 03).
+2. Odczyt HOUSEHOLD: każdy członek. Edycja HOUSEHOLD: każdy członek
+   (rodzina sobie ufa; audit log rejestruje kto zmienił). Zmiana scope'u
+   i usunięcie: właściciel lub ADMIN.
+3. Produkty kanoniczne, kategorie, jednostki, sklepy — **globalne**
+   (wspólny słownik instancji), edycja wartości odżywczych tylko ADMIN;
+   dodanie nowego produktu (inline create) może wykonać USER — produkt
+   dostaje status weryfikacji `UNVERIFIED` (§4.9).
+4. Produkty sklepowe (retail) — globalne, edytowalne przez USER.
+
+## 4. Catalog
+
+### 4.1 CanonicalProduct (produkt kanoniczny)
+
+Fundament systemu. Pola: nazwa, nazwa znormalizowana (unikat), kategoria
+zakupowa, bazowy typ miary (`MASS` | `VOLUME` | `PIECE`), wartości odżywcze
+**na 100 g** (dla VOLUME: na 100 ml; dla PIECE: na 100 g + obowiązkowa waga
+sztuki): kcal, białko, tłuszcz, węglowodany, błonnik, cukry — oraz
+**indeks glikemiczny (IG, 0–110, opcjonalny)**. Metadane wiarygodności:
+`nutrition_source` (tekst, np. `usda:...`, `producent:etykieta`, `manual`),
+`verified_at`, `verification_status` (`UNVERIFIED` | `VERIFIED`), `is_archived`.
+
+- Każdy przepis używający cebuli wskazuje TEN SAM produkt kanoniczny.
+- Wartości odżywcze edytuje wyłącznie ADMIN; edycja trafia do audit logu.
+- AI może proponować wartości/mapowania — nigdy nie zapisuje bez człowieka.
+
+### 4.2 Jednostki i normalizacja
+
+- Jednostki systemowe: `g`, `kg`, `ml`, `l`, `szt.`, `opak.` UI przyjmuje
+  wygodne, wewnętrznie wszystko normalizowane do **g** (masa), **ml**
+  (objętość), **szt.** (sztuki, z wagą sztuki produktu → gramy).
+- **ProductUnitWeight** (jednostka domowa produktu): para (produkt,
+  etykieta jednostki np. „łyżka", „garść", „plaster", „opakowanie") →
+  gramy na 1 jednostkę + `source` + `samples_count`. Audyt PDF (01_PDF_AUDIT
+  §5.2) dowiódł, że gramatura jednostki jest własnością produktu i bywa
+  niespójna — przeliczniki uczone z próbek (mediana), edytowalne.
+- Prezentacja: ≥1000 g → wyświetlaj w kg (formatter frontendowy, dane
+  zawsze w g/ml).
+
+### 4.3 Kategorie zakupowe
+
+Słownik globalny (seed z 01_PDF_AUDIT §5.5 + nabiał/pieczywo/suche/
+makarony-ryż-kasze/puszki-słoiki wg wymagań). Produkt ma dokładnie jedną
+kategorię. Kategorie porządkowane per sklep (§4.5).
+
+### 4.4 RetailProduct (produkt sklepowy)
+
+Konkretny produkt z półki: nazwa, marka, opcjonalny sklep, wielkość
+opakowania (gramy/ml/sztuki w opakowaniu), zdjęcie, powiązanie
+z CanonicalProduct (wymagane). Np. kanoniczny „Jogurt naturalny" ↔ retail
+„Pilos Jogurt naturalny 400 g". Używany przez silnik zakupowy do doboru
+opakowań i wyliczania resztek.
+
+### 4.5 Store i StoreProfile
+
+- **Store**: nazwa (Biedronka, Lidl…), opcjonalne logo/kolor.
+- Profil sklepu = uporządkowana lista kategorii zakupowych (kolejność
+  fizycznego przejścia po sklepie). Lista zakupowa sortowana wg profilu
+  wybranego sklepu.
+
+### 4.6 Usuwanie i archiwizacja (ADR-012)
+
+- Fizyczne usunięcie dozwolone tylko, gdy encja nie jest nigdzie użyta
+  (sprawdzenie referencji w serwisie). Jeśli użyta — HTTP 409 z czytelną
+  listą „gdzie użyto" (nazwa przepisu/planu/listy).
+- Alternatywa: `is_archived` — znika z wyszukiwarek i list wyboru,
+  pozostaje w danych historycznych.
+
+### 4.9 Cykl weryfikacji produktu
+
+`UNVERIFIED` (utworzony inline przez USERA lub import) → ADMIN uzupełnia/
+sprawdza wartości → `VERIFIED`. Widoki liczące żywienie pokazują ostrzeżenie,
+gdy w wyliczeniu biorą udział produkty UNVERIFIED lub bez kompletu wartości.
+
+## 5. Recipes
+
+- **Recipe (danie/przepis)**: nazwa, scope + właściciel, składniki,
+  instrukcja (tekst), **porcja bazowa** (`base_servings`, int ≥1 — na ile
+  porcji jest przepis), tagi, opcjonalny czas przygotowania (min),
+  opcjonalna trudność 1–10, zdjęcie, `is_archived`.
+- **RecipeIngredient**: produkt kanoniczny + ilość wpisana (liczba,
+  etykieta jednostki) + **ilość znormalizowana w gramach/ml** (przeliczona
+  przy zapisie — zapis odrzucany, jeśli nie da się jednoznacznie przeliczyć)
+  + opcjonalna notatka („może być z puszki").
+- **Tag**: słownik globalny, płaski; przypisanie N:M. Seed: śniadanie,
+  obiad, kolacja, szybkie, warzywne, do lunchboxa, do zamrożenia, dzieci
+  lubią. Filtrowanie list przepisów po tagach = wymaganie twarde.
+- **Rating**: ocena 1–5 na parę (przepis, user), średnia per rodzina
+  widoczna na karcie. Bez komentarzy/socialu.
+- Wartości odżywcze przepisu NIE są przechowywane — zawsze wyliczane
+  (silnik §6) per **1 porcja bazowa** = suma(składniki)/base_servings.
+
+## 6. Nutrition (silnik obliczeń) — serce systemu, ADR-008
+
+Czyste funkcje, `Decimal`, zero I/O, 100% pokrycia testami:
+
+```
+wartości_składnika(g, produkt)   = g/100 × wartości_100g produktu
+wartości_przepisu(przepis)       = Σ składników (na całość)
+wartości_porcji(przepis)         = całość / base_servings
+wartości_pozycji_planu(pozycja)  = wartości_porcji × mnożnik_porcji
+ŁG_składnika                     = IG_produktu × węglowodany_przyswajalne_g / 100
+                                   (węglowodany_przyswajalne = węglowodany − błonnik, min 0)
+wartości_posiłku/dnia            = Σ pozycji
+```
+
+- Brak IG produktu ⇒ ŁG posiłka oznaczony jako „niepełny" (suma z dostępnych
+  + flaga completeness). To samo dla brakujących makro.
+- Zaokrąglenia: kcal do 1, makra do 0,1 g, ŁG do 0,1 — wyłącznie na wyjściu
+  (prezentacja/serializacja), nigdy w krokach pośrednich.
+- **Cele**: `UserNutritionGoal` — dzienny cel kcal + opcjonalnie makra
+  (g lub % energii), obowiązuje od daty (historia celów zachowana, statystyki
+  liczą wg celu z dnia). Cel per posiłek: pole `kcal_target` na posiłku planu
+  (i w szablonach dnia). Cel ≠ porcja: mnożnik porcji zmienia wartości,
+  akcja „dopasuj porcję do celu" (jawna) proponuje mnożnik = target/kcal_porcji.
+- Wskaźniki UI: aktualna wartość / cel / różnica / status
+  (za mało · prawidłowo · za dużo; progi: <90% / 90–110% / >110% celu —
+  konfigurowalne w ustawieniach użytkownika).
+
+## 7. Planning
+
+- **PlanDay**: data + właściciel/scope. Dowolna liczba posiłków.
+- **PlanMeal**: nazwa (śniadanie, II śniadanie, obiad…), pozycja, opcjonalny
+  `kcal_target`.
+- **PlanMealItem**: przepis LUB produkt luzem (np. „Skyr 330 g")
+  + **mnożnik porcji** (`servings` Decimal, domyślnie 1.0)
+  + opcjonalny rozkład rodzinny: lista par (MemberProfile, mnożnik),
+  wtedy `servings` = suma rozkładu. Prosty przypadek „7 porcji" = servings 7
+  bez rozkładu. Zaawansowany: 3×1.0 + 2×0.8 + 2×1.3 ⇒ servings 6.2.
+- Szybkie akcje domenowe: kopiuj dzień → data/daty, kopiuj posiłek, powiel
+  blok N dni (model 2+2+2 z listu dietetyczki — 01_PDF_AUDIT §6).
+- **DayTemplate / WeekTemplate**: zamrożona kopia struktury (bez dat);
+  tworzone z istniejącego dnia/tygodnia lub od zera. Instancjacja = kopia
+  do planu (bez live-sync).
+- **WeekCycle**: uporządkowana lista WeekTemplate (A→B→C→A…) + data startu;
+  akcja „zastosuj cykl na zakres dat".
+- **Historia**: plany trwają bezterminowo; akcja „użyj ponownie" kopiuje
+  dzień/tydzień z historii na nowe daty.
+
+## 8. Pantry (spiżarnia)
+
+- **PantryItem**: produkt kanoniczny (lub retail), ilość w g/ml/szt.,
+  opcjonalna data ważności, opcjonalna lokalizacja (szafka/lodówka/
+  zamrażarka), notatka. Operacje: dodaj / zmień ilość / wyzeruj / usuń.
+- Stan bywa nieaktualny ⇒ **generator zakupów zawsze jawnie pyta**
+  „Uwzględnić stan domowy?" i pokazuje w preview, co odjął. Nigdy nie
+  odejmuje w tle.
+- Po utworzeniu listy zakupów spiżarnia NIE jest automatycznie zwiększana
+  (zakupy ≠ dostawa); opcjonalna akcja „przyjmij zakupy do spiżarni"
+  z odhaczonych pozycji — świadoma, jednym kliknięciem.
+
+## 9. Shopping
+
+### 9.1 Pipeline (deterministyczny, ADR-008)
+
+```
+PLAN(zakres dat, osoby) → porcje → przepisy → składniki → normalizacja(g/ml)
+→ agregacja per produkt → [spiżarnia? – jawne pytanie] → „mam już w domu"
+→ podział na tury → dobór opakowań retail → PREVIEW (niejasności!)
+→ zatwierdzenie → finalne listy (per tura)
+```
+
+### 9.2 ShoppingRound (tura) i harmonogram
+
+- Konfiguracja per rodzina: lista tur, każda z: nazwa, dzień zakupów,
+  zakres dni planu, filtr trwałości (świeże/trwałe/wszystko).
+- Produkt ma flagę `perishability` (`FRESH` | `DURABLE`) na kategorii
+  z możliwością nadpisania per produkt.
+- Preset domyślny (z wymagań, NIE hardcode): Tura 1 (niedziela): trwałe na
+  cały zakres + świeże na pierwsze 4 dni; Tura 2 (środa): świeże na resztę.
+
+### 9.3 Opakowania i resztki
+
+Dla pozycji z wybranym produktem retail: liczba opakowań =
+`ceil(potrzeba/wielkość_opakowania)`, resztka = kupione − potrzeba,
+**resztka zawsze wyeksponowana** („Zostanie: 150 g"). Brak retail = pozycja
+w gramach (dozwolone); preview podpowiada dodanie produktu retail.
+Bez automatycznych zamienników składników (out of scope).
+
+### 9.4 ShoppingList
+
+Obiekt bazodanowy: pozycje (produkt, ilość, kategoria, tura, stan checkboxa,
+`already_have`, resztka), `created_at`, `expires_at` (domyślnie +7 dni),
+tura, sklep (profil sortowania), **publiczny token** (opcjonalny).
+Stan checkboxów trwały (persystowany, synchronizowany z offline — ADR-009).
+
+### 9.5 Publiczny link (ADR-010)
+
+Token `secrets.token_urlsafe(32)` (256 bitów), unikat, w URL ścieżkowym;
+uprawnienia: odczyt + odhaczanie (nic więcej); wygasa z listą; odwoływalny;
+rate limit na endpointach publicznych; zero danych użytkownika/rodziny
+w odpowiedzi (tylko treść listy). Po wygaśnięciu przyjazny ekran
+„Ta lista zakupowa już wygasła lub została usunięta."
+
+## 10. Importer PDF
+
+Osobny moduł ze staging area: **ImportJob** (plik, status: UPLOADED →
+PARSED → IN_REVIEW → APPROVED/REJECTED), **StagedRecipe**,
+**StagedIngredient** (surowe: nazwa/ilość/jednostka/gramy + propozycja
+mapowania na produkt kanoniczny + confidence), **ImportIssue** (typ:
+MULTI_PORTION_SUSPECT, KCAL_MISMATCH, UNMAPPED_PRODUCT, UNIT_CONFLICT,
+DUPLICATE_RECIPE; severity; rozstrzygnięcie użytkownika). Kontrakt parsera
+i anomalie: `docs/implementation-plan/01_PDF_AUDIT.md` (wiążący).
+Zatwierdzenie tworzy normalne Recipe/CanonicalProduct + wpis audit.
+Nic nie trafia do danych aplikacji bez review.
+
+## 11. Transfer (eksport/import)
+
+- Eksport logiczny: JSON (wszystkie encje użytkownika/instancji, wersją
+  schematu) + ZIP ze zdjęciami. ADMIN: pełny eksport instancji.
+- Import: walidacja wersji + dry-run raport (co powstanie/koliduje) →
+  zastosowanie. Dane należą do użytkownika — pełne odzyskanie bez SaaS.
+
+## 12. Audit
+
+AuditEntry: kto, kiedy, operacja, encja, skrót zmiany (JSON before/after
+dla wartości odżywczych). Zakres: zmiany nutrition data, weryfikacja
+produktów, import (job + zatwierdzenia), operacje admina na kontach/
+rodzinach, eksport/import. Bez rozbudowy enterprise.
+
+## 13. Niezmienniki systemowe (do pilnowania testami)
+
+1. Każda ilość składnika ma jednoznaczną reprezentację w g/ml — zapis bez
+   przeliczenia jest niemożliwy.
+2. Wartości żywieniowe nigdy nie są cache'owane w encjach domenowych
+   (wyjątek: zatwierdzone snapshoty importu jako metadane walidacyjne).
+3. Zmiana mnożnika porcji w planie zmienia WSZYSTKO spójnie (kcal, makra,
+   ŁG, agregaty zakupowe) — bo wszystko jest wyliczane z jednego źródła.
+4. Produkt użyty w jakiejkolwiek encji nie może zostać fizycznie usunięty.
+5. Publiczny endpoint listy nie zwraca żadnych danych poza treścią listy.
+6. Import niczego nie zapisuje do danych aplikacji przed APPROVED.

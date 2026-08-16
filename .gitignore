@@ -1,0 +1,31 @@
+# środowisko i sekrety
+.env
+*.env
+!*.env.example
+
+# python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# node
+node_modules/
+dist/
+coverage/
+
+# playwright
+test-results/
+playwright-report/
+
+# dane lokalne (dev)
+/uploads/
+/backups/
+
+# IDE / OS
+.idea/
+.vscode/
+Thumbs.db
+.DS_Store

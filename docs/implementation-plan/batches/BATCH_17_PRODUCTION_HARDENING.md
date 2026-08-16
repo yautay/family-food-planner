@@ -1,0 +1,221 @@
+# BATCH_17 — PRODUCTION_HARDENING
+
+Klasa: PROD · Zależności: R4 (werdykt GO / GO warunkowe) · Szacunek rozmiaru: M
+
+## Goal
+
+Aplikacja staje się gotowa do wdrożenia: skrypty backup/restore z retencją
+i kontenerem cron, healthcheck rozszerzony (migracje, DB, dysk), produkcyjny
+multi-stage Dockerfile z obrazami tagowanymi wersją git, logging produkcyjny
+JSON oraz przegląd całej konfiguracji prod. Dodatkowo batch wykonuje
+konkretne naprawy wskazane przez R4. Samo wdrożenie na Odroida (compose.prod,
+proxy, runbooki) to B18.
+
+## Context
+
+Po R4 aplikacja ma werdykt GO (ew. warunkowy) i listę ustaleń P1 — część
+z nich R4 wpisał do sekcji „Ustalenia R4 do wykonania" poniżej. Istnieje
+multi-stage Dockerfile z B01 (target dev) i compose.dev/test; NIE istnieją:
+skrypty backup, target prod obrazu, rozszerzony healthcheck, prod logging.
+
+Wymagane lektury przed startem:
+
+- `docs/implementation-plan/implementation_prompt.md` + karta w całości.
+- **`docs/architecture/09_DEPLOYMENT_AND_OPERATIONS.md` — WIĄŻĄCY**:
+  §1 (topologia, bind mounts), §2 (start bez auto-migracji, healthcheck
+  degraded), **§3 (backup — rdzeń tego batcha)**, §4 (update/rollback —
+  obrazy tagowane), §5 (środowiska), §6–7.
+- `docs/architecture/07_SECURITY_DESIGN.md` §7 (sekrety env, chmod 600),
+  §8 (logi bez tokenów), §9 (PG bez SUPERUSER, port tylko w sieci compose).
+- `docs/architecture/01_ARCHITECTURE_OVERVIEW.md` §5; 08_TESTING §1.
+- `docs/implementation-plan/PROGRESS.md` — werdykt R4 i warunki.
+- ADR-002 (bind mounts, migracje jawne), ADR-014 (backend serwuje SPA —
+  target prod domyka tę decyzję).
+
+## Ustalenia R4 do wykonania
+
+(wypełnia karta review R4 — konkretne naprawy P1 z plikami i opisem;
+agent B17 wykonuje je jako Stage 1)
+
+- [ ] _placeholder — uzupełnia R4_
+
+## Stages
+
+1. **Naprawy z R4**: wykonać listę z sekcji „Ustalenia R4 do wykonania";
+   każdą odhaczyć z krótkim opisem w Completion notes.
+2. **Dockerfile prod**: target `prod` w multi-stage (stage frontend build →
+   stage python bez dev-deps; dist w obrazie — ADR-014; Uvicorn workers=2,
+   bez --reload; USER nie-root). Tagowanie obrazu wersją git
+   (`task build-prod` → tag `ffp-app:<git describe/sha>`).
+3. **Konfiguracja prod**: przegląd `app/core/config.py` — WSZYSTKIE
+   wartości różniące środowiska przez env (żadnych defaultów prod w kodzie);
+   limity rozmiaru request (body limit dla uploadów: obraz 10 MB, PDF 25 MB
+   + margines); `APP_ENV=prod` przełącza logging. `.env.example` uzupełniony.
+4. **Logging prod**: structlog → JSON na stdout gdy `APP_ENV=prod`;
+   poziomy przez env (`LOG_LEVEL`); potwierdzone filtry: zero tokenów
+   (sesyjnych/publicznych/API), maskowanie `/public/lists/***`.
+5. **Healthcheck rozszerzony**: `/api/v1/health` zwraca `status:
+   ok|degraded`, `version`, oraz checki: DB odpowiada, `alembic heads`
+   == wersja w DB (degraded gdy niezmigrowana — 09 §2), wolne miejsce
+   na dysku danych (degraded poniżej progu z env, default 1 GB).
+   Bez auth; bez ujawniania ścieżek/hostów w odpowiedzi.
+6. **Skrypty backup/restore** (09 §3): `docker/backup/` — skrypt backup
+   (`pg_dump -Fc` + `tar` uploads + kopia pliku env WYŁĄCZONA z repo —
+   tylko instrukcja; prune retencji: 7 dziennych + 4 tygodniowe),
+   skrypt restore (przywraca dump + uploads do wskazanego środowiska),
+   kontener cron w profilu `backup` (codziennie 03:00, logi na stdout).
+7. **Testy**: round-trip backup→restore REALNIE wykonany na compose
+   testowym; test healthcheck degraded przy braku migracji; testy
+   jednostkowe checków. `task check` zielony.
+8. **Docs i domknięcie**: 09_DEPLOYMENT zaktualizowany do stanu
+   faktycznego (nazwy skryptów, targety task); PROGRESS.md; commit
+   `batch(17): ...`.
+
+## Database / migrations
+
+- Brak zmian schematu. Jeśli naprawa z R4 wymaga migracji: numer =
+  pierwszy wolny, `down_revision` z `alembic heads`, down testowany
+  (ADR-002); po zmianie `alembic heads` = 1.
+- Healthcheck porównuje rewizję head (z kodu) z `alembic_version` w DB —
+  odczyt read-only, bez side effectów.
+
+## Backend
+
+| Ścieżka | Metoda | Rola | Opis |
+|---|---|---|---|
+| `/api/v1/health` | GET | publiczny | rozszerzony: `{status: ok\|degraded, version, checks: {db, migrations, disk}}` — bez ścieżek i szczegółów infrastruktury |
+
+- `core/config.py`: nowe env — `LOG_LEVEL`, `UVICORN_WORKERS` (compose),
+  `DISK_MIN_FREE_MB`, `MAX_UPLOAD_IMAGE_MB`, `MAX_UPLOAD_PDF_MB`
+  (jeśli dotąd zaszyte w kodzie).
+- Limit rozmiaru request: middleware/konfiguracja odrzucająca body ponad
+  limit z czytelnym 413 w kształcie błędu 04_API §1.
+- Skrypty backup/restore: bash w `docker/backup/` (uruchamialne też
+  ręcznie przez `task backup` / `task restore -- <plik>`), idempotentny
+  prune, kod wyjścia ≠0 przy niepowodzeniu (cron alarmuje logiem).
+
+## Frontend
+
+- Brak zmian funkcjonalnych. Weryfikacja: build produkcyjny (`vite build`)
+  przechodzi i dist serwowany przez backend w obrazie prod działa
+  (SPA fallback na index.html — ADR-014), PWA manifest dostępny.
+
+## Security
+
+- Obraz prod: nie-root user, bez dev-dependencies, bez source map
+  z sekretami; `docker history` bez sekretów (build args nie niosą kluczy).
+- Backup zawiera dump DB i uploads — pliki backupu traktowane jak sekrety
+  (zawierają dane rodziny): uprawnienia 600, katalog poza web-rootem;
+  skrypt NIE loguje zawartości ani connection stringów.
+- Logging prod: potwierdzić na realnym logu, że nie ma tokenów/haseł
+  (grep po przechwyconym stdout).
+- PG: user aplikacyjny bez SUPERUSER (07 §9) — zweryfikować i opisać
+  w 09_DEPLOYMENT, jeśli dotąd nieegzekwowane.
+- Naprawy z R4 o charakterze security wykonywane w pierwszej kolejności.
+
+## Tests
+
+- **Round-trip backup→restore (KLUCZOWY, wykonany REALNIE)**: na compose
+  testowym — seed demo → backup → zniszczenie środowiska (down -v /
+  czysta baza) → restore → smoke API (login, plan, lista) + porównanie
+  liczności kluczowych tabel przed/po. Wynik (czasy, rozmiary) w raporcie.
+- **Healthcheck degraded**: baza bez wykonanej ostatniej migracji →
+  `status: degraded` z `checks.migrations: fail`; DB niedostępna →
+  degraded; dysk poniżej progu (prog ustawiony sztucznie wysoko) → degraded.
+- **Prune retencji**: unit test na zestawie dat plików (7 dziennych +
+  4 tygodniowe zostają, reszta znika; idempotencja).
+- **Limit uploadu**: request ponad limit → 413 w kształcie błędu.
+- **Obraz prod**: kontener z obrazu prod startuje, serwuje SPA i API
+  (test smoke w compose testowym).
+- `task check` zielony.
+
+## Acceptance Criteria
+
+1. Wszystkie pozycje „Ustalenia R4 do wykonania" odhaczone (albo jawnie
+   przeniesione z uzasadnieniem do PROGRESS).
+2. `task backup` tworzy komplet: dump `-Fc` + tar uploads; prune retencji
+   działa wg 7d/4w; kontener cron w profilu `backup` wykonuje backup.
+3. Round-trip backup→restore wykonany realnie na compose testowym —
+   aplikacja po restore działa (smoke), dane zgodne.
+4. `/api/v1/health` zwraca degraded przy: niezmigrowanej bazie, braku DB,
+   niskim dysku — potwierdzone testami.
+5. Obraz prod: multi-stage, tagowany wersją git, nie-root, dist w środku;
+   `docker run` obrazu serwuje aplikację.
+6. Cała konfiguracja różnicująca środowiska przechodzi przez env;
+   `.env.example` kompletny; Uvicorn workers=2 w konfiguracji prod.
+7. Logi w trybie prod: JSON, poziom z env, zero tokenów (zweryfikowane
+   grepem po realnym logu).
+8. `task check` zielony; 09_DEPLOYMENT zaktualizowany do stanu faktycznego.
+
+## Out of Scope
+
+- `compose.prod.yml`, konfiguracja reverse proxy, instalacja na Odroidzie,
+  runbooki operacyjne, backup off-device, restore drill na produkcji → B18.
+- Rozstrzyganie D6/D7 (bramki B18) — nie blokują B17.
+- Naprawy P2/P3 z rejestru długu (pozostają w PROGRESS).
+- Uptime-check zewnętrzny (decyzja przy B18 — 09 §6).
+
+## Expected files/modules
+
+- `docker/Dockerfile` (target prod), `docker/backup/{backup.sh,restore.sh,
+  crontab,Dockerfile}` (lub równoważnie — uzasadnić), profil `backup`
+  w compose (dev/test do ćwiczeń; prod spina B18).
+- `backend/app/core/config.py`, `backend/app/main.py` / moduł health
+  (rozszerzenie), middleware limitu rozmiaru.
+- `Taskfile.yml`: `backup`, `restore`, `build-prod` (+ help).
+- `backend/tests/`: healthcheck degraded, prune, limit uploadu, smoke prod.
+- `.env.example`, `docs/architecture/09_DEPLOYMENT_AND_OPERATIONS.md`,
+  `docs/implementation-plan/PROGRESS.md`.
+
+## Implementation Notes
+
+- Kolejność: naprawy R4 → Dockerfile prod → config/logging → healthcheck →
+  backup → testy. Backup testować na compose TESTOWYM, nigdy na dev-bazie
+  z realnymi danymi właściciela.
+- Restore skrypt ma być używalny w B18 jako część runbooka — parametry
+  (plik dumpu, katalog uploads) jawne, bez interakcji.
+- Kopia pliku env w backupie: 09 §3 wymienia env jako część kompletu —
+  ale env żyje na hoście (B18); w B17 skrypt przyjmuje opcjonalną ścieżkę
+  env do włączenia w archiwum, default wyłączone w dev/test.
+- Decyzje pozostawione implementującemu (uzasadnić w Completion notes):
+  cron w dedykowanym kontenerze z crond vs `sleep`-loop; sposób pomiaru
+  wolnego dysku w kontenerze (statvfs na katalogu uploads).
+- Wersja obrazu: `git describe --tags --always` — jeśli brak tagów git,
+  sha; spójnie z polem `version` w health.
+
+## Cross-Batch Impact
+
+- **B18**: konsumuje WSZYSTKO z tego batcha (obraz prod, skrypty backup/
+  restore, healthcheck, env). Po zakończeniu B17 zaktualizować kartę B18
+  o faktyczne nazwy targetów/skryptów i wymagane zmienne env.
+- **PROGRESS**: pozycje R4 przeniesione/wykonane — zaktualizować rejestr długu.
+- Zmiany komend → Taskfile + CLAUDE.md + skill ffp-framework naraz.
+
+## Implementation checklist
+
+- [ ] Ustalenia R4 wykonane i odhaczone
+- [ ] Dockerfile target prod (nie-root, dist, workers=2) + tagowanie git
+- [ ] Config: wszystkie wartości prod przez env; `.env.example` kompletny
+- [ ] Limity rozmiaru request (413 w kształcie błędu)
+- [ ] Logging prod JSON + LOG_LEVEL + weryfikacja braku tokenów
+- [ ] Healthcheck: db + migracje + dysk, statusy ok/degraded
+- [ ] backup.sh (pg_dump -Fc + tar uploads + prune 7d/4w) + restore.sh
+- [ ] Kontener cron w profilu backup
+- [ ] Taskfile: backup/restore/build-prod
+- [ ] Round-trip backup→restore wykonany realnie
+- [ ] Testy: degraded, prune, limit, smoke obrazu prod
+- [ ] 09_DEPLOYMENT + PROGRESS zaktualizowane
+
+## Verification checklist
+
+- [ ] `task check` zielony (testy+lint+typecheck)
+- [ ] `alembic heads` = 1 (jeśli doszła migracja: up/down/up przechodzi)
+- [ ] Round-trip backup→restore: raport z czasami i weryfikacją danych
+- [ ] Obraz prod zbudowany i uruchomiony (smoke)
+- [ ] Acceptance Criteria 1–8 odhaczone
+- [ ] `/code-review` zmian wykonany przed commitem
+- [ ] Commit `batch(17): ...`, `git status` czysty
+
+## Completion notes
+
+(wypełnia agent wykonujący)
