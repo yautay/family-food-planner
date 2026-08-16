@@ -12,6 +12,7 @@ wskazany batch — nie wolno go zlecić przed rozstrzygnięciem.
 | D2 | Dane startowe | **ZATWIERDZONE: czysty start** — bez seedu z prototypu; treść wchodzi ręcznie + przez PDF importer. `data/reference/prototype.db` służy WYŁĄCZNIE jako referencja walidacyjna importera (84 przepisy / 592 składniki / 181 produktów). Konsekwencja: B15/B16 nie później niż po R3 | 2026-08-16 |
 | D3 | Język UI | **ZATWIERDZONE**: wyłącznie polski, bez warstwy i18n (ADR-007) | 2026-08-16 |
 | D4 | Zakres wartości odżywczych | **ZATWIERDZONE**: kcal, białko, tłuszcz, węglowodany, błonnik, cukry + **indeks glikemiczny produktu** (ŁG wyliczany per porcja/posiłek/dzień). Mikroelementy później przez rejestr nutrients (ADR-004) bez migracji łamiącej | 2026-08-16 |
+| D12 | Sposób wdrożenia na Odroida | **ZATWIERDZONE: bez Ansistrano** — zostaje procedura z 09_DEPLOYMENT §4 (`git pull` → build obrazów → backup → `alembic upgrade head` → `compose up -d`), rollback przez tagowane obrazy. B18 implementuje ją jako skrypt, nie wprowadza dodatkowego narzędzia wdrożeniowego | 2026-08-16 |
 | D5 | AI w imporcie PDF | **ZATWIERDZONE**: wolno wysyłać treść PDF-ów do Claude API („żaden sekret"); klucz server-side; AI tylko proponuje (ADR-011) | 2026-08-16 |
 
 ## Otwarte

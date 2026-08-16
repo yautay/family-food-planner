@@ -28,3 +28,4 @@ Zasady:
 | 012 | Usuwanie: blokada przy referencjach + archiwizacja, bez soft delete |
 | 013 | Wykresy: własne prymitywy SVG, bez biblioteki wykresów |
 | 014 | Backend serwuje SPA i uploady; jeden kontener aplikacyjny |
+| 015 | Dostęp do bazy asynchronicznie: SQLAlchemy async + psycopg 3 |

@@ -1,9 +1,10 @@
 # CLAUDE.md
 
-**Faza projektu: BLUEPRINT — implementacja nie została rozpoczęta.**
-Ten plik zostanie rozbudowany w BATCH_01 o kontrakt komend i kodu.
+**Faza projektu: implementacja batchami. Fundament (BATCH_01) gotowy.**
+Ten plik to kontrakt repo: komendy, wzorce kodu i twarde zakazy. Procedura
+sesji: `docs/implementation-plan/implementation_prompt.md`.
 
-## Zasady obowiązujące już teraz
+## 1. Proces
 
 1. Implementację prowadzi się WYŁĄCZNIE batchami:
    `docs/implementation-plan/implementation_prompt.md` → procedura,
@@ -13,19 +14,101 @@ Ten plik zostanie rozbudowany w BATCH_01 o kontrakt komend i kodu.
    pytanie do właściciela albo wpis w `02_DECISIONS.md`, nie cicha zmiana.
 3. Decyzje właściciela: `docs/implementation-plan/02_DECISIONS.md`.
    Decyzja-bramka w statusie OPEN blokuje wskazany batch.
-3a. Skille: karta batcha ma sekcję "Skills" — Required ładujesz na starcie
+4. Skille: karta batcha ma sekcję „Skills" — Required ładujesz na starcie
    sesji, Review uruchamiasz na diffie przed commitem. Manifest i mapa
    ID→skill: `docs/implementation-plan/03_AI_SKILLS.md`. Hierarchia przy
    konfliktach: właściciel > ADR/architektura > karta batcha > master
    prompt > CLAUDE.md > skille > ogólna wiedza. Skill NIGDY nie nadpisuje
    ADR (np. żadnego JWT, bo skill tak radzi — obowiązuje ADR-003).
-4. Twarde zakazy (od pierwszej linii kodu):
-   - float dla ilości/wartości odżywczych — zawsze Decimal/NUMERIC (ADR-008),
-   - kopiowanie stanu serwera do Pinia — stan serwera żyje w TanStack Query (ADR-007),
-   - endpoint zasobu bez testu macierzy uprawnień/scope (08_TESTING §4),
-   - warstwa i18n — UI wyłącznie po polsku (D3, ADR-007),
-   - sekrety w plikach śledzonych; `.env` nigdy w repo (07_SECURITY §7),
-   - migracja z numerem „zarezerwowanym" — numer = pierwszy wolny,
-     `down_revision` z `alembic heads` (ADR-002).
 5. Jeden batch = jeden finalny commit `batch(XX): opis`; bez push.
 6. Testy uruchamiaj realnie i raportuj faktyczne wyniki.
+
+## 2. Twarde zakazy (od pierwszej linii kodu)
+
+- **float** dla ilości/wartości odżywczych — zawsze Decimal/NUMERIC, a w JSON
+  stringi dziesiętne (ADR-008, 04_API §1),
+- kopiowanie stanu serwera do Pinia — stan serwera żyje w TanStack Query
+  (ADR-007),
+- endpoint zasobu bez testu macierzy uprawnień/scope (08_TESTING §4),
+- warstwa i18n — UI wyłącznie po polsku (D3, ADR-007),
+- sekrety w plikach śledzonych; `.env` nigdy w repo (07_SECURITY §7),
+- migracja z numerem „zarezerwowanym" — numer = pierwszy wolny,
+  `down_revision` z `alembic heads` (ADR-002),
+- ręczne interfejsy TS dla odpowiedzi API — typy pochodzą z `task fe-types`,
+- biblioteki wykresów — wykresy to własne SVG (ADR-013).
+
+## 3. Komendy (Taskfile — jedyne wejście)
+
+Wymagane na hoście: **Docker Desktop, uv, Node 22+, go-task**.
+Start od zera: `cp .env.example .env` → `task install` → `task dev`.
+
+| Komenda | Do czego |
+|---|---|
+| `task dev` | cały stack w Dockerze (app + frontend + db + db-test), hot reload |
+| `task dev-db` | same bazy (gdy testy uruchamiasz z hosta) |
+| `task down` / `task logs` | zatrzymanie / logi |
+| `task check` | **BRAMKA DoD**: migrations-check + unit + int + api + fe-test + typecheck + lint + format-check |
+| `task test-unit` / `test-int` / `test-api` / `test-be` | pytest wg markerów |
+| `task fe-test` | vitest |
+| `task test-e2e` (+ `task e2e-install`) | Playwright, chromium |
+| `task typecheck` / `lint` / `format` / `format-check` | mypy+vue-tsc / ruff+eslint / ruff format+prettier |
+| `task db-migrate` / `db-heads` / `db-revision -- --rev-id 0002 -m "opis"` | Alembic |
+| `task fe-types` | OpenAPI → `backend/openapi.json` → `frontend/src/api/generated.ts` (oba commitowane) |
+| `task audit` / `task secrets-scan` | Review batche i BATCH_17 |
+| `task create-admin` / `db-seed-demo` | PLACEHOLDERY — dostarczają B02 / batche domenowe |
+
+Nigdy nie wołaj gołego `pytest`/`vitest`/`alembic` — Taskfile wstrzykuje
+`.env` i właściwy interpreter.
+
+## 4. Backend — wzorzec kodu
+
+Moduł: `backend/app/modules/<nazwa>/{models,schemas,service,router}.py`.
+`router.py` (HTTP + walidacja wejścia) → `service.py` (logika, transakcje,
+autoryzacja scope, jedyne I/O) → `models.py` (SQLAlchemy 2.0 typed).
+Router nigdy nie dotyka sesji DB; moduł→moduł wyłącznie przez service.
+Silniki obliczeń (`nutrition/engine.py`, `shopping/engine.py`) to czyste
+funkcje bez I/O (ADR-008). Katalogi modułów tworzy batch, który je zasiedla.
+
+Fundament dostarczony w BATCH_01:
+
+- `app/core/config.py` — `Settings` (pydantic-settings). Nowa zmienna =
+  wpis w `.env.example` w tym samym commicie. Brak wymaganej zmiennej =
+  `ConfigurationError` z komunikatem po polsku.
+- `app/core/db.py` — `Base` (naming convention!), silnik async
+  (`postgresql+psycopg://`, ADR-015), `get_session` jako dependency,
+  `selector_loop_factory()` dla narzędzi uruchamianych na Windows.
+- `app/core/errors.py` — `AppError` + podklasy (`NotFoundError`,
+  `ForbiddenError`, `ConflictError`, …) i handlery. Serwisy rzucają te
+  wyjątki, NIE `HTTPException`. Kształt odpowiedzi:
+  `{"error": {code, message, details}}`, message po polsku.
+- `app/core/logging.py` — structlog + middleware requestów (request id,
+  ścieżka maskowana dla `/public/lists/*`). Nigdy nie loguj haseł, tokenów
+  ani payloadów (07_SECURITY §8).
+- `app/main.py` — `create_app()` jako composition root. Aplikacja NIE
+  powstaje na poziomie modułu; uruchomienie: `uvicorn app.main:create_app
+  --factory`.
+
+Testy: `tests/{unit,integration,api}/`, markery `unit`/`integration`/`api`
+(wymagane — bez markera test nie wejdzie do żadnego targetu), docstring po
+polsku opisujący scenariusz. Fixture'y wspólne w `tests/conftest.py`
+(`app`, `client`, `settings`, `test_database_url`).
+
+## 5. Frontend — wzorzec kodu
+
+`<script setup lang="ts">`, TS strict, bez `any`. Stan serwera = TanStack
+Query (klucze w `src/api/queryKeys.ts`), Pinia = wyłącznie stan UI.
+Wywołania HTTP tylko przez `src/api/client.ts` (`apiFetch`, `ApiError`).
+Kolory wyłącznie przez tokens z `src/assets/tailwind.css` (06_UIUX §1) —
+żadnych wartości hex w komponentach. Komponenty shadcn-vue w
+`src/components/ui/` modyfikuje się przez tokens, nie przez fork logiki;
+domenowe w `src/components/domain/`. Teksty po polsku, wielokrotnego użytku
+w `src/lib/texts.ts`. Mobile-first, cele dotykowe ≥44 px, `aria-label` dla
+elementów bez tekstu, selektory E2E przez `data-testid`.
+
+## 6. Migracje
+
+`task db-revision -- --rev-id <pierwszy wolny> -m "opis"`; `down_revision`
+uzupełnij wynikiem `task db-heads`. Po zmianie: dokładnie jedna głowa
+(pilnuje tego `task migrations-check` w `task check`), a `upgrade` i
+`downgrade` muszą przechodzić na czystej bazie. Backfill = osobna,
+idempotentna migracja.

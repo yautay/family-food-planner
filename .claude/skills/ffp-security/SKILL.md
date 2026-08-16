@@ -3,8 +3,23 @@ name: ffp-security
 description: Reguły bezpieczeństwa Family Food Planner — sesje/CSRF/rate-limit, scope household, publiczne tokeny list, walidacja uploadów, higiena logów i sekretów. Ładuj przy batchach dotykających auth, tokenów, uploadów, eksportu danych lub deploymentu.
 ---
 
-<!-- verified: 2026-08-16 (blueprint; R1/R3/R4 uzgadniają z kodem)
+<!-- verified: 2026-08-16 (BATCH_01 — uzgodnione z kodem w repo; R1/R3/R4 dalej)
+     stack: FastAPI 0.141 · structlog 26 · PG 17; argon2-cffi i slowapi
+            dokłada BATCH_02 (nie ma ich jeszcze w pyproject)
      źródła nadrzędne: 07_SECURITY, ADR-003, ADR-006, ADR-010, ADR-011 -->
+
+## Co już jest w kodzie (BATCH_01)
+
+- Konfiguracja i sekrety: `app/core/config.py` + `.env.example`; `.env`
+  w `.gitignore`. Brak wymaganej zmiennej = twardy błąd startu.
+- Logi: `app/core/logging.py` — request id na każdym requeście, funkcja
+  `mask_path()` maskuje `/public/lists/<token>` do `/public/lists/***`.
+- Błędy: `app/core/errors.py` — użytkownik dostaje `{"error": {...}}`
+  z `details.error_id`, stacktrace wyłącznie do logów.
+- Compose dev publikuje porty tylko na 127.0.0.1; prod (B18) nie publikuje
+  portów bazy w ogóle.
+- Do dostarczenia: sesje/CSRF/rate limit (B02), `ScopedQuery` (B03),
+  nagłówki bezpieczeństwa i CSP (B17).
 
 # FFP — kontrakt bezpieczeństwa
 

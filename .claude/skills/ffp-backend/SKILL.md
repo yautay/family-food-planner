@@ -3,15 +3,34 @@ name: ffp-backend
 description: Kontrakt backendu Family Food Planner — wzorzec modułu FastAPI (router→service→models), SQLAlchemy 2.0 typed, Alembic, Pydantic v2, ScopedQuery, pytest. Ładuj przed pracą nad plikami w backend/**.
 ---
 
-<!-- verified: 2026-08-16 (blueprint; B01 uzgadnia z rzeczywistym kodem)
-     stack: Python 3.13 · FastAPI 0.12x · SQLAlchemy 2.0 · Pydantic 2.x · PG 17
+<!-- verified: 2026-08-16 (BATCH_01 — uzgodnione z kodem w repo)
+     stack: Python 3.13 · FastAPI 0.141 · SQLAlchemy 2.0.52 · Pydantic 2.13
+            · Alembic 1.19 · psycopg 3.3 (async) · pytest 9.1 · PG 17 · uv
      hierarchia: ADR i docs/architecture NADRZĘDNE wobec tego skilla -->
 
 # FFP — kontrakt backendu
 
+## Fundament z BATCH_01 (istnieje, nie pisz tego od nowa)
+
+- `app/core/config.py` — `Settings` (pydantic-settings), `get_settings()`
+  z cache, `ConfigurationError` po polsku przy brakach. Nowa zmienna =
+  wpis w `.env.example` w tym samym commicie.
+- `app/core/db.py` — `Base` z `naming_convention`, silnik async
+  (`postgresql+psycopg://`, ADR-015), `get_session()` jako dependency,
+  `selector_loop_factory()` (Windows: psycopg nie działa na Proactor).
+- `app/core/errors.py` — `AppError` + `NotFoundError` / `ForbiddenError` /
+  `UnauthorizedError` / `ConflictError` i handlery. Serwisy rzucają te
+  wyjątki, NIGDY `HTTPException`.
+- `app/core/logging.py` — structlog + `RequestLoggingMiddleware`.
+- `app/main.py` — `create_app(settings)`; aplikacji NIE ma na poziomie
+  modułu (uruchomienie: `uvicorn app.main:create_app --factory`).
+  Nowy moduł rejestruje router właśnie tutaj.
+
 ## Wzorzec modułu (ADR-001, 01_ARCHITECTURE §2)
 
 `backend/app/modules/<nazwa>/{models.py, schemas.py, service.py, router.py}`.
+Katalog modułu tworzy batch, który go zasiedla — pustych katalogów „na zapas"
+nie ma.
 
 - **router.py**: tylko HTTP — walidacja wejścia (schemas), wywołanie serwisu,
   mapowanie wyniku. NIGDY nie dotyka sesji DB ani nie zawiera logiki.
@@ -34,10 +53,15 @@ description: Kontrakt backendu Family Food Planner — wzorzec modułu FastAPI (
 ## Alembic (ADR-002, 03_DATABASE §1)
 
 - Numer migracji = pierwszy wolny w `migrations/versions/`; `down_revision`
-  = wynik `alembic heads`. NIGDY numer z planu/karty.
-- Po zmianie: `alembic heads` → dokładnie 1 głowa; `upgrade head` i
-  `downgrade -1` przechodzą na kopii bazy. Backfill = osobna migracja,
-  idempotentna.
+  = wynik `task db-heads`. NIGDY numer z planu/karty. Rewizja bazowa to
+  pusta `0001_initial`.
+- Tworzenie: `task db-revision -- --rev-id 0002 -m "opis"` (plik dostaje
+  nazwę `0002_opis.py`; hook formatuje go ruffem).
+- Po zmianie: dokładnie 1 głowa (pilnuje `task migrations-check` wewnątrz
+  `task check`); `upgrade head` i `downgrade` przechodzą na czystej bazie.
+  Backfill = osobna migracja, idempotentna.
+- `migrations/env.py` bierze URL z `DATABASE_URL` albo z `-x db_url=…`;
+  w `alembic.ini` NIE MA poświadczeń.
 
 ## Pydantic v2 / API (04_API)
 
@@ -62,16 +86,23 @@ description: Kontrakt backendu Family Food Planner — wzorzec modułu FastAPI (
 
 ## Async
 
-- Route'y async; żadnych blokujących wywołań w event loopie (Pillow,
-  pdfplumber → `run_in_threadpool`). Bez własnych wątków/kolejek (ADR-001).
+- Route'y async; sesja DB też jest async (`AsyncSession`, ADR-015).
+- Żadnych blokujących wywołań w event loopie (Pillow, pdfplumber →
+  `run_in_threadpool`). Bez własnych wątków/kolejek (ADR-001).
 
 ## pytest
 
-- Unit (czyste funkcje, bez DB) / integration (PG z compose, rollback po
-  teście) / api (httpx AsyncClient + ASGITransport). Fabryki w
-  `tests/factories.py`. Testy nazywają scenariusz po polsku w docstringu.
+- Katalogi `tests/{unit,integration,api}/`; KAŻDY plik testowy deklaruje
+  marker (`pytestmark = pytest.mark.unit|integration|api`) — bez markera
+  test nie wejdzie do żadnego targetu Taskfile'a.
+- Fixture'y w `tests/conftest.py`: `settings`, `app`, `client`
+  (httpx AsyncClient + ASGITransport), `test_database_url` (db-test).
+  Fabryki danych → `tests/factories.py` (od pierwszego modułu z modelami).
+- Testy integracyjne dostają `DATABASE_URL` = `TEST_DATABASE_URL`; baza dev
+  jest nietykalna.
+- Testy nazywają scenariusz po polsku w docstringu.
 - Uruchamiaj przez `task test-unit|test-int|test-api|check` — nigdy goły
-  `pytest` (zły interpreter/env).
+  `pytest` (zły interpreter/env, brak `.env`).
 
 ## Konfiguracja i logi
 

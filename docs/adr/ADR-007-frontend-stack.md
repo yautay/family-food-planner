@@ -22,3 +22,9 @@ właściciela: shadcn-vue (charakter zgodny z wizualizacją). Aplikacja PL-only
   spójny wygląd z wizualizacją bez walki z gotową biblioteką.
 − Ewentualna przyszła wielojęzyczność = osobny, duży refaktor (świadomie
   zaakceptowane — aplikacja domowa).
+
+## Uwaga implementacyjna (2026-08-16, BATCH_01 — nie zmienia decyzji)
+Paczka `lucide-vue-next` została przez autorów zdeprecjonowana na rzecz
+`@lucide/vue` i to jej używa dzisiejsze shadcn-vue. Biblioteka ikon pozostaje
+ta sama (lucide) — zmienia się wyłącznie nazwa pakietu npm. W repo jest
+`@lucide/vue`.

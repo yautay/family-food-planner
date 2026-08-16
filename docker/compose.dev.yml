@@ -1,0 +1,122 @@
+# Family Food Planner — stack deweloperski (jedno polecenie: `task dev`).
+#
+# Cztery serwisy: app (FastAPI, hot reload), frontend (vite dev server, HMR),
+# db (dane trwałe w wolumenie nazwanym), db-test (dane na tmpfs — baza testów
+# integracyjnych, kasowana z kontenerem).
+#
+# Uruchamiać z korzenia repo, żeby złapać .env:
+#   docker compose --env-file .env -f docker/compose.dev.yml up
+#
+# Porty publikowane WYŁĄCZNIE na 127.0.0.1 — dev na laptopie nie wystawia
+# bazy do sieci lokalnej (07_SECURITY §9). compose.prod.yml (B18) nie
+# publikuje portów bazy w ogóle.
+
+name: ffp-dev
+
+x-postgres-env: &postgres-env
+  POSTGRES_USER: ${POSTGRES_USER:-ffp}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?ustaw POSTGRES_PASSWORD w .env}
+
+services:
+  db:
+    image: postgres:17
+    environment:
+      <<: *postgres-env
+      POSTGRES_DB: ${POSTGRES_DB:-ffp}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ffp} -d ${POSTGRES_DB:-ffp}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  db-test:
+    image: postgres:17
+    environment:
+      <<: *postgres-env
+      POSTGRES_DB: ${POSTGRES_TEST_DB:-ffp_test}
+      # Baza jednorazowa — inicjalizacja bez fsync jest tu bezpieczna i szybka.
+      POSTGRES_INITDB_ARGS: "--no-sync"
+    command:
+      - postgres
+      - -c
+      - fsync=off
+      - -c
+      - full_page_writes=off
+      - -c
+      - synchronous_commit=off
+    ports:
+      - "127.0.0.1:${POSTGRES_TEST_PORT:-5433}:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ffp} -d ${POSTGRES_TEST_DB:-ffp_test}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: dev
+    environment:
+      APP_ENV: ${APP_ENV:-dev}
+      APP_VERSION: ${APP_VERSION:-0.1.0}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      SECRET_KEY: ${SECRET_KEY:?ustaw SECRET_KEY w .env}
+      # W sieci compose baza to `db`, nie 127.0.0.1 z .env.
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-ffp}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-ffp}
+      # Bind mount z Windows/WSL2 nie generuje zdarzeń inotify — bez tego
+      # uvicorn --reload nie zauważa zmian (uwaga z karty BATCH_01).
+      WATCHFILES_FORCE_POLLING: "true"
+    volumes:
+      - ../backend:/app
+      # Anonimowe wolumeny przykrywają artefakty hosta (venv Windows,
+      # cache) — w kontenerze obowiązuje /opt/venv z obrazu.
+      - /app/.venv
+      - /app/.pytest_cache
+    ports:
+      - "127.0.0.1:${BACKEND_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/api/v1/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+
+  frontend:
+    image: node:22-alpine
+    working_dir: /app
+    environment:
+      # Wewnątrz sieci compose backend to `app`, nie 127.0.0.1.
+      VITE_API_PROXY_TARGET: http://app:8000
+      # HMR przez bind mount z Windows wymaga pollingu (jak wyżej).
+      VITE_USE_POLLING: "true"
+    command:
+      - sh
+      - -c
+      - "[ -d node_modules/vite ] || npm ci; npm run dev -- --host 0.0.0.0 --port 5173"
+    volumes:
+      - ../frontend:/app
+      - node_modules:/app/node_modules
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-5173}:5173"
+    depends_on:
+      - app
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  node_modules:

@@ -1,0 +1,81 @@
+/* Family Food Planner — motyw Tailwind 4.
+ *
+ * JEDYNE miejsce definicji kolorów w aplikacji (06_UIUX §1, skill ffp-frontend).
+ * Komponenty używają klas semantycznych (bg-background, text-muted-foreground,
+ * border-border…), nigdy wartości hex. Zmiana palety = zmiana tego pliku.
+ *
+ * Interfejs jest wyłącznie jasny — 06_UIUX §1: „Nie: ciemny interfejs".
+ * Wariantu dark świadomie nie definiujemy.
+ */
+
+@import 'tailwindcss';
+@import 'tw-animate-css';
+/* Inter hostowany lokalnie — CSP zabrania źródeł zewnętrznych (07_SECURITY §3). */
+@import '@fontsource-variable/inter';
+
+@theme {
+  /* --- kolory (06_UIUX §1) ------------------------------------------- */
+  --color-background: #faf6ef; /* ciepły krem — tło aplikacji */
+  --color-foreground: #2b2620; /* tekst główny */
+
+  --color-card: #ffffff;
+  --color-card-foreground: #2b2620;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #2b2620;
+
+  --color-primary: #e07a2f; /* curry/pomarańcz — akcent główny */
+  --color-primary-foreground: #ffffff;
+  --color-primary-hover: #c96a26;
+
+  --color-secondary: #3f7a5e; /* zieleń ziołowa — statusy OK, wykresy */
+  --color-secondary-foreground: #ffffff;
+
+  --color-muted: #ede5d8;
+  --color-muted-foreground: #6f675c; /* tekst wtórny */
+  --color-accent: #ede5d8;
+  --color-accent-foreground: #2b2620;
+
+  --color-warning: #d9a441; /* za mało / uwaga */
+  --color-warning-foreground: #2b2620;
+  --color-destructive: #c24c3b; /* błąd / przekroczenie */
+  --color-destructive-foreground: #ffffff;
+
+  --color-border: #ede5d8;
+  --color-input: #ede5d8;
+  --color-ring: #e07a2f;
+
+  /* --- promienie (karty rounded-xl, kontrolki rounded-lg) ------------- */
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+
+  /* --- typografia ---------------------------------------------------- */
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+
+  /* Cyfry w tabelach wartości odżywczych mają się nie „rozjeżdżać". */
+  .tabular-nums,
+  table {
+    font-variant-numeric: tabular-nums;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply font-semibold;
+  }
+
+  /* Widoczny focus ring — warunek dostępności (05_FRONTEND §7). */
+  :focus-visible {
+    @apply outline-ring outline-2 outline-offset-2;
+  }
+}

@@ -15,8 +15,24 @@ proxy, runbooki) to B18.
 
 Po R4 aplikacja ma werdykt GO (ew. warunkowy) i listę ustaleń P1 — część
 z nich R4 wpisał do sekcji „Ustalenia R4 do wykonania" poniżej. Istnieje
-multi-stage Dockerfile z B01 (target dev) i compose.dev/test; NIE istnieją:
-skrypty backup, target prod obrazu, rozszerzony healthcheck, prod logging.
+multi-stage Dockerfile z B01 (stage `base` + `dev`) i compose.dev.yml
+(app + frontend + db + db-test na tmpfs); NIE istnieją: skrypty backup,
+target prod obrazu, rozszerzony healthcheck, prod logging.
+
+Konkrety z B01 do wykorzystania/uzupełnienia:
+
+- `docker/Dockerfile`: `base` instaluje zależności do `/opt/venv`
+  (`UV_PROJECT_ENVIRONMENT`), `dev` dokłada grupę dev i `--reload`.
+  Stage `frontend-build` + `prod` (SPA przez StaticFiles, ADR-014)
+  dokłada TEN batch — świadomie nie było ich wcześniej.
+- Aplikacja startuje jako `uvicorn app.main:create_app --factory`.
+- `/api/v1/health` zwraca wyłącznie `{status, version}`. Rozszerzenie
+  o zgodność head↔DB i status `degraded` (09_DEPLOYMENT §2) to zadanie
+  tego batcha — B01 świadomie tego nie robił (health bez dostępu do DB).
+- Nagłówki bezpieczeństwa i CSP (07_SECURITY §3) nie są jeszcze wpięte
+  w `create_app()` — dokłada je ten batch.
+- `task audit` i `task secrets-scan` istnieją w Taskfile (nieuruchamiane
+  w `task check`).
 
 Wymagane lektury przed startem:
 

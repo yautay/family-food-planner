@@ -3,11 +3,21 @@ name: ffp-frontend
 description: Kontrakt frontendu Family Food Planner — Vue 3 script setup + TS strict, TanStack Query vs Pinia, shadcn-vue, tokens Tailwind, wzorce UX (create-in-context, mobile-first, PL-only). Ładuj przed pracą nad plikami w frontend/src/**.
 ---
 
-<!-- verified: 2026-08-16 (blueprint; B01 uzgadnia z rzeczywistym kodem)
-     stack: Vue 3.5 · TypeScript strict · Vite · Tailwind 4 · shadcn-vue · Pinia · TanStack Query
+<!-- verified: 2026-08-16 (BATCH_01 — uzgodnione z kodem w repo)
+     stack: Vue 3.5 · TypeScript 5.9 strict · Vite 8 · Tailwind 4.3 · shadcn-vue
+            (reka-ui) · Pinia 4 · vue-router 5 · TanStack Query 5 · vitest 4
+            · Playwright 1.62 · vite-plugin-pwa 1.3
      hierarchia: ADR i docs/architecture NADRZĘDNE wobec tego skilla -->
 
 # FFP — kontrakt frontendu
+
+## Co już stoi (BATCH_01)
+
+`src/main.ts` (Pinia + VueQueryPlugin + router) · `src/router.ts` ·
+`src/layouts/AppShell.vue` · `src/pages/LoginPage.vue` (placeholder bez
+logiki) · `src/api/{client.ts,queryKeys.ts,generated.ts}` ·
+`src/components/ui/{button,card,input}` · `src/lib/utils.ts` (`cn`) ·
+`src/assets/tailwind.css` (tokens). Alias `@/` → `src/`.
 
 ## Podstawy
 
@@ -15,8 +25,12 @@ description: Kontrakt frontendu Family Food Planner — Vue 3 script setup + TS 
   bez Options API, bez `any` (uzasadniony wyjątek = komentarz dlaczego).
 - **Bez i18n** (D3/ADR-007): stringi po polsku wprost; teksty wielokrotnego
   użytku w `src/lib/texts.ts`. Nie dodawaj vue-i18n ani kluczy tłumaczeń.
-- Typy API: generowane z OpenAPI (`task fe-types` → `src/api/generated.ts`).
-  Ręczne interfejsy odpowiedzi API = błąd review.
+- Typy API: generowane z OpenAPI (`task fe-types` → `backend/openapi.json`
+  → `src/api/generated.ts`; oba pliki commitowane). Ręczne interfejsy
+  odpowiedzi API = błąd review.
+- Wywołania HTTP wyłącznie przez `apiFetch` z `src/api/client.ts` (rzuca
+  `ApiError` ze `status`/`code`/`details`); gołego `fetch` w komponentach
+  nie ma.
 
 ## Stan (ADR-007) — reguła najczęściej łamana przez modele
 
@@ -31,10 +45,13 @@ description: Kontrakt frontendu Family Food Planner — Vue 3 script setup + TS 
 - shadcn-vue w `components/ui/` — modyfikacje przez tokens, nie fork logiki.
   Domenowe w `components/domain/`, wykresy własne SVG w `components/charts/`
   (ADR-013 — ŻADNEJ biblioteki wykresów).
-- Kolory WYŁĄCZNIE z tokens (06_UIUX §1: krem #FAF6EF, curry #E07A2F,
-  zieleń #3F7A5E, bursztyn/czerwień statusów). Statusy zawsze kolor+tekst,
-  nigdy sam kolor.
-- Ikony: lucide-vue-next. Formularze: vee-validate + zod
+- Kolory WYŁĄCZNIE przez klasy semantyczne z tokens zdefiniowanych
+  w `src/assets/tailwind.css` (`bg-background`, `text-muted-foreground`,
+  `bg-primary`, `border-border`…). Wartość hex w komponencie = błąd review.
+  Paleta 06_UIUX §1: krem #FAF6EF, curry #E07A2F, zieleń #3F7A5E,
+  bursztyn #D9A441, czerwień #C24C3B. Statusy zawsze kolor+tekst.
+- Ikony: `@lucide/vue` (następca lucide-vue-next, którego shadcn-vue już
+  nie używa). Formularze: vee-validate + zod
   (`src/lib/schemas/*`), komunikaty PL; 422 mapowane na pola.
 - Ilości formatowane TYLKO przez `formatAmount` (g→kg ≥1000, przecinek);
   frontend nie liczy wartości domenowych na floatach — liczy backend.
@@ -64,6 +81,9 @@ description: Kontrakt frontendu Family Food Planner — Vue 3 script setup + TS 
 ## Testy i jakość
 
 - vitest dla composables/komponentów krytycznych (ProductPicker,
-  AmountInput, kolejka offline); selektory E2E `data-testid`.
-- `task fe-test`, `task typecheck` (vue-tsc), `task lint` zielone = warunek
-  DoD. Build: `task check` obejmuje `vite build`.
+  AmountInput, kolejka offline). Pliki `*.spec.ts` OBOK testowanego modułu
+  (`src/**/*.spec.ts` — inne lokalizacje nie są zbierane).
+- E2E w `frontend/e2e/`, selektory `data-testid`; `task test-e2e`
+  (jednorazowo `task e2e-install`). E2E NIE wchodzi do `task check`.
+- `task check` obejmuje: fe-test, typecheck (vue-tsc), lint (eslint),
+  format-check (prettier) i `vite build` — wszystkie muszą być zielone (DoD).

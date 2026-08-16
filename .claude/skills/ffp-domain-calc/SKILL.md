@@ -3,8 +3,12 @@ name: ffp-domain-calc
 description: Reguły logiki obliczeniowej Family Food Planner — Decimal end-to-end, normalizacja jednostek, wzory nutrition (kcal/makro/IG→ŁG), determinizm silnika zakupowego, zaokrąglenia, property-based testy. Ładuj przy każdym batchu liczącym ilości lub wartości.
 ---
 
-<!-- verified: 2026-08-16 (blueprint; R2/R3 uzgadniają z kodem)
-     źródła nadrzędne: ADR-004, ADR-005, ADR-008, 02_DOMAIN §6 i §9, 08_TESTING §2 -->
+<!-- verified: 2026-08-16 (przegląd w BATCH_01: kodu obliczeniowego jeszcze nie
+     ma, więc treść bez zmian; realne uzgodnienie z kodem robią R2/R3)
+     stack: Python 3.13 · Decimal (stdlib) · hypothesis dołoży batch z pierwszym
+            silnikiem (B04/B05)
+     źródła nadrzędne: ADR-004, ADR-005, ADR-008, 02_DOMAIN §6 i §9, 08_TESTING §2
+     uruchamianie testów: `task test-unit` (silniki nie dotykają bazy) -->
 
 # FFP — kontrakt obliczeń domenowych
 

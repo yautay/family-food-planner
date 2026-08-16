@@ -1,0 +1,71 @@
+[project]
+name = "ffp-backend"
+version = "0.1.0"
+description = "Family Food Planner — backend (modularny monolit FastAPI)"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.34",
+    "sqlalchemy>=2.0.36",
+    "alembic>=1.14",
+    "pydantic>=2.10",
+    "pydantic-settings>=2.7",
+    "psycopg[binary]>=3.2",
+    "structlog>=24.4",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.25",
+    "httpx>=0.28",
+    "ruff>=0.8",
+    "mypy>=1.14",
+]
+
+# Projekt „wirtualny" (uv nie instaluje go jako paczki) — aplikacja jest
+# importowana z katalogu backend/ (patrz tool.pytest.ini_options.pythonpath).
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle
+    "F",   # pyflakes
+    "I",   # isort
+    "UP",  # pyupgrade
+    "B",   # bugbear
+    "C4",  # comprehensions
+    "SIM", # simplify
+    "RUF",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["B018"]
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+# warn_unreachable celowo WYŁĄCZONE: mypy zawęża `sys.platform` do platformy,
+# na której działa, więc gałęzie cross-platform (Windows vs Linux) fałszywie
+# wyglądają na martwe. Reszta `strict` obowiązuje.
+plugins = []
+exclude = ["^migrations/versions/"]
+
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+disallow_untyped_decorators = false
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+markers = [
+    "unit: testy jednostkowe — czyste funkcje, bez DB i bez HTTP",
+    "integration: testy integracyjne — wymagają bazy db-test",
+    "api: testy kontraktu HTTP — httpx AsyncClient + ASGITransport",
+]
+filterwarnings = ["error::DeprecationWarning:app.*"]

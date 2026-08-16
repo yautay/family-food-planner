@@ -17,8 +17,14 @@ bez zasięgu odhacza zakupy tak samo, jak z zasięgiem.
 
 Batch zastaje (po B11 + R3):
 
-- `frontend/` — działające SPA (Vite, Vue 3, Pinia, TanStack Query);
-  `frontend/vite.config.ts` bez pluginu PWA; `frontend/src/main.ts`;
+- `frontend/` — działające SPA (Vite, Vue 3, Pinia, TanStack Query).
+  **Korekta po B01 (2026-08-16)**: `vite-plugin-pwa` JEST już wpięty
+  w `frontend/vite.config.ts` (registerType `autoUpdate`, manifest PL,
+  `navigateFallbackDenylist` dla `/api/`, ikony placeholder
+  `public/icon.svg` + `icon-maskable.svg`). Ten batch NIE inicjalizuje
+  pluginu — dokłada strategie cache, kolejkę offline i KOMPLET ikon
+  (PNG 192/512, splash) w miejsce placeholderów SVG.
+- `frontend/src/main.ts`;
   strony `ZakupyPage`, `ListaZakupowPage` (`/zakupy/listy/:id`),
   `PublicznaListaPage` (`/l/:token`, poza shellem, bez auth).
 - Backend: `backend/app/modules/shopping/` — `router.py` z

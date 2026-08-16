@@ -259,33 +259,154 @@ diffie przed commitem (krok 11).
 
 ## Implementation checklist
 
-- [ ] Backend: pyproject (uv), app factory, config, errors, health
-- [ ] structlog skonfigurowany (request id, bez sekretów)
-- [ ] Alembic init + pusta migracja bazowa, up/down zweryfikowane
-- [ ] Frontend: Vite+Vue3+TS strict+Tailwind4+shadcn-vue z tokens 06_UIUX
-- [ ] Pinia, TanStack Query, vue-router, AppShell, /login placeholder
-- [ ] vite-plugin-pwa minimalny manifest (bez offline)
-- [ ] docker/compose.dev.yml: app + db (pg17) + db-test (tmpfs), healthchecki
-- [ ] Taskfile.yml: komplet targetów (w tym placeholdery create-admin,
+- [x] Backend: pyproject (uv), app factory, config, errors, health
+- [x] structlog skonfigurowany (request id, bez sekretów)
+- [x] Alembic init + pusta migracja bazowa, up/down zweryfikowane
+- [x] Frontend: Vite+Vue3+TS strict+Tailwind4+shadcn-vue z tokens 06_UIUX
+- [x] Pinia, TanStack Query, vue-router, AppShell, /login placeholder
+- [x] vite-plugin-pwa minimalny manifest (bez offline)
+- [x] docker/compose.dev.yml: app + db (pg17) + db-test (tmpfs), healthchecki
+- [x] Taskfile.yml: komplet targetów (w tym placeholdery create-admin,
       db-seed-demo)
-- [ ] task fe-types działa, generated.ts commitowany
-- [ ] .env.example, .gitignore, .editorconfig
-- [ ] CLAUDE.md + uzgodnienie 4 skilli .claude/skills/ffp-*/SKILL.md
-- [ ] Testy: api health, unit config/factory, int migracje, fe-test, e2e konfig
-- [ ] PROGRESS.md zaktualizowany
+- [x] task fe-types działa, generated.ts commitowany
+- [x] .env.example, .gitignore, .editorconfig
+- [x] CLAUDE.md + uzgodnienie 4 skilli .claude/skills/ffp-*/SKILL.md
+- [x] Testy: api health, unit config/factory, int migracje, fe-test, e2e konfig
+- [x] PROGRESS.md zaktualizowany
 
 ## Verification checklist
 
-- [ ] `task check` zielony (unit + int + api + fe-test + typecheck + lint)
-- [ ] `alembic heads` = 1 głowa; upgrade → downgrade → upgrade przechodzi
-- [ ] compose up działa; health zwraca status+version; hot reload BE i FE
-      sprawdzony ręcznie
-- [ ] `git ls-files` bez .env / sekretów / node_modules / dist
-- [ ] Acceptance Criteria 1–8 odhaczone jedno po drugim
-- [ ] Dokumentacja: PROGRESS.md + ewentualne korekty 01_ARCHITECTURE do
-      stanu faktycznego
-- [ ] Commit `batch(01): ...` wykonany, `git status` czysty
+- [x] `task check` zielony (unit + int + api + fe-test + typecheck + lint
+      + format-check + fe-build + migrations-check)
+- [x] `alembic heads` = 1 głowa; upgrade → downgrade → upgrade przechodzi
+- [x] compose up działa; health zwraca status+version; hot reload BE i FE
+      sprawdzony (logi: „WatchFiles detected changes… Reloading",
+      „[vite] (client) hmr update /src/layouts/AppShell.vue")
+- [x] `git ls-files` bez .env / sekretów / node_modules / dist
+- [x] Acceptance Criteria 1–8 odhaczone jedno po drugim
+- [x] Dokumentacja: PROGRESS.md + korekty 01_ARCHITECTURE §2/§3, ADR-015,
+      uwaga implementacyjna w ADR-007
+- [x] Commit `batch(01): ...` wykonany, `git status` czysty
 
 ## Completion notes
 
-(wypełnia agent wykonujący)
+Wykonano: 2026-08-16.
+
+### Zrobione
+
+Backend (`backend/`): pyproject na uv (FastAPI 0.141, SQLAlchemy 2.0.52,
+Pydantic 2.13, Alembic 1.19, psycopg 3.3, structlog 26; dev: pytest 9.1,
+httpx, ruff, mypy), `app/core/{config,db,errors,logging}.py`, `app/main.py`
+z `create_app()` i `GET /api/v1/health`. Alembic zainicjalizowany
+(template async), pusta rewizja bazowa `0001_initial`. Frontend
+(`frontend/`): Vite 8 + Vue 3.5 + TS 5.9 strict + Tailwind 4.3 z tokens
+06_UIUX, shadcn-vue (button/card/input), Pinia, TanStack Query, vue-router,
+`AppShell.vue`, `/login` placeholder, `api/{client,queryKeys,generated}.ts`,
+vite-plugin-pwa (manifest PL, bez offline), vitest + Playwright.
+`docker/{Dockerfile,compose.dev.yml}` (app + frontend + db + db-test),
+`Taskfile.yml`, `.env.example`, `.editorconfig`, `.gitignore`, `CLAUDE.md`,
+uzgodnione 4 skille ffp-*.
+
+### Decyzje implementującego (wymagane przez kartę)
+
+1. **Frontend jako osobny serwis compose** (nie vite na hoście). Powód:
+   właściciel poprosił wprost o „cały stack do dev/testów bez zbędnej
+   komplikacji"; `task dev` jednym poleceniem podnosi app + frontend + obie
+   bazy. HMR przez bind mount z Windows wymaga pollingu — compose ustawia
+   `VITE_USE_POLLING` i `WATCHFILES_FORCE_POLLING`, oba zweryfikowane
+   w logach. `node_modules` w wolumenie nazwanym (binaria Linux ≠ Windows).
+2. **Narzędzia jakości biegną na hoście** (uv + npm), usługi w Dockerze.
+   `task check` bez przebudowy obrazu = sekundy zamiast minut; bazę widzi
+   przez porty publikowane na 127.0.0.1.
+3. **Generator typów TS: `openapi-typescript`** (zalecany w karcie; zero
+   runtime, czysty plik `.d`-podobny). Wymusił przypięcie **TypeScript
+   ~5.9** — 7.13.0 ma peer `typescript@^5.x`, a szablon Vite dawał TS 6.0.
+   Cała reszta toolchainu (vue-tsc, typescript-eslint) obsługuje 5.9;
+   alternatywa (`--legacy-peer-deps`) psułaby `npm ci` w Dockerze i CI.
+4. **`task fe-types` commituje też `backend/openapi.json`** — poza typami
+   TS daje materiał do diffu API w batchach Review (04_API §4).
+5. **`vite build` dołożony do `task check`** — 03_AI_SKILLS §9 wymienia
+   build wśród istniejących bramek, a karta go nie miała; łapie błędy
+   widoczne dopiero w buildzie (np. konfiguracja PWA).
+6. **`create_app()` bez instancji `app` na poziomie modułu** — uruchomienie
+   `uvicorn app.main:create_app --factory`. Bez tego sam import modułu
+   wymagał pełnej konfiguracji i wywracał eksport OpenAPI bez `.env`.
+
+### Odstępstwa od karty
+
+- **`app/core/logging.py` jako osobny plik** (karta wymieniała tylko
+  `config/db/errors` i „structlog w main.py"). Konfiguracja structlog +
+  middleware requestów to ~90 linii — w `main.py` zaciemniałyby composition
+  root. `main.py` woła `configure_logging()` i rejestruje middleware.
+- **`backend/scripts/export_openapi.py`** — plik spoza listy „Expected
+  files", niezbędny do `task fe-types` (eksport `app.openapi()` do JSON).
+- **`TEST_DATABASE_URL` nie jest polem `Settings`** — to konfiguracja testów,
+  nie aplikacji; czyta ją `tests/conftest.py` z env (wpis jest
+  w `.env.example`). `conftest` ustawia `DATABASE_URL := TEST_DATABASE_URL`,
+  żeby testy migracji (downgrade base!) nigdy nie dotknęły bazy dev.
+- **Health nie sprawdza zgodności migracji** (09_DEPLOYMENT §2 przewiduje
+  status `degraded`). Karta definiuje `{status, version}` i zakazuje
+  ujawniania czegokolwiek więcej; rozszerzenie przypisane do B17 (wpisane
+  do jego karty).
+- **Nagłówki bezpieczeństwa/CSP (07 §3) niewdrożone** — poza zakresem B01
+  (brak auth i SPA serwowanej przez backend); zadanie B17, odnotowane
+  w jego karcie.
+- **ADR-007 nie został zmieniony merytorycznie**: `lucide-vue-next` jest
+  zdeprecjonowany przez autorów na rzecz `@lucide/vue` (tej używa dzisiejsze
+  shadcn-vue). Dopisana „Uwaga implementacyjna" bez zmiany decyzji —
+  biblioteka ikon (lucide) pozostaje ta sama.
+
+### Nowy ADR
+
+- **ADR-015 — async SQLAlchemy + psycopg 3.** Architektura wymagała
+  `async` route'ów, ale nie rozstrzygała warstwy DB; wybór determinuje
+  sygnatury serwisów we wszystkich kolejnych batchach. Konsekwencja
+  Windows: psycopg async nie działa na `ProactorEventLoop`, więc alembic
+  i pytest na hoście wymuszają `SelectorEventLoop`
+  (`selector_loop_factory()`, hook `pytest_asyncio_loop_factories`).
+
+### Review (SKILL-REVIEW = /code-review, poziom high)
+
+5 ustaleń, wszystkie **naprawione w tym batchu**:
+
+1. `app/core/errors.py` — własny `detail` z `HTTPException` był gubiony
+   (domyślny komunikat zawsze wygrywał); teraz wygrywa własny, a angielska
+   fraza domyślna Starlette jest zamieniana na polski komunikat.
+2. `app/core/logging.py` — `clear_contextvars()` kasował cały kontekst
+   structloga (skasowałby `user_id` z B02) → `bound_contextvars`.
+3. `docker/compose.dev.yml` — `--nosync` (alias nieudokumentowany) →
+   `--no-sync`.
+4. `tests/unit/test_config.py` — test wartości domyślnych czytał lokalny
+   `.env` i przechodził z niewłaściwego powodu → izolacja `tmp_path`.
+5. `tests/conftest.py` — martwa stała `BACKEND_DIR` usunięta.
+
+Dołożony `tests/unit/test_errors.py` (5 testów) pokrywający kontrakt błędu
+i maskowanie tokenów w logach.
+
+### Środowisko / rzeczy dla właściciela
+
+- Sesja agenta ma regułę uprawnień blokującą pliki `*.ini` i `.env` —
+  `backend/alembic.ini` wkleił właściciel (treść podana przez agenta,
+  zweryfikowana funkcjonalnie: `alembic heads`, upgrade/downgrade), `.env`
+  właściciel utworzył z `.env.example`. Jeśli reguła zostanie zdjęta,
+  kolejne sesje zrobią to same.
+- Docker Desktop nie był w `PATH` sesji (instalacja per-user
+  `%LOCALAPPDATA%\Programs\DockerDesktop`) — weryfikacja szła pełną
+  ścieżką. W normalnym terminalu `docker` działa.
+
+### Follow-upy (poza zakresem B01)
+
+1. `task check` nie weryfikuje, czy `openapi.json`/`generated.ts` są świeże
+   względem kodu — rozważyć bramkę „regeneruj i porównaj" (R1).
+2. `task audit` i `task secrets-scan` napisane, ale **nieuruchomione**
+   w tym batchu (wg 03_AI_SKILLS §9 należą do Review i B17).
+3. Ikony PWA to placeholdery SVG — komplet PNG 192/512 dowozi B12
+   (wpisane do karty B12).
+4. `frontend/.vscode/extensions.json` ze szablonu Vite zostaje na dysku,
+   ale jest ignorowany przez `.gitignore` (`.vscode/`).
+### Pytania do właściciela
+
+Brak otwartych. **D12 (Ansistrano) rozstrzygnięte 2026-08-16 w trakcie tej
+sesji: bez Ansistrano** — wdrożenie zostaje na procedurze z 09_DEPLOYMENT §4
+(`git pull` → build → backup → `alembic upgrade head` → `compose up -d`),
+B18 opakowuje ją w skrypt. 09_DEPLOYMENT i karta B18 nie wymagają zmian.

@@ -14,11 +14,14 @@ __pycache__/
 # node
 node_modules/
 dist/
+dev-dist/
 coverage/
+*.log
 
 # playwright
 test-results/
 playwright-report/
+.playwright/
 
 # dane lokalne (dev)
 /uploads/

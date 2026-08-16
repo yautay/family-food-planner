@@ -17,6 +17,31 @@ Zastaje: szkielet z B01 — app factory (`backend/app/main.py`), core
 (bez CSRF), pusty AppShell, `/login` placeholder, targety Taskfile
 (`create-admin` jako placeholder do podmiany). Żadnych tabel w DB.
 
+Konkrety z wykonanego B01 (2026-08-16) — czytaj przed pisaniem kodu:
+
+- **DB jest async** (ADR-015): `AsyncSession`, dependency
+  `app.core.db.get_session`, driver `postgresql+psycopg://`. Serwisy
+  `async def`, `await session.execute(...)`. Na Windows narzędzia hosta
+  wymuszają SelectorEventLoop (jest w `db.py` i `tests/conftest.py`).
+- **Nie ma `app` na poziomie modułu** — uruchomienie przez
+  `uvicorn app.main:create_app --factory`; router modułu rejestruje się
+  w `create_app()`. Prefiks: `API_V1_PREFIX = "/api/v1"`.
+- **Błędy**: rzucaj `AppError`/`NotFoundError`/`ForbiddenError`/
+  `UnauthorizedError`/`ConflictError` z `app/core/errors.py`, nigdy
+  `HTTPException`. Handler 429 dla slowapi dopisz do
+  `register_error_handlers` (kod `rate_limited` już jest w mapie).
+- **Testy**: każdy plik testowy deklaruje `pytestmark` (`unit`/`integration`
+  /`api`) — bez markera nie trafi do żadnego targetu. Fixture'y `app`,
+  `client`, `settings`, `test_database_url` są w `tests/conftest.py`.
+- **Migracja**: `task db-revision -- --rev-id 0002 -m "accounts"`,
+  `down_revision = "0001"` (potwierdź `task db-heads`).
+- **Frontend**: klient to `apiFetch`/`ApiError` w `src/api/client.ts`
+  (miejsce na nagłówek CSRF oznaczone komentarzem); alias `@/`;
+  AppShell w `src/layouts/AppShell.vue`; ikony z `@lucide/vue`;
+  `vee-validate`/`zod` NIE są jeszcze zainstalowane — dołóż je w B02.
+- **Sekrety w dev**: `.env` powstaje z `.env.example`; nowa zmienna =
+  wpis w `.env.example` w tym samym commicie.
+
 Wymagane lektury przed startem:
 
 - `docs/implementation-plan/implementation_prompt.md` + PROGRESS.md

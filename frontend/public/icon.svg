@@ -1,0 +1,8 @@
+<!-- Ikona placeholder (BATCH_01). Komplet ikon PWA (PNG 192/512, splash)
+     dostarcza BATCH_12 — patrz ADR-009. Kolory: tokens 06_UIUX §1. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Family Food Planner">
+  <rect width="64" height="64" rx="14" fill="#FAF6EF" />
+  <circle cx="32" cy="34" r="16" fill="none" stroke="#E07A2F" stroke-width="4" />
+  <path d="M20 20h24" stroke="#3F7A5E" stroke-width="4" stroke-linecap="round" />
+  <path d="M32 26v16M26 34h12" stroke="#E07A2F" stroke-width="4" stroke-linecap="round" />
+</svg>

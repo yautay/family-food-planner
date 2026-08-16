@@ -1,0 +1,295 @@
+# Family Food Planner — jedyne źródło komend deweloperskich (`task help`).
+#
+# Kontrakt dla każdej sesji AI: kod uruchamia się TYLKO przez te targety
+# (skille ffp-* i CLAUDE.md odwołują się do ich nazw). Zmiana nazwy komendy
+# = aktualizacja Taskfile + CLAUDE.md + skilli ffp-* w tym samym commicie.
+#
+# Podział: usługi (baza, hot reload) stoją w Dockerze, narzędzia jakości
+# (pytest/ruff/mypy/vitest/eslint) biegną na hoście przez uv i npm — szybka
+# pętla zwrotna bez przebudowy obrazu.
+#
+# Wymagane na hoście: Docker Desktop, uv, Node 22+, go-task.
+
+version: '3'
+
+dotenv: ['.env']
+
+vars:
+  COMPOSE: docker compose --env-file .env -f docker/compose.dev.yml
+
+tasks:
+  default:
+    cmds:
+      - task: help
+
+  help:
+    desc: 'Lista dostępnych komend (pełna, z podtaskami: task --list-all)'
+    silent: true
+    cmds:
+      - task --list
+
+  # --- pętla deweloperska ---------------------------------------------------
+
+  dev:
+    desc: Podnosi cały stack (app + frontend + db + db-test) z hot reloadem
+    cmds:
+      - '{{.COMPOSE}} up --build'
+
+  dev-detached:
+    desc: Jak `dev`, ale w tle
+    cmds:
+      - '{{.COMPOSE}} up --build -d'
+
+  dev-db:
+    desc: Podnosi wyłącznie bazy (db + db-test) — testy uruchamiane z hosta
+    cmds:
+      - '{{.COMPOSE}} up -d db db-test'
+
+  down:
+    desc: Zatrzymuje stack (dane bazy dev zostają w wolumenie)
+    cmds:
+      - '{{.COMPOSE}} down'
+
+  logs:
+    desc: Logi wszystkich serwisów (Ctrl+C przerywa)
+    cmds:
+      - '{{.COMPOSE}} logs -f'
+
+  install:
+    desc: Instaluje zależności backendu i frontendu
+    cmds:
+      - task: install-be
+      - task: install-fe
+
+  install-be:
+    dir: backend
+    cmds:
+      - uv sync
+
+  install-fe:
+    dir: frontend
+    cmds:
+      - npm ci
+
+  # --- bramka jakości -------------------------------------------------------
+
+  check:
+    desc: 'BRAMKA DoD batcha: testy + typy + lint + format + jedna głowa migracji'
+    cmds:
+      - task: migrations-check
+      - task: test-unit
+      - task: test-int
+      - task: test-api
+      - task: fe-test
+      - task: typecheck
+      - task: lint
+      - task: format-check
+      - task: fe-build
+
+  test-unit:
+    desc: Testy jednostkowe backendu (bez bazy, sekundy)
+    dir: backend
+    cmds:
+      - uv run pytest -m unit
+
+  test-int:
+    desc: Testy integracyjne backendu (wymagają db-test — `task dev-db`)
+    dir: backend
+    cmds:
+      - uv run pytest -m integration
+
+  test-api:
+    desc: Testy kontraktu HTTP (httpx AsyncClient)
+    dir: backend
+    cmds:
+      - uv run pytest -m api
+
+  test-be:
+    desc: Wszystkie testy backendu naraz
+    dir: backend
+    cmds:
+      - uv run pytest
+
+  fe-test:
+    desc: Testy frontendu (vitest)
+    dir: frontend
+    cmds:
+      - npm run test
+
+  fe-build:
+    desc: Produkcyjny build frontendu (bramka — łapie błędy widoczne dopiero w buildzie)
+    dir: frontend
+    cmds:
+      - npx vite build
+
+  test-e2e:
+    desc: Testy E2E (Playwright, chromium) — wymaga `task e2e-install`
+    dir: frontend
+    cmds:
+      - npm run e2e
+
+  e2e-install:
+    desc: Instaluje przeglądarkę dla Playwrighta (jednorazowo)
+    dir: frontend
+    cmds:
+      - npx playwright install chromium
+
+  typecheck:
+    desc: Typy — mypy (backend) + vue-tsc (frontend)
+    cmds:
+      - task: typecheck-be
+      - task: typecheck-fe
+
+  typecheck-be:
+    dir: backend
+    cmds:
+      - uv run mypy app tests scripts
+
+  typecheck-fe:
+    dir: frontend
+    cmds:
+      - npm run typecheck
+
+  lint:
+    desc: Lint — ruff (backend) + eslint (frontend)
+    cmds:
+      - task: lint-be
+      - task: lint-fe
+
+  lint-be:
+    dir: backend
+    cmds:
+      - uv run ruff check .
+
+  lint-fe:
+    dir: frontend
+    cmds:
+      - npm run lint
+
+  format:
+    desc: Formatuje kod (ruff format + prettier) — uruchamiaj przed commitem
+    cmds:
+      - task: format-be
+      - task: format-fe
+
+  format-be:
+    dir: backend
+    cmds:
+      - uv run ruff format .
+      - uv run ruff check --fix .
+
+  format-fe:
+    dir: frontend
+    cmds:
+      - npm run format
+
+  format-check:
+    desc: Sprawdza formatowanie bez zmian w plikach (część `check`)
+    cmds:
+      - task: format-check-be
+      - task: format-check-fe
+
+  format-check-be:
+    dir: backend
+    cmds:
+      - uv run ruff format --check .
+
+  format-check-fe:
+    dir: frontend
+    cmds:
+      - npm run format:check
+
+  # --- baza danych ----------------------------------------------------------
+
+  db-migrate:
+    desc: Aplikuje migracje na bazie dev (alembic upgrade head)
+    dir: backend
+    cmds:
+      - uv run alembic upgrade head
+
+  db-revision:
+    desc: 'Nowa migracja. Użycie: task db-revision -- --rev-id 0002 -m "accounts"'
+    dir: backend
+    cmds:
+      - uv run alembic revision {{.CLI_ARGS}}
+    preconditions:
+      - sh: '[ -n "{{.CLI_ARGS}}" ]'
+        msg: 'Podaj argumenty: task db-revision -- --rev-id 0002 -m "accounts"'
+
+  db-heads:
+    desc: Pokazuje głowy migracji (musi być dokładnie jedna)
+    dir: backend
+    cmds:
+      - uv run alembic heads
+
+  migrations-check:
+    desc: Weryfikuje, że łańcuch migracji ma dokładnie jedną głowę
+    dir: backend
+    cmds:
+      - uv run pytest tests/unit/test_migrations_chain.py -q
+
+  db-shell:
+    desc: psql na bazie dev
+    cmds:
+      - '{{.COMPOSE}} exec db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+
+  create-admin:
+    desc: '[PLACEHOLDER] Tworzy pierwsze konto administratora — dostarcza BATCH_02'
+    silent: true
+    cmds:
+      - |
+        echo "Komenda create-admin nie jest jeszcze zaimplementowana."
+        echo "Dostarcza ją BATCH_02 (AUTH_AND_ACCOUNTS): konta zakłada CLI,"
+        echo "nigdy seed z hasłem w repozytorium (07_SECURITY par. 2)."
+        exit 1
+
+  db-seed-demo:
+    desc: '[PLACEHOLDER] Deterministyczny seed demo — dostarczają batche domenowe'
+    silent: true
+    cmds:
+      - |
+        echo "Komenda db-seed-demo nie jest jeszcze zaimplementowana."
+        echo "Dane demo (rodzina, produkty, przepisy, tydzien planu) pojawia sie"
+        echo "wraz z modulami domenowymi — 08_TESTING par. 5."
+        exit 1
+
+  # --- kontrakt API ---------------------------------------------------------
+
+  fe-types:
+    desc: Generuje typy TS z OpenAPI (backend/openapi.json → src/api/generated.ts)
+    cmds:
+      - task: fe-types-export
+      - task: fe-types-generate
+
+  fe-types-export:
+    dir: backend
+    cmds:
+      - uv run python -m scripts.export_openapi openapi.json
+
+  fe-types-generate:
+    dir: frontend
+    cmds:
+      - npm run generate:api
+
+  # --- bezpieczeństwo (Review batche i BATCH_17) ----------------------------
+
+  audit:
+    desc: Audyt zależności (pip-audit + npm audit) — Review batche i B17
+    cmds:
+      - task: audit-be
+      - task: audit-fe
+
+  audit-be:
+    dir: backend
+    cmds:
+      - uv run --with pip-audit pip-audit --strict
+
+  audit-fe:
+    dir: frontend
+    cmds:
+      - npm audit --audit-level=high
+
+  secrets-scan:
+    desc: Skan sekretów w repo (gitleaks przez docker run)
+    cmds:
+      - docker run --rm -v "{{.ROOT_DIR}}:/repo" zricethezav/gitleaks:latest detect --source=/repo --redact --verbose
