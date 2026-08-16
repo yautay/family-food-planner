@@ -28,7 +28,50 @@ export const common = {
   save: 'Zapisz',
   cancel: 'Anuluj',
   search: 'Szukaj',
+  add: 'Dodaj',
+  edit: 'Edytuj',
+  remove: 'Usuń',
   placeholderSection: 'Ta sekcja powstanie w kolejnych etapach.',
+} as const
+
+export const household = {
+  sectionTitle: 'Moja rodzina',
+  sectionSubtitle: 'Rodzina decyduje, z kim dzielisz przepisy, plany i listy zakupów.',
+  membersTitle: 'Konta w rodzinie',
+  profilesTitle: 'Profile członków',
+  profilesSubtitle:
+    'Profil to osoba przy stole — także dziecko bez własnego konta. Mnożnik skaluje porcje.',
+  emptyHousehold: 'Nie należysz do rodziny — poproś administratora o przypisanie Cię do rodziny.',
+  emptyProfiles: 'Nie ma jeszcze żadnego profilu. Dodaj pierwszego członka rodziny.',
+  nameLabel: 'Imię',
+  multiplierLabel: 'Domyślny mnożnik porcji',
+  kcalGoalLabel: 'Dzienny cel kcal',
+  activeLabel: 'Aktywny',
+  inactiveLabel: 'Nieaktywny',
+  addProfile: 'Dodaj profil',
+  deactivate: 'Dezaktywuj',
+  activate: 'Aktywuj',
+  multiplierHint: 'Liczba dodatnia, maksymalnie dwie cyfry po przecinku (np. 0,8).',
+  kcalGoalHint: 'Opcjonalnie — liczba całkowita większa od zera.',
+  confirmProfileDelete: 'Usunąć ten profil? Operacji nie da się cofnąć.',
+} as const
+
+export const adminHouseholds = {
+  title: 'Rodziny',
+  subtitle: 'Rodziny i przypisania kont. Konto należy do co najwyżej jednej rodziny.',
+  createHousehold: 'Dodaj rodzinę',
+  householdName: 'Nazwa rodziny',
+  emptyState: 'Nie ma jeszcze żadnej rodziny. Utwórz pierwszą.',
+  membersCount: 'Konta',
+  profilesCount: 'Profile',
+  membersTitle: 'Konta w rodzinie',
+  assignUser: 'Przypisz konto',
+  detach: 'Odepnij',
+  noFreeAccounts: 'Wszystkie konta należą już do jakiejś rodziny.',
+  noMembers: 'Brak przypisanych kont.',
+  rename: 'Zmień nazwę',
+  confirmDelete: 'Usunąć tę rodzinę? Operacji nie da się cofnąć.',
+  usedInIntro: 'Rodzina jest w użyciu:',
 } as const
 
 export const admin = {

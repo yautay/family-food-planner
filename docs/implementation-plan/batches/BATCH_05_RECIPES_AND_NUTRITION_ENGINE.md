@@ -17,6 +17,39 @@ Batch zastaje po B01–B04 + R1 (stan faktyczny sprawdź w `PROGRESS.md`):
 
 - `backend/app/core/` — config, db, security, deps (`current_user`,
   `require_admin`), errors (kształt błędu z 04_API §1), mixin `ScopedQuery`.
+
+  **`recipes` to PIERWSZA produkcyjna encja ze scope** — konkretne API
+  mechanizmu z B03 (`backend/app/core/scope.py`), nie zgaduj go:
+
+  ```python
+  from app.core.scope import Scope, ScopedMixin, ScopedQuery, SCOPE_ENUM
+
+  class Recipe(TimestampMixin, ScopedMixin, Base):          # PK `id` i kolumny
+      __tablename__ = "recipes"                             # scope daje mixin
+      name: Mapped[str] = mapped_column(Text, nullable=False)
+      # własne __table_args__? MUSZĄ zawierać scope_check_constraint()
+
+  _RECIPES = ScopedQuery(Recipe, not_found_message="Nie znaleziono przepisu.")
+
+  recipe = await _RECIPES.get_or_404(session, recipe_id, user)   # cudze → 404
+  _RECIPES.assert_can_manage(recipe, user)                       # scope/delete
+  recipe = Recipe(name=..., **ScopedQuery.ownership_for_create(user, scope))
+  statement = _RECIPES.select_visible(user)                      # lista
+  ```
+
+  Edycja treści encji HOUSEHOLD nie wymaga `assert_can_manage` (rodzina sobie
+  ufa); wymagają go WYŁĄCZNIE zmiana scope i usunięcie. Własnych filtrów
+  widoczności nie piszemy — to błąd review.
+
+  **Migracja `recipes` tworzy typ enumowy `entity_scope`** (B03 celowo go nie
+  utworzył, bo nie miał go kto używać): `sa.Enum("private", "household",
+  name="entity_scope")` w `upgrade`, jawny `DROP TYPE` w `downgrade` (wzór:
+  `user_role` w migracji `0002`). Kolejne tabele ze scope (B06+) muszą
+  wtedy użyć `postgresql.ENUM(..., create_type=False)`.
+
+  Macierz uprawnień z 08_TESTING §4 jest już udowodniona na encji testowej
+  (`tests/integration/test_scope_matrix.py`) — w B05 powtarzasz ją jako testy
+  API `/recipes` (anonim 401 / obcy 404 / członek 200 / delete: członek 403).
 - `backend/app/modules/catalog/` — `canonical_products`,
   `product_unit_weights`, `product_categories`, serwis normalizacji jednostek
   (ADR-005) i blokada usuwania (ADR-012). Przepis dopisuje się do listy

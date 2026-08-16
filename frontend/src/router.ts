@@ -58,7 +58,7 @@ export const routes: RouteRecordRaw[] = [
       {
         path: 'ustawienia',
         name: 'ustawienia',
-        component: PlaceholderPage,
+        component: () => import('@/pages/UstawieniaPage.vue'),
         meta: { title: 'Ustawienia' },
       },
       {
@@ -66,6 +66,12 @@ export const routes: RouteRecordRaw[] = [
         name: 'admin-users',
         component: () => import('@/pages/admin/AdminUsersPage.vue'),
         meta: { title: 'Użytkownicy', admin: true },
+      },
+      {
+        path: 'admin/rodziny',
+        name: 'admin-households',
+        component: () => import('@/pages/admin/AdminHouseholdsPage.vue'),
+        meta: { title: 'Rodziny', admin: true },
       },
     ],
   },

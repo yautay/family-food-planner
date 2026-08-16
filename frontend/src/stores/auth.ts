@@ -21,6 +21,12 @@ export const useAuthStore = defineStore('auth', () => {
 
   const isAuthenticated = computed(() => user.value !== null)
   const isAdmin = computed(() => user.value?.role === 'admin')
+  /**
+   * Rodzina zalogowanego użytkownika (id + nazwa) albo `null`. To nadal stan
+   * sesji, nie kopia danych serwera: skład rodziny i profile żyją w TanStack
+   * Query (ADR-007), tutaj jest tylko tyle, ile potrzebuje nagłówek i guard.
+   */
+  const household = computed(() => user.value?.household ?? null)
 
   /** Jednorazowe ustalenie sesji przy starcie aplikacji (współdzieli lot w toku). */
   async function ensureLoaded(): Promise<void> {
@@ -59,5 +65,15 @@ export const useAuthStore = defineStore('auth', () => {
     resolved.value = true
   }
 
-  return { user, resolved, isAuthenticated, isAdmin, ensureLoaded, login, logout, clear }
+  return {
+    user,
+    resolved,
+    isAuthenticated,
+    isAdmin,
+    household,
+    ensureLoaded,
+    login,
+    logout,
+    clear,
+  }
 })

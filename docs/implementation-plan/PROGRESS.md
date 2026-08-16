@@ -10,8 +10,8 @@ commit wykonany). Kolumna „Blokery" = zależności + decyzje z 02_DECISIONS.
 |---|---|---|---|
 | 01 PROJECT_SCAFFOLD_AND_DEV_LOOP | [x] | — | `batch(01)` na master (hash wpisać po push) |
 | 02 AUTH_AND_ACCOUNTS | [x] | — | `batch(02)` na master (hash wpisać po push) |
-| 03 HOUSEHOLDS_AND_SCOPE | [ ] | 02 | |
-| 04 UNITS_AND_CANONICAL_PRODUCTS | [ ] | 03 | |
+| 03 HOUSEHOLDS_AND_SCOPE | [x] | — | `batch(03)` na master (hash wpisać po push) |
+| 04 UNITS_AND_CANONICAL_PRODUCTS | [ ] | — (03 gotowe) | |
 | R1 REVIEW_FOUNDATIONS | [ ] | 01–04 | |
 | 05 RECIPES_AND_NUTRITION_ENGINE | [ ] | 04, R1 | |
 | 06 GOALS_AND_DAY_PLAN | [ ] | 05 | |
@@ -40,6 +40,59 @@ zmiany dotykające przyszłych batchy trzeba wpisać do ich kart
 (00_MASTER_PLAN §8); dziennik to indeks, nie schowek.
 
 ---
+
+**2026-08-16 — BATCH_03 (HOUSEHOLDS_AND_SCOPE)**: są rodziny i jest jedno
+miejsce egzekwowania widoczności. Migracja `0003` (`households`,
+`member_profiles`, `audit_entries`, `users.household_id`), `app/core/scope.py`
+(`Scope`, `ScopedMixin`, generyczny `ScopedQuery`) udowodniony pełną macierzą
+08 §4 na encji testowej `ScopedNote`, moduł `audit` (`record()` append-only
++ `GET /api/v1/audit` dla ADMIN, audit dopięty wstecznie do operacji B02 na
+kontach), `/admin/households` z `set_members`, `/households/my` i CRUD profili.
+Frontend: `/ustawienia` z sekcją rodziny i profilami, `/admin/rodziny`,
+`authStore.household`, `src/lib/decimal.ts`. `task check` zielony
+(3 migrations-check / 92 unit / 36 int / 118 api / 73 vitest / mypy 57 plików /
+ruff / eslint / prettier / vite build).
+
+**Co MUSZĄ wiedzieć kolejne batche:**
+
+1. **Żadnych własnych filtrów widoczności** — każda encja współdzielna
+   konsumuje `ScopedMixin` + `ScopedQuery` z `app/core/scope.py`
+   (`get_or_404`, `select_visible`, `assert_can_manage`,
+   `ownership_for_create`). Ręczny filtr scope w serwisie = błąd review.
+   Cudza encja to **404, nie 403**. Konkretny przykład użycia wklejony do
+   karty B05.
+2. **Typ enumowy `entity_scope` jeszcze NIE istnieje w bazie** — B03 stworzył
+   sam mechanizm, bez produkcyjnej tabeli. Tworzy go migracja `recipes`
+   (B05); każda kolejna tabela ze scope musi wtedy użyć
+   `postgresql.ENUM(..., create_type=False)`.
+3. **Kontrakt 409 `used_in` ustalony**:
+   `details = {"used_in": [{"type", "id", "name"}]}`. Referencje liczy się
+   PRZED usunięciem, a `IntegrityError` z commita łapie jako drugą linię
+   obrony — inaczej użytkownik dostaje 500 zamiast 409. Obowiązuje każde
+   usuwanie od B04 (ADR-012).
+4. **`AuditService.record()` NIE commituje** — wpis powstaje w tej samej
+   transakcji co operacja. Serwis domenowy trzyma `self._audit =
+   AuditService(session)` i robi jeden `commit()`. Nowa akcja = wpis
+   w `AuditAction`/`AuditEntity` (konwencja `<encja>.<czasownik>`).
+   Decimal w payloadzie serializowany przez `format(value, "f")`, nigdy float.
+5. **`app/core/schemas.py` → `DecimalString`** — każde pole NUMERIC
+   w odpowiedzi używa tego aliasu (OpenAPI `string` ⇒ `task fe-types`
+   generuje `string`). Ograniczenia wejścia jako Annotated, bo mypy odrzuca
+   `Field(**dict)`. Po stronie FE parser jest jeden: `src/lib/decimal.ts`.
+6. **Nowa tabela = wpis w DWÓCH miejscach testowych**: `DB_TABLES`
+   (`tests/conftest.py`, TRUNCATE) **i** `EXPECTED_TABLES`
+   (`tests/integration/test_migrations.py` — asercja na dokładny zestaw
+   tabel po `upgrade head`). Kolejna wolna migracja: `0004`.
+7. **Karty zaktualizowane**: B04 (konkrety audytu, `DecimalString`, prototyp
+   409, `src/lib/decimal.ts`) i B05 (gotowy przykład użycia `ScopedQuery`
+   + instrukcja tworzenia `entity_scope`).
+8. **Follow-up dla R1**: E2E `frontend/e2e/households.spec.ts` jest napisany,
+   ale NIE został uruchomiony — sesja domykająca batch nie miała Dockera.
+   Do odhaczenia na maszynie z Docker Desktop. Wciąż otwarty także follow-up
+   z B02 (`compose.dev.yml` nie odświeża `node_modules`).
+9. **Domknięcie B03 zrobiła inna sesja niż implementacja** (checklisty,
+   Completion notes, PROGRESS, commit) — notatki w karcie opisują stan kodu,
+   nie intencje autora.
 
 **2026-08-16 — BATCH_02 (AUTH_AND_ACCOUNTS)**: aplikacja ma prawdziwe
 logowanie. Sesje server-side w PG (cookie `ffp_session` HttpOnly, TTL 30 dni

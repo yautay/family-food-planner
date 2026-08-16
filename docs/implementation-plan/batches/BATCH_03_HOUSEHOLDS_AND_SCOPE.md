@@ -295,32 +295,102 @@ diffie przed commitem (krok 11).
 
 ## Implementation checklist
 
-- [ ] Migracja: households, member_profiles, users.household_id,
+- [x] Migracja: households, member_profiles, users.household_id,
       audit_entries (up/down/up OK)
-- [ ] core/scope.py — ScopedQuery z regułami 02 §3.1 / 03 §4
-- [ ] Encja testowa ScopedNote + pełna macierz integracyjna §4
-- [ ] audit/service.record + GET /audit (ADMIN, paginacja, filtry)
-- [ ] Audit dopięty do operacji admina na kontach (wstecznie do B02)
-- [ ] /admin/households CRUD + members; 409 used_in przy niepustej
-- [ ] /households/my + /households/my/profiles CRUD
-- [ ] /auth/me zwraca household; authStore zaktualizowany
-- [ ] FE: /admin/rodziny, Ustawienia z sekcją rodziny i profilami
-- [ ] fe-types zregenerowane; query keys dopisane
-- [ ] Testy unit/int/api/fe + rozszerzony E2E
-- [ ] PROGRESS.md + propagacja do kart B04/B05
+- [x] core/scope.py — ScopedQuery z regułami 02 §3.1 / 03 §4
+- [x] Encja testowa ScopedNote + pełna macierz integracyjna §4
+- [x] audit/service.record + GET /audit (ADMIN, paginacja, filtry)
+- [x] Audit dopięty do operacji admina na kontach (wstecznie do B02)
+- [x] /admin/households CRUD + members; 409 used_in przy niepustej
+- [x] /households/my + /households/my/profiles CRUD
+- [x] /auth/me zwraca household; authStore zaktualizowany
+- [x] FE: /admin/rodziny, Ustawienia z sekcją rodziny i profilami
+- [x] fe-types zregenerowane; query keys dopisane
+- [x] Testy unit/int/api/fe + rozszerzony E2E (E2E napisany, NIE uruchomiony —
+      patrz Completion notes)
+- [x] PROGRESS.md + propagacja do kart B04/B05
 
 ## Verification checklist
 
-- [ ] `task check` zielony
-- [ ] `alembic heads` = 1; upgrade → downgrade → upgrade OK; tabele
+- [x] `task check` zielony
+- [x] `alembic heads` = 1; upgrade → downgrade → upgrade OK; tabele
       testowe NIE powstają z migracji
-- [ ] Macierz scope §4: komplet przypadków, realne wyniki w raporcie
-- [ ] Testy anty-IDOR na profiles (obcy → 404) przechodzą
-- [ ] Wpisy audit weryfikowane asercjami, nie ręcznie
-- [ ] Acceptance Criteria 1–7 potwierdzone
-- [ ] Living docs + karty przyszłych batchy zaktualizowane;
+- [x] Macierz scope §4: komplet przypadków, realne wyniki w raporcie
+- [x] Testy anty-IDOR na profiles (obcy → 404) przechodzą
+- [x] Wpisy audit weryfikowane asercjami, nie ręcznie
+- [x] Acceptance Criteria 1–7 potwierdzone
+- [x] Living docs + karty przyszłych batchy zaktualizowane;
       commit `batch(03): ...`, status czysty
 
 ## Completion notes
 
-(wypełnia agent wykonujący)
+**Uwaga proceduralna:** implementację wykonała jedna sesja, a domknięcie
+(checklisty, te notatki, PROGRESS, commit) — kolejna, na podstawie diffu
+i realnego przebiegu `task check`. Notatki opisują więc STAN KODU, a nie
+intencje autora; ewentualne rozważane alternatywy przepadły wraz z tamtą
+sesją.
+
+### Wykonane
+
+- **Migracja `0003_households_audit.py`** (`down_revision = "0002"`,
+  `alembic heads` = jedna głowa `0003`): `households`, `member_profiles`,
+  `audit_entries`, ALTER `users.household_id`. `upgrade → downgrade →
+  upgrade` na czystej bazie potwierdzony testem integracyjnym, tak samo
+  dokładny zestaw tabel (`EXPECTED_TABLES`) — tabela encji testowej
+  `ScopedNote` NIE powstaje z migracji.
+- **`app/core/scope.py`** — `Scope`, `SCOPE_ENUM`, `scope_check_constraint()`,
+  `ScopedMixin` (PK + `owner_user_id`/`household_id`/`scope`) i generyczny
+  `ScopedQuery[ScopedT]` z API: `visible_condition`, `select_visible`,
+  `get_or_404`, `assert_can_manage`, `assert_scope_allowed`,
+  `ownership_for_create`. Cudza encja = 404, nie 403.
+- **`app/modules/audit/`** — `AuditService.record()` (append-only, BEZ
+  commita — wpis w tej samej transakcji co operacja) + `list_entries`
+  z paginacją i filtrami; `GET /api/v1/audit` tylko dla ADMIN. Audit
+  dopięty wstecznie do operacji B02 na kontach.
+- **`app/modules/households/`** — `/admin/households` CRUD + `set_members`,
+  `/households/my`, `/households/my/profiles` CRUD.
+- **Frontend** — `UstawieniaPage.vue`, `admin/AdminHouseholdsPage.vue`,
+  `authStore.household`, `/auth/me` → `HouseholdSummary | None`,
+  `src/lib/decimal.ts`, query keys, regenerowane `openapi.json` +
+  `generated.ts`.
+
+### Decyzje podjęte w kodzie (do wiadomości kolejnych batchy)
+
+1. **Typ enumowy `entity_scope` NIE powstaje w `0003`** — mechanizm scope
+   istnieje, ale nie ma jeszcze produkcyjnej tabeli, która by go używała.
+   Tworzy go migracja `recipes` w B05 (opisane w karcie B05).
+2. **Kontrakt 409 `used_in`** ustalony na `delete_household`:
+   `details = {"used_in": [{"type", "id", "name"}]}`. Referencje liczone
+   PRZED usunięciem, a `IntegrityError` z commita łapany jako druga linia
+   obrony (`used_in: []`) — inaczej użytkownik dostaje 500. To wzorzec
+   obowiązujący B04+.
+3. **`ownership_for_create` zapisuje `household_id` także dla PRIVATE**,
+   żeby późniejsza zmiana scope nie zgadywała rodziny; konsekwencja
+   przenosin między rodzinami świadoma i opisana w ADR-006.
+4. **Payload audytu serializuje Decimal przez `format(value, "f")`**
+   (`_profile_snapshot`) — nigdy float. Ten sam wzór obowiązuje nutrition
+   before/after w B04.
+5. **Edycja treści encji HOUSEHOLD nie wymaga `assert_can_manage`** —
+   rodzina sobie ufa, a kto zmienił, zapisuje audit. `assert_can_manage`
+   pilnuje wyłącznie zmiany scope i usunięcia.
+
+### Odstępstwa
+
+- **E2E `frontend/e2e/households.spec.ts` napisany, ale NIE uruchomiony.**
+  W środowisku domykającym nie ma Dockera (`docker: command not found`),
+  a natywny uvicorn na Windows z dostępem do bazy nie jest wspierany
+  (ADR-015 / dziennik B01), więc stack do Playwrighta nie wstaje.
+  Do odhaczenia przy najbliższej sesji na maszynie z Docker Desktop —
+  wpisane jako follow-up dla R1.
+- Acceptance Criteria 1–2 (przepływy UI) potwierdzone testami API +
+  vitest, bez ręcznego przeklikania — z tego samego powodu.
+
+### Follow-upy
+
+- **[R1]** Uruchomić E2E `households.spec.ts` na maszynie z Dockerem.
+- **[R1]** Nadal otwarty follow-up z B02: `docker/compose.dev.yml` nie
+  odświeża `node_modules`.
+
+### Pytania
+
+Brak.

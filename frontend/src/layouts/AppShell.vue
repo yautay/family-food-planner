@@ -12,7 +12,7 @@ import { computed, ref } from 'vue'
 import { RouterLink, RouterView, useRouter } from 'vue-router'
 
 import { Button } from '@/components/ui/button'
-import { visibleNavItems } from '@/lib/navigation'
+import { navGroups, visibleNavItems } from '@/lib/navigation'
 import { APP_NAME, APP_TAGLINE, auth as authTexts } from '@/lib/texts'
 import { useAuthStore } from '@/stores/auth'
 
@@ -21,6 +21,7 @@ const router = useRouter()
 const queryClient = useQueryClient()
 
 const items = computed(() => visibleNavItems(auth.isAdmin))
+const groups = computed(() => navGroups(auth.isAdmin))
 const primaryItems = computed(() => items.value.filter((item) => item.primary))
 const secondaryItems = computed(() => items.value.filter((item) => !item.primary))
 
@@ -53,17 +54,26 @@ const logout = useMutation({
       </div>
 
       <nav class="flex-1 space-y-1 p-2" aria-label="Nawigacja główna">
-        <RouterLink
-          v-for="item in items"
-          :key="item.name"
-          :to="{ name: item.name }"
-          class="hover:bg-accent flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm"
-          active-class="bg-accent text-accent-foreground font-medium"
-          :data-testid="`nav-item-${item.name}`"
-        >
-          <component :is="item.icon" class="size-5 shrink-0" aria-hidden="true" />
-          {{ item.label }}
-        </RouterLink>
+        <template v-for="group in groups" :key="group.label ?? 'main'">
+          <p
+            v-if="group.label"
+            class="text-muted-foreground px-3 pt-4 pb-1 text-xs font-medium uppercase"
+            :data-testid="`nav-group-${group.label}`"
+          >
+            {{ group.label }}
+          </p>
+          <RouterLink
+            v-for="item in group.items"
+            :key="item.name"
+            :to="{ name: item.name }"
+            class="hover:bg-accent flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm"
+            active-class="bg-accent text-accent-foreground font-medium"
+            :data-testid="`nav-item-${item.name}`"
+          >
+            <component :is="item.icon" class="size-5 shrink-0" aria-hidden="true" />
+            {{ item.label }}
+          </RouterLink>
+        </template>
       </nav>
 
       <div class="border-border border-t p-3">

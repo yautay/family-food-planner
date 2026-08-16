@@ -11,6 +11,7 @@ komunikatem. Nie wolno tego „poprawiać" na czytelniejsze komunikaty.
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy import delete, func, or_, select
@@ -33,6 +34,7 @@ from app.core.security import (
     verify_password,
 )
 from app.modules.accounts.models import Session, User, UserRole
+from app.modules.audit.service import AuditAction, AuditEntity, AuditService
 
 #: Jeden komunikat na wszystkie powody odmowy logowania.
 INVALID_CREDENTIALS = "Nieprawidłowy email lub hasło."
@@ -45,10 +47,16 @@ def normalize_email(email: str) -> str:
 
 
 class AccountsService:
-    """Operacje na kontach i sesjach. Transakcje commitowane jawnie."""
+    """Operacje na kontach i sesjach. Transakcje commitowane jawnie.
+
+    Operacje ADMIN-a na kontach trafiają do dziennika (02_DOMAIN §12) w tej samej
+    transakcji, co sama zmiana. W payloadzie audytu NIGDY nie ma hasła ani hasha —
+    przy zmianie hasła zapisujemy wyłącznie flagę, że do niej doszło.
+    """
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
+        self._audit = AuditService(session)
 
     # --- uwierzytelnianie -----------------------------------------------------
 
@@ -201,8 +209,13 @@ class AccountsService:
         display_name: str,
         role: UserRole,
         is_active: bool,
+        actor: User | None = None,
     ) -> User:
-        """Utwórz konto. Zajęty email = 409 (04_API §1)."""
+        """Utwórz konto. Zajęty email = 409 (04_API §1).
+
+        `actor is None` tylko dla CLI `task create-admin` (pierwszy administrator
+        nie ma kto założyć) — wpis w dzienniku powstaje wtedy bez `user_id`.
+        """
         normalized = normalize_email(email)
         if await self._find_by_email(normalized) is not None:
             raise ConflictError("Konto z tym adresem e-mail już istnieje.")
@@ -216,6 +229,16 @@ class AccountsService:
         )
         self._session.add(user)
         try:
+            # Flush przed audytem — wpis potrzebuje `entity_id`, a wyścig
+            # o zajęty email ma się skończyć tym samym 409 co sprawdzenie wyżej.
+            await self._session.flush()
+            self._audit.record(
+                action=AuditAction.USER_CREATE,
+                entity_type=AuditEntity.USER,
+                entity_id=user.id,
+                actor_id=actor.id if actor is not None else None,
+                payload={"email": user.email, "role": user.role.value},
+            )
             await self._session.commit()
         except IntegrityError as exc:  # wyścig dwóch równoczesnych tworzeń
             await self._session.rollback()
@@ -237,20 +260,34 @@ class AccountsService:
         user = await self.get_user(user_id)
         self._guard_self_lockout(user, actor, role=role, is_active=is_active)
 
-        if display_name is not None:
+        changed: dict[str, Any] = {}
+        if display_name is not None and display_name != user.display_name:
+            changed["display_name"] = {"before": user.display_name, "after": display_name}
             user.display_name = display_name
-        if role is not None:
+        if role is not None and role is not user.role:
+            changed["role"] = {"before": user.role.value, "after": role.value}
             user.role = role
-        if is_active is not None:
+        if is_active is not None and is_active != user.is_active:
+            changed["is_active"] = {"before": user.is_active, "after": is_active}
             user.is_active = is_active
         if password is not None:
             user.password_hash = await run_in_threadpool(hash_password, password)
             self._apply_lockout(user, register_success())
+            # Do dziennika trafia SAM FAKT zmiany hasła — nigdy hasło ani hash.
+            changed["password"] = {"changed": True}
 
         # Zmiana hasła albo wyłączenie konta unieważnia wszystkie jego sesje.
         if password is not None or is_active is False:
             await self._session.execute(delete(Session).where(Session.user_id == user.id))
 
+        if changed:
+            self._audit.record(
+                action=AuditAction.USER_UPDATE,
+                entity_type=AuditEntity.USER,
+                entity_id=user.id,
+                actor_id=actor.id,
+                payload={"email": user.email, "changed": changed},
+            )
         await self._session.commit()
         await self._session.refresh(user)
         return user
@@ -262,6 +299,13 @@ class AccountsService:
             raise ConflictError("Nie można usunąć własnego konta.")
 
         await self._session.delete(user)
+        self._audit.record(
+            action=AuditAction.USER_DELETE,
+            entity_type=AuditEntity.USER,
+            entity_id=user_id,
+            actor_id=actor.id,
+            payload={"email": user.email, "role": user.role.value},
+        )
         try:
             await self._session.commit()
         except IntegrityError as exc:

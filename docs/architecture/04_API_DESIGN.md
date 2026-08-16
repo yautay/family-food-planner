@@ -79,7 +79,15 @@ UNVERIFIED); edycja wartości odżywczych i statusu weryfikacji: ADMIN.
 
 1. Wszystko poza `/health`, `/auth/login`, `/public/*` wymaga sesji.
 2. Scope egzekwowany w serwisach (`ScopedQuery`), nie w routerach —
-   router nie wie, czym jest household.
+   router nie wie, czym jest household. ADMIN nie jest wyjątkiem na ścieżkach
+   użytkownika: `/households/my` pokazuje mu WŁASNĄ rodzinę, a do cudzych
+   danych ma `/admin/*` (07_SECURITY §4).
+2a. Zasoby należące do rodziny bez kolumn scope (`member_profiles`) filtruje
+   się porównaniem `household_id`; cudze i nieistniejące dają identyczne 404.
+   `ScopedQuery` obowiązuje encje z kolumnami wzorca 03_DATABASE §4.
+2b. Stan „użytkownik bez rodziny" jest legalny: `/households/my` zwraca 200
+   z `household: null`, a nie 404. Operacje wymagające rodziny (utworzenie
+   profilu, nadanie `scope=household`) kończą się 409 z instrukcją.
 3. `/public/lists/{token}`: lookup wyłącznie po pełnym tokenie (unique
    index), `410 Gone` po wygaśnięciu/odwołaniu z przyjaznym komunikatem,
    odpowiedź zawiera tylko: nazwę listy, pozycje (label, ilość, kategoria,

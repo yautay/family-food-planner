@@ -71,6 +71,13 @@ seed przez API, nie przez UI.
 | nutrition produktu (edycja) | 401 | 403 | 403 | 403 | 200 |
 | publiczna lista (token) | 200 | 200 | 200 | 200 | 200 |
 
+Macierz jest udowodniona raz, na poziomie mechanizmu: BATCH_03 dostarczył
+`tests/integration/test_scope_matrix.py` na encji testowej `ScopedNote`
+(konsumuje ten sam `ScopedQuery`, co encje produkcyjne, ale nie istnieje
+w migracjach — tabelę tworzy fixture `scoped_notes_table` w bazie testowej).
+Batche domenowe NIE przepisują testów mixinu — powtarzają macierz jako testy
+API swojego zasobu (kody HTTP, nie wywołania serwisu).
+
 ## 5. Dane testowe
 
 Fabryki (factory-boy lub proste funkcje) per moduł w `tests/factories.py`;

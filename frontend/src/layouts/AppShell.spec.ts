@@ -79,6 +79,20 @@ describe('AppShell', () => {
     expect(wrapper.find('[data-testid="nav-item-admin-users"]').exists()).toBe(true)
   })
 
+  it('administracja ma podsekcje pod wspólnym nagłówkiem', async () => {
+    const wrapper = await mountShell('admin')
+
+    expect(wrapper.find('[data-testid="nav-group-Administracja"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="nav-item-admin-households"]').exists()).toBe(true)
+  })
+
+  it('nagłówek administracji nie pokazuje się zwykłemu użytkownikowi', async () => {
+    const wrapper = await mountShell('user')
+
+    expect(wrapper.find('[data-testid="nav-group-Administracja"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="nav-item-admin-households"]').exists()).toBe(false)
+  })
+
   it('bottom-nav ma trzy sekcje główne i przycisk Więcej', async () => {
     const wrapper = await mountShell()
 

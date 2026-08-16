@@ -28,7 +28,8 @@ sessions (id TEXT PK,        -- secrets.token_urlsafe(32), spójnie z 07_SECURIT
        -- indeksy: expires_at (sprzątanie), user_id (odwołanie sesji konta);
        -- bez updated_at — rolę znacznika ostatniego użycia pełni expires_at
 households (id, name)
-member_profiles (id, household_id FK CASCADE NULL, owner_user_id FK NULL,
+member_profiles (id, household_id FK CASCADE NULL,
+       owner_user_id FK NULL ON DELETE SET NULL,   -- profil przeżywa konto
        name, default_multiplier NUMERIC(4,2) DEFAULT 1.0,
        kcal_goal NUMERIC(6,0) NULL, is_active BOOL)
 user_nutrition_goals (id, user_id FK CASCADE, valid_from DATE,
@@ -89,6 +90,24 @@ WHERE owner_user_id = :uid
 CHECK: `scope='household'` ⇒ `household_id IS NOT NULL` — z wyjątkiem
 użytkowników bez rodziny (wtedy scope household niedozwolony na poziomie
 serwisu). Egzekwowanie w jednym miejscu: mixin serwisowy `ScopedQuery`.
+
+Stan faktyczny (BATCH_03, `backend/app/core/scope.py`):
+
+- `ScopedMixin` dostarcza kolumny wzorca **oraz** PK `id` (konwencja §1) —
+  model konsumujący nie deklaruje ich ponownie. CHECK `scope_requires_household`
+  dokłada `__table_args__` mixinu; model z własnymi `__table_args__` musi
+  dołożyć `scope_check_constraint()` samodzielnie.
+- `owner_user_id` → `users.id` **ON DELETE RESTRICT**, `household_id` →
+  `households.id` **ON DELETE RESTRICT**. RESTRICT, a nie SET NULL: wyzerowanie
+  `household_id` przy `scope='household'` złamałoby CHECK-a, a rodziny i tak
+  usuwa się wyłącznie puste (409 `used_in`).
+- `household_id` zapisywany jest także dla `scope='private'` — dzięki temu
+  późniejsza zmiana scope nie musi zgadywać rodziny (konsekwencje przenosin:
+  ADR-006).
+- Typ enumowy nazywa się `entity_scope` i tworzy go migracja PIERWSZEJ
+  produkcyjnej tabeli ze scope (`recipes`, BATCH_05); BATCH_03 dostarczył sam
+  mechanizm i macierz testów na encji testowej `scoped_notes` (tworzonej
+  wyłącznie w bazie testowej, nigdy migracją).
 
 ## 5. Schemat — recipes
 
@@ -207,6 +226,8 @@ Zatwierdzenie joba dozwolone tylko bez nierozwiązanych issues `blocker`.
 audit_entries (id, user_id FK NULL SET NULL, action TEXT, entity_type TEXT,
        entity_id BIGINT NULL, payload JSONB, created_at)
        -- payload: before/after dla nutrition, parametry importu/eksportu
+       -- indeksy: (entity_type, entity_id), created_at DESC, user_id
+       -- BEZ updated_at: tabela jest append-only (BATCH_03)
 ```
 
 Eksport nie ma tabel (generowany plik); import loguje się w audit_entries.

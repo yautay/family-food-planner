@@ -22,6 +22,37 @@ panele admin (Użytkownicy/Rodziny). Produkty są GLOBALNE (02 §3.1 pkt 3) —
 ScopedQuery NIE dotyczy encji katalogu; z B03 bierzemy audit i prototyp
 409 used_in (DELETE rodziny).
 
+Konkrety z wykonanego B03 (2026-08-16) — czytaj przed pisaniem kodu:
+
+- **Audit**: `app/modules/audit/service.py` → `AuditService(session)` oraz
+  enumy `AuditAction` / `AuditEntity` (konwencja akcji: `<encja>.<czasownik>`;
+  ten batch dokłada np. `product.nutrition_update`). `record(...)` **NIE
+  commituje** — wpis powstaje w tej samej transakcji, co operacja. Serwis
+  domenowy tworzy `self._audit = AuditService(session)` w `__init__`
+  (wzór: `HouseholdsService`, `AccountsService`). Payload dla nutrition:
+  `{"before": {...}, "after": {...}}` — dokładnie jak w
+  `HouseholdsService._profile_snapshot` (Decimal serializowany przez
+  `format(value, "f")`, nigdy float).
+- **Decimal w schematach**: `app/core/schemas.py` → `DecimalString`
+  (Annotated + PlainSerializer). Każde pole NUMERIC w odpowiedzi ma być tego
+  typu — wtedy OpenAPI ma `string`, a `task fe-types` generuje `string`.
+  Ograniczenia wejścia jako Annotated (wzór: `Multiplier`, `KcalGoal`
+  w `modules/households/schemas.py`), bo mypy odrzuca `Field(**dict)`.
+  Nazwy: `NonEmptyName` (`StringConstraints(strip_whitespace=True,
+  min_length=1)`) — samo `min_length` przepuszcza `"   "`.
+- **Prototyp 409 `used_in`**: `HouseholdsService.delete_household` —
+  najpierw policz referencje i zwróć `ConflictError(msg,
+  details={"used_in": [{type, id, name}]})`, a `IntegrityError` z commita
+  złap jako drugą linię obrony (inaczej użytkownik dostanie 500).
+- **Frontend**: `src/lib/decimal.ts` (`normalizeDecimalInput`,
+  `toDecimalInput`, `isValidDecimal`) — `AmountInput` z 05_FRONTEND §4 buduj
+  NA TYM, nie pisz drugiego parsera. Nawigacja admina ma już grupy
+  (`group: ADMIN_GROUP` w `src/lib/navigation.ts`) — nowa podsekcja to jeden
+  wpis. Klucze zapytań: `src/api/queryKeys.ts`.
+- **Testy**: nowa tabela = wpis w `DB_TABLES` (conftest) **i** w
+  `EXPECTED_TABLES` (`tests/integration/test_migrations.py`, asercja na
+  dokładny zestaw tabel po `upgrade head`). Pierwsza wolna migracja: `0004`.
+
 Wymagane lektury przed startem:
 
 - `docs/implementation-plan/implementation_prompt.md` + PROGRESS.md

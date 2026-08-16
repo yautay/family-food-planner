@@ -24,6 +24,7 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
+    AsyncConnection,
     AsyncEngine,
     AsyncSession,
     async_sessionmaker,
@@ -55,7 +56,7 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 
 #: Tabele czyszczone między testami korzystającymi z bazy. Nowy moduł domenowy
 #: dopisuje tu swoje tabele (kolejność nieistotna — TRUNCATE ... CASCADE).
-DB_TABLES = ("sessions", "users")
+DB_TABLES = ("audit_entries", "member_profiles", "sessions", "users", "households")
 
 
 def pytest_asyncio_loop_factories(
@@ -139,6 +140,42 @@ async def db_session(db_sessions: async_sessionmaker[AsyncSession]) -> AsyncIter
     """Sesja dla testów integracyjnych serwisów."""
     async with db_sessions() as session:
         yield session
+
+
+@pytest.fixture
+async def scoped_notes_table(
+    db_engine: AsyncEngine, db_session: AsyncSession
+) -> AsyncIterator[None]:
+    """Tabela encji testowej `scoped_notes` na czas JEDNEGO testu.
+
+    Nie ma jej w żadnej migracji (karta BATCH_03): `alembic upgrade head` na
+    bazie produkcyjnej nie może tworzyć tabel testowych.
+
+    `db_session` w sygnaturze nie jest ozdobą: sesja testu trzyma otwartą
+    transakcję czytelnika (ACCESS SHARE) na `scoped_notes`, a `DROP TABLE`
+    potrzebuje ACCESS EXCLUSIVE — bez jawnego `rollback()` przed sprzątaniem
+    teardown czekałby na tę blokadę w nieskończoność.
+    """
+    from app.core.scope import SCOPE_ENUM
+    from tests.scoped_entity import SCOPED_NOTES_TABLE as table
+
+    async def reset(connection: AsyncConnection) -> None:
+        # Gdyby jakaś sesja jednak trzymała blokadę, chcemy czytelnego błędu
+        # po pięciu sekundach, a nie zawieszonego przebiegu testów.
+        await connection.execute(text("SET LOCAL lock_timeout = '5s'"))
+        await connection.run_sync(table.drop, checkfirst=True)
+        # DROP TABLE nie usuwa typu enumowego (lekcja z migracji 0002).
+        await connection.run_sync(SCOPE_ENUM.drop, checkfirst=True)
+
+    async with db_engine.begin() as connection:
+        await reset(connection)
+        await connection.run_sync(table.create)
+    try:
+        yield
+    finally:
+        await db_session.rollback()
+        async with db_engine.begin() as connection:
+            await reset(connection)
 
 
 @pytest.fixture

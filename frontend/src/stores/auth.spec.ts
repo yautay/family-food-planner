@@ -97,6 +97,35 @@ describe('authStore', () => {
     expect(auth.isAuthenticated).toBe(false)
   })
 
+  it('bez rodziny household jest pusty', async () => {
+    fetchCurrentUser.mockResolvedValue(USER)
+    const auth = useAuthStore()
+
+    await auth.ensureLoaded()
+
+    expect(auth.household).toBeNull()
+  })
+
+  it('udostępnia rodzinę z /auth/me', async () => {
+    fetchCurrentUser.mockResolvedValue({ ...USER, household: { id: 4, name: 'Kowalscy' } })
+    const auth = useAuthStore()
+
+    await auth.ensureLoaded()
+
+    expect(auth.household).toEqual({ id: 4, name: 'Kowalscy' })
+  })
+
+  it('wylogowanie czyści także rodzinę', async () => {
+    loginRequest.mockResolvedValue({ ...USER, household: { id: 4, name: 'Kowalscy' } })
+    logoutRequest.mockResolvedValue(undefined)
+    const auth = useAuthStore()
+    await auth.login({ email: 'anna@example.com', password: 'haslo-testowe-2026' })
+
+    await auth.logout()
+
+    expect(auth.household).toBeNull()
+  })
+
   it('rozpoznaje rolę administratora', async () => {
     fetchCurrentUser.mockResolvedValue({ ...USER, role: 'admin' })
     const auth = useAuthStore()

@@ -109,10 +109,169 @@ export interface paths {
         patch: operations["update_user_api_v1_admin_users__user_id__patch"];
         trace?: never;
     };
+    "/api/v1/households/my": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Moja rodzina */
+        get: operations["my_household_api_v1_households_my_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/households/my/profiles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Profile członków mojej rodziny */
+        get: operations["list_profiles_api_v1_households_my_profiles_get"];
+        put?: never;
+        /** Dodanie profilu członka rodziny */
+        post: operations["create_profile_api_v1_households_my_profiles_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/households/my/profiles/{profile_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Usunięcie profilu członka rodziny */
+        delete: operations["delete_profile_api_v1_households_my_profiles__profile_id__delete"];
+        options?: never;
+        head?: never;
+        /** Edycja profilu członka rodziny */
+        patch: operations["update_profile_api_v1_households_my_profiles__profile_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/admin/households": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lista rodzin */
+        get: operations["list_households_api_v1_admin_households_get"];
+        put?: never;
+        /** Utworzenie rodziny */
+        post: operations["create_household_api_v1_admin_households_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/households/{household_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Szczegóły rodziny z członkami i profilami */
+        get: operations["get_household_api_v1_admin_households__household_id__get"];
+        put?: never;
+        post?: never;
+        /** Usunięcie rodziny (409 z listą użyć, gdy nie jest pusta) */
+        delete: operations["delete_household_api_v1_admin_households__household_id__delete"];
+        options?: never;
+        head?: never;
+        /** Zmiana nazwy rodziny */
+        patch: operations["update_household_api_v1_admin_households__household_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/admin/households/{household_id}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Podmiana składu rodziny (konta spoza listy zostają odpięte) */
+        put: operations["set_members_api_v1_admin_households__household_id__members_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Dziennik operacji */
+        get: operations["list_entries_api_v1_audit_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * AuditEntryRead
+         * @description Wpis dziennika widziany przez administratora.
+         */
+        AuditEntryRead: {
+            /** Id */
+            id: number;
+            /** User Id */
+            user_id: number | null;
+            /** Action */
+            action: string;
+            /** Entity Type */
+            entity_type: string;
+            /** Entity Id */
+            entity_id: number | null;
+            /** Payload */
+            payload: {
+                [key: string]: unknown;
+            };
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /**
+         * AuditListResponse
+         * @description Lista wpisów z paginacją (04_API §1).
+         */
+        AuditListResponse: {
+            /** Items */
+            items: components["schemas"]["AuditEntryRead"][];
+            /** Total */
+            total: number;
+        };
         /**
          * CurrentUser
          * @description Odpowiedź `GET /auth/me` — to, co frontend wie o zalogowanym użytkowniku.
@@ -133,8 +292,7 @@ export interface components {
             ui_settings: {
                 [key: string]: unknown;
             };
-            /** Household */
-            household?: null;
+            household?: components["schemas"]["HouseholdSummary"] | null;
         };
         /**
          * ErrorBody
@@ -176,6 +334,120 @@ export interface components {
             version: string;
         };
         /**
+         * HouseholdCreateRequest
+         * @description Utworzenie rodziny (wyłącznie ADMIN — 02_DOMAIN §3).
+         */
+        HouseholdCreateRequest: {
+            /** Name */
+            name: string;
+        };
+        /**
+         * HouseholdDetail
+         * @description Szczegóły rodziny: konta i profile członków.
+         */
+        HouseholdDetail: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Members Count */
+            members_count: number;
+            /** Profiles Count */
+            profiles_count: number;
+            /** Members */
+            members: components["schemas"]["HouseholdMember"][];
+            /** Profiles */
+            profiles: components["schemas"]["MemberProfileRead"][];
+        };
+        /**
+         * HouseholdListResponse
+         * @description Lista rodzin z paginacją (04_API §1).
+         */
+        HouseholdListResponse: {
+            /** Items */
+            items: components["schemas"]["HouseholdRead"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * HouseholdMember
+         * @description Konto należące do rodziny.
+         *
+         *     `email` jako zwykły `str` (nie `EmailStr`) — jak w `UserRead`: walidacja
+         *     adresu należy do wejścia, odczyt nie może się wywalić na starszym wierszu.
+         */
+        HouseholdMember: {
+            /** Id */
+            id: number;
+            /** Email */
+            email: string;
+            /** Display Name */
+            display_name: string;
+            role: components["schemas"]["UserRole"];
+            /** Is Active */
+            is_active: boolean;
+        };
+        /**
+         * HouseholdMembersRequest
+         * @description Pełna podmiana składu rodziny: konta spoza listy zostają odpięte.
+         */
+        HouseholdMembersRequest: {
+            /** User Ids */
+            user_ids?: number[];
+        };
+        /**
+         * HouseholdRead
+         * @description Rodzina na liście administratora (z licznikami, żeby lista miała treść).
+         */
+        HouseholdRead: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Members Count */
+            members_count: number;
+            /** Profiles Count */
+            profiles_count: number;
+        };
+        /**
+         * HouseholdSummary
+         * @description Rodzina w skrócie — tyle o niej wie sesja (`GET /auth/me`).
+         */
+        HouseholdSummary: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+        };
+        /**
+         * HouseholdUpdateRequest
+         * @description Zmiana nazwy rodziny.
+         */
+        HouseholdUpdateRequest: {
+            /** Name */
+            name?: string | null;
+        };
+        /**
          * LoginRequest
          * @description Dane logowania. Hasło bez dolnego limitu — złe dane to 401, nie 422.
          */
@@ -187,6 +459,91 @@ export interface components {
             email: string;
             /** Password */
             password: string;
+        };
+        /**
+         * MemberProfileCreateRequest
+         * @description Nowy profil w rodzinie zalogowanego użytkownika.
+         */
+        MemberProfileCreateRequest: {
+            /** Name */
+            name: string;
+            /**
+             * Default Multiplier
+             * @default 1.00
+             */
+            default_multiplier: number | string;
+            /** Kcal Goal */
+            kcal_goal?: number | string | null;
+            /**
+             * Is Active
+             * @default true
+             */
+            is_active: boolean;
+        };
+        /**
+         * MemberProfileListResponse
+         * @description Lista profili z paginacją (04_API §1).
+         */
+        MemberProfileListResponse: {
+            /** Items */
+            items: components["schemas"]["MemberProfileRead"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * MemberProfileRead
+         * @description Profil członka rodziny (może istnieć bez konta — 02_DOMAIN §3).
+         */
+        MemberProfileRead: {
+            /** Id */
+            id: number;
+            /** Household Id */
+            household_id: number | null;
+            /** Owner User Id */
+            owner_user_id: number | null;
+            /** Name */
+            name: string;
+            /** Default Multiplier */
+            default_multiplier: string;
+            /** Kcal Goal */
+            kcal_goal: string | null;
+            /** Is Active */
+            is_active: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * MemberProfileUpdateRequest
+         * @description Częściowa edycja profilu. Pola pominięte pozostają bez zmian.
+         */
+        MemberProfileUpdateRequest: {
+            /** Name */
+            name?: string | null;
+            /** Default Multiplier */
+            default_multiplier?: number | string | null;
+            /** Kcal Goal */
+            kcal_goal?: number | string | null;
+            /** Is Active */
+            is_active?: boolean | null;
+        };
+        /**
+         * MyHouseholdResponse
+         * @description `GET /households/my` — brak rodziny to legalny stan, a nie 404.
+         */
+        MyHouseholdResponse: {
+            household: components["schemas"]["HouseholdSummary"] | null;
+            /** Members */
+            members: components["schemas"]["HouseholdMember"][];
+            /** Profiles */
+            profiles: components["schemas"]["MemberProfileRead"][];
         };
         /**
          * UserCreateRequest
@@ -539,6 +896,392 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UserRead"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    my_household_api_v1_households_my_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyHouseholdResponse"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_profiles_api_v1_households_my_profiles_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberProfileListResponse"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_profile_api_v1_households_my_profiles_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MemberProfileCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberProfileRead"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_profile_api_v1_households_my_profiles__profile_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profile_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_profile_api_v1_households_my_profiles__profile_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profile_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MemberProfileUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberProfileRead"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_households_api_v1_admin_households_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+                q?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HouseholdListResponse"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_household_api_v1_admin_households_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HouseholdCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HouseholdDetail"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_household_api_v1_admin_households__household_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                household_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HouseholdDetail"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_household_api_v1_admin_households__household_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                household_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_household_api_v1_admin_households__household_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                household_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HouseholdUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HouseholdDetail"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    set_members_api_v1_admin_households__household_id__members_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                household_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HouseholdMembersRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HouseholdDetail"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_entries_api_v1_audit_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+                action?: string | null;
+                entity_type?: string | null;
+                user_id?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditListResponse"];
                 };
             };
             /** @description Błąd */

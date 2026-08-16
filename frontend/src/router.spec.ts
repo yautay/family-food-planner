@@ -74,6 +74,14 @@ describe('guard routera', () => {
 
     expect(result).toBe(true)
   })
+
+  it('trasa rodzin jest zamknięta dla zwykłego użytkownika', async () => {
+    fetchCurrentUser.mockResolvedValue(USER)
+
+    const result = await authGuard(target('/admin/rodziny', { admin: true }), useAuthStore())
+
+    expect(result).toEqual({ name: 'plan-dnia' })
+  })
 })
 
 describe('mapa tras', () => {
@@ -91,6 +99,7 @@ describe('mapa tras', () => {
       'statystyki',
       'ustawienia',
       'admin-users',
+      'admin-households',
     ])
   })
 

@@ -52,7 +52,16 @@ def _current_revision(url: str) -> str | None:
 
 #: Tabele oczekiwane po `upgrade head`. Batch dodający migrację dopisuje swoje —
 #: dzięki temu „przypadkowa" tabela albo zapomniany downgrade są widoczne od razu.
-EXPECTED_TABLES = {"alembic_version", "users", "sessions"}
+#: `scoped_notes` (encja testowa BATCH_03) świadomie NIE jest tu wymieniona:
+#: migracje produkcyjne nie mogą tworzyć tabel testowych.
+EXPECTED_TABLES = {
+    "alembic_version",
+    "users",
+    "sessions",
+    "households",
+    "member_profiles",
+    "audit_entries",
+}
 
 
 def test_upgrade_downgrade_upgrade_na_czystej_bazie(
@@ -64,7 +73,7 @@ def test_upgrade_downgrade_upgrade_na_czystej_bazie(
 
     command.upgrade(alembic_config, "head")
     after_upgrade = _current_revision(test_database_url)
-    assert after_upgrade == "0002"
+    assert after_upgrade == "0003"
 
     command.downgrade(alembic_config, "base")
     assert _current_revision(test_database_url) is None

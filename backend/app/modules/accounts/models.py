@@ -1,14 +1,15 @@
 """Modele modułu accounts: User i Session (03_DATABASE §2 — schemat wiążący).
 
-`users.household_id` NIE powstaje w tym batchu — kolumnę razem z tabelą
-`households` dodaje BATCH_03 (nie tworzymy FK do nieistniejącej tabeli).
+`users.household_id` (BATCH_03) jest jedyną reprezentacją członkostwa
+w rodzinie — tabeli łączącej nie ma, bo ADR-006 dopuszcza maksymalnie jedną
+rodzinę na konto, a scope musi zostać jednym warunkiem SQL.
 """
 
 from __future__ import annotations
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import (
     BigInteger,
@@ -26,6 +27,9 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base, TimestampMixin
+
+if TYPE_CHECKING:  # pragma: no cover — tylko dla typów, bez cyklu importów
+    from app.modules.households.models import Household
 
 
 class UserRole(StrEnum):
@@ -60,6 +64,14 @@ class User(TimestampMixin, Base):
     ui_settings: Mapped[dict[str, Any]] = mapped_column(
         JSONB, nullable=False, default=dict, server_default="{}"
     )
+    #: Rodzina użytkownika (ADR-006: co najwyżej jedna). Usunięcie rodziny nie
+    #: kasuje konta — zostaje bez rodziny, dokładnie jak konto nigdy nieprzypisane.
+    household_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        ForeignKey("households.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
 
     # Blokada po serii nieudanych logowań (07_SECURITY §2). Stan trzymamy w bazie,
     # a nie w pamięci procesu — restart aplikacji nie może zerować blokady.
@@ -71,6 +83,9 @@ class User(TimestampMixin, Base):
     sessions: Mapped[list[Session]] = relationship(
         back_populates="user", cascade="all, delete-orphan", passive_deletes=True
     )
+    #: `lazy="joined"`, bo `GET /auth/me` zwraca rodzinę przy każdym żądaniu,
+    #: a leniwe doczytanie w sesji async kończy się `MissingGreenlet`.
+    household: Mapped[Household | None] = relationship(back_populates="users", lazy="joined")
 
 
 class Session(Base):

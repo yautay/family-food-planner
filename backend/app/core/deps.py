@@ -19,6 +19,8 @@ from app.core.errors import ForbiddenError, UnauthorizedError
 from app.core.security import CSRF_COOKIE_NAME, SESSION_COOKIE_NAME
 from app.modules.accounts.models import User, UserRole
 from app.modules.accounts.service import SESSION_REQUIRED, AccountsService
+from app.modules.audit.service import AuditService
+from app.modules.households.service import HouseholdsService
 
 
 def get_accounts_service(
@@ -26,6 +28,20 @@ def get_accounts_service(
 ) -> AccountsService:
     """Serwis kont na potrzeby routerów i innych dependency."""
     return AccountsService(session)
+
+
+def get_households_service(
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> HouseholdsService:
+    """Serwis rodzin i profili członków."""
+    return HouseholdsService(session)
+
+
+def get_audit_service(
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> AuditService:
+    """Serwis dziennika operacji (odczyt dla ADMIN-a; zapisy robią serwisy domenowe)."""
+    return AuditService(session)
 
 
 async def get_current_user(

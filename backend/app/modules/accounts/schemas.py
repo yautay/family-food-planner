@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from app.core.security import MIN_PASSWORD_LENGTH
 from app.modules.accounts.models import UserRole
+from app.modules.households.schemas import HouseholdSummary
 
 #: Górny limit długości hasła — argon2 nie ma limitu, ale nieograniczone
 #: wejście to darmowy DoS (hash liczy się tym dłużej, im dłuższe hasło).
@@ -42,8 +43,8 @@ class CurrentUser(BaseModel):
     display_name: str
     role: UserRole
     ui_settings: dict[str, object]
-    #: Kontrakt na BATCH_03 — pole istnieje od razu, wartość dopiero z rodzinami.
-    household: None = None
+    #: Rodzina użytkownika albo `null` — brak rodziny to legalny stan (ADR-006).
+    household: HouseholdSummary | None = None
 
 
 class UserRead(BaseModel):

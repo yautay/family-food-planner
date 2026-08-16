@@ -109,13 +109,16 @@ def build_admin_users_router() -> APIRouter:
         status_code=status.HTTP_201_CREATED,
         summary="Utworzenie konta",
     )
-    async def create_user(payload: UserCreateRequest, service: ServiceDep) -> UserRead:
+    async def create_user(
+        payload: UserCreateRequest, service: ServiceDep, actor: AdminUser
+    ) -> UserRead:
         user = await service.create_user(
             email=payload.email,
             password=payload.password,
             display_name=payload.display_name,
             role=payload.role,
             is_active=payload.is_active,
+            actor=actor,
         )
         return UserRead.model_validate(user)
 
