@@ -35,6 +35,17 @@ Wymagane lektury przed startem:
 - ADR-004 (model wartości), ADR-005 (jednostki), ADR-008 (czyste silniki,
   Decimal), ADR-012 (usuwanie).
 
+## Skills
+
+Mapa ID → skill: `docs/implementation-plan/03_AI_SKILLS.md` §3. Required
+ładowane na starcie sesji (master prompt krok 1f); Review uruchamiane na
+diffie przed commitem (krok 11).
+
+- **Required**: SKILL-REVIEW, SKILL-BE, SKILL-CALC
+- **Recommended**: SKILL-FE, SKILL-CREATOR
+
+Review batch sam jest procesem przeglądowym — SKILL-REVIEW/SKILL-SECREV uruchamiane są na pełnym zakresie zmian od poprzedniego review, nie na diffie własnego commita.
+
 ## Stages
 
 1. **Rekonstrukcja stanu**: PROGRESS (w tym warunki z R1) + Completion

@@ -167,6 +167,16 @@ przy pierwszym użyciu (brak konfiguracji w scope) utworzyć: „Niedziela" —
 - Tokeny publiczne: kolumny istnieją, ale ŻADEN endpoint ich nie wystawia
   ani nie generuje (to B11) — test, że odpowiedzi nie zawierają `public_token`.
 
+## Skills
+
+Mapa ID → skill: `docs/implementation-plan/03_AI_SKILLS.md` §3. Required
+ładowane na starcie sesji (master prompt krok 1f); Review uruchamiane na
+diffie przed commitem (krok 11).
+
+- **Required**: SKILL-BE, SKILL-CALC
+- **Recommended**: SKILL-FE
+- **Review**: SKILL-REVIEW
+
 ## Tests
 
 Obszary krytyczne 08 §2.4–2.7 — KAŻDY punkt jako nazwane przypadki w `backend/tests/unit/shopping/`:

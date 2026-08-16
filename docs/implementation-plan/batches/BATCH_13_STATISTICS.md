@@ -137,6 +137,16 @@ zarządza — nie przez „sięganie w tabele", 02_DOMAIN §1):
 - Brak nowych powierzchni: bez uploadów, tokenów, mutacji (endpoint
   read-only, GET bez CSRF).
 
+## Skills
+
+Mapa ID → skill: `docs/implementation-plan/03_AI_SKILLS.md` §3. Required
+ładowane na starcie sesji (master prompt krok 1f); Review uruchamiane na
+diffie przed commitem (krok 11).
+
+- **Required**: SKILL-FE, SKILL-CALC
+- **Recommended**: SKILL-BE
+- **Review**: SKILL-REVIEW
+
 ## Tests
 
 - **Unit (pytest, czyste):** wybór celu wg `valid_from` (przed pierwszym

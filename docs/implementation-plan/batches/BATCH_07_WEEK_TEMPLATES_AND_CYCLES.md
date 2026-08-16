@@ -147,6 +147,16 @@ Serwisy i reguły:
   jak w B06 (tylko własna rodzina).
 - Brak nowych uploadów/tokenów; endpointy niedostępne publicznie.
 
+## Skills
+
+Mapa ID → skill: `docs/implementation-plan/03_AI_SKILLS.md` §3. Required
+ładowane na starcie sesji (master prompt krok 1f); Review uruchamiane na
+diffie przed commitem (krok 11).
+
+- **Required**: SKILL-BE, SKILL-FE
+- **Recommended**: SKILL-CALC
+- **Review**: SKILL-REVIEW
+
 ## Tests
 
 - **Unit**: budowa payloadu z dnia/tygodnia planu (struktura, pozycje,

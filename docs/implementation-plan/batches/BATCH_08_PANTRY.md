@@ -144,6 +144,16 @@ Ilości w JSON jako stringi dziesiętne (`"250.0"`) — konwencja 04 §1.
   pozycji (macierz 08 §4).
 - Brak uploadów, tokenów publicznych i operacji admin-only w tym batchu.
 
+## Skills
+
+Mapa ID → skill: `docs/implementation-plan/03_AI_SKILLS.md` §3. Required
+ładowane na starcie sesji (master prompt krok 1f); Review uruchamiane na
+diffie przed commitem (krok 11).
+
+- **Required**: SKILL-BE, SKILL-FE
+- **Recommended**: SKILL-CALC
+- **Review**: SKILL-REVIEW
+
 ## Tests
 
 - **Integration** (`task test-int`):

@@ -39,6 +39,17 @@ Wymagane lektury przed startem:
   ADR-010 (publiczne tokeny), ADR-011 (importer — pod potwierdzenie
   kolejności B15/B16).
 
+## Skills
+
+Mapa ID → skill: `docs/implementation-plan/03_AI_SKILLS.md` §3. Required
+ładowane na starcie sesji (master prompt krok 1f); Review uruchamiane na
+diffie przed commitem (krok 11).
+
+- **Required**: SKILL-REVIEW, SKILL-SECREV, SKILL-BE, SKILL-FE, SKILL-CALC, SKILL-SEC
+- **Recommended**: SKILL-CREATOR
+
+Review batch sam jest procesem przeglądowym — SKILL-REVIEW/SKILL-SECREV uruchamiane są na pełnym zakresie zmian od poprzedniego review, nie na diffie własnego commita.
+
 ## Stages
 
 1. **Rekonstrukcja stanu**: PROGRESS (warunki R2) + Completion notes

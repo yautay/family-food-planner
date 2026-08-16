@@ -125,6 +125,16 @@ Brak nowych endpointów. Deliverables operacyjne:
 - Hasło pierwszego admina ustawione interaktywnie przy create-admin,
   nieobecne w historii shella (instrukcja w runbooku).
 
+## Skills
+
+Mapa ID → skill: `docs/implementation-plan/03_AI_SKILLS.md` §3. Required
+ładowane na starcie sesji (master prompt krok 1f); Review uruchamiane na
+diffie przed commitem (krok 11).
+
+- **Required**: SKILL-SEC
+- **Recommended**: SKILL-BE
+- **Review**: SKILL-SECREV
+
 ## Tests
 
 - `task check` zielony (bez zmian logiki — regresja).

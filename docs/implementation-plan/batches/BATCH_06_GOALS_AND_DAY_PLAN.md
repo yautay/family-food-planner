@@ -153,6 +153,15 @@ Serwisy i reguły:
 - Cele i `ui_settings`: wyłącznie własne (`user_id` z sesji, nie z body).
 - Brak nowych uploadów/tokenów publicznych.
 
+## Skills
+
+Mapa ID → skill: `docs/implementation-plan/03_AI_SKILLS.md` §3. Required
+ładowane na starcie sesji (master prompt krok 1f); Review uruchamiane na
+diffie przed commitem (krok 11).
+
+- **Required**: SKILL-BE, SKILL-FE, SKILL-CALC
+- **Review**: SKILL-REVIEW
+
 ## Tests
 
 - **Unit — engine (08 §2.1–2.2)**: `fit_servings_to_target` (dokładny cel,

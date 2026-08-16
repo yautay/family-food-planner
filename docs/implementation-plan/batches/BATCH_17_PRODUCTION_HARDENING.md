@@ -113,6 +113,15 @@ agent B17 wykonuje je jako Stage 1)
   w 09_DEPLOYMENT, jeśli dotąd nieegzekwowane.
 - Naprawy z R4 o charakterze security wykonywane w pierwszej kolejności.
 
+## Skills
+
+Mapa ID → skill: `docs/implementation-plan/03_AI_SKILLS.md` §3. Required
+ładowane na starcie sesji (master prompt krok 1f); Review uruchamiane na
+diffie przed commitem (krok 11).
+
+- **Required**: SKILL-BE, SKILL-SEC
+- **Review**: SKILL-REVIEW, SKILL-SECREV
+
 ## Tests
 
 - **Round-trip backup→restore (KLUCZOWY, wykonany REALNIE)**: na compose

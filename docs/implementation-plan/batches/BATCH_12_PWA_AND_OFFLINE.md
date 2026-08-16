@@ -115,6 +115,16 @@ przycinane do `now()` serwera (ochrona przed rozjechanym zegarem klienta).
 - Token w kluczu idb: akceptowalne (to samo urządzenie co URL); tokenów
   nie logujemy w konsoli ani w raportach błędów.
 
+## Skills
+
+Mapa ID → skill: `docs/implementation-plan/03_AI_SKILLS.md` §3. Required
+ładowane na starcie sesji (master prompt krok 1f); Review uruchamiane na
+diffie przed commitem (krok 11).
+
+- **Required**: SKILL-FE
+- **Recommended**: SKILL-SEC
+- **Review**: SKILL-REVIEW
+
 ## Tests
 
 - **vitest (kolejka — obowiązkowe scenariusze z ADR-009):**

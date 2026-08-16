@@ -118,6 +118,9 @@ Klasa · Zależności (batche + decyzje-bramki) · Szacunek rozmiaru (S/M/L)
 ## Backend         — endpointy (tabela: ścieżka, metoda, rola), serwisy, walidacje
 ## Frontend        — strony/komponenty/stores, wzorce z 05/06 (create-in-context!)
 ## Security        — czego batch dotyka (auth/scope/upload/tokeny) i jak chroni
+## Skills          — Required / Recommended / Review: identyfikatory SKILL-*
+                     z 03_AI_SKILLS §3 (Required ładowane na starcie sesji,
+                     Review uruchamiane na diffie przed commitem)
 ## Tests           — konkretne przypadki per poziom (unit/int/api/fe/e2e);
                      obszary krytyczne z 08_TESTING §2, macierz uprawnień §4
 ## Acceptance Criteria — ponumerowane, sprawdzalne ręcznie lub testem

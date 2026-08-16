@@ -142,6 +142,16 @@ Wg 03_DATABASE §2, §10 (WIĄŻĄCE):
   nigdy hash/hasło).
 - Wszystkie nowe mutacje pod CSRF (dziedziczą z middleware B02).
 
+## Skills
+
+Mapa ID → skill: `docs/implementation-plan/03_AI_SKILLS.md` §3. Required
+ładowane na starcie sesji (master prompt krok 1f); Review uruchamiane na
+diffie przed commitem (krok 11).
+
+- **Required**: SKILL-BE, SKILL-SEC
+- **Recommended**: SKILL-FE
+- **Review**: SKILL-REVIEW, SKILL-SECREV
+
 ## Tests
 
 - **Unit**: walidacje profilu (mnożnik > 0, NUMERIC(4,2); kcal_goal

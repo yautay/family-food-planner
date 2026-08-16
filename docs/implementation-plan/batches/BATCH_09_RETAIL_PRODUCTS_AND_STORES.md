@@ -156,6 +156,15 @@ Usuwanie (ADR-012):
   nie pisać własnej ścieżki zapisu.
 - Blokada usuwania (ADR-012) chroni integralność danych historycznych.
 
+## Skills
+
+Mapa ID → skill: `docs/implementation-plan/03_AI_SKILLS.md` §3. Required
+ładowane na starcie sesji (master prompt krok 1f); Review uruchamiane na
+diffie przed commitem (krok 11).
+
+- **Required**: SKILL-BE, SKILL-FE
+- **Review**: SKILL-REVIEW
+
 ## Tests
 
 - **Integration**:

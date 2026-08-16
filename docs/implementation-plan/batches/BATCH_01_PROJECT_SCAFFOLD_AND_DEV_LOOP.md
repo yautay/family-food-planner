@@ -8,7 +8,7 @@ Po tym batchu repozytorium ma kompletny szkielet monorepo (backend FastAPI +
 frontend Vue 3) z działającą pętlą deweloperską: `docker compose` podnosi
 aplikację z hot-reloadem i PostgreSQL, `task check` przechodzi na zielono,
 `/api/v1/health` odpowiada. Powstaje też kontrakt jakości dla wszystkich
-kolejnych sesji: `CLAUDE.md`, project skill `ffp-framework` i generowanie
+kolejnych sesji: `CLAUDE.md`, uzgodnione project skille ffp-* i generowanie
 typów TS z OpenAPI. Zero logiki domenowej — wyłącznie fundament.
 
 ## Context
@@ -30,8 +30,9 @@ Wymagane lektury przed startem:
 - `docs/architecture/07_SECURITY_DESIGN.md` §7 (sekrety wyłącznie env).
 - `docs/architecture/08_TESTING_STRATEGY.md` §1 (piramida, definicja
   `task check`).
-- `docs/implementation-plan/03_AI_SKILLS.md` — zakres CLAUDE.md i project
-  skilla (obowiązkowe artefakty tego batcha).
+- `docs/implementation-plan/03_AI_SKILLS.md` — manifest systemu skilli
+  (hierarchia, matryca, polityka aktualizacji); ten batch uzgadnia
+  istniejące skille ffp-* z rzeczywistym kodem.
 - ADR-001 (modularny monolit), ADR-002 (bind mounts), ADR-007 (frontend
   stack), ADR-014 (backend serwuje SPA — w dev odroczony, patrz Notes).
 
@@ -66,9 +67,14 @@ Wymagane lektury przed startem:
    `db` (postgres:17, wolumen dev), `db-test` (postgres:17, `tmpfs` na
    danych — baza testów integracyjnych). Healthcheck `db` przez `pg_isready`.
 5. **Taskfile.yml**: targety `dev` (compose up), `check` (test-unit +
-   test-int + test-api + fe-test + typecheck + lint), `test-unit`,
+   test-int + test-api + fe-test + typecheck + lint + format-check +
+   kontrola „`alembic heads` = dokładnie 1"), `test-unit`,
    `test-int`, `test-api`, `fe-test`, `typecheck` (mypy + vue-tsc), `lint`
-   (ruff + eslint), `fe-types` (eksport OpenAPI z app factory → generator
+   (ruff + eslint), `format` / `format-check` (ruff format + prettier —
+   wiele sesji AI wymaga formattera, inaczej diffy toną w szumie),
+   `audit` (pip-audit + npm audit — używane w Review batchach i B17),
+   `secrets-scan` (gitleaks przez docker run — j.w.),
+   `fe-types` (eksport OpenAPI z app factory → generator
    typów TS → `frontend/src/api/generated.ts`), `db-migrate`,
    `create-admin` (placeholder z komunikatem „dostarcza BATCH_02"),
    `db-seed-demo` (placeholder — dostarczają batche domenowe), `help`.
@@ -79,12 +85,13 @@ Wymagane lektury przed startem:
    router→service→models, ZAKAZY: float w ilościach (tylko Decimal/NUMERIC/
    stringi dziesiętne), kopiowanie stanu serwera do Pinia, endpoint bez
    testu scope/uprawnień, i18n; wskaźnik na
-   `docs/implementation-plan/implementation_prompt.md`. Project skill
-   `.claude/skills/ffp-framework/SKILL.md` wg 03_AI_SKILLS: kontrakt
-   kodowania (moduł backendu, ScopedQuery — zapowiedź z odesłaniem do B03,
-   konwencje Decimal, Query vs Pinia, create-in-context, jak uruchamiać
-   testy) — ładowany przy pracy w `backend/**` / `frontend/**`; przy
-   tworzeniu użyć skilla `skill-creator`.
+   `docs/implementation-plan/implementation_prompt.md`. Project skille
+   JUŻ ISTNIEJĄ jako artefakty blueprintu (2026-08-16):
+   `.claude/skills/ffp-{backend,frontend,domain-calc,security}/SKILL.md`.
+   Zadanie tego batcha: UZGODNIĆ je z rzeczywistym kodem (nazwy tasków,
+   ścieżki, wersje w nagłówku `stack:`), zaktualizować datę `verified:`
+   i usunąć rozjazdy — nie tworzyć od zera. Przy zmianach strukturalnych
+   użyć skilla `skill-creator`.
 8. **Testy i domknięcie**: test API health, smoke test app factory, test
    frontendowy (vitest — render AppShell), config pytest (markery unit/int/
    api, fixture DB na `db-test`). `task check` zielony. Aktualizacja
@@ -144,6 +151,16 @@ Wymagane lektury przed startem:
 - Logi bez haseł/tokenów/payloadów (07 §8) — konfiguracja structlog od dziś.
 - Port PG nie wystawiony poza sieć compose (07 §9); hasło DB z env.
 
+## Skills
+
+Mapa ID → skill: `docs/implementation-plan/03_AI_SKILLS.md` §3. Required
+ładowane na starcie sesji (master prompt krok 1f); Review uruchamiane na
+diffie przed commitem (krok 11).
+
+- **Required**: SKILL-BE, SKILL-FE
+- **Recommended**: SKILL-CREATOR
+- **Review**: SKILL-REVIEW
+
 ## Tests
 
 - **API** (`task test-api`): `GET /api/v1/health` → 200, body zawiera
@@ -178,8 +195,9 @@ Wymagane lektury przed startem:
 6. `/login` renderuje się z tokens 06_UIUX (krem `#FAF6EF`, akcent
    `#E07A2F`) — weryfikacja wizualna.
 7. W repo nie ma pliku `.env` ani żadnego sekretu (`git ls-files` czysty).
-8. `CLAUDE.md` i `.claude/skills/ffp-framework/SKILL.md` istnieją i zawierają
-   komplet z 03_AI_SKILLS (komendy, zakazy, wskaźnik na master prompt).
+8. `CLAUDE.md` i 4 project skille (`.claude/skills/ffp-*/SKILL.md`) są
+   uzgodnione ze stanem faktycznym repo (komendy task istnieją i działają,
+   ścieżki prawdziwe, `verified:` zaktualizowane) — zgodnie z 03_AI_SKILLS.
 
 ## Out of Scope
 
@@ -204,7 +222,7 @@ Wymagane lektury przed startem:
   `src/components/ui/*` (shadcn-vue), `frontend/e2e/` (konfig Playwright)
 - `docker/Dockerfile`, `docker/compose.dev.yml`
 - `Taskfile.yml`, `.env.example`, `.gitignore`, `.editorconfig`
-- `CLAUDE.md`, `.claude/skills/ffp-framework/SKILL.md`
+- `CLAUDE.md`, `.claude/skills/ffp-{backend,frontend,domain-calc,security}/SKILL.md` (aktualizacja)
 - `docs/implementation-plan/PROGRESS.md` (aktualizacja)
 
 ## Implementation Notes
@@ -227,7 +245,7 @@ Wymagane lektury przed startem:
 
 ## Cross-Batch Impact
 
-- **Wszystkie batche**: Taskfile, CLAUDE.md i skill ffp-framework to
+- **Wszystkie batche**: Taskfile, CLAUDE.md i project skille ffp-* to
   kontrakt każdej kolejnej sesji — zmiany komend wymagają aktualizacji
   wszystkich trzech miejsc naraz.
 - **B02**: zastępuje placeholder `create-admin`, dopina CSRF w
@@ -252,7 +270,7 @@ Wymagane lektury przed startem:
       db-seed-demo)
 - [ ] task fe-types działa, generated.ts commitowany
 - [ ] .env.example, .gitignore, .editorconfig
-- [ ] CLAUDE.md + .claude/skills/ffp-framework/SKILL.md
+- [ ] CLAUDE.md + uzgodnienie 4 skilli .claude/skills/ffp-*/SKILL.md
 - [ ] Testy: api health, unit config/factory, int migracje, fe-test, e2e konfig
 - [ ] PROGRESS.md zaktualizowany
 

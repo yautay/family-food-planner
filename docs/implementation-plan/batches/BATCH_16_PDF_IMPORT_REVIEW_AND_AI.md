@@ -155,6 +155,16 @@ ENUM-ami. Migracja korygująca dozwolona TYLKO przy odstępstwie B15
   w recipes/canonical_products/product_unit_weights.
 - Rate limit na `ai-suggest` (koszt API) — np. 10/min/user.
 
+## Skills
+
+Mapa ID → skill: `docs/implementation-plan/03_AI_SKILLS.md` §3. Required
+ładowane na starcie sesji (master prompt krok 1f); Review uruchamiane na
+diffie przed commitem (krok 11).
+
+- **Required**: SKILL-BE, SKILL-FE, SKILL-PDF, SKILL-API
+- **Recommended**: SKILL-SEC
+- **Review**: SKILL-REVIEW, SKILL-SECREV
+
 ## Tests
 
 - **Unit:** mediana `grams_per_unit` (parzysta/nieparzysta liczba próbek,

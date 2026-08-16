@@ -34,6 +34,17 @@ Wymagane lektury przed startem:
   + `/code-review` w tym review.
 - ADR-001…014 — zgodność stanu faktycznego z każdym ACCEPTED.
 
+## Skills
+
+Mapa ID → skill: `docs/implementation-plan/03_AI_SKILLS.md` §3. Required
+ładowane na starcie sesji (master prompt krok 1f); Review uruchamiane na
+diffie przed commitem (krok 11).
+
+- **Required**: SKILL-REVIEW, SKILL-SECREV, SKILL-BE, SKILL-FE, SKILL-CALC, SKILL-SEC
+- **Recommended**: SKILL-CREATOR
+
+Review batch sam jest procesem przeglądowym — SKILL-REVIEW/SKILL-SECREV uruchamiane są na pełnym zakresie zmian od poprzedniego review, nie na diffie własnego commita.
+
 ## Stages
 
 1. **Rekonstrukcja stanu**: PROGRESS + Completion notes B01–B16 +

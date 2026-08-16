@@ -142,6 +142,16 @@ Serwisy i reguły:
 - Ocena: użytkownik zapisuje wyłącznie własną (`user_id` z sesji, nie z body).
 - Mutacje z nagłówkiem CSRF (istniejący middleware).
 
+## Skills
+
+Mapa ID → skill: `docs/implementation-plan/03_AI_SKILLS.md` §3. Required
+ładowane na starcie sesji (master prompt krok 1f); Review uruchamiane na
+diffie przed commitem (krok 11).
+
+- **Required**: SKILL-BE, SKILL-FE, SKILL-CALC
+- **Recommended**: SKILL-SEC
+- **Review**: SKILL-REVIEW
+
 ## Tests
 
 - **Unit — silnik (08_TESTING §2.1, pokrycie ~100%)**: przykłady liczbowe

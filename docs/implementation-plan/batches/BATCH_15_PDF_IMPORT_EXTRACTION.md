@@ -154,6 +154,16 @@ z pdfplumber, wyjście = struktury dataclass.
   job = 404 (test anty-IDOR).
 - Żadnych wywołań zewnętrznych (AI dopiero w B16) — parser w pełni offline.
 
+## Skills
+
+Mapa ID → skill: `docs/implementation-plan/03_AI_SKILLS.md` §3. Required
+ładowane na starcie sesji (master prompt krok 1f); Review uruchamiane na
+diffie przed commitem (krok 11).
+
+- **Required**: SKILL-BE, SKILL-PDF
+- **Recommended**: SKILL-CALC
+- **Review**: SKILL-REVIEW
+
 ## Tests
 
 - **Unit (parser, bez DB — na wyciętych tekstach):** regex nagłówka

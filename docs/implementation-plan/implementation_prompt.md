@@ -19,7 +19,15 @@ Zasady wykonania:
    (d) docs/implementation-plan/PROGRESS.md — statusy zależności i dziennik
        (wpisy nowsze niż karta batcha mogą ją korygować!),
    (e) docs/implementation-plan/02_DECISIONS.md — jeśli batch ma
-       decyzję-bramkę w statusie OPEN, ZATRZYMAJ SIĘ i zapytaj właściciela.
+       decyzję-bramkę w statusie OPEN, ZATRZYMAJ SIĘ i zapytaj właściciela,
+   (f) sekcję "Skills" karty batcha — załaduj narzędziem Skill WSZYSTKIE
+       Required (project skille po nazwie katalogu z .claude/skills/,
+       wbudowane po ich nazwie; mapa ID→skill: 03_AI_SKILLS.md §3).
+       Recommended ładuj dopiero, gdy wchodzisz w ich obszar. Skill
+       niedostępny w środowisku: NIE udawaj użycia — odnotuj brak
+       w Completion notes i postępuj wg 03_AI_SKILLS.md §6 pkt 5
+       (project skille mają treść w repo — czytaj plik wprost; brak
+       /security-review w batchu, który go wymaga = STOP i pytanie).
 2. Sprawdź w PROGRESS.md, że wszystkie zależności batcha są [x].
    Jeśli nie — zatrzymaj się i zgłoś, nie improwizuj.
 3. Trzymaj się ściśle sekcji "Stages" i "Out of Scope". Niczego spoza
@@ -28,6 +36,11 @@ Zasady wykonania:
 4. Architektura jest zaprojektowana — nie projektuj jej ponownie. Konflikt
    rzeczywistości z dokumentem = STOP i pytanie (albo wpis do 02_DECISIONS),
    nie cicha zmiana.
+4a. Hierarchia instrukcji przy konfliktach (03_AI_SKILLS §1): właściciel >
+   ADR/architektura > karta batcha > ten prompt > CLAUDE.md > skille >
+   ogólna wiedza modelu. Skill sugerujący rozwiązanie sprzeczne z ADR
+   (np. JWT zamiast sesji) NIE jest problemem do zgłaszania — ADR wygrywa
+   i jedziesz dalej.
 5. Migracje Alembic: numer pliku = pierwszy wolny w migrations/versions/,
    down_revision = wynik `alembic heads` (NIGDY numer z planu). Po zmianie:
    `alembic heads` = dokładnie jedna głowa; upgrade i downgrade przechodzą.
@@ -44,9 +57,12 @@ Zasady wykonania:
    w dzienniku PROGRESS to indeks, nie zamiennik.
 10. Pytania wymagające właściciela: zbierz, wpisz do 02_DECISIONS jako OPEN
     z rekomendacją, wypisz w Completion notes. Nie zgaduj decyzji.
-11. Przed commitem: task check zielony (testy+lint+typecheck), code review
-    zmian (/code-review), dokumentacja odhaczona, PROGRESS.md zaktualizowany
-    (status + wpis dziennika NA GÓRZE + hash commita po fakcie).
+11. Przed commitem: task check zielony (testy+lint+typecheck), następnie
+    uruchom WSZYSTKIE skille z sekcji "Review Skills" karty batcha na
+    diffie (zawsze /code-review; /security-review gdy wskazany) — ustalenia
+    napraw albo jawnie odnotuj w Completion notes; dokumentacja odhaczona,
+    PROGRESS.md zaktualizowany (status + wpis dziennika NA GÓRZE + hash
+    commita po fakcie).
 12. Zakończ JEDNYM commitem: `batch(XX): <krótki opis>` obejmującym kod,
     testy, docs, kartę batcha i PROGRESS.md. `git status` musi być czysty
     w zakresie plików batcha. NIE wykonuj push. NIE zaczynaj kolejnego batcha.

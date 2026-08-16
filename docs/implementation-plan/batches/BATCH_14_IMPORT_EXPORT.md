@@ -134,6 +134,16 @@ Serwis `transfer/service.py`:
   może tworzyć encji w cudzym household.
 - Audit: eksport i import (dry-run apply) logowane z liczbami, bez treści.
 
+## Skills
+
+Mapa ID → skill: `docs/implementation-plan/03_AI_SKILLS.md` §3. Required
+ładowane na starcie sesji (master prompt krok 1f); Review uruchamiane na
+diffie przed commitem (krok 11).
+
+- **Required**: SKILL-BE, SKILL-SEC
+- **Recommended**: SKILL-FE
+- **Review**: SKILL-REVIEW, SKILL-SECREV
+
 ## Tests
 
 - **Unit:** serializacja/deserializacja encji (fabryki → JSON → obiekty);

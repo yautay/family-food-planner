@@ -161,6 +161,16 @@ z dokumentu, nie z pamięci): `product_categories`, `canonical_products`,
 - Trigram parametryzowany przez SQLAlchemy (bez interpolacji SQL).
 - Wszystkie mutacje pod CSRF; brak nowych endpointów publicznych.
 
+## Skills
+
+Mapa ID → skill: `docs/implementation-plan/03_AI_SKILLS.md` §3. Required
+ładowane na starcie sesji (master prompt krok 1f); Review uruchamiane na
+diffie przed commitem (krok 11).
+
+- **Required**: SKILL-BE, SKILL-FE, SKILL-CALC
+- **Recommended**: SKILL-SEC
+- **Review**: SKILL-REVIEW
+
 ## Tests
 
 - **Unit — konwersje (08 §2.3, obszar krytyczny, blisko 100%)**: kg→g,

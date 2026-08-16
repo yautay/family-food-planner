@@ -88,7 +88,8 @@ Wg 03_DATABASE §2 (WIĄŻĄCE):
   ui_settings JSONB DEFAULT '{}', created_at/updated_at timestamptz.
   **Bez `household_id`** — tę kolumnę dodaje migracja B03 razem z tabelą
   `households` (nie tworzymy FK do nieistniejącej tabeli).
-- `sessions`: id UUID PK, user_id FK→users ON DELETE CASCADE, expires_at,
+- `sessions`: id TEXT PK (`secrets.token_urlsafe(32)` — 03 §2), user_id
+  FK→users ON DELETE CASCADE, expires_at,
   created_at, ip, user_agent. Indeks na `expires_at` (sprzątanie) i
   `user_id`.
 - Migracja: numer = pierwszy wolny w `migrations/versions/`,
@@ -137,7 +138,7 @@ Ten batch JEST warstwą bezpieczeństwa aplikacji:
 
 - Hasła: argon2id, parametry domyślne biblioteki, rehash przy logowaniu;
   min. długość 10 (07 §2).
-- Sesja: `secrets.token_urlsafe(32)` jako id (kolumna UUID → patrz Notes),
+- Sesja: `secrets.token_urlsafe(32)` jako id (kolumna TEXT),
   cookie `HttpOnly; Secure; SameSite=Lax; Path=/`, TTL 30 dni przesuwne,
   logout = DELETE wiersza (natychmiastowe odwołanie).
 - CSRF: cookie `csrf_token` (nie-HttpOnly) + nagłówek `X-CSRF-Token`,
@@ -152,6 +153,16 @@ Ten batch JEST warstwą bezpieczeństwa aplikacji:
   'unsafe-inline'`.
 - Logi: nigdy hasło/id sesji/token; user id zamiast emaila (07 §8).
 - Brak samorejestracji; konta tworzy wyłącznie ADMIN.
+
+## Skills
+
+Mapa ID → skill: `docs/implementation-plan/03_AI_SKILLS.md` §3. Required
+ładowane na starcie sesji (master prompt krok 1f); Review uruchamiane na
+diffie przed commitem (krok 11).
+
+- **Required**: SKILL-BE, SKILL-SEC
+- **Recommended**: SKILL-FE
+- **Review**: SKILL-REVIEW, SKILL-SECREV
 
 ## Tests
 
