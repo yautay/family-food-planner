@@ -46,6 +46,9 @@ U      /recipes                            — CRUD, filtry: tag, tekst, czas,
                                              trudność, ocena, scope
 U      /recipes/{id}/rating                — PUT własnej oceny
 GET    /recipes/{id}?servings=2.5          — nutrition per porcja × mnożnik
+U      /recipes/{id}/photo                 — POST (multipart) / DELETE zdjęcia
+GET    /uploads/{path}                     — serving uploadów; POZA /api/v1,
+                                             wymaga sesji (07_SECURITY §6)
 
 U      /plan/days?from=&to=                — dni z posiłkami+pozycjami+nutrition
 U      /plan/days/{date} (+meals, +items)  — CRUD; PATCH mnożników

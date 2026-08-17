@@ -33,8 +33,28 @@ export const routes: RouteRecordRaw[] = [
       {
         path: 'przepisy',
         name: 'przepisy',
-        component: PlaceholderPage,
+        component: () => import('@/pages/przepisy/PrzepisyPage.vue'),
         meta: { title: 'Przepisy' },
+      },
+      // Trasy podrzędne sekcji „Przepisy" — bez nowych pozycji w nawigacji.
+      // Statyczne `nowy` musi stać przed parametrem `:id` (kolejność dopasowania).
+      {
+        path: 'przepisy/nowy',
+        name: 'przepis-nowy',
+        component: () => import('@/pages/przepisy/PrzepisEdytorPage.vue'),
+        meta: { title: 'Nowy przepis' },
+      },
+      {
+        path: 'przepisy/:id',
+        name: 'przepis-szczegol',
+        component: () => import('@/pages/przepisy/PrzepisSzczegolPage.vue'),
+        meta: { title: 'Przepis' },
+      },
+      {
+        path: 'przepisy/:id/edytuj',
+        name: 'przepis-edycja',
+        component: () => import('@/pages/przepisy/PrzepisEdytorPage.vue'),
+        meta: { title: 'Edycja przepisu' },
       },
       {
         path: 'produkty',

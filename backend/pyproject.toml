@@ -17,6 +17,10 @@ dependencies = [
     "argon2-cffi>=23.1",
     "slowapi>=0.1.9",
     "email-validator>=2.2",
+    # BATCH_05 (07_SECURITY §6): Pillow do sniffingu/re-encode zdjęć,
+    # python-multipart do przyjmowania multipart/form-data (upload zdjęcia).
+    "pillow>=11.1",
+    "python-multipart>=0.0.20",
 ]
 
 [dependency-groups]
@@ -26,6 +30,10 @@ dev = [
     "httpx>=0.28",
     "ruff>=0.8",
     "mypy>=1.14",
+    # BATCH_05: property-based testy silnika nutrition (08_TESTING §2.1)
+    # i raport pokrycia engine.py (acceptance criteria pkt 2).
+    "hypothesis>=6.125",
+    "pytest-cov>=6.0",
 ]
 
 # Projekt „wirtualny" (uv nie instaluje go jako paczki) — aplikacja jest

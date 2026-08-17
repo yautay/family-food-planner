@@ -703,8 +703,10 @@ const basisUnit = computed(() => (productValues.measure_kind === 'volume' ? 'ml'
             class="border-border flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3"
             :data-testid="`unit-weight-${weight.id}`"
           >
+            <!-- U9 (review R1): przelicznik leży na osi WARTOŚCI produktu
+                 (basisUnit) — dla produktu VOLUME to mililitry, nie gramy. -->
             <span class="text-sm tabular-nums">
-              1 {{ weight.unit_label }} = {{ formatAmount(weight.grams_per_unit, 'g') }}
+              1 {{ weight.unit_label }} = {{ formatAmount(weight.grams_per_unit, basisUnit) }}
             </span>
             <Button
               type="button"
@@ -736,7 +738,7 @@ const basisUnit = computed(() => (productValues.measure_kind === 'volume' ? 'ml'
           </div>
           <div class="grid gap-2">
             <label class="text-sm font-medium" for="unit-grams">
-              {{ texts.gramsPerUnitLabel }}
+              {{ texts.perUnitLabel }} ({{ basisUnit }})
             </label>
             <Input
               id="unit-grams"

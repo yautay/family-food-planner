@@ -66,6 +66,11 @@ EXPECTED_TABLES = {
     "product_unit_weights",
     "nutrients",
     "product_nutrient_values",
+    "recipes",
+    "recipe_ingredients",
+    "tags",
+    "recipe_tags",
+    "recipe_ratings",
 }
 
 
@@ -78,7 +83,7 @@ def test_upgrade_downgrade_upgrade_na_czystej_bazie(
 
     command.upgrade(alembic_config, "head")
     after_upgrade = _current_revision(test_database_url)
-    assert after_upgrade == "0005"
+    assert after_upgrade == "0007"
 
     command.downgrade(alembic_config, "base")
     assert _current_revision(test_database_url) is None
@@ -104,7 +109,15 @@ def test_schemat_po_migracjach_zawiera_dokladnie_oczekiwane_tabele(
 
 
 #: Typy enumowe tworzone przez migracje. Każda migracja z enumem dopisuje tu swój.
-EXPECTED_ENUM_TYPES = ("user_role", "perishability", "measure_kind", "verification_status")
+EXPECTED_ENUM_TYPES = (
+    "user_role",
+    "perishability",
+    "measure_kind",
+    "verification_status",
+    "entity_scope",
+    "recipe_source",
+    "amount_unit",
+)
 
 
 def test_downgrade_usuwa_takze_typy_enumowe(alembic_config: Config, test_database_url: str) -> None:

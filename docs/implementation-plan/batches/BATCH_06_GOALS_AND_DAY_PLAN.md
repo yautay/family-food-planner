@@ -16,13 +16,34 @@ wartości liczone silnikiem z B05, nic nie jest cache'owane.
 
 Batch zastaje po B05 (stan faktyczny sprawdź w `PROGRESS.md`):
 
-- `modules/nutrition/engine.py` — czyste funkcje Decimal: `ingredient_nutrition`,
-  `recipe_nutrition`, `portion_nutrition`, `scale`, `glycemic_load`,
-  `aggregate`, `round_for_output`; typy `ProductNutrition`, `NutritionValues`
-  (`{kcal, protein_g, fat_g, carbs_g, fiber_g, sugars_g, glycemic_load,
-  complete, missing[]}`).
-- `modules/recipes/` — CRUD przepisów, `GET /recipes/{id}?servings=`;
+- `modules/nutrition/engine.py` — czyste funkcje Decimal (stan FAKTYCZNY
+  po B05, sygnatury są kontraktem):
+  `ingredient_nutrition(basis_amount, product: ProductNutrition)` — ilość na
+  osi WARTOŚCI produktu (`to_basis_amount` z `catalog/units.py`; wzór
+  przepakowania i obsługi rozjechanego `measure_kind`:
+  `recipes/service.py::_ingredient_values`); produkt UNVERIFIED ⇒
+  `complete=False` + wpis „…: produkt niezweryfikowany" w `missing`;
+  `recipe_nutrition(list)` (= `aggregate`), `portion_nutrition(total,
+  base_servings: int)`, `scale(values, multiplier: Decimal)`,
+  `glycemic_load(gi, carbs_g, fiber_g|None)`, `aggregate(list)` (dedupe
+  `missing`, `complete` = AND), `round_for_output(values)` (kcal→1, reszta→0,1,
+  WYŁĄCZNIE na wyjściu). Typy w `modules/nutrition/types.py`:
+  `NutritionValues` (`{kcal, protein_g, fat_g, carbs_g, fiber_g, sugars_g,
+  glycemic_load, complete, missing[]}` — pola Decimal to SUMA Z DOSTĘPNYCH),
+  `NUTRITION_NUMERIC_FIELDS`, `ZERO_VALUES`, re-eksport `ProductNutrition`.
+- `modules/recipes/` — CRUD przepisów, `GET /recipes/{id}?servings=`, tagi,
+  oceny, zdjęcia. **B06 MUSI zarejestrować licznik referencji przepisów**:
+  `recipes.service.register_recipe_reference_finder(finder)` z
+  `finder(session, recipe_id) -> Sequence[UsedInRef]` — bez tego DELETE
+  przepisu użytego w planie da gołe 409 z FK RESTRICT zamiast listy
+  „Używane w:" (rejestr powstał w B05 i jest pusty).
   `modules/catalog/` — produkty + normalizacja jednostek (ADR-005).
+- Typ enumowy **`amount_unit`** (`g,ml,piece`) tworzy migracja `0006` —
+  `plan_meal_items.amount_unit` używa `postgresql.ENUM(..., create_type=False)`
+  (tak samo jak `entity_scope`).
+- Pułapka FastAPI z B05: parametr query typu Decimal deklaruj przez
+  `Annotated[Decimal, Query(...)]` — `Field(...)` w Annotated nie działa
+  jako query param (`?servings=` w `recipes/router.py` to wzór).
 - `member_profiles` (B03) — profile członków rodziny z `default_multiplier`
   i opcjonalnym `kcal_goal`; `users.ui_settings JSONB` (B02).
 - Frontend: ProductPicker, AmountInput, RecipeCard, klient API, AppShell.
@@ -51,6 +72,9 @@ Konwencje potwierdzone w review R1 (obowiązują od pierwszej linii tego batcha)
 - Widoczność planów: `ScopedQuery` bez wyjątków. Jeśli właściciel rozstrzygnie
   **D16** (czy ADMIN widzi cudze encje na ścieżkach użytkownika), B06 idzie za
   rozstrzygnięciem — mechanizm jest w jednym miejscu (`app/core/scope.py`).
+  B05 zaasercjonował stan faktyczny testem
+  `tests/api/recipes/test_recipes_api.py::test_d16_admin_widzi_cudze_przepisy_na_sciezkach_uzytkownika`
+  — rozstrzygnięcie odwrotne ma zacząć od wywrócenia tego testu.
 
 Wymagane lektury przed startem:
 

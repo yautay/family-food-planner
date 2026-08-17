@@ -355,26 +355,129 @@ diffie przed commitem (krok 11).
 
 ## Implementation checklist
 
-- [ ] Migracja schematu + seed tagów; up/down/up zielone, jedna głowa
-- [ ] `nutrition/engine.py` + `types.py` + testy unit (property + brzegowe)
-- [ ] Serwis recipes: normalizacja, scope, blokady, oceny, tagi
-- [ ] Router recipes + tags; kształty błędów wg 04_API §1
-- [ ] `core/uploads.py` + endpoint photo + auth-gated `/uploads/*`
-- [ ] `task fe-types`; strony widoków 2–3 + edytor z ProductPicker/AmountInput
-- [ ] Testy integration/api/fe; E2E core flow 1
-- [ ] PROGRESS.md + propagacja Cross-Batch Impact do kart B06/B09
+- [x] Migracja schematu + seed tagów; up/down/up zielone, jedna głowa
+- [x] `nutrition/engine.py` + `types.py` + testy unit (property + brzegowe)
+- [x] Serwis recipes: normalizacja, scope, blokady, oceny, tagi
+- [x] Router recipes + tags; kształty błędów wg 04_API §1
+- [x] `core/uploads.py` + endpoint photo + auth-gated `/uploads/*`
+- [x] `task fe-types`; strony widoków 2–3 + edytor z ProductPicker/AmountInput
+- [x] Testy integration/api/fe; E2E core flow 1 (spec napisany; NIEURUCHOMIONY — brak Dockera)
+- [x] PROGRESS.md + propagacja Cross-Batch Impact do kart B06/B09
 
 ## Verification checklist
 
-- [ ] `task check` (unit+int+api+fe-test+typecheck+lint) zielony — wynik REALNY
-- [ ] `alembic upgrade head && alembic downgrade -1 && alembic upgrade head`
-- [ ] Pokrycie `nutrition/engine.py` ≥ 95% (raport w Completion notes)
-- [ ] E2E `recipe-inline-create` zielony na realnym stacku
-- [ ] Ręcznie: przepis z 3 składnikami (w tym 1 inline create), zdjęcie,
-      regulacja porcji, filtr tagów; acceptance criteria 1–10 odhaczone
-- [ ] Dokumentacja zaktualizowana (PROGRESS, karty B06/B09, ew. 04_API)
-- [ ] Commit `batch(05): <opis>`; `git status` czysty w zakresie batcha
+- [x] `task check` (unit+int+api+fe-test+typecheck+lint) zielony — wynik REALNY
+      (3 migrations-check / 170 unit / 78 int / 184 api / 144 vitest / mypy /
+      vue-tsc / ruff / eslint / format-check / vite build, exit 0)
+- [x] `alembic upgrade head && downgrade -1 && upgrade head` — realnie przez
+      `tests/integration/test_migrations.py` na db-test (pełny cykl base↔head,
+      asercja zestawu tabel i typów enumowych)
+- [x] Pokrycie `nutrition/engine.py` ≥ 95% — **100%** (engine 44/44 stmts,
+      types 18/18; `pytest --cov=app/modules/nutrition`)
+- [ ] E2E `recipe-inline-create` zielony na realnym stacku — **NIEURUCHOMIONY**
+      (w środowisku sesji brak Dockera; dług U15, do odhaczenia przed R2)
+- [ ] Ręcznie: przepis z 3 składnikami itd. — **NIEWYKONANE ręcznie** (stack
+      nie wstaje bez Dockera); acceptance criteria 1–7 i 9 dowiedzione
+      testami int/api (patrz Completion notes), 8 i 10 pokryte E2E spec +
+      vitest edytora — do potwierdzenia na compose przed R2
+- [x] Dokumentacja zaktualizowana (PROGRESS, karty B06/B09, 04_API §2,
+      03_DATABASE §5, 02_DECISIONS D15/D16, CLAUDE.md §4)
+- [x] Commit `batch(05): <opis>`; `git status` czysty w zakresie batcha
 
 ## Completion notes
 
-(wypełnia agent wykonujący)
+**Wykonane.** Stages 1–6 w komplecie: migracje `0006` (schemat §5 + enumy
+`entity_scope`/`amount_unit`/`recipe_source` + GIN trigram na `recipes.name`)
+i `0007` (seed 9 tagów, idempotentny, downgrade oszczędza tagi w użyciu);
+silnik `nutrition/{engine,types}.py` (pokrycie 100%, property-based:
+addytywność, liniowość, nieujemność, completeness); moduł `recipes/`
+(CRUD + filtry + oceny + tagi + zdjęcie); `core/uploads.py` + `GET /uploads/*`
+z sesją; frontend widoków 2–3 + edytor + RecipeCard + naprawy U9/U10.
+
+**Rozstrzygnięcia pozostawione implementującemu (uzasadnienia):**
+
+1. **FK `import_job_id`: teraz NIE** — kolumna nullable bez FK; constraint
+   dopina migracja B15 razem z tabelą `import_jobs`. FK do nieistniejącej
+   tabeli nie istnieje w PG, a pusta tabela „na zapas" łamie ADR-001.
+2. **Miniatury: jeden rozmiar** — `_thumb.jpg`, dłuższy bok ≤512 px, JPEG q85.
+   Wystarcza kartom gridu (~240 px) także na ekranach 2x; drugi rozmiar
+   to koszt bez konsumenta (YAGNI); hero szczegółu używa oryginału.
+3. **PUT wymienia składniki kompletem, id pozycji NIEZACHOWANE** (sugestia
+   karty przyjęta) — prostszy serwis i brak fikcji stabilności; nikt jeszcze
+   nie trzyma FK do `recipe_ingredients`.
+4. **D15 wdrożone wg rekomendacji** (zbicie do UNVERIFIED + `verified_at=NULL`
+   przy zmianie `measure_kind` na produkcie z wartościami; widoczne w audycie
+   `product.update` — snapshot rozszerzony o `verification_status`).
+   Wariantu „zmiana measure_kind tylko dla ADMIN-a" NIE wdrożono — czeka na
+   właściciela (02_DECISIONS zaktualizowane).
+5. **D16: utrzymany stan faktyczny** ScopedQuery (ADMIN widzi wszystko)
+   + jawny test API asercjonujący tę decyzję (nazwa testu w 02_DECISIONS).
+6. **Serce „ulubione" na karcie jest wyłącznie wskaźnikiem** (tag przypięty
+   do przepisu); przełączanie ulubionych = tag w edytorze. Toggle z karty
+   wymagałby PUT całego przepisu albo osobnego endpointu spoza karty batcha —
+   zostawione świadomie; jeśli okaże się mylące, pytanie do 02_DECISIONS.
+7. **Filtr tagów = koniunkcja (AND)**: doklikiwanie chipsów zawęża
+   („obiad" + „ulubione" = ulubione obiady); semantyka nie była w karcie.
+8. **Defensywa silnika po D15**: składnik zapisany przed zmianą
+   `measure_kind` (np. amount w g, produkt teraz VOLUME) nie wysadza odczytu
+   500 — pozycja nie wnosi wartości, wynik dostaje `complete=False`
+   i komunikat „ilość w jednostce niezgodnej ze sposobem liczenia produktu"
+   (`recipes/service.py::_ingredient_values`).
+
+**Odstępstwa:**
+
+- Testy konwersji per produkt NIE trafiły do `tests/unit/catalog/` (Expected
+  files) — komplet scenariuszy §2.3 istnieje od B04/R1 w
+  `tests/unit/test_units.py` (jednostki systemowe, domowe per produkt,
+  odmowa nieprzeliczalnej, piece bez wagi, obie osie). Duplikowanie plików
+  dla samej ścieżki uznane za szum.
+- `recipe_tags` bez `created_at`/`updated_at` (03_DATABASE §1 mówi „wszędzie")
+  — czysta tabela asocjacyjna zgodna literalnie z §5; odnotowane w 03 §5.
+- `AmountInput` nie wymagał zmian (Expected files: „ew.") — reużyty jak jest.
+- Naprawa spoza listy plików: fixture `scoped_notes_table`
+  (`tests/conftest.py`) przestał tworzyć/kasować typ `entity_scope` (należy
+  do migracji 0006; ORM-owy `table.drop` kasowałby typ w użyciu), a
+  `tests/integration/test_catalog_seed.py` ponawia seed przez
+  `upgrade 0005` + `stamp head` zamiast `upgrade head` (powtórka migracji
+  SCHEMATU 0006 na bazie z tym schematem = DuplicateObject). To adaptacje
+  wymuszone przez 0006, nie osłabienie testów.
+
+**Follow-upy:**
+
+- E2E `recipe-inline-create.spec.ts` + ręczna weryfikacja acceptance 8/10
+  na realnym stacku — przed R2 (dług U15; w tej sesji brak Dockera).
+- `docker-compose`/prod: `UPLOADS_DIR` wymaga bind mount poza web-rootem —
+  dopisać do zakresu B17/B18 przy przeglądzie deploymentu.
+- Seed demo (`task db-seed-demo`) nadal bez przepisów (08_TESTING §5 mówi
+  o „5 przepisach") — naturalne miejsce: po B06/B07, gdy będzie też tydzień
+  planu; do rozważenia w R2.
+- `fetchRecipes` składa query string ręcznie (parametr `tag` wielokrotny) —
+  jeśli kolejny moduł też będzie potrzebował parametrów multi, rozszerzyć
+  `apiFetch.query` zamiast kopiować wzorzec.
+
+**Review (SKILL-REVIEW, /code-review na diffie przed commitem):** 8 kątów;
+część finderów uruchomiona subagentami, kąty A/B/C i konwencje wykonane
+bezpośrednio po tym, jak subagenci padli na limicie sesji API (bez utraty
+pokrycia — diff przejrzany w całości). 10 ustaleń, z tego NAPRAWIONE przed
+commitem: (1) watch edytora nadpisywał niezapisane edycje po refetchu
+(populate-once), (2) upload czytał całe body do RAM przed limitem (odczyt
+z sufitem 10 MB+1), (3) `_rerun_seed` tagów wybuchłby przy migracji 0008
+(upgrade celuje w 0007), (4) `SCOPE_ENUM` dostał `create_type=False` — typ
+należy do migracji, fixture wrócił do symetrycznego ORM create/drop,
+(5) `apiFetch.query` obsługuje parametry wielokrotne (koniec ręcznego query
+stringa), (6) `USED_IN_LIMIT` przeniesiony do `core/deletion.py`,
+(7) usunięte puste podklasy `RecipeCreateRequest`/`RecipeUpdateRequest`
+(jeden `RecipePayload` w OpenAPI), (8) `_to_detail` bez podmiany klucza przez
+dict + drobne (ternary o identycznych gałęziach, `formatDecimal` dla
+mnożnika porcji, `MeasureKind` z generated.ts zamiast ręcznej unii,
+dedup żądań `loadHomeUnits`, `Cache-Control: immutable` dla `/uploads/*`,
+`_replace_tags` bez parametru `clear`, `replace(ZERO_VALUES, …)`,
+`setQueryData` po zapisie, inline `scaled_fiber`, restrukturyzacja
+`_ComputedRecipe`). ODROCZONE świadomie: duplikacja wyszukiwarki trigramowej
+catalog↔recipes (ekstrakcja helpera dotyka katalogu — kandydat R2) i
+read-back po zapisie (~6 nadmiarowych zapytań na POST — skala domowa,
+optymalizacja przy okazji R2). Po naprawach `task check` ponownie zielony.
+
+**Pytania do właściciela:** brak nowych — D15/D16 czekają na formalne
+zatwierdzenie (rekomendacje wdrożone/zaasercjonowane, szczegóły
+w 02_DECISIONS).

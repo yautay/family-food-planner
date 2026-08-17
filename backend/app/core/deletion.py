@@ -27,6 +27,11 @@ from typing import Any
 
 from app.core.errors import ConflictError
 
+#: Maksymalna długość listy „Używane w:" w odpowiedzi 409 — jedna wartość dla
+#: całego kontraktu (katalog, przepisy, kolejni konsumenci); pełna lista przy
+#: popularnej encji byłaby nieczytelna, a UI i tak pokazuje pierwsze pozycje.
+USED_IN_LIMIT = 20
+
 
 @dataclass(frozen=True)
 class UsedInRef:

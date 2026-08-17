@@ -66,17 +66,26 @@ def engine(test_database_url: str) -> Iterator[Engine]:
         engine.dispose()
 
 
+def _rerun_seed(alembic_config: Config) -> None:
+    """Ponów WYŁĄCZNIE migrację danych `0005` na bazie będącej na head.
+
+    `stamp` cofa sam ZNACZNIK wersji, bez ruszania danych, więc `upgrade 0005`
+    uruchamia seed na wyczyszczonej tabeli. Upgrade celuje w `0005`, a nie
+    w `head`: od BATCH_05 nad seedem stoi migracja SCHEMATU `0006` i jej
+    powtórka na bazie, która ten schemat już ma, kończy się `DuplicateObject`.
+    Końcowy `stamp head` przywraca znacznik do stanu faktycznego schematu.
+    """
+    command.stamp(alembic_config, "0004")
+    command.upgrade(alembic_config, "0005")
+    command.stamp(alembic_config, "head")
+
+
 @pytest.fixture
 def seeded(alembic_config: Config, engine: Engine) -> None:
-    """Czysta tabela kategorii + jedno wykonanie seedu, niezależnie od innych testów.
-
-    `stamp` cofa sam ZNACZNIK wersji, bez ruszania danych, więc kolejny `upgrade`
-    uruchamia migrację danych na wyczyszczonej tabeli.
-    """
+    """Czysta tabela kategorii + jedno wykonanie seedu, niezależnie od innych testów."""
     command.upgrade(alembic_config, "head")
     _reset(engine)
-    command.stamp(alembic_config, "0004")
-    command.upgrade(alembic_config, "head")
+    _rerun_seed(alembic_config)
 
 
 def _reset(engine: Engine) -> None:
@@ -113,8 +122,7 @@ def test_seed_jest_idempotentny(alembic_config: Config, engine: Engine) -> None:
     """Powtórzony seed nie duplikuje kategorii — dokładnie tak jak powtórzone wdrożenie."""
     before = _categories(engine)
 
-    command.stamp(alembic_config, "0004")
-    command.upgrade(alembic_config, "head")
+    _rerun_seed(alembic_config)
 
     assert _categories(engine) == before
     with engine.connect() as connection:

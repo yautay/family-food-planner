@@ -1651,6 +1651,576 @@
         }
       }
     },
+    "/api/v1/recipes": {
+      "get": {
+        "tags": [
+          "recipes"
+        ],
+        "summary": "Lista i filtrowanie przepisów",
+        "operationId": "list_recipes_api_v1_recipes_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "name": "tag",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "integer"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tag"
+            }
+          },
+          {
+            "name": "prep_time_max",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "maximum": 6000,
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Prep Time Max"
+            }
+          },
+          {
+            "name": "difficulty_max",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "maximum": 10,
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Difficulty Max"
+            }
+          },
+          {
+            "name": "rating_min",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "maximum": 5,
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Rating Min"
+            }
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Scope"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Scope"
+            }
+          },
+          {
+            "name": "include_archived",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Archived"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecipeListResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "recipes"
+        ],
+        "summary": "Nowy przepis ze składnikami (normalizacja ilości przy zapisie)",
+        "operationId": "create_recipe_api_v1_recipes_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecipePayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecipeDetail"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/recipes/{recipe_id}": {
+      "get": {
+        "tags": [
+          "recipes"
+        ],
+        "summary": "Szczegóły przepisu; ?servings= przelicza nutrition i składniki",
+        "operationId": "get_recipe_api_v1_recipes__recipe_id__get",
+        "parameters": [
+          {
+            "name": "recipe_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Recipe Id"
+            }
+          },
+          {
+            "name": "servings",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "maximum": 100.0,
+                  "exclusiveMinimum": 0.0
+                },
+                {
+                  "type": "string",
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+                }
+              ],
+              "default": "1",
+              "title": "Servings"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecipeDetail"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "recipes"
+        ],
+        "summary": "Pełna podmiana przepisu (składniki wymieniane kompletem)",
+        "operationId": "update_recipe_api_v1_recipes__recipe_id__put",
+        "parameters": [
+          {
+            "name": "recipe_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Recipe Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecipePayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecipeDetail"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "recipes"
+        ],
+        "summary": "Usunięcie przepisu (właściciel/ADMIN; 409 gdy używany)",
+        "operationId": "delete_recipe_api_v1_recipes__recipe_id__delete",
+        "parameters": [
+          {
+            "name": "recipe_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Recipe Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/recipes/{recipe_id}/rating": {
+      "put": {
+        "tags": [
+          "recipes"
+        ],
+        "summary": "Własna ocena 1-5 (upsert); odpowiedź zawiera średnią",
+        "operationId": "rate_recipe_api_v1_recipes__recipe_id__rating_put",
+        "parameters": [
+          {
+            "name": "recipe_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Recipe Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RatingRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RatingResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/recipes/{recipe_id}/photo": {
+      "post": {
+        "tags": [
+          "recipes"
+        ],
+        "summary": "Zdjęcie przepisu (multipart; sniffing, re-encode, miniatura)",
+        "operationId": "upload_photo_api_v1_recipes__recipe_id__photo_post",
+        "parameters": [
+          {
+            "name": "recipe_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Recipe Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_photo_api_v1_recipes__recipe_id__photo_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecipeDetail"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "recipes"
+        ],
+        "summary": "Usunięcie zdjęcia przepisu",
+        "operationId": "delete_photo_api_v1_recipes__recipe_id__photo_delete",
+        "parameters": [
+          {
+            "name": "recipe_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Recipe Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecipeDetail"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tags": {
+      "get": {
+        "tags": [
+          "recipes"
+        ],
+        "summary": "Słownik tagów",
+        "operationId": "list_tags_api_v1_tags_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TagListResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "recipes"
+        ],
+        "summary": "Nowy tag użytkowy (inline create z multi-pickera)",
+        "operationId": "create_tag_api_v1_tags_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TagCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TagRead"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/audit": {
       "get": {
         "tags": [
@@ -1757,10 +2327,60 @@
           }
         }
       }
+    },
+    "/uploads/{file_path}": {
+      "get": {
+        "tags": [
+          "uploads"
+        ],
+        "summary": "Plik uploadu (wymaga sesji)",
+        "operationId": "serve_upload_uploads__file_path__get",
+        "parameters": [
+          {
+            "name": "file_path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "File Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
+      "AmountUnit": {
+        "type": "string",
+        "enum": [
+          "g",
+          "ml",
+          "piece"
+        ],
+        "title": "AmountUnit",
+        "description": "Oś, na której ilość jest przechowywana (03_DATABASE §5: `ENUM(g,ml,piece)`)."
+      },
       "AuditEntryRead": {
         "properties": {
           "id": {
@@ -1842,6 +2462,21 @@
         ],
         "title": "AuditListResponse",
         "description": "Lista wpisów z paginacją (04_API §1)."
+      },
+      "Body_upload_photo_api_v1_recipes__recipe_id__photo_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "description": "Plik obrazu, maks. 10 MB"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_photo_api_v1_recipes__recipe_id__photo_post"
       },
       "CategoryCreateRequest": {
         "properties": {
@@ -2609,6 +3244,63 @@
         "title": "NutritionCompleteness",
         "description": "Czy wartości wystarczą do policzenia czegokolwiek (04_API §1, 06_UIUX §3.5).\n\nLiczone przez adapter `ProductNutrition` — UI pokazuje na tej podstawie\nplakietkę „niepełne dane\" z tooltipem `missing`."
       },
+      "NutritionRead": {
+        "properties": {
+          "kcal": {
+            "type": "string",
+            "title": "Kcal"
+          },
+          "protein_g": {
+            "type": "string",
+            "title": "Protein G"
+          },
+          "fat_g": {
+            "type": "string",
+            "title": "Fat G"
+          },
+          "carbs_g": {
+            "type": "string",
+            "title": "Carbs G"
+          },
+          "fiber_g": {
+            "type": "string",
+            "title": "Fiber G"
+          },
+          "sugars_g": {
+            "type": "string",
+            "title": "Sugars G"
+          },
+          "glycemic_load": {
+            "type": "string",
+            "title": "Glycemic Load"
+          },
+          "complete": {
+            "type": "boolean",
+            "title": "Complete"
+          },
+          "missing": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Missing"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kcal",
+          "protein_g",
+          "fat_g",
+          "carbs_g",
+          "fiber_g",
+          "sugars_g",
+          "glycemic_load",
+          "complete",
+          "missing"
+        ],
+        "title": "NutritionRead",
+        "description": "Wartości wyliczone przez silnik — nigdy przechowywane (02_DOMAIN §13.2)."
+      },
       "Perishability": {
         "type": "string",
         "enum": [
@@ -3227,6 +3919,643 @@
         "type": "object",
         "title": "ProductUpdateRequest",
         "description": "Częściowa edycja pól opisowych produktu (USER)."
+      },
+      "RatingRequest": {
+        "properties": {
+          "rating": {
+            "type": "integer",
+            "maximum": 5.0,
+            "minimum": 1.0,
+            "title": "Rating"
+          }
+        },
+        "type": "object",
+        "required": [
+          "rating"
+        ],
+        "title": "RatingRequest",
+        "description": "Własna ocena 1-5; `user_id` pochodzi z sesji, nigdy z body (karta B05)."
+      },
+      "RatingResponse": {
+        "properties": {
+          "my_rating": {
+            "type": "integer",
+            "title": "My Rating"
+          },
+          "avg_rating": {
+            "type": "string",
+            "title": "Avg Rating"
+          },
+          "ratings_count": {
+            "type": "integer",
+            "title": "Ratings Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "my_rating",
+          "avg_rating",
+          "ratings_count"
+        ],
+        "title": "RatingResponse"
+      },
+      "RecipeDetail": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/Scope"
+          },
+          "owner_user_id": {
+            "type": "integer",
+            "title": "Owner User Id"
+          },
+          "base_servings": {
+            "type": "integer",
+            "title": "Base Servings"
+          },
+          "prep_time_min": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prep Time Min"
+          },
+          "difficulty": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Difficulty"
+          },
+          "source": {
+            "$ref": "#/components/schemas/RecipeSource"
+          },
+          "is_archived": {
+            "type": "boolean",
+            "title": "Is Archived"
+          },
+          "photo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Photo Url"
+          },
+          "photo_thumb_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Photo Thumb Url"
+          },
+          "tags": {
+            "items": {
+              "$ref": "#/components/schemas/TagRead"
+            },
+            "type": "array",
+            "title": "Tags"
+          },
+          "avg_rating": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Rating"
+          },
+          "ratings_count": {
+            "type": "integer",
+            "title": "Ratings Count"
+          },
+          "my_rating": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "My Rating"
+          },
+          "nutrition": {
+            "$ref": "#/components/schemas/NutritionRead"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "instructions": {
+            "type": "string",
+            "title": "Instructions"
+          },
+          "servings": {
+            "type": "string",
+            "title": "Servings"
+          },
+          "ingredients": {
+            "items": {
+              "$ref": "#/components/schemas/RecipeIngredientRead"
+            },
+            "type": "array",
+            "title": "Ingredients"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "scope",
+          "owner_user_id",
+          "base_servings",
+          "prep_time_min",
+          "difficulty",
+          "source",
+          "is_archived",
+          "photo_url",
+          "photo_thumb_url",
+          "tags",
+          "avg_rating",
+          "ratings_count",
+          "my_rating",
+          "nutrition",
+          "created_at",
+          "updated_at",
+          "instructions",
+          "servings",
+          "ingredients"
+        ],
+        "title": "RecipeDetail",
+        "description": "Szczegóły (widok 3): instrukcja, składniki i nutrition x mnożnik porcji."
+      },
+      "RecipeIngredientInput": {
+        "properties": {
+          "product_id": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Product Id"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 99999.999,
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,5}|(?=[\\d.]{1,9}0*$)\\d{0,5}\\.\\d{0,3}0*$)"
+              }
+            ],
+            "title": "Quantity"
+          },
+          "unit": {
+            "type": "string",
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Unit"
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 500,
+            "title": "Note",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "product_id",
+          "quantity",
+          "unit"
+        ],
+        "title": "RecipeIngredientInput",
+        "description": "Pozycja składnika przy zapisie — ilość W JEDNOSTCE użytkownika.\n\nNormalizację do g/ml/szt. robi serwis (ADR-005); pozycja na liście wynika\nz kolejności w tablicy, nie z osobnego pola."
+      },
+      "RecipeIngredientRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "product_id": {
+            "type": "integer",
+            "title": "Product Id"
+          },
+          "product_name": {
+            "type": "string",
+            "title": "Product Name"
+          },
+          "measure_kind": {
+            "$ref": "#/components/schemas/MeasureKind"
+          },
+          "display_qty": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Qty"
+          },
+          "display_unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Unit"
+          },
+          "amount": {
+            "type": "string",
+            "title": "Amount"
+          },
+          "amount_unit": {
+            "$ref": "#/components/schemas/AmountUnit"
+          },
+          "scaled_amount": {
+            "type": "string",
+            "title": "Scaled Amount"
+          },
+          "note": {
+            "type": "string",
+            "title": "Note"
+          },
+          "position": {
+            "type": "integer",
+            "title": "Position"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "product_id",
+          "product_name",
+          "measure_kind",
+          "display_qty",
+          "display_unit",
+          "amount",
+          "amount_unit",
+          "scaled_amount",
+          "note",
+          "position"
+        ],
+        "title": "RecipeIngredientRead",
+        "description": "Składnik w odczycie: zapis użytkownika + postać znormalizowana + przeskalowana."
+      },
+      "RecipeListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RecipeSummary"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "RecipeListResponse"
+      },
+      "RecipePayload": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "instructions": {
+            "type": "string",
+            "maxLength": 20000,
+            "title": "Instructions",
+            "default": ""
+          },
+          "base_servings": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Base Servings",
+            "default": 1
+          },
+          "prep_time_min": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 6000.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prep Time Min"
+          },
+          "difficulty": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 10.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Difficulty"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/Scope",
+            "default": "private"
+          },
+          "ingredients": {
+            "items": {
+              "$ref": "#/components/schemas/RecipeIngredientInput"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "title": "Ingredients"
+          },
+          "tag_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Tag Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "RecipePayload",
+        "description": "Jeden model wejścia dla POST (create) i PUT (pełna podmiana — 04_API §1).\n\nŚwiadomie BEZ pustych podklas per metoda: dwa bit-identyczne schematy\nw OpenAPI maskowałyby, który jest „prawdziwy\", i podwajały diff\n`generated.ts` (ustalenie review B05)."
+      },
+      "RecipeSource": {
+        "type": "string",
+        "enum": [
+          "manual",
+          "pdf_import"
+        ],
+        "title": "RecipeSource",
+        "description": "Pochodzenie przepisu: ręczne albo z importu PDF (B15/16)."
+      },
+      "RecipeSummary": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/Scope"
+          },
+          "owner_user_id": {
+            "type": "integer",
+            "title": "Owner User Id"
+          },
+          "base_servings": {
+            "type": "integer",
+            "title": "Base Servings"
+          },
+          "prep_time_min": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prep Time Min"
+          },
+          "difficulty": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Difficulty"
+          },
+          "source": {
+            "$ref": "#/components/schemas/RecipeSource"
+          },
+          "is_archived": {
+            "type": "boolean",
+            "title": "Is Archived"
+          },
+          "photo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Photo Url"
+          },
+          "photo_thumb_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Photo Thumb Url"
+          },
+          "tags": {
+            "items": {
+              "$ref": "#/components/schemas/TagRead"
+            },
+            "type": "array",
+            "title": "Tags"
+          },
+          "avg_rating": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Rating"
+          },
+          "ratings_count": {
+            "type": "integer",
+            "title": "Ratings Count"
+          },
+          "my_rating": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "My Rating"
+          },
+          "nutrition": {
+            "$ref": "#/components/schemas/NutritionRead"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "scope",
+          "owner_user_id",
+          "base_servings",
+          "prep_time_min",
+          "difficulty",
+          "source",
+          "is_archived",
+          "photo_url",
+          "photo_thumb_url",
+          "tags",
+          "avg_rating",
+          "ratings_count",
+          "my_rating",
+          "nutrition",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "RecipeSummary",
+        "description": "Przepis na liście (widok 2): karta z kcal/porcję, oceną i tagami."
+      },
+      "Scope": {
+        "type": "string",
+        "enum": [
+          "private",
+          "household"
+        ],
+        "title": "Scope",
+        "description": "Zakres widoczności encji współdzielnej (ADR-006)."
+      },
+      "TagCreateRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "TagCreateRequest",
+        "description": "Inline create tagu użytkowego (`is_system=false`) z multi-pickera."
+      },
+      "TagListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TagRead"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "TagListResponse"
+      },
+      "TagRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "is_system": {
+            "type": "boolean",
+            "title": "Is System"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "is_system"
+        ],
+        "title": "TagRead",
+        "description": "Tag ze słownika globalnego."
       },
       "UnitWeightCreateRequest": {
         "properties": {

@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import os
 import sys
+import tempfile
 from collections.abc import AsyncIterator, Callable
 from pathlib import Path
 
@@ -36,6 +37,8 @@ from sqlalchemy.pool import NullPool
 os.environ.setdefault("APP_ENV", "test")
 os.environ.setdefault("SECRET_KEY", "test-secret-nieuzywany-do-prawdziwych-sesji")
 os.environ.setdefault("APP_VERSION", "0.1.0-test")
+# Uploady lądują w katalogu tymczasowym procesu testowego — nigdy w repo.
+os.environ.setdefault("UPLOADS_DIR", tempfile.mkdtemp(prefix="ffp-test-uploads-"))
 
 # Testy NIGDY nie dotykają bazy deweloperskiej: DATABASE_URL na czas sesji
 # testowej wskazuje db-test (downgrade base w testach migracji kasuje schemat).
@@ -62,6 +65,13 @@ DB_TABLES = (
     "sessions",
     "users",
     "households",
+    "recipe_ratings",
+    "recipe_tags",
+    "recipe_ingredients",
+    "recipes",
+    # Tagi czyścimy z tego samego powodu co kategorie: seed migracji `0007`
+    # weryfikuje osobny test integracyjny, a testy widzą tylko własne dane.
+    "tags",
     "product_nutrient_values",
     "nutrients",
     "product_unit_weights",
@@ -166,12 +176,15 @@ async def scoped_notes_table(
     Nie ma jej w żadnej migracji (karta BATCH_03): `alembic upgrade head` na
     bazie produkcyjnej nie może tworzyć tabel testowych.
 
+    Typ enumowy `entity_scope` NALEŻY DO MIGRACJI `0006` (recipes, BATCH_05) —
+    `SCOPE_ENUM` ma `create_type=False`, więc ORM-owe create/drop tabeli nie
+    dotyka typu i fixture może symetrycznie tworzyć/kasować samą tabelę.
+
     `db_session` w sygnaturze nie jest ozdobą: sesja testu trzyma otwartą
     transakcję czytelnika (ACCESS SHARE) na `scoped_notes`, a `DROP TABLE`
     potrzebuje ACCESS EXCLUSIVE — bez jawnego `rollback()` przed sprzątaniem
     teardown czekałby na tę blokadę w nieskończoność.
     """
-    from app.core.scope import SCOPE_ENUM
     from tests.scoped_entity import SCOPED_NOTES_TABLE as table
 
     async def reset(connection: AsyncConnection) -> None:
@@ -179,8 +192,6 @@ async def scoped_notes_table(
         # po pięciu sekundach, a nie zawieszonego przebiegu testów.
         await connection.execute(text("SET LOCAL lock_timeout = '5s'"))
         await connection.run_sync(table.drop, checkfirst=True)
-        # DROP TABLE nie usuwa typu enumowego (lekcja z migracji 0002).
-        await connection.run_sync(SCOPE_ENUM.drop, checkfirst=True)
 
     async with db_engine.begin() as connection:
         await reset(connection)

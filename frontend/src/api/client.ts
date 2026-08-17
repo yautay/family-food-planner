@@ -74,8 +74,12 @@ const FALLBACK_MESSAGE = 'Nie udało się połączyć z serwerem. Sprawdź poł�
 export interface ApiRequestOptions extends Omit<RequestInit, 'body'> {
   /** Ciało żądania — serializowane do JSON (pomijane dla GET). */
   json?: unknown
-  /** Parametry zapytania; wartości `undefined` są pomijane. */
-  query?: Record<string, string | number | boolean | undefined>
+  /** Ciało multipart (upload plików) — wyklucza się z `json`; Content-Type
+   *  ustawia przeglądarka (boundary), więc nagłówka nie dotykamy. */
+  form?: FormData
+  /** Parametry zapytania; wartości `undefined` są pomijane, tablica =
+   *  parametr powtórzony (`?tag=1&tag=2`). */
+  query?: Record<string, string | number | boolean | undefined | readonly (string | number)[]>
 }
 
 function buildUrl(path: string, query: ApiRequestOptions['query']): string {
@@ -85,7 +89,14 @@ function buildUrl(path: string, query: ApiRequestOptions['query']): string {
   }
   const params = new URLSearchParams()
   for (const [key, value] of Object.entries(query)) {
-    if (value !== undefined) {
+    if (value === undefined) {
+      continue
+    }
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        params.append(key, String(item))
+      }
+    } else {
       params.append(key, String(value))
     }
   }
@@ -132,7 +143,7 @@ async function toApiError(response: Response): Promise<ApiError> {
  * (wtedy `status = 0`) — obsługę komunikatu robi warstwa wywołująca.
  */
 export async function apiFetch<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
-  const { json, query, headers, ...rest } = options
+  const { json, form, query, headers, ...rest } = options
   const method = (rest.method ?? 'GET').toUpperCase()
 
   const requestHeaders = new Headers(headers)
@@ -153,7 +164,7 @@ export async function apiFetch<T>(path: string, options: ApiRequestOptions = {})
       ...rest,
       headers: requestHeaders,
       credentials: 'include',
-      body: json === undefined ? undefined : JSON.stringify(json),
+      body: form ?? (json === undefined ? undefined : JSON.stringify(json)),
     })
   } catch (cause) {
     throw new ApiError(

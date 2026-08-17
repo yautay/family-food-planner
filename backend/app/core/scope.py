@@ -35,7 +35,6 @@ from sqlalchemy import (
     BigInteger,
     CheckConstraint,
     ColumnElement,
-    Enum,
     ForeignKey,
     Identity,
     Select,
@@ -44,6 +43,7 @@ from sqlalchemy import (
     select,
     true,
 )
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, declared_attr, mapped_column
 
@@ -58,10 +58,15 @@ class Scope(StrEnum):
     HOUSEHOLD = "household"
 
 
-#: Typ enumowy w PG współdzielony przez modele i migracje — jedna definicja nazw.
-SCOPE_ENUM = Enum(
+#: Typ enumowy w PG współdzielony przez modele — jedna definicja nazw.
+#: `create_type=False`, bo cykl życia typu należy do MIGRACJI (`0006` tworzy,
+#: jej downgrade kasuje) — ORM-owe create/drop tabeli z kolumną scope nie ma
+#: prawa dotykać typu (ustalenie review B05: fixture testowy kasował typ
+#: będący w użyciu przez `recipes`).
+SCOPE_ENUM = postgresql.ENUM(
     Scope,
     name="entity_scope",
+    create_type=False,
     values_callable=lambda enum: [member.value for member in enum],
 )
 

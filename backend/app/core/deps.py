@@ -22,6 +22,7 @@ from app.modules.accounts.service import SESSION_REQUIRED, AccountsService
 from app.modules.audit.service import AuditService
 from app.modules.catalog.service import CatalogService
 from app.modules.households.service import HouseholdsService
+from app.modules.recipes.service import RecipesService
 
 
 def get_accounts_service(
@@ -43,6 +44,13 @@ def get_catalog_service(
 ) -> CatalogService:
     """Serwis katalogu: produkty kanoniczne, kategorie, przeliczniki jednostek."""
     return CatalogService(session)
+
+
+def get_recipes_service(
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> RecipesService:
+    """Serwis przepisów: CRUD, składniki, tagi, oceny, zdjęcie."""
+    return RecipesService(session)
 
 
 def get_audit_service(

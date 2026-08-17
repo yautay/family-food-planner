@@ -13,7 +13,7 @@ commit wykonany). Kolumna „Blokery" = zależności + decyzje z 02_DECISIONS.
 | 03 HOUSEHOLDS_AND_SCOPE | [x] | — | `batch(03)` na master (hash wpisać po push) |
 | 04 UNITS_AND_CANONICAL_PRODUCTS | [x] | — | `batch(04)` na master (hash wpisać po push) |
 | R1 REVIEW_FOUNDATIONS | [x] | — | `batch(R1)` na master (hash wpisać po push) |
-| 05 RECIPES_AND_NUTRITION_ENGINE | [ ] | 04, R1 **(PASS z warunkami — patrz dziennik)** | |
+| 05 RECIPES_AND_NUTRITION_ENGINE | [x] | — | `batch(05)` na master (hash wpisać po push) |
 | 06 GOALS_AND_DAY_PLAN | [ ] | 05 | |
 | 07 WEEK_TEMPLATES_AND_CYCLES | [ ] | 06 | |
 | R2 REVIEW_PLANNING_CORE | [ ] | 05–07 | |
@@ -40,6 +40,66 @@ zmiany dotykające przyszłych batchy trzeba wpisać do ich kart
 (00_MASTER_PLAN §8); dziennik to indeks, nie schowek.
 
 ---
+
+**2026-08-17 — BATCH_05 (RECIPES_AND_NUTRITION_ENGINE)**: jest serce systemu.
+Migracje `0006` (recipes/recipe_ingredients/tags/recipe_tags/recipe_ratings +
+enumy `entity_scope`, `amount_unit`, `recipe_source` + GIN trigram na
+`recipes.name`) i `0007` (idempotentny seed 9 tagów systemowych, w tym
+„ulubione"). Czysty silnik `nutrition/{engine,types}.py` (Decimal, property-based,
+pokrycie 100%), moduł `recipes/` (CRUD z filtrami, normalizacja składników
+przy zapisie, oceny z upsertem, tagi z inline create), `core/uploads.py`
+(sniffing+re-encode+miniatury) + auth-gated `GET /uploads/*`. Frontend:
+`/przepisy` (grid + chipsy tagów), szczegół z regulacją porcji na żywo,
+edytor z ProductPicker/AmountInput, RecipeCard; naprawy U9/U10 z R1.
+Warunki R1 domknięte: D15 wdrożone (measure_kind → UNVERIFIED), D16
+zaasercjonowane testem. `task check` zielony (3 migrations-check / 170 unit /
+78 int / 184 api / 144 vitest / mypy 92 pliki / vue-tsc / ruff / eslint /
+prettier / vite build).
+
+**Co MUSZĄ wiedzieć kolejne batche:**
+
+1. **Sygnatury silnika i `NutritionValues` są kontraktem** (karta B05,
+   Cross-Batch Impact). `ingredient_nutrition` przyjmuje ilość na osi
+   WARTOŚCI produktu (`to_basis_amount`); liczby w wyniku to SUMA
+   Z DOSTĘPNYCH danych + `complete`/`missing` (braki i UNVERIFIED nigdy nie
+   są cichym zerem). Wzór budowy wejść z ORM (przepakowanie `UnitWeight`,
+   obsługa rozjechanego `measure_kind` po D15):
+   `recipes/service.py::_ingredient_values` i `_build_ingredients`.
+2. **Rejestr referencji przepisów**:
+   `recipes.service.register_recipe_reference_finder(finder)` — B06 (plan)
+   i B07 (szablony) MUSZĄ się zarejestrować, inaczej DELETE przepisu
+   w użyciu da 409 bez listy `used_in` (druga linia: FK RESTRICT).
+   Rejestr produktów działa: przepisy zgłaszają się do katalogu, DELETE
+   produktu użytego w przepisie zwraca nazwę przepisu.
+3. **Migracja `0006` utworzyła enumy** `entity_scope`, `amount_unit`,
+   `recipe_source` — kolejne tabele ze scope/ilością używają
+   `postgresql.ENUM(..., create_type=False)`. Fixture `scoped_notes_table`
+   już NIE tworzy/nie kasuje `entity_scope` (typ należy do migracji);
+   `test_catalog_seed._rerun_seed` celuje `upgrade 0005` + `stamp head`,
+   bo powtórka migracji SCHEMATU na bazie z tym schematem = DuplicateObject.
+4. **`recipes.import_job_id` bez FK** — dopina go migracja B15 razem
+   z tabelą `import_jobs` (03_DATABASE §5, stan faktyczny).
+5. **Upload obrazów ma jeden pipeline**: `core/uploads.py` + serving
+   `GET /uploads/{path}` z sesją (poza `/api/v1`). B09 reużywa z własnym
+   `subdir` — konkrety wpisane do karty B09. Nowa zmienna konfiguracji:
+   `UPLOADS_DIR` (default `data/uploads`); w compose/prod wymaga bind mount
+   (B17/B18). Nowe zależności: pillow, python-multipart (runtime);
+   hypothesis, pytest-cov (dev).
+6. **D15 wdrożone / D16 utrwalone testem** — szczegóły w 02_DECISIONS
+   (oba czekają na formalny głos właściciela; testy wskazują, co zmienić
+   przy odwrotnym rozstrzygnięciu).
+7. **PUT /recipes/{id} wymienia składniki kompletem** (nowe wiersze, id
+   pozycji nie są stabilne) — konsumenci nie mogą trzymać referencji do
+   `recipe_ingredients.id`. Serce na karcie = tag systemowy „ulubione"
+   (przypisanie per przepis, nie per user — uproszczenie z karty B05).
+8. **Pułapka FastAPI**: query param typu Decimal deklaruj przez
+   `Annotated[Decimal, Query(...)]` — `Field(...)` w Annotated jest
+   ignorowany jako query (wzór: `?servings=` w `recipes/router.py`).
+9. Kolejna wolna migracja: `0008`. Karty zaktualizowane: B06 (kontrakt
+   silnika, rejestr referencji, amount_unit, pułapka Query), B09 (API
+   uploadów). E2E `recipe-inline-create.spec.ts` napisany, NIEURUCHOMIONY
+   (brak Dockera w tej sesji — dług U15 rośnie o jeden spec, do odhaczenia
+   przed R2 razem z `produkty.spec.ts` i `households.spec.ts`).
 
 **2026-08-16 — REVIEW R1 (REVIEW_FOUNDATIONS) — WERDYKT: PASS Z WARUNKAMI**
 

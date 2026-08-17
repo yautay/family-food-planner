@@ -6,19 +6,30 @@ kolejne batche i rejestrują tu swoje routery.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi import APIRouter, FastAPI
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 from app.core.config import Settings, get_settings
-from app.core.errors import ErrorResponse, register_error_handlers, register_rate_limit_handler
+from app.core.deps import CurrentUser
+from app.core.errors import (
+    ErrorResponse,
+    NotFoundError,
+    register_error_handlers,
+    register_rate_limit_handler,
+)
 from app.core.logging import RequestLoggingMiddleware, configure_logging
 from app.core.middleware import CsrfMiddleware, SecurityHeadersMiddleware
+from app.core.uploads import FILE_NOT_FOUND_MESSAGE, resolve_upload_path
 from app.modules.accounts.router import build_admin_users_router, build_auth_router
 from app.modules.audit.router import build_audit_router
 from app.modules.catalog.router import build_categories_router, build_products_router
 from app.modules.households.router import build_admin_households_router, build_households_router
+from app.modules.recipes.router import build_recipes_router, build_tags_router
 
 API_V1_PREFIX = "/api/v1"
 
@@ -37,6 +48,30 @@ def build_health_router(settings: Settings) -> APIRouter:
     @router.get("/health", response_model=HealthResponse, summary="Stan aplikacji")
     async def health() -> HealthResponse:
         return HealthResponse(status="ok", version=settings.app_version)
+
+    return router
+
+
+def build_uploads_router(settings: Settings) -> APIRouter:
+    """Serwowanie uploadów — POZA `/api/v1` (01_ARCH §1), ZAWSZE z sesją.
+
+    Świadomie nie StaticFiles: montowanie katalogu omijałoby autoryzację
+    (07_SECURITY §6). `resolve_upload_path` odrzuca ścieżki spoza katalogu
+    uploadów identycznym 404 jak dla pliku, którego nie ma.
+    """
+    router = APIRouter(tags=["uploads"])
+    uploads_root = Path(settings.uploads_dir)
+
+    @router.get("/uploads/{file_path:path}", summary="Plik uploadu (wymaga sesji)")
+    async def serve_upload(file_path: str, user: CurrentUser) -> FileResponse:
+        resolved = resolve_upload_path(file_path, uploads_root=uploads_root)
+        if not resolved.is_file():
+            raise NotFoundError(FILE_NOT_FOUND_MESSAGE)
+        # Nazwy plików to uuid4 — treść pod URL-em nigdy się nie zmienia, więc
+        # przeglądarka może cache'ować agresywnie (private: odpowiedź za sesją).
+        return FileResponse(
+            resolved, headers={"Cache-Control": "private, max-age=31536000, immutable"}
+        )
 
     return router
 
@@ -78,7 +113,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(build_admin_households_router(), prefix=API_V1_PREFIX)
     app.include_router(build_products_router(), prefix=API_V1_PREFIX)
     app.include_router(build_categories_router(), prefix=API_V1_PREFIX)
+    app.include_router(build_recipes_router(), prefix=API_V1_PREFIX)
+    app.include_router(build_tags_router(), prefix=API_V1_PREFIX)
     app.include_router(build_audit_router(), prefix=API_V1_PREFIX)
+    # Uploady poza /api/v1 (01_ARCH §1) — endpoint z sesją, nie StaticFiles.
+    app.include_router(build_uploads_router(settings))
 
     return app
 

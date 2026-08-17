@@ -125,6 +125,24 @@ Dołożone w BATCH_03 i BATCH_04 (też fundament — nie pisz tego od nowa):
   (wpis w tej samej transakcji co operacja); nowa akcja = wpis w
   `AuditAction`/`AuditEntity`, konwencja `<encja>.<czasownik>`.
 
+Dołożone w BATCH_05 (też fundament):
+
+- `app/core/uploads.py` — JEDYNY pipeline obrazów (07_SECURITY §6):
+  `save_image` (limit 10 MB → 413, sniffing Pillow → 422, re-encode JPEG,
+  miniatura `_thumb`), `delete_image`, `thumbnail_path_for`,
+  `resolve_upload_path`. Funkcje synchroniczne — serwis woła przez
+  `run_in_threadpool`. Serving: `GET /uploads/{path}` z sesją
+  (`app/main.py`), NIGDY StaticFiles. Katalog: `Settings.uploads_dir`.
+- `app/modules/nutrition/{engine,types}.py` — czysty silnik obliczeń
+  (ADR-008): wejście WYŁĄCZNIE `ProductNutrition` z adaptera, ilości na osi
+  `basis_unit`; `NutritionValues` to kontrakt między batchami (zmiany tylko
+  addytywne); zaokrągla wyłącznie `round_for_output` na wyjściu.
+- `app/modules/recipes/service.py` — rejestr
+  `register_recipe_reference_finder(finder)`: moduł z FK do `recipes`
+  (plan B06, szablony B07) rejestruje licznik, inaczej 409 bez `used_in`.
+- Enumy `entity_scope` i `amount_unit` istnieją od migracji `0006` — kolejne
+  tabele ze scope/ilością używają `postgresql.ENUM(..., create_type=False)`.
+
 Testy: `tests/{unit,integration,api}/` (pakiet — z `__init__.py`), markery
 `unit`/`integration`/`api` (wymagane — bez markera test nie wejdzie do
 żadnego targetu), docstring po polsku opisujący scenariusz. Fixture'y

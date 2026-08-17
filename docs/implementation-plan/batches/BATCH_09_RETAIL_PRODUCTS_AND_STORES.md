@@ -33,9 +33,18 @@ Co już istnieje (stan po R2):
   `app/core/deletion.py`) — inaczej 409 przy usuwaniu produktu kanonicznego
   wyjdzie bez czytelnej listy użyć. Wielkości opakowań i ilości to `Decimal`
   w bazie i **stringi dziesiętne** w JSON (`DecimalString` z `app/core/schemas.py`).
-- Infrastruktura uploadu zdjęć z BATCH_05 (Pillow re-encode, miniatury,
-  losowe nazwy, bind mount `/data/uploads`, serwowanie przez endpoint
-  z autoryzacją) — do PONOWNEGO UŻYCIA, nie kopiowania.
+- Infrastruktura uploadu zdjęć z BATCH_05 — do PONOWNEGO UŻYCIA, nie
+  kopiowania. Konkretne API (`backend/app/core/uploads.py`):
+  `save_image(data: bytes, *, uploads_root: Path, subdir: str) -> SavedImage
+  (path, thumbnail_path)` — limit 10 MB (413), sniffing Pillow (422),
+  re-encode do JPEG (strip EXIF), miniatura `<nazwa>_thumb.jpg` ≤512 px;
+  `delete_image(path, *, uploads_root)` (usuwa też miniaturę, idempotentne);
+  `thumbnail_path_for(path)`. Funkcje są synchroniczne — serwis woła je przez
+  `run_in_threadpool` (wzór: `recipes/service.py::set_photo`). Katalog =
+  `Settings.uploads_dir` (env `UPLOADS_DIR`); dla retail użyj własnego
+  `subdir` (np. `"retail"`). Serwowanie już istnieje: `GET /uploads/{path}`
+  (poza `/api/v1`, wymaga sesji — `app/main.py::build_uploads_router`);
+  URL w odpowiedzi buduje się jak w `recipes/router.py::_photo_urls`.
 - `ProductPicker` + wzorzec create-in-context (05_FRONTEND §4);
   `UstawieniaPage` (cele, profile rodziny, konto).
 

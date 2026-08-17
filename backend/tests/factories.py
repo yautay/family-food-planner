@@ -12,6 +12,7 @@ from functools import lru_cache
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.scope import Scope, ScopedQuery
 from app.core.security import generate_token, hash_password, session_expires_at, utcnow
 from app.modules.accounts.models import Session, User, UserRole
 from app.modules.catalog.models import (
@@ -23,8 +24,9 @@ from app.modules.catalog.models import (
     VerificationStatus,
 )
 from app.modules.catalog.naming import normalize_name
-from app.modules.catalog.units import normalize_unit_label
+from app.modules.catalog.units import AmountUnit, normalize_unit_label
 from app.modules.households.models import Household, MemberProfile
+from app.modules.recipes.models import Recipe, RecipeIngredient, RecipeRating, Tag, recipe_tags
 
 #: Hasło używane przez fabryki. Nie jest sekretem — istnieje wyłącznie w testach.
 TEST_PASSWORD = "haslo-testowe-2026"
@@ -207,6 +209,91 @@ async def create_unit_weight(
     await session.commit()
     await session.refresh(weight)
     return weight
+
+
+async def create_recipe(
+    session: AsyncSession,
+    *,
+    owner: User,
+    name: str = "Gołąbki",
+    scope: Scope = Scope.PRIVATE,
+    instructions: str = "",
+    base_servings: int = 1,
+    prep_time_min: int | None = None,
+    difficulty: int | None = None,
+    photo_path: str | None = None,
+    is_archived: bool = False,
+) -> Recipe:
+    """Przepis utworzony tak, jak zrobiłby to serwis — przez `ownership_for_create`."""
+    recipe = Recipe(
+        name=name,
+        instructions=instructions,
+        base_servings=base_servings,
+        prep_time_min=prep_time_min,
+        difficulty=difficulty,
+        photo_path=photo_path,
+        is_archived=is_archived,
+        **ScopedQuery.ownership_for_create(owner, scope),
+    )
+    session.add(recipe)
+    await session.commit()
+    await session.refresh(recipe)
+    return recipe
+
+
+async def create_ingredient(
+    session: AsyncSession,
+    *,
+    recipe: Recipe,
+    product: CanonicalProduct,
+    amount: Decimal = Decimal("100.000"),
+    amount_unit: AmountUnit = AmountUnit.GRAM,
+    display_qty: Decimal | None = None,
+    display_unit: str | None = None,
+    note: str = "",
+    position: int = 0,
+) -> RecipeIngredient:
+    """Składnik z ilością już znormalizowaną (fabryka omija serwis świadomie)."""
+    ingredient = RecipeIngredient(
+        recipe_id=recipe.id,
+        product_id=product.id,
+        amount=amount,
+        amount_unit=amount_unit,
+        display_qty=display_qty,
+        display_unit=display_unit,
+        note=note,
+        position=position,
+    )
+    session.add(ingredient)
+    await session.commit()
+    await session.refresh(ingredient)
+    return ingredient
+
+
+async def create_tag(session: AsyncSession, *, name: str = "obiad", is_system: bool = False) -> Tag:
+    """Tag słownika globalnego."""
+    tag = Tag(name=name, is_system=is_system)
+    session.add(tag)
+    await session.commit()
+    await session.refresh(tag)
+    return tag
+
+
+async def attach_tag(session: AsyncSession, *, recipe: Recipe, tag: Tag) -> None:
+    """Przypisanie N:M przepis↔tag."""
+    await session.execute(recipe_tags.insert().values(recipe_id=recipe.id, tag_id=tag.id))
+    await session.commit()
+
+
+async def create_rating(
+    session: AsyncSession, *, recipe: Recipe, user: User, rating: int = 5
+) -> RecipeRating:
+    """Ocena 1-5 pary (przepis, użytkownik)."""
+    row = RecipeRating(recipe_id=recipe.id, user_id=user.id, rating=rating)
+    session.add(row)
+    await session.commit()
+    await session.refresh(row)
+    return row
 
 
 async def assign_to_household(

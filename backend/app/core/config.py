@@ -47,6 +47,11 @@ class Settings(BaseSettings):
     #: urośnie (pg_trgm domyślnie używa 0.3, co gubi krótkie polskie nazwy).
     catalog_search_similarity_threshold: float = 0.25
 
+    #: Katalog uploadów (zdjęcia przepisów B05, retail B09, PDF-y B15) —
+    #: bind mount POZA web-rootem (03_DATABASE §11, 07_SECURITY §6). Ścieżka
+    #: względna liczy się od katalogu roboczego procesu (w kontenerze: /app).
+    uploads_dir: str = "data/uploads"
+
 
 def _format_missing(exc: ValidationError) -> str:
     missing = sorted(

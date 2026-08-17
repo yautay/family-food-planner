@@ -18,6 +18,18 @@ export interface AdminHouseholdsFilters {
   q?: string
 }
 
+export interface RecipesFilters {
+  limit: number
+  offset: number
+  q?: string
+  tag?: number[]
+  prep_time_max?: number
+  difficulty_max?: number
+  rating_min?: number
+  scope?: 'private' | 'household'
+  include_archived?: boolean
+}
+
 export interface ProductsFilters {
   limit: number
   offset: number
@@ -28,6 +40,15 @@ export interface ProductsFilters {
 }
 
 export const queryKeys = {
+  recipes: {
+    all: ['recipes'] as const,
+    list: (filters: RecipesFilters) => ['recipes', 'list', filters] as const,
+    /** Klucz zawiera mnożnik porcji — regulacja porcji to refetch, nie mutacja. */
+    detail: (id: number, servings: string) => ['recipes', 'detail', id, servings] as const,
+  },
+  tags: {
+    all: ['tags'] as const,
+  },
   products: {
     all: ['products'] as const,
     list: (filters: ProductsFilters) => ['products', 'list', filters] as const,

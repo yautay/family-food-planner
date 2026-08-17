@@ -159,6 +159,24 @@ recipe_ratings (id, recipe_id FK CASCADE, user_id FK CASCADE,
 `amount_unit=piece` dozwolone tylko dla produktów `measure_kind=piece`
 (walidacja serwisowa); do obliczeń piece → g przez `piece_weight_g`.
 
+Stan faktyczny (BATCH_05, migracje `0006` + `0007`):
+
+- Migracja `0006` tworzy trzy typy enumowe: **`entity_scope`** (pierwsza
+  produkcyjna tabela ze scope — 03 §4), **`amount_unit`** (reużyją go
+  planning/pantry/shopping przez `postgresql.ENUM(..., create_type=False)`)
+  i `recipe_source`.
+- **`recipes.import_job_id` jest kolumną BEZ klucza obcego** — tabela
+  `import_jobs` powstaje dopiero w B15 i dopiero tamta migracja dopina
+  constraint (FK do nieistniejącej tabeli nie istnieje w PG).
+- `recipe_tags` to czysta tabela asocjacyjna bez `created_at`/`updated_at`
+  (świadomy wyjątek od §1 — wiersz nie ma cyklu życia poza parą kluczy;
+  precedens: append-only `audit_entries` bez `updated_at`).
+- `recipes.name` ma indeks trigramowy GIN (wyszukiwarka `?q=`, wymóg
+  szybkości dla RecipePickera w B06); `pg_trgm` istnieje od migracji `0004`.
+- Migracja danych `0007` seeduje 9 tagów systemowych (02_DOMAIN §5 +
+  „ulubione" — serce na karcie, 06_UIUX §4.2), idempotentnie; downgrade
+  usuwa tylko tagi seedu NIEprzypisane do żadnego przepisu (lekcja U2 z R1).
+
 ## 6. Schemat — planning
 
 ```sql

@@ -377,6 +377,96 @@ export interface paths {
         patch: operations["update_category_api_v1_categories__category_id__patch"];
         trace?: never;
     };
+    "/api/v1/recipes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lista i filtrowanie przepisów */
+        get: operations["list_recipes_api_v1_recipes_get"];
+        put?: never;
+        /** Nowy przepis ze składnikami (normalizacja ilości przy zapisie) */
+        post: operations["create_recipe_api_v1_recipes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recipes/{recipe_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Szczegóły przepisu; ?servings= przelicza nutrition i składniki */
+        get: operations["get_recipe_api_v1_recipes__recipe_id__get"];
+        /** Pełna podmiana przepisu (składniki wymieniane kompletem) */
+        put: operations["update_recipe_api_v1_recipes__recipe_id__put"];
+        post?: never;
+        /** Usunięcie przepisu (właściciel/ADMIN; 409 gdy używany) */
+        delete: operations["delete_recipe_api_v1_recipes__recipe_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recipes/{recipe_id}/rating": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Własna ocena 1-5 (upsert); odpowiedź zawiera średnią */
+        put: operations["rate_recipe_api_v1_recipes__recipe_id__rating_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recipes/{recipe_id}/photo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Zdjęcie przepisu (multipart; sniffing, re-encode, miniatura) */
+        post: operations["upload_photo_api_v1_recipes__recipe_id__photo_post"];
+        /** Usunięcie zdjęcia przepisu */
+        delete: operations["delete_photo_api_v1_recipes__recipe_id__photo_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Słownik tagów */
+        get: operations["list_tags_api_v1_tags_get"];
+        put?: never;
+        /** Nowy tag użytkowy (inline create z multi-pickera) */
+        post: operations["create_tag_api_v1_tags_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/audit": {
         parameters: {
             query?: never;
@@ -394,10 +484,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/uploads/{file_path}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Plik uploadu (wymaga sesji) */
+        get: operations["serve_upload_uploads__file_path__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * AmountUnit
+         * @description Oś, na której ilość jest przechowywana (03_DATABASE §5: `ENUM(g,ml,piece)`).
+         * @enum {string}
+         */
+        AmountUnit: "g" | "ml" | "piece";
         /**
          * AuditEntryRead
          * @description Wpis dziennika widziany przez administratora.
@@ -432,6 +545,14 @@ export interface components {
             items: components["schemas"]["AuditEntryRead"][];
             /** Total */
             total: number;
+        };
+        /** Body_upload_photo_api_v1_recipes__recipe_id__photo_post */
+        Body_upload_photo_api_v1_recipes__recipe_id__photo_post: {
+            /**
+             * File
+             * @description Plik obrazu, maks. 10 MB
+             */
+            file: string;
         };
         /**
          * CategoryCreateRequest
@@ -783,6 +904,30 @@ export interface components {
             missing: string[];
         };
         /**
+         * NutritionRead
+         * @description Wartości wyliczone przez silnik — nigdy przechowywane (02_DOMAIN §13.2).
+         */
+        NutritionRead: {
+            /** Kcal */
+            kcal: string;
+            /** Protein G */
+            protein_g: string;
+            /** Fat G */
+            fat_g: string;
+            /** Carbs G */
+            carbs_g: string;
+            /** Fiber G */
+            fiber_g: string;
+            /** Sugars G */
+            sugars_g: string;
+            /** Glycemic Load */
+            glycemic_load: string;
+            /** Complete */
+            complete: boolean;
+            /** Missing */
+            missing: string[];
+        };
+        /**
          * Perishability
          * @description Trwałość — steruje podziałem na tury zakupowe (02_DOMAIN §9.2, B10).
          * @enum {string}
@@ -957,6 +1102,243 @@ export interface components {
             /** Piece Weight G */
             piece_weight_g?: number | string | null;
             perishability_override?: components["schemas"]["Perishability"] | null;
+        };
+        /**
+         * RatingRequest
+         * @description Własna ocena 1-5; `user_id` pochodzi z sesji, nigdy z body (karta B05).
+         */
+        RatingRequest: {
+            /** Rating */
+            rating: number;
+        };
+        /** RatingResponse */
+        RatingResponse: {
+            /** My Rating */
+            my_rating: number;
+            /** Avg Rating */
+            avg_rating: string;
+            /** Ratings Count */
+            ratings_count: number;
+        };
+        /**
+         * RecipeDetail
+         * @description Szczegóły (widok 3): instrukcja, składniki i nutrition x mnożnik porcji.
+         */
+        RecipeDetail: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            scope: components["schemas"]["Scope"];
+            /** Owner User Id */
+            owner_user_id: number;
+            /** Base Servings */
+            base_servings: number;
+            /** Prep Time Min */
+            prep_time_min: number | null;
+            /** Difficulty */
+            difficulty: number | null;
+            source: components["schemas"]["RecipeSource"];
+            /** Is Archived */
+            is_archived: boolean;
+            /** Photo Url */
+            photo_url: string | null;
+            /** Photo Thumb Url */
+            photo_thumb_url: string | null;
+            /** Tags */
+            tags: components["schemas"]["TagRead"][];
+            /** Avg Rating */
+            avg_rating: string | null;
+            /** Ratings Count */
+            ratings_count: number;
+            /** My Rating */
+            my_rating: number | null;
+            nutrition: components["schemas"]["NutritionRead"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Instructions */
+            instructions: string;
+            /** Servings */
+            servings: string;
+            /** Ingredients */
+            ingredients: components["schemas"]["RecipeIngredientRead"][];
+        };
+        /**
+         * RecipeIngredientInput
+         * @description Pozycja składnika przy zapisie — ilość W JEDNOSTCE użytkownika.
+         *
+         *     Normalizację do g/ml/szt. robi serwis (ADR-005); pozycja na liście wynika
+         *     z kolejności w tablicy, nie z osobnego pola.
+         */
+        RecipeIngredientInput: {
+            /** Product Id */
+            product_id: number;
+            /** Quantity */
+            quantity: number | string;
+            /** Unit */
+            unit: string;
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+        };
+        /**
+         * RecipeIngredientRead
+         * @description Składnik w odczycie: zapis użytkownika + postać znormalizowana + przeskalowana.
+         */
+        RecipeIngredientRead: {
+            /** Id */
+            id: number;
+            /** Product Id */
+            product_id: number;
+            /** Product Name */
+            product_name: string;
+            measure_kind: components["schemas"]["MeasureKind"];
+            /** Display Qty */
+            display_qty: string | null;
+            /** Display Unit */
+            display_unit: string | null;
+            /** Amount */
+            amount: string;
+            amount_unit: components["schemas"]["AmountUnit"];
+            /** Scaled Amount */
+            scaled_amount: string;
+            /** Note */
+            note: string;
+            /** Position */
+            position: number;
+        };
+        /** RecipeListResponse */
+        RecipeListResponse: {
+            /** Items */
+            items: components["schemas"]["RecipeSummary"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * RecipePayload
+         * @description Jeden model wejścia dla POST (create) i PUT (pełna podmiana — 04_API §1).
+         *
+         *     Świadomie BEZ pustych podklas per metoda: dwa bit-identyczne schematy
+         *     w OpenAPI maskowałyby, który jest „prawdziwy", i podwajały diff
+         *     `generated.ts` (ustalenie review B05).
+         */
+        RecipePayload: {
+            /** Name */
+            name: string;
+            /**
+             * Instructions
+             * @default
+             */
+            instructions: string;
+            /**
+             * Base Servings
+             * @default 1
+             */
+            base_servings: number;
+            /** Prep Time Min */
+            prep_time_min?: number | null;
+            /** Difficulty */
+            difficulty?: number | null;
+            /** @default private */
+            scope: components["schemas"]["Scope"];
+            /** Ingredients */
+            ingredients?: components["schemas"]["RecipeIngredientInput"][];
+            /** Tag Ids */
+            tag_ids?: number[];
+        };
+        /**
+         * RecipeSource
+         * @description Pochodzenie przepisu: ręczne albo z importu PDF (B15/16).
+         * @enum {string}
+         */
+        RecipeSource: "manual" | "pdf_import";
+        /**
+         * RecipeSummary
+         * @description Przepis na liście (widok 2): karta z kcal/porcję, oceną i tagami.
+         */
+        RecipeSummary: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            scope: components["schemas"]["Scope"];
+            /** Owner User Id */
+            owner_user_id: number;
+            /** Base Servings */
+            base_servings: number;
+            /** Prep Time Min */
+            prep_time_min: number | null;
+            /** Difficulty */
+            difficulty: number | null;
+            source: components["schemas"]["RecipeSource"];
+            /** Is Archived */
+            is_archived: boolean;
+            /** Photo Url */
+            photo_url: string | null;
+            /** Photo Thumb Url */
+            photo_thumb_url: string | null;
+            /** Tags */
+            tags: components["schemas"]["TagRead"][];
+            /** Avg Rating */
+            avg_rating: string | null;
+            /** Ratings Count */
+            ratings_count: number;
+            /** My Rating */
+            my_rating: number | null;
+            nutrition: components["schemas"]["NutritionRead"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * Scope
+         * @description Zakres widoczności encji współdzielnej (ADR-006).
+         * @enum {string}
+         */
+        Scope: "private" | "household";
+        /**
+         * TagCreateRequest
+         * @description Inline create tagu użytkowego (`is_system=false`) z multi-pickera.
+         */
+        TagCreateRequest: {
+            /** Name */
+            name: string;
+        };
+        /** TagListResponse */
+        TagListResponse: {
+            /** Items */
+            items: components["schemas"]["TagRead"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * TagRead
+         * @description Tag ze słownika globalnego.
+         */
+        TagRead: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Is System */
+            is_system: boolean;
         };
         /**
          * UnitWeightCreateRequest
@@ -2288,6 +2670,338 @@ export interface operations {
             };
         };
     };
+    list_recipes_api_v1_recipes_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+                q?: string | null;
+                tag?: number[] | null;
+                prep_time_max?: number | null;
+                difficulty_max?: number | null;
+                rating_min?: number | null;
+                scope?: components["schemas"]["Scope"] | null;
+                include_archived?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecipeListResponse"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_recipe_api_v1_recipes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecipePayload"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecipeDetail"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_recipe_api_v1_recipes__recipe_id__get: {
+        parameters: {
+            query?: {
+                servings?: number | string;
+            };
+            header?: never;
+            path: {
+                recipe_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecipeDetail"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_recipe_api_v1_recipes__recipe_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                recipe_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecipePayload"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecipeDetail"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_recipe_api_v1_recipes__recipe_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                recipe_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    rate_recipe_api_v1_recipes__recipe_id__rating_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                recipe_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RatingRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RatingResponse"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    upload_photo_api_v1_recipes__recipe_id__photo_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                recipe_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_photo_api_v1_recipes__recipe_id__photo_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecipeDetail"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_photo_api_v1_recipes__recipe_id__photo_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                recipe_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecipeDetail"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_tags_api_v1_tags_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagListResponse"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_tag_api_v1_tags_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TagCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagRead"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     list_entries_api_v1_audit_get: {
         parameters: {
             query?: {
@@ -2310,6 +3024,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuditListResponse"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    serve_upload_uploads__file_path__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                file_path: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Błąd */

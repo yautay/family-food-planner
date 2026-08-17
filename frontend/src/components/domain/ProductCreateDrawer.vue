@@ -56,6 +56,10 @@ watch(
       name.value = prefill
       errorMessage.value = null
       existingId.value = null
+      // U10 (review R1): bez resetu kolejny inline create startowałby ze
+      // sposobem liczenia i wagą sztuki POPRZEDNIEGO produktu.
+      measureKind.value = 'mass'
+      pieceWeight.value = ''
     }
   },
   { immediate: true },

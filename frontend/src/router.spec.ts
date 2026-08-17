@@ -89,12 +89,15 @@ describe('mapa tras', () => {
     const shell = routes.find((route) => route.path === '/')
     const names = (shell?.children ?? []).map((child) => child.name).filter(Boolean)
 
-    // Trasy formularzy (`produkt-nowy`, `produkt-edycja`) są podstronami sekcji
-    // „Produkty" — nie dokładają pozycji do nawigacji (05_FRONTEND §3).
+    // Trasy formularzy (`produkt-*`, `przepis-*`) są podstronami swoich sekcji
+    // — nie dokładają pozycji do nawigacji (05_FRONTEND §3).
     expect(names).toEqual([
       'plan-dnia',
       'tydzien',
       'przepisy',
+      'przepis-nowy',
+      'przepis-szczegol',
+      'przepis-edycja',
       'produkty',
       'produkt-nowy',
       'produkt-edycja',

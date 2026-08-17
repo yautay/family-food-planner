@@ -16,6 +16,7 @@ node_modules/
 dist/
 dev-dist/
 coverage/
+.coverage
 *.log
 
 # playwright

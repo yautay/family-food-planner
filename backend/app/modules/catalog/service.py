@@ -32,7 +32,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.core.deletion import UsedInRef, assert_deletable, conflict_from_integrity_error
+from app.core.deletion import (
+    USED_IN_LIMIT,
+    UsedInRef,
+    assert_deletable,
+    conflict_from_integrity_error,
+)
 from app.core.errors import AppError, ConflictError, ForbiddenError, NotFoundError
 from app.modules.accounts.models import User, UserRole
 from app.modules.audit.service import AuditAction, AuditEntity, AuditService
@@ -76,10 +81,6 @@ VERIFY_INCOMPLETE = (
 )
 PIECE_WEIGHT_REQUIRED = "Produkt mierzony w sztukach musi mieć podaną wagę jednej sztuki."
 PIECE_WEIGHT_NOT_ALLOWED = "Wagę sztuki podaje się wyłącznie dla produktów mierzonych w sztukach."
-
-#: Maksymalna długość listy „Używane w:" w odpowiedzi 409 — pełna lista przy
-#: popularnym produkcie byłaby nieczytelna, a UI i tak pokazuje pierwsze pozycje.
-USED_IN_LIMIT = 20
 
 #: Pola opisowe produktu, które wolno zmienić PATCH-em (USER). Wartości odżywcze
 #: NIE są tu wymienione świadomie — te idą wyłącznie przez `PUT /nutrition`.
@@ -471,6 +472,18 @@ class CatalogService:
             product.piece_weight_g = None
         _assert_piece_weight(product.measure_kind, product.piece_weight_g)
 
+        # D15 (02_DECISIONS): zmiana `measure_kind` przestawia podstawę wartości
+        # („na 100 g" ⇄ „na 100 ml", ADR-004), więc na produkcie z jakimikolwiek
+        # wartościami odżywczymi unieważnia weryfikację. Silnik nutrition (B05)
+        # ma pokazać „niepełne dane", dopóki ADMIN nie sprawdzi liczb na nowej osi.
+        if (
+            product.measure_kind.value != before["measure_kind"]
+            and product.verification_status is VerificationStatus.VERIFIED
+            and any(getattr(product, field) is not None for field in NUTRITION_FIELDS)
+        ):
+            product.verification_status = VerificationStatus.UNVERIFIED
+            product.verified_at = None
+
         duplicate = await self._find_by_normalized_name(
             product.normalized_name, exclude_id=product.id
         )
@@ -741,7 +754,11 @@ class CatalogService:
 
     @staticmethod
     def _product_snapshot(product: CanonicalProduct) -> dict[str, Any]:
-        """Pola opisowe produktu w payloadzie audytu."""
+        """Pola opisowe produktu w payloadzie audytu.
+
+        `verification_status` jest tu od D15: zbicie weryfikacji przy zmianie
+        `measure_kind` ma być widoczne w before/after wpisu `product.update`.
+        """
         return {
             "name": product.name,
             "category_id": product.category_id,
@@ -752,6 +769,7 @@ class CatalogService:
                 if product.perishability_override is None
                 else product.perishability_override.value
             ),
+            "verification_status": product.verification_status.value,
         }
 
     @staticmethod
