@@ -204,6 +204,26 @@ nadpisywany całością — upraszcza model, a referencje wewnątrz payloadu
 liczą się do blokady usuwania przepisów przez zliczenie w serwisie
 (zapytanie po JSONB path, indeks GIN).
 
+Stan faktyczny (BATCH_06, migracja `0008`):
+
+- Powstały `user_nutrition_goals` (§2) oraz `plan_days`, `plan_meals`,
+  `plan_meal_items`, `plan_item_servings`. `day_templates`, `week_templates`
+  i `week_cycles` dokłada BATCH_07.
+- Typy `entity_scope` i `amount_unit` są REUŻYWANE z migracji `0006`
+  (`postgresql.ENUM(..., create_type=False)`); `downgrade` migracji `0008`
+  świadomie ich NIE kasuje — należą do `0006` i używa ich moduł przepisów.
+- Dodatkowe CHECK-i wobec szkicu: `plan_meal_items.product_requires_amount`
+  (produkt luzem MUSI mieć ilość i jednostkę, pozycja z przepisem nie ma
+  żadnej — niezmiennik 02_DOMAIN §13.1), `amount_positive`, `servings_positive`,
+  `plan_meals.kcal_target_positive`, `user_nutrition_goals.kcal_positive`
+  i `macros_non_negative`. `plan_item_servings` ma
+  `UNIQUE(plan_meal_item_id, member_profile_id)` — ta sama osoba nie może
+  wystąpić w rozkładzie dwa razy.
+- `plan_days.day` ma indeks (najczęstsze zapytanie modułu to zakres dat).
+- Suma multiplierów rozkładu = `servings` pozycji pozostaje regułą SERWISU
+  (baza nie widzi całej kolekcji przy pojedynczym INSERT); pilnuje jej
+  `planning/service.py::assert_split_matches_servings` (czysta funkcja).
+
 ## 7. Schemat — pantry
 
 ```sql

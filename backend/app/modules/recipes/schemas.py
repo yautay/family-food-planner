@@ -9,6 +9,10 @@ Składnik ma dwa oblicza: wejście (`quantity` + `unit` — to, co wpisał
 użytkownik) i odczyt (`display_*` + znormalizowane `amount`/`amount_unit`
 + `scaled_amount` policzone dla żądanej liczby porcji — frontend nie liczy
 ilości sam, 05_FRONTEND §7).
+
+`NutritionRead` jest importowany z modułu nutrition (BATCH_06): kształt wyniku
+obliczeń należy do domeny żywienia i konsumuje go też plan dnia — dwie kopie
+oznaczałyby dwa komponenty w OpenAPI o identycznej treści.
 """
 
 from __future__ import annotations
@@ -23,7 +27,23 @@ from app.core.schemas import DecimalString
 from app.core.scope import Scope
 from app.modules.catalog.models import MeasureKind
 from app.modules.catalog.units import AmountUnit
+from app.modules.nutrition.schemas import NutritionRead
 from app.modules.recipes.models import RecipeSource
+
+__all__ = [
+    "NutritionRead",
+    "RatingRequest",
+    "RatingResponse",
+    "RecipeDetail",
+    "RecipeIngredientInput",
+    "RecipeIngredientRead",
+    "RecipeListResponse",
+    "RecipePayload",
+    "RecipeSummary",
+    "TagCreateRequest",
+    "TagListResponse",
+    "TagRead",
+]
 
 RecipeName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
 TagName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]
@@ -32,22 +52,6 @@ UnitLabel = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1
 IngredientQuantity = Annotated[
     Decimal, Field(gt=Decimal("0"), le=Decimal("99999.999"), max_digits=8, decimal_places=3)
 ]
-# --- nutrition (04_API §1) ----------------------------------------------------------
-
-
-class NutritionRead(BaseModel):
-    """Wartości wyliczone przez silnik — nigdy przechowywane (02_DOMAIN §13.2)."""
-
-    kcal: DecimalString
-    protein_g: DecimalString
-    fat_g: DecimalString
-    carbs_g: DecimalString
-    fiber_g: DecimalString
-    sugars_g: DecimalString
-    glycemic_load: DecimalString
-    complete: bool
-    missing: list[str]
-
 
 # --- tagi -----------------------------------------------------------------------------
 

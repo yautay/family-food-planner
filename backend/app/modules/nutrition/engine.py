@@ -27,18 +27,24 @@ Zasady twarde:
 from __future__ import annotations
 
 from collections.abc import Sequence
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal
 
+from app.core.errors import AppError
 from app.modules.nutrition.types import (
     NUTRITION_NUMERIC_FIELDS,
     ZERO_VALUES,
+    GoalStatus,
+    GoalThresholds,
     NutritionValues,
     ProductNutrition,
 )
 
 __all__ = [
+    "NutritionTargetError",
     "aggregate",
+    "fit_servings_to_target",
     "glycemic_load",
+    "goal_status",
     "ingredient_nutrition",
     "portion_nutrition",
     "recipe_nutrition",
@@ -52,6 +58,21 @@ _HUNDRED = Decimal("100")
 #: Dopisek do `missing` dla produktu bez weryfikacji (02_DOMAIN §4.9).
 UNVERIFIED_LABEL = "produkt niezweryfikowany"
 
+#: Kwant mnożnika porcji — skala kolumny `plan_meal_items.servings` NUMERIC(6,2).
+SERVINGS_QUANTUM = Decimal("0.01")
+#: Zakres mnożnika mieszczący się w NUMERIC(6,2); propozycja nigdy z niego nie wyjdzie.
+MIN_SERVINGS = SERVINGS_QUANTUM
+MAX_SERVINGS = Decimal("9999.99")
+
+NO_TARGET_MESSAGE = (
+    "Ten posiłek nie ma celu kalorii, więc nie ma do czego dopasować porcji. "
+    "Ustaw cel kcal posiłku i spróbuj ponownie."
+)
+ZERO_PORTION_MESSAGE = (
+    "Nie znamy kalorii tej pozycji, więc nie da się policzyć mnożnika porcji. "
+    "Uzupełnij wartości odżywcze produktów i spróbuj ponownie."
+)
+
 #: Kwanty zaokrągleń wyjściowych (02_DOMAIN §6): kcal → 1, reszta → 0,1.
 _OUTPUT_QUANTA: dict[str, Decimal] = {
     "kcal": Decimal("1"),
@@ -62,6 +83,18 @@ _OUTPUT_QUANTA: dict[str, Decimal] = {
     "sugars_g": Decimal("0.1"),
     "glycemic_load": Decimal("0.1"),
 }
+
+
+class NutritionTargetError(AppError):
+    """422 — nie da się policzyć propozycji mnożnika (brak celu albo zerowe kcal).
+
+    Wyjątek mieszka przy silniku, bo to on rozpoznaje sytuację; klasa jest czystą
+    strukturą danych (precedens: `UnitConversionError` w `catalog/units.py`),
+    więc nie łamie zakazu I/O w silniku (ADR-008).
+    """
+
+    status_code = 422
+    code = "validation_error"
 
 
 def glycemic_load(glycemic_index: Decimal, carbs_g: Decimal, fiber_g: Decimal | None) -> Decimal:
@@ -164,6 +197,48 @@ def portion_nutrition(total: NutritionValues, base_servings: int) -> NutritionVa
         complete=total.complete,
         missing=total.missing,
     )
+
+
+def goal_status(
+    value: Decimal, target: Decimal | None, thresholds: GoalThresholds
+) -> GoalStatus | None:
+    """Status wartości względem celu (02_DOMAIN §6, progi D9 z `ui_settings`).
+
+    `below` poniżej `low`% celu, `above` powyżej `high`%, `ok` pomiędzy —
+    OBA progi należą do przedziału „prawidłowo" (dokładnie 90% i dokładnie 110%
+    przy domyślnych progach to jeszcze `ok`).
+
+    Brak celu (albo cel niedodatni) daje `None`, nie `below`: „nie wiem" i „za
+    mało" to dwie różne informacje, a UI pokazuje je inaczej (06_UIUX §3.5).
+    """
+    if target is None or target <= _ZERO:
+        return None
+
+    percent = value * _HUNDRED / target
+    if percent < thresholds.low:
+        return GoalStatus.BELOW
+    if percent > thresholds.high:
+        return GoalStatus.ABOVE
+    return GoalStatus.OK
+
+
+def fit_servings_to_target(target_kcal: Decimal | None, portion_kcal: Decimal) -> Decimal:
+    """Propozycja mnożnika porcji: `cel / kcal_porcji`, kwantowana W DÓŁ do 0,01.
+
+    W dół, bo „dopasuj porcję do celu" ma celu NIE przekraczać (02_DOMAIN §6).
+    Funkcja tylko liczy — zapis jest osobną, jawną akcją użytkownika (karta B06).
+
+    Wynik trzyma się zakresu kolumny `servings` NUMERIC(6,2) i nigdy nie schodzi
+    do zera: „0 porcji" nie jest odpowiedzią na pytanie „ile porcji zjeść",
+    a takiego mnożnika nie dałoby się nawet zapisać.
+    """
+    if target_kcal is None or target_kcal <= _ZERO:
+        raise NutritionTargetError(NO_TARGET_MESSAGE)
+    if portion_kcal <= _ZERO:
+        raise NutritionTargetError(ZERO_PORTION_MESSAGE)
+
+    proposed = (target_kcal / portion_kcal).quantize(SERVINGS_QUANTUM, rounding=ROUND_DOWN)
+    return min(max(proposed, MIN_SERVINGS), MAX_SERVINGS)
 
 
 def round_for_output(values: NutritionValues) -> NutritionValues:

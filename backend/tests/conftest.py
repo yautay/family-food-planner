@@ -61,6 +61,11 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 #: dopisuje tu swoje tabele (kolejność nieistotna — TRUNCATE ... CASCADE).
 DB_TABLES = (
     "audit_entries",
+    "plan_item_servings",
+    "plan_meal_items",
+    "plan_meals",
+    "plan_days",
+    "user_nutrition_goals",
     "member_profiles",
     "sessions",
     "users",

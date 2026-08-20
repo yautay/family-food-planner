@@ -292,6 +292,21 @@ class AccountsService:
         await self._session.refresh(user)
         return user
 
+    async def update_ui_settings(self, *, user: User, patch: dict[str, Any]) -> User:
+        """Scal ustawienia UI zalogowanego użytkownika (m.in. progi statusów, D9).
+
+        Scalanie jest PŁYTKIE i celowe: `PATCH` z jednym kluczem nie może
+        wyczyścić pozostałych preferencji, a klucz podany w całości zastępuje
+        poprzednią wartość (nie ma sensu doklejać połówki progów).
+
+        Nowy słownik zamiast mutacji w miejscu — SQLAlchemy nie śledzi zmian
+        wewnątrz JSONB, więc `user.ui_settings["x"] = ...` nie trafiłoby do bazy.
+        """
+        user.ui_settings = {**user.ui_settings, **patch}
+        await self._session.commit()
+        await self._session.refresh(user)
+        return user
+
     async def delete_user(self, user_id: int, *, actor: User) -> None:
         """Usuń konto bez powiązanych danych; konto z danymi → 409 (ADR-012)."""
         user = await self.get_user(user_id)

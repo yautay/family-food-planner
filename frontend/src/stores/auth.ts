@@ -65,6 +65,16 @@ export const useAuthStore = defineStore('auth', () => {
     resolved.value = true
   }
 
+  /**
+   * Podmienia dane zalogowanego konta po zapisie ustawień UI (BATCH_06).
+   * To nadal stan SESJI, nie kopia listy z serwera: `PATCH /auth/me/ui-settings`
+   * zwraca dokładnie ten sam kształt, co `GET /auth/me`.
+   */
+  function setUser(next: CurrentUser): void {
+    user.value = next
+    resolved.value = true
+  }
+
   return {
     user,
     resolved,
@@ -75,5 +85,6 @@ export const useAuthStore = defineStore('auth', () => {
     login,
     logout,
     clear,
+    setUser,
   }
 })

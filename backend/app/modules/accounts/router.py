@@ -7,7 +7,7 @@ mieszkają w `service.py`.
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query, Request, Response, status
 from slowapi import Limiter
@@ -21,12 +21,14 @@ from app.modules.accounts.schemas import (
 )
 from app.modules.accounts.schemas import (
     LoginRequest,
+    UiSettingsPatchRequest,
     UserCreateRequest,
     UserListResponse,
     UserRead,
     UserUpdateRequest,
 )
 from app.modules.accounts.service import AccountsService
+from app.modules.nutrition.types import NUTRITION_THRESHOLDS_KEY
 
 #: Rate limit logowania per IP (07_SECURITY §2).
 LOGIN_RATE_LIMIT = "5/minute"
@@ -83,6 +85,23 @@ def build_auth_router(settings: Settings, limiter: Limiter) -> APIRouter:
     @router.get("/me", response_model=CurrentUserSchema, summary="Zalogowany użytkownik")
     async def me(user: CurrentUser) -> CurrentUserSchema:
         return CurrentUserSchema.model_validate(user)
+
+    @router.patch(
+        "/me/ui-settings",
+        response_model=CurrentUserSchema,
+        summary="Ustawienia UI zalogowanego konta (m.in. progi statusów żywieniowych)",
+    )
+    async def patch_ui_settings(
+        payload: UiSettingsPatchRequest, user: CurrentUser, service: ServiceDep
+    ) -> CurrentUserSchema:
+        # Zmieniamy WYŁĄCZNIE własne ustawienia: konto bierzemy z sesji, nigdy
+        # z body (karta B06 §Security). Klucz pominięty w żądaniu to „nie ruszaj",
+        # a nie „ustaw na null" — dlatego budujemy patch tylko z podanych pól.
+        patch: dict[str, Any] = {}
+        if payload.nutrition_thresholds is not None:
+            patch[NUTRITION_THRESHOLDS_KEY] = payload.nutrition_thresholds.model_dump()
+        updated = await service.update_ui_settings(user=user, patch=patch)
+        return CurrentUserSchema.model_validate(updated)
 
     return router
 

@@ -72,6 +72,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/me/ui-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Ustawienia UI zalogowanego konta (m.in. progi statusów żywieniowych) */
+        patch: operations["patch_ui_settings_api_v1_auth_me_ui_settings_patch"];
+        trace?: never;
+    };
     "/api/v1/admin/users": {
         parameters: {
             query?: never;
@@ -467,6 +484,181 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/goals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Historia własnych celów (najnowszy pierwszy) + cel obowiązujący dziś */
+        get: operations["list_goals_api_v1_goals_get"];
+        put?: never;
+        /** Nowy cel od wskazanej daty (409, gdy cel na tę datę już istnieje) */
+        post: operations["create_goal_api_v1_goals_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/goals/{goal_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Pełna podmiana własnego celu */
+        put: operations["update_goal_api_v1_goals__goal_id__put"];
+        post?: never;
+        /** Usunięcie wpisu historii celów (wyłącznie własnego) */
+        delete: operations["delete_goal_api_v1_goals__goal_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/plan/days": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Dni planu z zakresu dat (posiłki, pozycje, wartości, cel i statusy) */
+        get: operations["list_days_api_v1_plan_days_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/plan/days/{day}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Plan wybranego dnia; data bez planu zwraca pusty dzień, nie 404 */
+        get: operations["get_day_api_v1_plan_days__day__get"];
+        /** Utworzenie albo aktualizacja dnia (tytuł, widoczność) */
+        put: operations["upsert_day_api_v1_plan_days__day__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/plan/days/{day}/meals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Nowy posiłek dnia (dzień powstaje implicite, gdy jeszcze go nie ma) */
+        post: operations["create_meal_api_v1_plan_days__day__meals_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/plan/meals/{meal_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Usunięcie posiłku razem z pozycjami */
+        delete: operations["delete_meal_api_v1_plan_meals__meal_id__delete"];
+        options?: never;
+        head?: never;
+        /** Edycja posiłku (nazwa, cel kcal, kolejność) */
+        patch: operations["update_meal_api_v1_plan_meals__meal_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/plan/meals/{meal_id}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Nowa pozycja: przepis z mnożnikiem albo produkt luzem z ilością */
+        post: operations["add_item_api_v1_plan_meals__meal_id__items_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/plan/items/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Usunięcie pozycji planu */
+        delete: operations["delete_item_api_v1_plan_items__item_id__delete"];
+        options?: never;
+        head?: never;
+        /** Edycja pozycji (mnożnik, ilość, rozkład rodzinny, kolejność) */
+        patch: operations["update_item_api_v1_plan_items__item_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/plan/items/{item_id}/fit-to-target": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** PROPOZYCJA mnożnika porcji pod cel kcal posiłku (nic nie zapisuje) */
+        post: operations["fit_to_target_api_v1_plan_items__item_id__fit_to_target_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/plan/copy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Głęboka kopia dnia na daty albo posiłku do dnia (dopisuje, nie nadpisuje) */
+        post: operations["copy_api_v1_plan_copy_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/audit": {
         parameters: {
             query?: never;
@@ -626,6 +818,58 @@ export interface components {
             household?: components["schemas"]["HouseholdSummary"] | null;
         };
         /**
+         * DayGoalProgressRead
+         * @description Cztery kafelki widoku 1: wartość/cel/delta/status dla kcal i makro.
+         */
+        DayGoalProgressRead: {
+            kcal: components["schemas"]["GoalMetricRead"];
+            protein_g: components["schemas"]["GoalMetricRead"];
+            fat_g: components["schemas"]["GoalMetricRead"];
+            carbs_g: components["schemas"]["GoalMetricRead"];
+        };
+        /**
+         * DayRead
+         * @description Dzień planu razem z posiłkami, wartościami i postępem względem celu.
+         *
+         *     `id` jest `null` dla dnia, którego jeszcze nie ma w bazie: otwarcie pustej
+         *     daty to normalna sytuacja, nie błąd 404 (dzień powstaje przy pierwszym
+         *     posiłku albo przez PUT).
+         */
+        DayRead: {
+            /** Id */
+            id: number | null;
+            /**
+             * Day
+             * Format: date
+             */
+            day: string;
+            /** Title */
+            title: string | null;
+            scope: components["schemas"]["Scope"];
+            /** Owner User Id */
+            owner_user_id: number | null;
+            /** Meals */
+            meals: components["schemas"]["MealRead"][];
+            nutrition: components["schemas"]["NutritionRead"];
+            goal_progress: components["schemas"]["DayGoalProgressRead"];
+            /** Goal Valid From */
+            goal_valid_from: string | null;
+            /** Created At */
+            created_at: string | null;
+            /** Updated At */
+            updated_at: string | null;
+        };
+        /**
+         * DaysResponse
+         * @description Dni z zakresu `from`-`to`. Zwracane są WYŁĄCZNIE dni istniejące w bazie.
+         */
+        DaysResponse: {
+            /** Items */
+            items: components["schemas"]["DayRead"][];
+            /** Total */
+            total: number;
+        };
+        /**
          * ErrorBody
          * @description Treść błędu.
          * @example {
@@ -654,6 +898,107 @@ export interface components {
         ErrorResponse: {
             error: components["schemas"]["ErrorBody"];
         };
+        /**
+         * FitToTargetResponse
+         * @description Propozycja „dopasuj porcję do celu" — sama propozycja, bez zapisu.
+         *
+         *     Zastosowanie jest osobną, jawną akcją użytkownika (`PATCH` pozycji) —
+         *     nic nie zmienia się samo (02_DOMAIN §6).
+         */
+        FitToTargetResponse: {
+            /** Item Id */
+            item_id: number;
+            /** Target Kcal */
+            target_kcal: string;
+            /** Current Servings */
+            current_servings: string;
+            /** Proposed Servings */
+            proposed_servings: string;
+            resulting_nutrition: components["schemas"]["NutritionRead"];
+        };
+        /**
+         * GoalListResponse
+         * @description Historia celów (najnowszy `valid_from` pierwszy) + cel obowiązujący dziś.
+         */
+        GoalListResponse: {
+            /** Items */
+            items: components["schemas"]["GoalRead"][];
+            /** Total */
+            total: number;
+            current: components["schemas"]["GoalRead"] | null;
+        };
+        /**
+         * GoalMetricRead
+         * @description Trio wartość/cel/delta + status słowny — kafelek widoku 1 (06_UIUX §3.5).
+         *
+         *     `target`, `delta` i `status` są `null`, gdy cel nie jest ustawiony: „nie wiem"
+         *     to inna informacja niż „za mało", a UI pokazuje je inaczej.
+         */
+        GoalMetricRead: {
+            /** Value */
+            value: string;
+            /** Target */
+            target: string | null;
+            /** Delta */
+            delta: string | null;
+            status: components["schemas"]["GoalStatus"] | null;
+        };
+        /**
+         * GoalPayload
+         * @description Cel obowiązujący od daty — wejście POST i PUT (04_API §1).
+         */
+        GoalPayload: {
+            /**
+             * Valid From
+             * Format: date
+             */
+            valid_from: string;
+            /** Kcal */
+            kcal: number | string;
+            /** Protein G */
+            protein_g?: number | string | null;
+            /** Fat G */
+            fat_g?: number | string | null;
+            /** Carbs G */
+            carbs_g?: number | string | null;
+        };
+        /**
+         * GoalRead
+         * @description Cel w odczycie. Historia jest pełna — nic nie znika samo (D10).
+         */
+        GoalRead: {
+            /** Id */
+            id: number;
+            /**
+             * Valid From
+             * Format: date
+             */
+            valid_from: string;
+            /** Kcal */
+            kcal: string;
+            /** Protein G */
+            protein_g: string | null;
+            /** Fat G */
+            fat_g: string | null;
+            /** Carbs G */
+            carbs_g: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * GoalStatus
+         * @description Status wartości względem celu dnia/posiłku (02_DOMAIN §6, D9).
+         * @enum {string}
+         */
+        GoalStatus: "below" | "ok" | "above";
         /**
          * HealthResponse
          * @description Odpowiedź healthchecku — świadomie nie ujawnia niczego poza statusem i wersją.
@@ -779,6 +1124,48 @@ export interface components {
             name?: string | null;
         };
         /**
+         * ItemCreateRequest
+         * @description Nowa pozycja posiłku: przepis z mnożnikiem ALBO produkt luzem z ilością.
+         */
+        ItemCreateRequest: {
+            /** Recipe Id */
+            recipe_id?: number | null;
+            /** Product Id */
+            product_id?: number | null;
+            /** Quantity */
+            quantity?: number | string | null;
+            /** Unit */
+            unit?: string | null;
+            /**
+             * Servings
+             * @default 1
+             */
+            servings: number | string;
+            /** Servings Split */
+            servings_split?: components["schemas"]["PlanServingSplitInput"][];
+            /** Position */
+            position?: number | null;
+        };
+        /**
+         * ItemUpdateRequest
+         * @description Częściowa edycja pozycji. Pola pominięte zostają bez zmian.
+         *
+         *     `servings_split` podane jawnie ZASTĘPUJE cały rozkład (pusta lista = brak
+         *     rozkładu); pominięte zostawia go nietkniętym.
+         */
+        ItemUpdateRequest: {
+            /** Servings */
+            servings?: number | string | null;
+            /** Servings Split */
+            servings_split?: components["schemas"]["PlanServingSplitInput"][] | null;
+            /** Quantity */
+            quantity?: number | string | null;
+            /** Unit */
+            unit?: string | null;
+            /** Position */
+            position?: number | null;
+        };
+        /**
          * LoginRequest
          * @description Dane logowania. Hasło bez dolnego limitu — złe dane to 401, nie 422.
          */
@@ -790,6 +1177,53 @@ export interface components {
             email: string;
             /** Password */
             password: string;
+        };
+        /**
+         * MealCreateRequest
+         * @description Nowy posiłek dnia — nazwa własna (02_DOMAIN §7), opcjonalny cel kcal.
+         */
+        MealCreateRequest: {
+            /** Name */
+            name: string;
+            /** Kcal Target */
+            kcal_target?: number | string | null;
+            /** Position */
+            position?: number | null;
+        };
+        /**
+         * MealRead
+         * @description Posiłek z pozycjami, sumą wartości i statusem względem własnego celu kcal.
+         */
+        MealRead: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Position */
+            position: number;
+            /** Kcal Target */
+            kcal_target: string | null;
+            kcal_status: components["schemas"]["GoalStatus"] | null;
+            /** Items */
+            items: components["schemas"]["PlanItemRead"][];
+            nutrition: components["schemas"]["NutritionRead"];
+        };
+        /**
+         * MealUpdateRequest
+         * @description Częściowa edycja posiłku. `kcal_target` można wyzerować, podając `null`.
+         */
+        MealUpdateRequest: {
+            /** Name */
+            name?: string | null;
+            /** Kcal Target */
+            kcal_target?: number | string | null;
+            /** Position */
+            position?: number | null;
+            /**
+             * Clear Kcal Target
+             * @default false
+             */
+            clear_kcal_target: boolean;
         };
         /**
          * MeasureKind
@@ -928,11 +1362,104 @@ export interface components {
             missing: string[];
         };
         /**
+         * NutritionThresholdsPayload
+         * @description Progi statusów żywieniowych w PROCENTACH celu (D9: domyślnie 90 i 110).
+         *
+         *     Walidacja `0 < low < high` jest tu, a nie w silniku: silnik dostaje progi
+         *     już poprawne, a użytkownik ma zobaczyć czytelny komunikat przy formularzu.
+         */
+        NutritionThresholdsPayload: {
+            /** Low */
+            low: number;
+            /** High */
+            high: number;
+        };
+        /**
          * Perishability
          * @description Trwałość — steruje podziałem na tury zakupowe (02_DOMAIN §9.2, B10).
          * @enum {string}
          */
         Perishability: "fresh" | "durable";
+        /**
+         * PlanCopyRequest
+         * @description Kopiowanie dnia na datę/daty albo posiłku do dnia (04_API §2).
+         *
+         *     Kopia jest GŁĘBOKA (nowe id posiłków, pozycji i rozkładów) i DOPISUJE się
+         *     do dnia docelowego — istniejących posiłków nie nadpisuje (karta B06).
+         */
+        PlanCopyRequest: {
+            /**
+             * What
+             * @enum {string}
+             */
+            what: "day" | "meal";
+            /** Source Date */
+            source_date?: string | null;
+            /** Source Meal Id */
+            source_meal_id?: number | null;
+            /** Target Dates */
+            target_dates: string[];
+        };
+        /**
+         * PlanDayUpsertRequest
+         * @description PUT dnia: tworzy go albo aktualizuje tytuł i widoczność (04_API §2).
+         */
+        PlanDayUpsertRequest: {
+            /** Title */
+            title?: string | null;
+            /** @default private */
+            scope: components["schemas"]["Scope"];
+        };
+        /**
+         * PlanItemRead
+         * @description Pozycja posiłku z wartościami policzonymi przez silnik.
+         */
+        PlanItemRead: {
+            /** Id */
+            id: number;
+            /** Position */
+            position: number;
+            /** Recipe Id */
+            recipe_id: number | null;
+            /** Recipe Name */
+            recipe_name: string | null;
+            /** Recipe Photo Thumb Url */
+            recipe_photo_thumb_url: string | null;
+            /** Product Id */
+            product_id: number | null;
+            /** Product Name */
+            product_name: string | null;
+            /** Amount */
+            amount: string | null;
+            amount_unit: components["schemas"]["AmountUnit"] | null;
+            /** Servings */
+            servings: string;
+            /** Servings Split */
+            servings_split: components["schemas"]["PlanServingSplitRead"][];
+            nutrition: components["schemas"]["NutritionRead"];
+        };
+        /**
+         * PlanServingSplitInput
+         * @description Jedna osoba w rozkładzie porcji. Suma multiplierów musi równać się `servings`.
+         */
+        PlanServingSplitInput: {
+            /** Member Profile Id */
+            member_profile_id: number;
+            /** Multiplier */
+            multiplier: number | string;
+        };
+        /**
+         * PlanServingSplitRead
+         * @description Rozkład w odczycie — z imieniem profilu, żeby UI nie dociągał go osobno.
+         */
+        PlanServingSplitRead: {
+            /** Member Profile Id */
+            member_profile_id: number;
+            /** Member Name */
+            member_name: string;
+            /** Multiplier */
+            multiplier: string;
+        };
         /**
          * ProductCreateRequest
          * @description Nowy produkt. Wartości odżywcze NIE wchodzą tędy — mają własny endpoint.
@@ -1341,6 +1868,17 @@ export interface components {
             is_system: boolean;
         };
         /**
+         * UiSettingsPatchRequest
+         * @description Częściowa zmiana ustawień UI zalogowanego użytkownika (04_API §2).
+         *
+         *     Pola pominięte zostają bez zmian. Dziś jedynym kluczem są progi statusów;
+         *     kolejne preferencje widoku dokładają następne batche — kształt jest
+         *     świadomie rozszerzalny, bo `users.ui_settings` to JSONB (03_DATABASE §2).
+         */
+        UiSettingsPatchRequest: {
+            nutrition_thresholds?: components["schemas"]["NutritionThresholdsPayload"] | null;
+        };
+        /**
          * UnitWeightCreateRequest
          * @description Nowy przelicznik. Etykieta jest normalizowana w serwisie przed zapisem.
          */
@@ -1587,6 +2125,39 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CurrentUser"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    patch_ui_settings_api_v1_auth_me_ui_settings_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UiSettingsPatchRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -2989,6 +3560,496 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TagRead"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_goals_api_v1_goals_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalListResponse"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_goal_api_v1_goals_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GoalPayload"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalRead"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_goal_api_v1_goals__goal_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                goal_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GoalPayload"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalRead"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_goal_api_v1_goals__goal_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                goal_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_days_api_v1_plan_days_get: {
+        parameters: {
+            query: {
+                from: string;
+                to: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DaysResponse"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_day_api_v1_plan_days__day__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                day: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DayRead"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    upsert_day_api_v1_plan_days__day__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                day: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanDayUpsertRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DayRead"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_meal_api_v1_plan_days__day__meals_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                day: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MealCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DayRead"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_meal_api_v1_plan_meals__meal_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                meal_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DayRead"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_meal_api_v1_plan_meals__meal_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                meal_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MealUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DayRead"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    add_item_api_v1_plan_meals__meal_id__items_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                meal_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ItemCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DayRead"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_item_api_v1_plan_items__item_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DayRead"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_item_api_v1_plan_items__item_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ItemUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DayRead"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    fit_to_target_api_v1_plan_items__item_id__fit_to_target_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FitToTargetResponse"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    copy_api_v1_plan_copy_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanCopyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DaysResponse"];
                 };
             };
             /** @description Błąd */

@@ -29,6 +29,8 @@ from app.modules.accounts.router import build_admin_users_router, build_auth_rou
 from app.modules.audit.router import build_audit_router
 from app.modules.catalog.router import build_categories_router, build_products_router
 from app.modules.households.router import build_admin_households_router, build_households_router
+from app.modules.nutrition.router import build_goals_router
+from app.modules.planning.router import build_plan_router
 from app.modules.recipes.router import build_recipes_router, build_tags_router
 
 API_V1_PREFIX = "/api/v1"
@@ -115,6 +117,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(build_categories_router(), prefix=API_V1_PREFIX)
     app.include_router(build_recipes_router(), prefix=API_V1_PREFIX)
     app.include_router(build_tags_router(), prefix=API_V1_PREFIX)
+    app.include_router(build_goals_router(), prefix=API_V1_PREFIX)
+    app.include_router(build_plan_router(), prefix=API_V1_PREFIX)
     app.include_router(build_audit_router(), prefix=API_V1_PREFIX)
     # Uploady poza /api/v1 (01_ARCH §1) — endpoint z sesją, nie StaticFiles.
     app.include_router(build_uploads_router(settings))

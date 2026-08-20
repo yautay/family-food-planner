@@ -19,9 +19,9 @@ from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 from app.core.deps import CurrentUser, get_recipes_service
 from app.core.scope import Scope
 from app.core.uploads import MAX_IMAGE_BYTES, thumbnail_path_for
+from app.modules.nutrition.schemas import nutrition_read
 from app.modules.nutrition.types import NutritionValues
 from app.modules.recipes.schemas import (
-    NutritionRead,
     RatingRequest,
     RatingResponse,
     RecipeDetail,
@@ -56,20 +56,6 @@ def _photo_urls(photo_path: str | None) -> tuple[str | None, str | None]:
     )
 
 
-def _to_nutrition(values: NutritionValues) -> NutritionRead:
-    return NutritionRead(
-        kcal=values.kcal,
-        protein_g=values.protein_g,
-        fat_g=values.fat_g,
-        carbs_g=values.carbs_g,
-        fiber_g=values.fiber_g,
-        sugars_g=values.sugars_g,
-        glycemic_load=values.glycemic_load,
-        complete=values.complete,
-        missing=list(values.missing),
-    )
-
-
 def _to_summary(view: RecipeView, *, nutrition: NutritionValues | None = None) -> RecipeSummary:
     """Widok → schemat karty; `nutrition` nadpisuje wartości per porcja (szczegóły)."""
     recipe = view.recipe
@@ -90,7 +76,7 @@ def _to_summary(view: RecipeView, *, nutrition: NutritionValues | None = None) -
         avg_rating=view.avg_rating,
         ratings_count=view.ratings_count,
         my_rating=view.my_rating,
-        nutrition=_to_nutrition(nutrition if nutrition is not None else view.nutrition),
+        nutrition=nutrition_read(nutrition if nutrition is not None else view.nutrition),
         created_at=recipe.created_at,
         updated_at=recipe.updated_at,
     )

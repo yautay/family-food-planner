@@ -12,6 +12,8 @@ from app.modules.accounts import models as accounts_models
 from app.modules.audit import models as audit_models
 from app.modules.catalog import models as catalog_models
 from app.modules.households import models as households_models
+from app.modules.nutrition import models as nutrition_models
+from app.modules.planning import models as planning_models
 from app.modules.recipes import models as recipes_models
 
 __all__ = [
@@ -20,5 +22,7 @@ __all__ = [
     "audit_models",
     "catalog_models",
     "households_models",
+    "nutrition_models",
+    "planning_models",
     "recipes_models",
 ]

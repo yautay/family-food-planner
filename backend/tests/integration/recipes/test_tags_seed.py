@@ -111,7 +111,13 @@ def test_seed_jest_idempotentny(alembic_config: Config, engine: Engine) -> None:
 
 @pytest.mark.usefixtures("seeded")
 def test_downgrade_seedu_oszczedza_tagi_w_uzyciu(alembic_config: Config, engine: Engine) -> None:
-    """Rollback usuwa tylko NIEUŻYWANE tagi seedu (lekcja U2 z review R1)."""
+    """Rollback usuwa tylko NIEUŻYWANE tagi seedu (lekcja U2 z review R1).
+
+    Sprzątanie kończy się `upgrade head`, a NIE `_rerun_seed`: downgrade do
+    `0006` cofa też każdą migrację SCHEMATU stojącą nad seedem (od B06 jest to
+    `0008` z tabelami planu), a `stamp head` przywróciłby sam znacznik — reszta
+    sesji testowej pracowałaby wtedy na bazie bez tych tabel (ustalenie B06).
+    """
     with engine.begin() as connection:
         connection.execute(
             text(
@@ -147,6 +153,8 @@ def test_downgrade_seedu_oszczedza_tagi_w_uzyciu(alembic_config: Config, engine:
             connection.execute(text("DELETE FROM recipes WHERE name = 'Gołąbki'"))
             connection.execute(text("DELETE FROM users WHERE email = 'seed-tagi@example.com'"))
             connection.execute(text("TRUNCATE TABLE tags CASCADE"))
-        _rerun_seed(alembic_config)
+        # Znacznik stoi na `0006`, więc ten upgrade robi OBIE rzeczy naraz:
+        # ponawia seed `0007` i odtwarza schemat migracji nad nim.
+        command.upgrade(alembic_config, "head")
 
     assert set(_tags(engine)) == EXPECTED_TAGS

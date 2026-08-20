@@ -40,6 +40,14 @@ export interface ProductsFilters {
 }
 
 export const queryKeys = {
+  planDays: {
+    all: ['plan', 'days'] as const,
+    /** Zakres dat — ten sam klucz obsługuje dzień (from === to) i tydzień. */
+    range: (from: string, to: string) => ['plan', 'days', 'range', from, to] as const,
+  },
+  goals: {
+    all: ['goals'] as const,
+  },
   recipes: {
     all: ['recipes'] as const,
     list: (filters: RecipesFilters) => ['recipes', 'list', filters] as const,

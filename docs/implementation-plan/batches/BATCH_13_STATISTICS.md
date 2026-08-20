@@ -26,6 +26,20 @@ Batch zastaje (po B06 + R3):
 - `user_nutrition_goals` (03_DATABASE §2): historia celów po `valid_from`,
   `UNIQUE(user_id, valid_from)`; `users.ui_settings` JSONB — progi statusów
   (D9: domyślnie 90–110%, konfigurowalne).
+  **Stan faktyczny po B06 — REUŻYJ, nie pisz drugi raz:**
+  `nutrition/engine.py::goal_status(value, target, thresholds)` (oba progi
+  należą do przedziału „prawidłowo"; brak celu ⇒ `None`, nie `below`),
+  `nutrition/types.py::thresholds_from_ui_settings(ui_settings)` (pobłażliwy
+  parser JSONB z fallbackiem na 90/110) oraz
+  `nutrition/service.py::goal_for_day(goals, day)` — czysta funkcja wybierająca
+  cel z NAJWIĘKSZYM `valid_from <= day` nad wczytaną historią
+  (`GoalsService.goals_of(user_id)` czyta ją jednym zapytaniem, więc zakres
+  dat nie generuje N+1). Statusy liczy się dla użytkownika Z SESJI: cel
+  i progi są własnością konta, nie dnia.
+  Schemat odpowiedzi kafelka: `GoalMetricRead{value, target, delta, status}`
+  w `nutrition/schemas.py` — statystyki używają tego samego kształtu.
+- Frontend: `src/lib/nutrition.ts` (`statusLabel`, `statusToken`, `statusFor`)
+  i `src/lib/dates.ts` (arytmetyka dat kalendarzowych) — gotowe od B06.
 - `frontend/src/components/charts/` — `NutritionBar`, `DonutChart`,
   `BarChart` (stacked, słupki tygodnia z widoku planu dnia) — własne SVG
   (ADR-013). **Brak** `TrendLine` — powstaje tutaj.

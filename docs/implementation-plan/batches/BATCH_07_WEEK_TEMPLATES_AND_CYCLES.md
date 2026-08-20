@@ -26,6 +26,36 @@ Batch zastaje po B06 (stan faktyczny sprawdź w `PROGRESS.md`):
   (05_FRONTEND §3), strona jeszcze nie istnieje.
 - Brak: tabel szablonów/cykli, widoku tygodnia, `BarChart`, kopiowania bloku.
 
+**Faktyczne kształty z B06, na których buduje ten batch** (nie zgaduj ich,
+sprawdź w kodzie — to jest kontrakt payloadu szablonów):
+
+- `PlanMeal`: `name`, `position`, `kcal_target NUMERIC(6,0) NULL`.
+  `PlanMealItem`: `recipe_id` XOR `product_id`, `amount NUMERIC(10,3) NULL`
+  + `amount_unit ENUM(g,ml,piece) NULL` (WYMAGANE razem dla produktu luzem,
+  ZABRONIONE dla przepisu — CHECK `product_requires_amount`),
+  `servings NUMERIC(6,2)`, `position`. `PlanItemServing`:
+  `(member_profile_id, multiplier NUMERIC(4,2))`, suma = `servings` pozycji.
+  Payload JSONB szablonu odwzorowuje dokładnie te pola.
+- **`PlanningService.copy(user, payload)`** przyjmuje
+  `PlanCopyRequest{what: "day"|"meal", source_date|source_meal_id,
+  target_dates[]}` i zwraca `list[DayView]`. Kopiowanie bloku N dni (B07) da
+  się złożyć z tej metody — nie pisz drugiego mechanizmu kopiowania.
+- **Reguła rozstrzygania dnia dla daty**: najpierw WŁASNY dzień użytkownika,
+  potem widoczny dzień rodzinny (`PlanningService._resolve_day`). Widok
+  tygodnia i instancjacja szablonu MUSZĄ używać tej samej reguły, inaczej
+  ta sama data znaczyłaby co innego w dwóch miejscach.
+- **Rejestr referencji przepisów jest już wpięty** przez planning
+  (`_plans_using_recipe`) — B07 dokłada WŁASNY finder dla payloadów JSONB
+  szablonów, nie modyfikuje istniejącego.
+- Wartości pozycji = `wartości jednej porcji x servings` również dla produktu
+  luzem (rozstrzygnięcie B06, 02_DOMAIN §13.3) — szablon musi kopiować
+  `servings` razem z ilością.
+- Wspólny kontrakt odpowiedzi: `NutritionRead` i `nutrition_read()` mieszkają
+  w `app/modules/nutrition/schemas.py` (przeniesione z recipes w B06).
+- Frontend ma gotowe `src/lib/dates.ts` (`addDays`, `startOfWeek`,
+  `weekDayLabel`, `isoDate`) — siatka tygodnia liczy daty tym modułem,
+  nie własnym kodem.
+
 Konwencje potwierdzone w review R1 (te same, co dla B06 — powtórzone, bo karta
 musi być samowystarczalna):
 

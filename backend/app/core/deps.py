@@ -22,6 +22,8 @@ from app.modules.accounts.service import SESSION_REQUIRED, AccountsService
 from app.modules.audit.service import AuditService
 from app.modules.catalog.service import CatalogService
 from app.modules.households.service import HouseholdsService
+from app.modules.nutrition.service import GoalsService
+from app.modules.planning.service import PlanningService
 from app.modules.recipes.service import RecipesService
 
 
@@ -51,6 +53,20 @@ def get_recipes_service(
 ) -> RecipesService:
     """Serwis przepisów: CRUD, składniki, tagi, oceny, zdjęcie."""
     return RecipesService(session)
+
+
+def get_goals_service(
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> GoalsService:
+    """Serwis celów żywieniowych (historia po `valid_from`)."""
+    return GoalsService(session)
+
+
+def get_planning_service(
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> PlanningService:
+    """Serwis planu dnia: dni, posiłki, pozycje, rozkład rodzinny, kopiowanie."""
+    return PlanningService(session)
 
 
 def get_audit_service(

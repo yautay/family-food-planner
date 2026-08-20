@@ -23,10 +23,12 @@ export const routes: RouteRecordRaw[] = [
     component: AppShell,
     children: [
       { path: '', redirect: { name: 'plan-dnia' } },
+      // Data jest opcjonalna: `/plan-dnia` otwiera dzisiejszy dzień, a
+      // `/plan-dnia/2026-08-17` konkretny — jeden wpis nawigacji, jedna trasa.
       {
-        path: 'plan-dnia',
+        path: 'plan-dnia/:date?',
         name: 'plan-dnia',
-        component: PlaceholderPage,
+        component: () => import('@/pages/plan-dnia/PlanDniaPage.vue'),
         meta: { title: 'Plan dnia' },
       },
       { path: 'tydzien', name: 'tydzien', component: PlaceholderPage, meta: { title: 'Tydzień' } },

@@ -133,6 +133,47 @@
         }
       }
     },
+    "/api/v1/auth/me/ui-settings": {
+      "patch": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Ustawienia UI zalogowanego konta (m.in. progi statusów żywieniowych)",
+        "operationId": "patch_ui_settings_api_v1_auth_me_ui_settings_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UiSettingsPatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentUser"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/admin/users": {
       "get": {
         "tags": [
@@ -2221,6 +2262,680 @@
         }
       }
     },
+    "/api/v1/goals": {
+      "get": {
+        "tags": [
+          "nutrition"
+        ],
+        "summary": "Historia własnych celów (najnowszy pierwszy) + cel obowiązujący dziś",
+        "operationId": "list_goals_api_v1_goals_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalListResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "nutrition"
+        ],
+        "summary": "Nowy cel od wskazanej daty (409, gdy cel na tę datę już istnieje)",
+        "operationId": "create_goal_api_v1_goals_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GoalPayload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalRead"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/goals/{goal_id}": {
+      "put": {
+        "tags": [
+          "nutrition"
+        ],
+        "summary": "Pełna podmiana własnego celu",
+        "operationId": "update_goal_api_v1_goals__goal_id__put",
+        "parameters": [
+          {
+            "name": "goal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Goal Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GoalPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalRead"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "nutrition"
+        ],
+        "summary": "Usunięcie wpisu historii celów (wyłącznie własnego)",
+        "operationId": "delete_goal_api_v1_goals__goal_id__delete",
+        "parameters": [
+          {
+            "name": "goal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Goal Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/plan/days": {
+      "get": {
+        "tags": [
+          "planning"
+        ],
+        "summary": "Dni planu z zakresu dat (posiłki, pozycje, wartości, cel i statusy)",
+        "operationId": "list_days_api_v1_plan_days_get",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "From"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "To"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DaysResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/plan/days/{day}": {
+      "get": {
+        "tags": [
+          "planning"
+        ],
+        "summary": "Plan wybranego dnia; data bez planu zwraca pusty dzień, nie 404",
+        "operationId": "get_day_api_v1_plan_days__day__get",
+        "parameters": [
+          {
+            "name": "day",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "Day"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DayRead"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "planning"
+        ],
+        "summary": "Utworzenie albo aktualizacja dnia (tytuł, widoczność)",
+        "operationId": "upsert_day_api_v1_plan_days__day__put",
+        "parameters": [
+          {
+            "name": "day",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "Day"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanDayUpsertRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DayRead"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/plan/days/{day}/meals": {
+      "post": {
+        "tags": [
+          "planning"
+        ],
+        "summary": "Nowy posiłek dnia (dzień powstaje implicite, gdy jeszcze go nie ma)",
+        "operationId": "create_meal_api_v1_plan_days__day__meals_post",
+        "parameters": [
+          {
+            "name": "day",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "Day"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MealCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DayRead"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/plan/meals/{meal_id}": {
+      "patch": {
+        "tags": [
+          "planning"
+        ],
+        "summary": "Edycja posiłku (nazwa, cel kcal, kolejność)",
+        "operationId": "update_meal_api_v1_plan_meals__meal_id__patch",
+        "parameters": [
+          {
+            "name": "meal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Meal Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MealUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DayRead"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "planning"
+        ],
+        "summary": "Usunięcie posiłku razem z pozycjami",
+        "operationId": "delete_meal_api_v1_plan_meals__meal_id__delete",
+        "parameters": [
+          {
+            "name": "meal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Meal Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DayRead"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/plan/meals/{meal_id}/items": {
+      "post": {
+        "tags": [
+          "planning"
+        ],
+        "summary": "Nowa pozycja: przepis z mnożnikiem albo produkt luzem z ilością",
+        "operationId": "add_item_api_v1_plan_meals__meal_id__items_post",
+        "parameters": [
+          {
+            "name": "meal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Meal Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ItemCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DayRead"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/plan/items/{item_id}": {
+      "patch": {
+        "tags": [
+          "planning"
+        ],
+        "summary": "Edycja pozycji (mnożnik, ilość, rozkład rodzinny, kolejność)",
+        "operationId": "update_item_api_v1_plan_items__item_id__patch",
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ItemUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DayRead"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "planning"
+        ],
+        "summary": "Usunięcie pozycji planu",
+        "operationId": "delete_item_api_v1_plan_items__item_id__delete",
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DayRead"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/plan/items/{item_id}/fit-to-target": {
+      "post": {
+        "tags": [
+          "planning"
+        ],
+        "summary": "PROPOZYCJA mnożnika porcji pod cel kcal posiłku (nic nie zapisuje)",
+        "operationId": "fit_to_target_api_v1_plan_items__item_id__fit_to_target_post",
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FitToTargetResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/plan/copy": {
+      "post": {
+        "tags": [
+          "planning"
+        ],
+        "summary": "Głęboka kopia dnia na daty albo posiłku do dnia (dopisuje, nie nadpisuje)",
+        "operationId": "copy_api_v1_plan_copy_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanCopyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DaysResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/audit": {
       "get": {
         "tags": [
@@ -2642,6 +3357,163 @@
         "title": "CurrentUser",
         "description": "Odpowiedź `GET /auth/me` — to, co frontend wie o zalogowanym użytkowniku.\n\n`email` jako zwykły `str` (nie `EmailStr`) świadomie: walidacja adresu\nnależy do wejścia. Gdyby reguły `email-validator` się zaostrzyły, wiersz\nzapisany wcześniej wysadzałby ODCZYT (500) zamiast po prostu się wyświetlić."
       },
+      "DayGoalProgressRead": {
+        "properties": {
+          "kcal": {
+            "$ref": "#/components/schemas/GoalMetricRead"
+          },
+          "protein_g": {
+            "$ref": "#/components/schemas/GoalMetricRead"
+          },
+          "fat_g": {
+            "$ref": "#/components/schemas/GoalMetricRead"
+          },
+          "carbs_g": {
+            "$ref": "#/components/schemas/GoalMetricRead"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kcal",
+          "protein_g",
+          "fat_g",
+          "carbs_g"
+        ],
+        "title": "DayGoalProgressRead",
+        "description": "Cztery kafelki widoku 1: wartość/cel/delta/status dla kcal i makro."
+      },
+      "DayRead": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "day": {
+            "type": "string",
+            "format": "date",
+            "title": "Day"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/Scope"
+          },
+          "owner_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner User Id"
+          },
+          "meals": {
+            "items": {
+              "$ref": "#/components/schemas/MealRead"
+            },
+            "type": "array",
+            "title": "Meals"
+          },
+          "nutrition": {
+            "$ref": "#/components/schemas/NutritionRead"
+          },
+          "goal_progress": {
+            "$ref": "#/components/schemas/DayGoalProgressRead"
+          },
+          "goal_valid_from": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Valid From"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "day",
+          "title",
+          "scope",
+          "owner_user_id",
+          "meals",
+          "nutrition",
+          "goal_progress",
+          "goal_valid_from",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "DayRead",
+        "description": "Dzień planu razem z posiłkami, wartościami i postępem względem celu.\n\n`id` jest `null` dla dnia, którego jeszcze nie ma w bazie: otwarcie pustej\ndaty to normalna sytuacja, nie błąd 404 (dzień powstaje przy pierwszym\nposiłku albo przez PUT)."
+      },
+      "DaysResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DayRead"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "DaysResponse",
+        "description": "Dni z zakresu `from`-`to`. Zwracane są WYŁĄCZNIE dni istniejące w bazie."
+      },
       "ErrorBody": {
         "properties": {
           "code": {
@@ -2684,6 +3556,285 @@
         ],
         "title": "ErrorResponse",
         "description": "Koperta błędu zwracana przez wszystkie endpointy."
+      },
+      "FitToTargetResponse": {
+        "properties": {
+          "item_id": {
+            "type": "integer",
+            "title": "Item Id"
+          },
+          "target_kcal": {
+            "type": "string",
+            "title": "Target Kcal"
+          },
+          "current_servings": {
+            "type": "string",
+            "title": "Current Servings"
+          },
+          "proposed_servings": {
+            "type": "string",
+            "title": "Proposed Servings"
+          },
+          "resulting_nutrition": {
+            "$ref": "#/components/schemas/NutritionRead"
+          }
+        },
+        "type": "object",
+        "required": [
+          "item_id",
+          "target_kcal",
+          "current_servings",
+          "proposed_servings",
+          "resulting_nutrition"
+        ],
+        "title": "FitToTargetResponse",
+        "description": "Propozycja „dopasuj porcję do celu\" — sama propozycja, bez zapisu.\n\nZastosowanie jest osobną, jawną akcją użytkownika (`PATCH` pozycji) —\nnic nie zmienia się samo (02_DOMAIN §6)."
+      },
+      "GoalListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/GoalRead"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "current": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GoalRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "current"
+        ],
+        "title": "GoalListResponse",
+        "description": "Historia celów (najnowszy `valid_from` pierwszy) + cel obowiązujący dziś."
+      },
+      "GoalMetricRead": {
+        "properties": {
+          "value": {
+            "type": "string",
+            "title": "Value"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
+          },
+          "delta": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delta"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GoalStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "value",
+          "target",
+          "delta",
+          "status"
+        ],
+        "title": "GoalMetricRead",
+        "description": "Trio wartość/cel/delta + status słowny — kafelek widoku 1 (06_UIUX §3.5).\n\n`target`, `delta` i `status` są `null`, gdy cel nie jest ustawiony: „nie wiem\"\nto inna informacja niż „za mało\", a UI pokazuje je inaczej."
+      },
+      "GoalPayload": {
+        "properties": {
+          "valid_from": {
+            "type": "string",
+            "format": "date",
+            "title": "Valid From"
+          },
+          "kcal": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 99999.0,
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d{0,0}0*$"
+              }
+            ],
+            "title": "Kcal"
+          },
+          "protein_g": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 99999.9,
+                "minimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d{0,1}0*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Protein G"
+          },
+          "fat_g": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 99999.9,
+                "minimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d{0,1}0*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fat G"
+          },
+          "carbs_g": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 99999.9,
+                "minimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d{0,1}0*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Carbs G"
+          }
+        },
+        "type": "object",
+        "required": [
+          "valid_from",
+          "kcal"
+        ],
+        "title": "GoalPayload",
+        "description": "Cel obowiązujący od daty — wejście POST i PUT (04_API §1)."
+      },
+      "GoalRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "valid_from": {
+            "type": "string",
+            "format": "date",
+            "title": "Valid From"
+          },
+          "kcal": {
+            "type": "string",
+            "title": "Kcal"
+          },
+          "protein_g": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Protein G"
+          },
+          "fat_g": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fat G"
+          },
+          "carbs_g": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Carbs G"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "valid_from",
+          "kcal",
+          "protein_g",
+          "fat_g",
+          "carbs_g",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "GoalRead",
+        "description": "Cel w odczycie. Historia jest pełna — nic nie znika samo (D10)."
+      },
+      "GoalStatus": {
+        "type": "string",
+        "enum": [
+          "below",
+          "ok",
+          "above"
+        ],
+        "title": "GoalStatus",
+        "description": "Status wartości względem celu dnia/posiłku (02_DOMAIN §6, D9)."
       },
       "HealthResponse": {
         "properties": {
@@ -2927,6 +4078,185 @@
         "title": "HouseholdUpdateRequest",
         "description": "Zmiana nazwy rodziny."
       },
+      "ItemCreateRequest": {
+        "properties": {
+          "recipe_id": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recipe Id"
+          },
+          "product_id": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Id"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 99999.999,
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,5}|(?=[\\d.]{1,9}0*$)\\d{0,5}\\.\\d{0,3}0*$)"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantity"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 50,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          },
+          "servings": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 9999.99,
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,4}|(?=[\\d.]{1,7}0*$)\\d{0,4}\\.\\d{0,2}0*$)"
+              }
+            ],
+            "title": "Servings",
+            "default": "1"
+          },
+          "servings_split": {
+            "items": {
+              "$ref": "#/components/schemas/PlanServingSplitInput"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Servings Split"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 10000.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          }
+        },
+        "type": "object",
+        "title": "ItemCreateRequest",
+        "description": "Nowa pozycja posiłku: przepis z mnożnikiem ALBO produkt luzem z ilością."
+      },
+      "ItemUpdateRequest": {
+        "properties": {
+          "servings": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 9999.99,
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,4}|(?=[\\d.]{1,7}0*$)\\d{0,4}\\.\\d{0,2}0*$)"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Servings"
+          },
+          "servings_split": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/PlanServingSplitInput"
+                },
+                "type": "array",
+                "maxItems": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Servings Split"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 99999.999,
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,5}|(?=[\\d.]{1,9}0*$)\\d{0,5}\\.\\d{0,3}0*$)"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantity"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 50,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 10000.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          }
+        },
+        "type": "object",
+        "title": "ItemUpdateRequest",
+        "description": "Częściowa edycja pozycji. Pola pominięte zostają bez zmian.\n\n`servings_split` podane jawnie ZASTĘPUJE cały rozkład (pusta lista = brak\nrozkładu); pominięte zostawia go nietkniętym."
+      },
       "LoginRequest": {
         "properties": {
           "email": {
@@ -2948,6 +4278,166 @@
         ],
         "title": "LoginRequest",
         "description": "Dane logowania. Hasło bez dolnego limitu — złe dane to 401, nie 422."
+      },
+      "MealCreateRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "kcal_target": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 99999.0,
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d{0,0}0*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kcal Target"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 10000.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "MealCreateRequest",
+        "description": "Nowy posiłek dnia — nazwa własna (02_DOMAIN §7), opcjonalny cel kcal."
+      },
+      "MealRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "position": {
+            "type": "integer",
+            "title": "Position"
+          },
+          "kcal_target": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kcal Target"
+          },
+          "kcal_status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GoalStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PlanItemRead"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "nutrition": {
+            "$ref": "#/components/schemas/NutritionRead"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "position",
+          "kcal_target",
+          "kcal_status",
+          "items",
+          "nutrition"
+        ],
+        "title": "MealRead",
+        "description": "Posiłek z pozycjami, sumą wartości i statusem względem własnego celu kcal."
+      },
+      "MealUpdateRequest": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "kcal_target": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 99999.0,
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d{0,0}0*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kcal Target"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 10000.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
+          "clear_kcal_target": {
+            "type": "boolean",
+            "title": "Clear Kcal Target",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "MealUpdateRequest",
+        "description": "Częściowa edycja posiłku. `kcal_target` można wyzerować, podając `null`."
       },
       "MeasureKind": {
         "type": "string",
@@ -3301,6 +4791,29 @@
         "title": "NutritionRead",
         "description": "Wartości wyliczone przez silnik — nigdy przechowywane (02_DOMAIN §13.2)."
       },
+      "NutritionThresholdsPayload": {
+        "properties": {
+          "low": {
+            "type": "integer",
+            "maximum": 1000.0,
+            "minimum": 1.0,
+            "title": "Low"
+          },
+          "high": {
+            "type": "integer",
+            "maximum": 1000.0,
+            "minimum": 1.0,
+            "title": "High"
+          }
+        },
+        "type": "object",
+        "required": [
+          "low",
+          "high"
+        ],
+        "title": "NutritionThresholdsPayload",
+        "description": "Progi statusów żywieniowych w PROCENTACH celu (D9: domyślnie 90 i 110).\n\nWalidacja `0 < low < high` jest tu, a nie w silniku: silnik dostaje progi\njuż poprawne, a użytkownik ma zobaczyć czytelny komunikat przy formularzu."
+      },
       "Perishability": {
         "type": "string",
         "enum": [
@@ -3309,6 +4822,256 @@
         ],
         "title": "Perishability",
         "description": "Trwałość — steruje podziałem na tury zakupowe (02_DOMAIN §9.2, B10)."
+      },
+      "PlanCopyRequest": {
+        "properties": {
+          "what": {
+            "type": "string",
+            "enum": [
+              "day",
+              "meal"
+            ],
+            "title": "What"
+          },
+          "source_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Date"
+          },
+          "source_meal_id": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Meal Id"
+          },
+          "target_dates": {
+            "items": {
+              "type": "string",
+              "format": "date"
+            },
+            "type": "array",
+            "maxItems": 62,
+            "minItems": 1,
+            "title": "Target Dates"
+          }
+        },
+        "type": "object",
+        "required": [
+          "what",
+          "target_dates"
+        ],
+        "title": "PlanCopyRequest",
+        "description": "Kopiowanie dnia na datę/daty albo posiłku do dnia (04_API §2).\n\nKopia jest GŁĘBOKA (nowe id posiłków, pozycji i rozkładów) i DOPISUJE się\ndo dnia docelowego — istniejących posiłków nie nadpisuje (karta B06)."
+      },
+      "PlanDayUpsertRequest": {
+        "properties": {
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/Scope",
+            "default": "private"
+          }
+        },
+        "type": "object",
+        "title": "PlanDayUpsertRequest",
+        "description": "PUT dnia: tworzy go albo aktualizuje tytuł i widoczność (04_API §2)."
+      },
+      "PlanItemRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "position": {
+            "type": "integer",
+            "title": "Position"
+          },
+          "recipe_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recipe Id"
+          },
+          "recipe_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recipe Name"
+          },
+          "recipe_photo_thumb_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recipe Photo Thumb Url"
+          },
+          "product_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Id"
+          },
+          "product_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Name"
+          },
+          "amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount"
+          },
+          "amount_unit": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AmountUnit"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "servings": {
+            "type": "string",
+            "title": "Servings"
+          },
+          "servings_split": {
+            "items": {
+              "$ref": "#/components/schemas/PlanServingSplitRead"
+            },
+            "type": "array",
+            "title": "Servings Split"
+          },
+          "nutrition": {
+            "$ref": "#/components/schemas/NutritionRead"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "position",
+          "recipe_id",
+          "recipe_name",
+          "recipe_photo_thumb_url",
+          "product_id",
+          "product_name",
+          "amount",
+          "amount_unit",
+          "servings",
+          "servings_split",
+          "nutrition"
+        ],
+        "title": "PlanItemRead",
+        "description": "Pozycja posiłku z wartościami policzonymi przez silnik."
+      },
+      "PlanServingSplitInput": {
+        "properties": {
+          "member_profile_id": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Member Profile Id"
+          },
+          "multiplier": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 99.99,
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,2}|(?=[\\d.]{1,5}0*$)\\d{0,2}\\.\\d{0,2}0*$)"
+              }
+            ],
+            "title": "Multiplier"
+          }
+        },
+        "type": "object",
+        "required": [
+          "member_profile_id",
+          "multiplier"
+        ],
+        "title": "PlanServingSplitInput",
+        "description": "Jedna osoba w rozkładzie porcji. Suma multiplierów musi równać się `servings`."
+      },
+      "PlanServingSplitRead": {
+        "properties": {
+          "member_profile_id": {
+            "type": "integer",
+            "title": "Member Profile Id"
+          },
+          "member_name": {
+            "type": "string",
+            "title": "Member Name"
+          },
+          "multiplier": {
+            "type": "string",
+            "title": "Multiplier"
+          }
+        },
+        "type": "object",
+        "required": [
+          "member_profile_id",
+          "member_name",
+          "multiplier"
+        ],
+        "title": "PlanServingSplitRead",
+        "description": "Rozkład w odczycie — z imieniem profilu, żeby UI nie dociągał go osobno."
       },
       "ProductCreateRequest": {
         "properties": {
@@ -4556,6 +6319,23 @@
         ],
         "title": "TagRead",
         "description": "Tag ze słownika globalnego."
+      },
+      "UiSettingsPatchRequest": {
+        "properties": {
+          "nutrition_thresholds": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NutritionThresholdsPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "title": "UiSettingsPatchRequest",
+        "description": "Częściowa zmiana ustawień UI zalogowanego użytkownika (04_API §2).\n\nPola pominięte zostają bez zmian. Dziś jedynym kluczem są progi statusów;\nkolejne preferencje widoku dokładają następne batche — kształt jest\nświadomie rozszerzalny, bo `users.ui_settings` to JSONB (03_DATABASE §2)."
       },
       "UnitWeightCreateRequest": {
         "properties": {

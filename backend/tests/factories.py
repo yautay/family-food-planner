@@ -6,7 +6,7 @@ Hasła w testach są jawne i celowo trywialne; hash liczony jest raz na wartoś�
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import date, timedelta
 from decimal import Decimal
 from functools import lru_cache
 
@@ -26,6 +26,8 @@ from app.modules.catalog.models import (
 from app.modules.catalog.naming import normalize_name
 from app.modules.catalog.units import AmountUnit, normalize_unit_label
 from app.modules.households.models import Household, MemberProfile
+from app.modules.nutrition.models import UserNutritionGoal
+from app.modules.planning.models import PlanDay, PlanItemServing, PlanMeal, PlanMealItem
 from app.modules.recipes.models import Recipe, RecipeIngredient, RecipeRating, Tag, recipe_tags
 
 #: Hasło używane przez fabryki. Nie jest sekretem — istnieje wyłącznie w testach.
@@ -290,6 +292,107 @@ async def create_rating(
 ) -> RecipeRating:
     """Ocena 1-5 pary (przepis, użytkownik)."""
     row = RecipeRating(recipe_id=recipe.id, user_id=user.id, rating=rating)
+    session.add(row)
+    await session.commit()
+    await session.refresh(row)
+    return row
+
+
+async def create_goal(
+    session: AsyncSession,
+    *,
+    user: User,
+    valid_from: date,
+    kcal: Decimal = Decimal("2000"),
+    protein_g: Decimal | None = None,
+    fat_g: Decimal | None = None,
+    carbs_g: Decimal | None = None,
+) -> UserNutritionGoal:
+    """Cel żywieniowy obowiązujący od wskazanej daty (BATCH_06)."""
+    goal = UserNutritionGoal(
+        user_id=user.id,
+        valid_from=valid_from,
+        kcal=kcal,
+        protein_g=protein_g,
+        fat_g=fat_g,
+        carbs_g=carbs_g,
+    )
+    session.add(goal)
+    await session.commit()
+    await session.refresh(goal)
+    return goal
+
+
+async def create_plan_day(
+    session: AsyncSession,
+    *,
+    owner: User,
+    day: date,
+    title: str | None = None,
+    scope: Scope = Scope.PRIVATE,
+) -> PlanDay:
+    """Dzień planu utworzony tak, jak zrobiłby to serwis (`ownership_for_create`)."""
+    entity = PlanDay(day=day, title=title, **ScopedQuery.ownership_for_create(owner, scope))
+    session.add(entity)
+    await session.commit()
+    await session.refresh(entity)
+    return entity
+
+
+async def create_plan_meal(
+    session: AsyncSession,
+    *,
+    plan_day: PlanDay,
+    name: str = "Śniadanie",
+    position: int = 0,
+    kcal_target: Decimal | None = None,
+) -> PlanMeal:
+    """Posiłek dnia planu."""
+    meal = PlanMeal(plan_day_id=plan_day.id, name=name, position=position, kcal_target=kcal_target)
+    session.add(meal)
+    await session.commit()
+    await session.refresh(meal)
+    return meal
+
+
+async def create_plan_item(
+    session: AsyncSession,
+    *,
+    meal: PlanMeal,
+    recipe: Recipe | None = None,
+    product: CanonicalProduct | None = None,
+    amount: Decimal | None = None,
+    amount_unit: AmountUnit | None = None,
+    servings: Decimal = Decimal("1.00"),
+    position: int = 0,
+) -> PlanMealItem:
+    """Pozycja posiłku z ilością JUŻ znormalizowaną (fabryka omija serwis świadomie)."""
+    item = PlanMealItem(
+        plan_meal_id=meal.id,
+        recipe_id=recipe.id if recipe is not None else None,
+        product_id=product.id if product is not None else None,
+        amount=amount,
+        amount_unit=amount_unit,
+        servings=servings,
+        position=position,
+    )
+    session.add(item)
+    await session.commit()
+    await session.refresh(item)
+    return item
+
+
+async def create_item_split(
+    session: AsyncSession,
+    *,
+    item: PlanMealItem,
+    profile: MemberProfile,
+    multiplier: Decimal = Decimal("1.00"),
+) -> PlanItemServing:
+    """Wiersz rozkładu rodzinnego pozycji planu."""
+    row = PlanItemServing(
+        plan_meal_item_id=item.id, member_profile_id=profile.id, multiplier=multiplier
+    )
     session.add(row)
     await session.commit()
     await session.refresh(row)

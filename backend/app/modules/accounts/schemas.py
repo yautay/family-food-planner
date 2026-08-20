@@ -7,8 +7,9 @@ której `task fe-types` generuje typy dla frontendu.
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Self
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
 from app.core.security import MIN_PASSWORD_LENGTH
 from app.modules.accounts.models import UserRole
@@ -77,6 +78,34 @@ class UserCreateRequest(BaseModel):
     display_name: str = Field(min_length=1, max_length=200)
     role: UserRole = UserRole.USER
     is_active: bool = True
+
+
+class NutritionThresholdsPayload(BaseModel):
+    """Progi statusów żywieniowych w PROCENTACH celu (D9: domyślnie 90 i 110).
+
+    Walidacja `0 < low < high` jest tu, a nie w silniku: silnik dostaje progi
+    już poprawne, a użytkownik ma zobaczyć czytelny komunikat przy formularzu.
+    """
+
+    low: int = Field(ge=1, le=1000)
+    high: int = Field(ge=1, le=1000)
+
+    @model_validator(mode="after")
+    def _low_below_high(self) -> Self:
+        if self.low >= self.high:
+            raise ValueError("Próg „za mało” musi być mniejszy od progu „za dużo”.")
+        return self
+
+
+class UiSettingsPatchRequest(BaseModel):
+    """Częściowa zmiana ustawień UI zalogowanego użytkownika (04_API §2).
+
+    Pola pominięte zostają bez zmian. Dziś jedynym kluczem są progi statusów;
+    kolejne preferencje widoku dokładają następne batche — kształt jest
+    świadomie rozszerzalny, bo `users.ui_settings` to JSONB (03_DATABASE §2).
+    """
+
+    nutrition_thresholds: NutritionThresholdsPayload | None = None
 
 
 class UserUpdateRequest(BaseModel):

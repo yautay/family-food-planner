@@ -14,7 +14,7 @@ commit wykonany). Kolumna „Blokery" = zależności + decyzje z 02_DECISIONS.
 | 04 UNITS_AND_CANONICAL_PRODUCTS | [x] | — | `batch(04)` na master (hash wpisać po push) |
 | R1 REVIEW_FOUNDATIONS | [x] | — | `batch(R1)` na master (hash wpisać po push) |
 | 05 RECIPES_AND_NUTRITION_ENGINE | [x] | — | `batch(05)` na master (hash wpisać po push) |
-| 06 GOALS_AND_DAY_PLAN | [ ] | 05 | |
+| 06 GOALS_AND_DAY_PLAN | [x] | — | `batch(06)` na master (hash wpisać po push) |
 | 07 WEEK_TEMPLATES_AND_CYCLES | [ ] | 06 | |
 | R2 REVIEW_PLANNING_CORE | [ ] | 05–07 | |
 | 08 PANTRY | [ ] | 04, R2 | |
@@ -40,6 +40,69 @@ zmiany dotykające przyszłych batchy trzeba wpisać do ich kart
 (00_MASTER_PLAN §8); dziennik to indeks, nie schowek.
 
 ---
+
+**2026-08-17 — BATCH_06 (GOALS_AND_DAY_PLAN)**: plan dnia liczy się naprawdę.
+Migracja `0008` (`user_nutrition_goals` + `plan_days`/`plan_meals`/
+`plan_meal_items`/`plan_item_servings`, reużycie enumów `entity_scope`
+i `amount_unit` z `0006`). Silnik dostał addytywnie `goal_status`
+i `fit_servings_to_target` + typy progów (D9). Cele mieszkają w module
+`nutrition` (02_DOMAIN §1), progi w `users.ui_settings` przez nowy
+`PATCH /auth/me/ui-settings`. Nowy moduł `planning/` z pełnym `/plan/*`:
+dni (pusty dzień zamiast 404), posiłki, pozycje (przepis albo produkt luzem),
+rozkład rodzinny walidowany na Decimal, `/plan/copy` (głęboka kopia,
+dopisywanie) i `fit-to-target`, który NICZEGO nie zapisuje. Frontend:
+`PlanDniaPage` (widok 1), `NutritionBar`/`DonutChart` (własne SVG, ADR-013),
+`MealCard`, `RecipePicker` z inline create, `ServingsSplitDrawer`, sekcje celów
+i progów w ustawieniach.
+
+**Co MUSZĄ wiedzieć kolejne batche:**
+
+1. **Test seedu, który schodzi migracjami poniżej head, MUSI wracać
+   `upgrade head`, a nie `stamp head`.** `test_tags_seed.py` robił
+   `downgrade 0006` + `_rerun_seed` (czyli `stamp head`), więc w chwili, gdy nad
+   seedem stanęła migracja `0008`, reszta sesji testowej pracowała na bazie BEZ
+   tabel planu — 57 błędów setupu w plikach, które z B06 nie mają nic wspólnego.
+   Naprawione w tym batchu; ta sama pułapka czeka każdy przyszły seed.
+   **Pochodna:** przerwany przebieg testów zostawia bazę `db-test` w stanie
+   „znacznik na head, schematu brak" i KAŻDY kolejny przebieg pada na
+   `TRUNCATE`. Ratunek: `DROP SCHEMA public CASCADE; CREATE SCHEMA public`
+   + `alembic upgrade head` (follow-up dla R2 w Completion notes B06).
+2. **Kontrakt pola `nutrition` przeniesiony**: `NutritionRead` i
+   `nutrition_read()` mieszkają teraz w `app/modules/nutrition/schemas.py`
+   (recipes je stamtąd importuje). Nazwa komponentu OpenAPI bez zmian.
+3. **Mnożnik działa TAK SAMO dla przepisu i produktu luzem**: wartości pozycji
+   = wartości jednej porcji × `servings` (02_DOMAIN §13.3). Dla produktu
+   „jedna porcja" to zapisana ilość, więc B10 liczy zapotrzebowanie jako
+   `amount x servings`. Rozkład rodzinny NIE skaluje ilości — jego suma jest
+   z definicji równa `servings`.
+4. **Reguła rozstrzygania dnia dla daty** (`PlanningService._resolve_day`):
+   najpierw WŁASNY dzień, potem widoczny rodzinny. Widok tygodnia (B07)
+   i instancjacja szablonów muszą używać tej samej reguły.
+5. **Planning zarejestrował DWA liczniki referencji**: przepisów (rejestr B05)
+   i produktów (rejestr B04). DELETE przepisu/produktu użytego w planie zwraca
+   409 z `used_in` typu `plan_day` (nazwa = tytuł dnia albo `Plan dnia D.M.RRRR`).
+6. **Zagnieżdżone id sprawdza się łańcuchem**: `/plan/meals/{id}` i
+   `/plan/items/{id}` walidują `item → meal → day → scope`, nie samo istnienie
+   id (04_API §2c). Ten wzorzec obowiązuje każdy zasób zagnieżdżony w encji
+   ze scope (B07 szablony, B11 pozycje list).
+7. **02_DOMAIN §7 miał literówkę w przykładzie rozkładu** („3×1.0 + 2×0.8 +
+   2×1.3 ⇒ 6.2" daje 7,2). Poprawione na `2×1.0 + 2×0.8 + 2×1.3`; sama reguła
+   „suma rozkładu = servings" bez zmian.
+8. **Frontend ma nowe wspólne moduły**: `src/lib/dates.ts` (arytmetyka dat
+   kalendarzowych — widok tygodnia B07 liczy nią daty), `src/lib/nutrition.ts`
+   (etykiety i klasy statusów + `statusFor` do podglądu progów),
+   `src/lib/decimal.ts += sumDecimals/decimalsEqual` (sumowanie bez floatów).
+   `RecipePicker` powtarza kontrakt `ProductPickera` z prefiksem testid
+   `recipe-picker-` — nowy picker przepisu w kolejnym batchu = błąd review.
+9. Kolejna wolna migracja: `0009`. Karty zaktualizowane: B07 (faktyczne
+   kształty planu i `copy`), B10 (zasady agregacji zapotrzebowania), B13
+   (gotowe `goal_status`/`goal_for_day`/`thresholds_from_ui_settings`).
+   `04_API` dostało `PATCH /auth/me/ui-settings`, `fit-to-target` oraz zasady
+   §2c (łańcuch scope) i §2d (pusty dzień zamiast 404); `03_DATABASE §6` —
+   stan faktyczny migracji `0008`.
+10. **E2E `smoke.spec.ts` rozszerzony o plan dnia, ale NIEURUCHOMIONY** (brak
+    Dockera w tej sesji) — dług U15 z R1 rośnie o ten scenariusz. `/plan-dnia`
+    nie jest już placeholderem, więc stary asert `placeholder-page` zniknął.
 
 **2026-08-17 — BATCH_05 (RECIPES_AND_NUTRITION_ENGINE)**: jest serce systemu.
 Migracje `0006` (recipes/recipe_ingredients/tags/recipe_tags/recipe_ratings +

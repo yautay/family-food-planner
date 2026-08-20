@@ -1,7 +1,11 @@
 import { expect, test } from '@playwright/test'
 
 /**
- * Smoke E2E (08_TESTING §3): logowanie → plan dnia → wylogowanie.
+ * Smoke E2E (08_TESTING §3): logowanie → plan dnia → dodanie posiłku i pozycji
+ * → przeliczenie wartości po zmianie mnożnika → wylogowanie.
+ *
+ * Zakres rozszerzony w BATCH_06: od tego batcha `/plan-dnia` to prawdziwy widok
+ * (wcześniej placeholder), więc smoke sprawdza realny przepływ planowania.
  *
  * Konto testowe zakłada `task create-admin` (nigdy seed z hasłem w repo,
  * 07_SECURITY §2); dane logowania przychodzą ze zmiennych środowiskowych.
@@ -52,7 +56,7 @@ test('logowanie → plan dnia → wylogowanie', async ({ page }) => {
   await page.getByTestId('login-submit').click()
 
   await expect(page).toHaveURL(/\/plan-dnia/)
-  await expect(page.getByTestId('placeholder-page')).toBeVisible()
+  await expect(page.getByTestId('plan-dnia-page')).toBeVisible()
   await expect(page.getByTestId('nav-sidebar')).toBeVisible()
 
   await page.getByTestId('logout-button').click()
@@ -63,4 +67,68 @@ test('logowanie → plan dnia → wylogowanie', async ({ page }) => {
   // Sesja jest unieważniona po stronie serwera — powrót „wstecz" nie wskrzesza jej.
   await page.goto('/plan-dnia')
   await expect(page).toHaveURL(/\/login/)
+})
+
+test('plan dnia: posiłek → pozycja z przepisu → zmiana mnożnika przelicza wszystko', async ({
+  page,
+}) => {
+  const stamp = Date.now()
+  const recipeName = `Owsianka E2E ${stamp}`
+  // Data w przyszłości, żeby przebieg nie mieszał się z ręcznym klikaniem po „dziś".
+  const day = '2031-03-05'
+
+  page.on('dialog', (dialog) => dialog.accept())
+
+  await page.goto('/login')
+  await page.getByTestId('login-email').fill(email)
+  await page.getByTestId('login-password').fill(password)
+  await page.getByTestId('login-submit').click()
+  await expect(page).toHaveURL(/\/plan-dnia/)
+
+  await page.goto(`/plan-dnia/${day}`)
+  await expect(page.getByTestId('plan-dnia-page')).toBeVisible()
+  await expect(page.getByTestId('plan-empty')).toBeVisible()
+
+  // --- posiłek o własnej nazwie (dzień powstaje implicite) -------------------------
+  await page.getByTestId('plan-add-meal').click()
+  await page.getByTestId('meal-name-input').fill('II śniadanie')
+  await page.getByTestId('meal-target-input').fill('300')
+  await page.getByTestId('meal-submit').click()
+
+  const mealCard = page.locator('[data-testid^="meal-card-"]').first()
+  await expect(mealCard).toBeVisible()
+  await expect(mealCard).toContainText('II śniadanie')
+
+  // --- pozycja z przepisu (inline create w RecipePickerze) ---------------------------
+  await page.locator('[data-testid^="meal-add-item-"]').first().click()
+  await page.getByTestId('recipe-picker-input').fill(recipeName)
+  await expect(page.getByTestId('recipe-picker-create')).toBeVisible()
+  await page.getByTestId('recipe-picker-create').click()
+  await expect(page.getByTestId('recipe-picker-selected')).toContainText(recipeName)
+  await page.getByTestId('item-submit').click()
+
+  const item = page.locator('[data-testid^="plan-item-servings-"]').first()
+  await expect(item).toHaveText('1')
+
+  // --- zmiana mnożnika przelicza pozycję, posiłek i dzień w jednym kroku -------------
+  await page.locator('[data-testid^="plan-item-plus-"]').first().click()
+  await expect(item).toHaveText('1,5')
+
+  // Donut i kafelki są zasilane tą samą odpowiedzią, więc muszą być widoczne
+  // razem z przeliczonym dniem (spójność 02_DOMAIN §13.3).
+  await expect(page.getByTestId('plan-donut')).toBeVisible()
+  await expect(page.getByTestId('plan-tile-kcal')).toBeVisible()
+
+  // --- sprzątanie: usuwamy posiłek (kaskada zabiera pozycję) i przepis ---------------
+  await page.locator('[data-testid^="meal-menu-"]').first().click()
+  await page.locator('[data-testid^="meal-remove-"]').first().click()
+  await expect(page.getByTestId('plan-empty')).toBeVisible()
+
+  await page.goto('/przepisy')
+  await page.getByTestId('recipes-search').fill(recipeName)
+  const card = page.locator('[data-testid^="recipe-card-"]').first()
+  await expect(card).toBeVisible()
+  await card.click()
+  await page.getByTestId('recipe-delete').click()
+  await expect(page).toHaveURL(/\/przepisy$/)
 })

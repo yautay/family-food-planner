@@ -157,6 +157,22 @@ class RecipeDetailView:
 
 
 @dataclass(frozen=True)
+class RecipePortion:
+    """Przepis w postaci, której potrzebują konsumenci: plan dnia (B06), szablony (B07).
+
+    `portion` to wartości JEDNEJ porcji bazowej BEZ zaokrągleń — konsument mnoży
+    je przez swój mnożnik i dopiero wynik przepuszcza przez `round_for_output`
+    (zaokrąglenie w kroku pośrednim rozjechałoby sumę dnia).
+    """
+
+    recipe_id: int
+    name: str
+    base_servings: int
+    photo_path: str | None
+    portion: NutritionValues
+
+
+@dataclass(frozen=True)
 class RatingView:
     """Wynik upsertu oceny — odpowiedź zawiera średnią (karta B05)."""
 
@@ -364,6 +380,78 @@ class RecipesService:
 
         if photo_path:
             await run_in_threadpool(delete_image, photo_path, uploads_root=self._uploads_root)
+
+    async def portion_values(self, recipe_ids: Sequence[int]) -> dict[int, RecipePortion]:
+        """Wartości jednej porcji bazowej dla wskazanych przepisów — wejście dla planu.
+
+        Publiczne wejście modułu recipes dla innych modułów (CLAUDE.md §4:
+        moduł→moduł wyłącznie przez service). Stała liczba zapytań niezależnie
+        od liczby przepisów — plan tygodnia nie może generować N+1.
+
+        **Bez filtra scope, świadomie**: pozycja planu może wskazywać przepis,
+        którego czytający sam by nie znalazł na liście (np. prywatny przepis
+        właściciela dnia rodzinnego). Dzień jest udostępniony celowo, więc jego
+        wartości muszą się policzyć; widoczność samego planu pilnuje `ScopedQuery`
+        po stronie planning.
+        """
+        unique_ids = sorted(set(recipe_ids))
+        if not unique_ids:
+            return {}
+
+        recipes = (
+            (await self._session.execute(select(Recipe).where(Recipe.id.in_(unique_ids))))
+            .scalars()
+            .all()
+        )
+
+        ingredients_by: dict[int, list[RecipeIngredient]] = {rid: [] for rid in unique_ids}
+        for ingredient in (
+            (
+                await self._session.execute(
+                    select(RecipeIngredient)
+                    .where(RecipeIngredient.recipe_id.in_(unique_ids))
+                    .order_by(RecipeIngredient.position, RecipeIngredient.id)
+                )
+            )
+            .scalars()
+            .all()
+        ):
+            ingredients_by[ingredient.recipe_id].append(ingredient)
+
+        product_ids = {
+            ingredient.product_id for items in ingredients_by.values() for ingredient in items
+        }
+        products: dict[int, CanonicalProduct] = {}
+        if product_ids:
+            products = {
+                product.id: product
+                for product in (
+                    await self._session.execute(
+                        select(CanonicalProduct).where(CanonicalProduct.id.in_(product_ids))
+                    )
+                )
+                .scalars()
+                .all()
+            }
+
+        return {
+            recipe.id: RecipePortion(
+                recipe_id=recipe.id,
+                name=recipe.name,
+                base_servings=recipe.base_servings,
+                photo_path=recipe.photo_path,
+                portion=portion_nutrition(
+                    recipe_nutrition(
+                        [
+                            _ingredient_values(ingredient, products[ingredient.product_id])
+                            for ingredient in ingredients_by[recipe.id]
+                        ]
+                    ),
+                    recipe.base_servings,
+                ),
+            )
+            for recipe in recipes
+        }
 
     async def recipe_references(self, recipe_id: int) -> list[UsedInRef]:
         """Gdzie przepis jest używany — suma odpowiedzi zarejestrowanych konsumentów."""

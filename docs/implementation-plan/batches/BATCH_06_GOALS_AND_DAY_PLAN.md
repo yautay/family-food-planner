@@ -319,14 +319,14 @@ diffie przed commitem (krok 11).
 
 ## Implementation checklist
 
-- [ ] Migracja goals + planning; up/down/up zielone, jedna głowa
-- [ ] Engine: `fit_servings_to_target`, `goal_status` + testy unit
-- [ ] Serwis+router goals, `ui-settings` (progi D9)
-- [ ] Serwis+router plan (dni/posiłki/pozycje/rozkłady/copy/fit-to-target)
-- [ ] Charts: NutritionBar, DonutChart (tokens, aria)
-- [ ] PlanDniaPage (widok 1) + RecipePicker + sekcje w UstawieniaPage
-- [ ] Testy integration/api/fe; E2E smoke rozszerzony
-- [ ] PROGRESS.md + propagacja do kart B07/B10/B13
+- [x] Migracja goals + planning; up/down/up zielone, jedna głowa
+- [x] Engine: `fit_servings_to_target`, `goal_status` + testy unit
+- [x] Serwis+router goals, `ui-settings` (progi D9)
+- [x] Serwis+router plan (dni/posiłki/pozycje/rozkłady/copy/fit-to-target)
+- [x] Charts: NutritionBar, DonutChart (tokens, aria)
+- [x] PlanDniaPage (widok 1) + RecipePicker + sekcje w UstawieniaPage
+- [x] Testy integration/api/fe; E2E smoke rozszerzony (NIEURUCHOMIONY — brak Dockera)
+- [x] PROGRESS.md + propagacja do kart B07/B10/B13
 
 ## Verification checklist
 
@@ -341,4 +341,101 @@ diffie przed commitem (krok 11).
 
 ## Completion notes
 
-(wypełnia agent wykonujący)
+### Wykonane
+
+- **Migracja `0008`** (`goals_and_planning`): `user_nutrition_goals` (§2) oraz
+  `plan_days`/`plan_meals`/`plan_meal_items`/`plan_item_servings` (§6). Typy
+  `entity_scope` i `amount_unit` REUŻYTE z `0006` (`create_type=False`),
+  downgrade ich nie kasuje. `alembic check` = brak różnic modele↔migracja.
+- **Silnik** (addytywnie, kontrakt B05 nietknięty): `goal_status`,
+  `fit_servings_to_target`, `NutritionTargetError` + typy `GoalStatus`,
+  `GoalThresholds`, `DEFAULT_THRESHOLDS`, `thresholds_from_ui_settings`.
+- **Cele** w module `nutrition` (`models/schemas/service/router`) —
+  `GET/POST /goals`, `PUT/DELETE /goals/{id}`; `goal_for_day` jako czysta
+  funkcja nad wczytaną historią (zakres dat = jedno zapytanie).
+- **`PATCH /auth/me/ui-settings`** w `accounts` (progi D9, walidacja 0<low<high,
+  płytkie scalanie JSONB przez NOWY słownik — SQLAlchemy nie śledzi mutacji).
+- **Moduł `planning`** — pełne `/plan/*` z karty: dni (GET/PUT, pusty dzień
+  zamiast 404), posiłki, pozycje, rozkład rodzinny, `/plan/copy`,
+  `/plan/items/{id}/fit-to-target`. Rejestracja liczników referencji do
+  przepisów (rejestr B05) **i produktów** (rejestr B04 — wymóg CLAUDE.md §4).
+- **Frontend**: `charts/{NutritionBar,DonutChart}.vue`,
+  `domain/{MealCard,RecipePicker,ServingsSplitDrawer}.vue`, `PlanDniaPage`
+  (widok 1 z kafelkami, kartami posiłków, donutem i mini-słupkami tygodnia),
+  sekcje „Cele żywieniowe" i „Progi statusów" w `UstawieniaPage`,
+  `api/{planning,goals}.ts`, `lib/{nutrition,dates}.ts`,
+  `lib/decimal.ts += sumDecimals/decimalsEqual`, `queryKeys += planDays/goals`.
+- `NutritionRead` + `nutrition_read()` przeniesione z `recipes/schemas.py` do
+  `nutrition/schemas.py` (kontrakt pola `nutrition` należy do domeny żywienia;
+  nazwa komponentu OpenAPI bez zmian, więc `generated.ts` nie ma tu regresji).
+
+### Decyzje implementującego (pozostawione w karcie do uzasadnienia)
+
+1. **Moduł dla celów: `nutrition`, nie `accounts`.** 02_DOMAIN §1 przypisuje
+   „cele" wprost do modułu nutrition. `engine.py` pozostaje czystym plikiem bez
+   I/O (ADR-008 wiąże PLIK silnika, nie cały moduł), a `accounts` dostaje tylko
+   `ui-settings` — preferencję widoku, nie encję domenową.
+2. **Kształt `servings_split` w API**: `[{member_profile_id, multiplier}]` na
+   wejściu, `[{member_profile_id, member_name, multiplier}]` w odczycie
+   (drawer nie musi dociągać imion osobnym zapytaniem). Podanie
+   `servings_split` w PATCH **zastępuje cały rozkład**; pusta lista go usuwa,
+   pominięcie pola nie rusza go wcale.
+3. **PUT dnia nie jest wymagany do dodania posiłku** — `POST
+   /plan/days/{date}/meals` tworzy dzień implicite (sugestia karty, 06_UIUX §2).
+4. **Reguła rozstrzygania dnia dla daty**: najpierw własny dzień, potem
+   widoczny rodzinny. Ta sama reguła w odczycie, dopisywaniu i kopiowaniu —
+   inaczej ta sama data znaczyłaby co innego w każdej operacji.
+5. **Mutacje zwracają CAŁY dzień** (`DayRead`) zamiast 204: widok i tak
+   pokazuje dzień w całości, więc jedna odpowiedź zamiast „204 + refetch"
+   usuwa moment, w którym UI kłamie.
+6. **Wartości pozycji z produktem luzem = `ingredient_nutrition(amount) x
+   servings`.** Karta podaje wzór dla `servings=1`; ogólny przypadek musi
+   spełniać niezmiennik 02_DOMAIN §13.3 („zmiana mnożnika zmienia wszystko
+   spójnie"), inaczej stepper przy pozycji z produktem nic by nie zmieniał.
+   Konsekwencja dla B10: zapotrzebowanie = `amount x servings` (wpisane do karty).
+7. **Propozycja `fit-to-target` nie schodzi do zera** — kwantyzacja w dół daje
+   minimum 0,01 porcji; „0 porcji" nie jest odpowiedzią na „ile porcji zjeść",
+   a takiego mnożnika i tak nie dałoby się zapisać (CHECK `servings > 0`).
+8. **Kopiowanie między rodzinami gubi rozkład, nie mnożnik**: jeśli profil
+   z rozkładu nie należy do rodziny właściciela dnia DOCELOWEGO, kopiowany jest
+   sam `servings` (rozkład w komplecie albo wcale — inaczej suma przestałaby
+   się zgadzać).
+
+### Odstępstwa i poprawki dokumentów
+
+- **02_DOMAIN §7 miał błąd rachunkowy**: „3×1.0 + 2×0.8 + 2×1.3 ⇒ servings 6.2"
+  daje 7,2. Poprawione na `2×1.0 + 2×0.8 + 2×1.3 = 6.2` (minimalna zmiana
+  zachowująca liczbę 6,2 z karty). REGUŁA „suma rozkładu = servings" bez zmian.
+  Karta B06 §Tests nadal cytuje starą wersję przykładu — test
+  `tests/unit/planning/test_split_rules.py` używa poprawionej.
+- **`tests/integration/recipes/test_tags_seed.py` wymagał naprawy**:
+  `test_downgrade_seedu_oszczedza_tagi_w_uzyciu` schodził `downgrade 0006`
+  i wracał `_rerun_seed` (czyli `stamp head`), więc od chwili powstania
+  migracji `0008` reszta sesji testowej pracowała na bazie BEZ tabel planu
+  (57 błędów setupu). Sprzątanie kończy się teraz `upgrade head`. **Reguła dla
+  kolejnych batchy: test seedu, który schodzi poniżej head, MUSI wracać
+  `upgrade head`, nie `stamp head`.**
+- `_full_product` w testach zwraca `CanonicalProduct` (nie `object`) — mypy
+  w `tests/` jest częścią bramki.
+
+### Follow-upy (poza zakresem tego batcha)
+
+1. **Baza testowa nie odbudowuje się po przerwanym przebiegu**: fixture
+   `migrated_database` robi `upgrade head`, więc gdy znacznik stoi na head,
+   a schematu brakuje (skutek przerwanego testu migracji), KAŻDY kolejny
+   przebieg pada na `TRUNCATE`. Kandydat na R2: porównanie znacznika ze stanem
+   faktycznym albo `drop schema` przed sesją testową.
+2. **E2E `smoke.spec.ts` rozszerzony, ale NIEURUCHOMIONY** (brak Dockera
+   w tym środowisku) — dług U15 z R1 rośnie o ten spec.
+3. `db-seed-demo` nadal nie zna planu dnia — po B07 warto dosiać tydzień planu
+   (08_TESTING §5 mówi o „tygodniu planu" w seedzie demo).
+4. `GET /plan/days` liczy wartości przy każdym odczycie (zgodnie z §13.2);
+   przy zakresie roku to kilkaset pozycji na jedno żądanie — jeśli B13
+   zobaczy problem wydajności, miejscem na cache jest warstwa HTTP, nie encje.
+
+### Pytania do właściciela
+
+Brak nowych. D15 i D16 pozostają OPEN w 02_DECISIONS — B06 dziedziczy stan
+faktyczny D16 (ADMIN widzi cudze encje na ścieżkach użytkownika) i asercjonuje
+go testem `test_d16_admin_widzi_cudzy_plan_na_sciezkach_uzytkownika`
+(rozstrzygnięcie odwrotne zaczyna od `app/core/scope.py` i tych dwóch testów).

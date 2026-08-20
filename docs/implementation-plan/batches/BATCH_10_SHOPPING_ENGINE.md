@@ -17,6 +17,18 @@ jest `modules/shopping/engine.py` — czysta funkcja na `Decimal` (ADR-008).
 Co już istnieje:
 - Plan dnia/tygodnia (`plan_meal_items`: przepis LUB produkt luzem,
   `servings`, znormalizowane ilości składników w g/ml) — B05–B07.
+  **Stan faktyczny po B06** (wiążący dla agregacji zapotrzebowania):
+  pozycja z przepisem nie ma `amount` — jej wkład to
+  `składniki przepisu / base_servings x servings`; pozycja z produktem luzem
+  ma `amount` + `amount_unit` (g/ml/szt.) i jej wkład to
+  `amount x servings` (mnożnik działa tak samo w obu przypadkach —
+  niezmiennik 02_DOMAIN §13.3, rozstrzygnięcie w Completion notes B06).
+  Rozkład rodzinny (`plan_item_servings`) NIE zmienia zapotrzebowania:
+  suma multiplierów jest zawsze równa `servings` (pilnuje tego serwis), więc
+  agregacja czyta `servings` i nie musi sumować rozkładu — rozkład służy
+  podziałowi porcji między osoby, nie skalowaniu ilości.
+  Wejście do planu: `PlanningService.list_days(user, date_from=, date_to=)`
+  (max 366 dni na żądanie), zwraca `DayView` z posiłkami i pozycjami.
 - `modules/nutrition/engine.py` jako wzorzec czystego silnika (ADR-008).
 - Spiżarnia: `PantryService.get_household_state()` (B08 — sprawdzić
   faktyczną sygnaturę w kodzie i Completion notes B08).

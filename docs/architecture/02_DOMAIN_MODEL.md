@@ -183,7 +183,9 @@ wartości_posiłku/dnia            = Σ pozycji
   + **mnożnik porcji** (`servings` Decimal, domyślnie 1.0)
   + opcjonalny rozkład rodzinny: lista par (MemberProfile, mnożnik),
   wtedy `servings` = suma rozkładu. Prosty przypadek „7 porcji" = servings 7
-  bez rozkładu. Zaawansowany: 3×1.0 + 2×0.8 + 2×1.3 ⇒ servings 6.2.
+  bez rozkładu. Zaawansowany: 2×1.0 + 2×0.8 + 2×1.3 ⇒ servings 6.2
+  (BATCH_06 poprawił tu literówkę „3×1.0", która dawała 7.2 — reguła
+  „suma rozkładu = servings" bez zmian, egzekwuje ją serwis planning).
 - Szybkie akcje domenowe: kopiuj dzień → data/daty, kopiuj posiłek, powiel
   blok N dni (model 2+2+2 z listu dietetyczki — 01_PDF_AUDIT §6).
 - **DayTemplate / WeekTemplate**: zamrożona kopia struktury (bez dat);

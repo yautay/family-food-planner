@@ -29,6 +29,7 @@ szczegółowe schematy powstają w batchach i żyją w OpenAPI.
 ```
 POST   /auth/login /auth/logout            — sesja (rate limit 5/min/IP)
 GET    /auth/me                            — user + household + ustawienia UI
+PATCH  /auth/me/ui-settings                — własne ustawienia UI (progi statusów, D9)
 A      /admin/users, /admin/households     — CRUD kont i rodzin
 U      /households/my, /households/my/profiles — rodzina + profile członków
 U      /goals                              — cele żywieniowe (historia po valid_from)
@@ -52,6 +53,7 @@ GET    /uploads/{path}                     — serving uploadów; POZA /api/v1,
 
 U      /plan/days?from=&to=                — dni z posiłkami+pozycjami+nutrition
 U      /plan/days/{date} (+meals, +items)  — CRUD; PATCH mnożników
+U      /plan/items/{id}/fit-to-target      — PROPOZYCJA mnożnika (nic nie zapisuje)
 U      /plan/copy                          — {source, target(s), what: day|meal|block}
 U      /templates/days /templates/weeks /cycles — CRUD + instantiate
 U      /pantry                             — CRUD pozycji, filtr ważności
@@ -96,6 +98,14 @@ z podpowiedzią archiwizacji. Mutacje `/categories`: ADMIN; odczyt: każdy.
 2b. Stan „użytkownik bez rodziny" jest legalny: `/households/my` zwraca 200
    z `household: null`, a nie 404. Operacje wymagające rodziny (utworzenie
    profilu, nadanie `scope=household`) kończą się 409 z instrukcją.
+2c. Zasoby ZAGNIEŻDŻONE w encji ze scope (posiłki i pozycje planu) nie mają
+   własnego scope — widoczność dziedziczą po rodzicu, a serwis sprawdza CAŁY
+   łańcuch (`item → meal → day → warunek scope`), nie samo istnienie id.
+   Cudze zagnieżdżone id daje 404, identycznie jak nieistniejące (BATCH_06).
+2d. Data bez zapisanego planu to 200 z pustym dniem (`id: null`), nie 404:
+   otwarcie kalendarza na wolnej dacie jest normalną sytuacją, a nie błędem.
+   Ten sam wyjątek NIE dotyczy pojedynczych encji (przepis, produkt) — tam
+   brak zasobu pozostaje 404 (BATCH_06).
 3. `/public/lists/{token}`: lookup wyłącznie po pełnym tokenie (unique
    index), `410 Gone` po wygaśnięciu/odwołaniu z przyjaznym komunikatem,
    odpowiedź zawiera tylko: nazwę listy, pozycje (label, ilość, kategoria,
