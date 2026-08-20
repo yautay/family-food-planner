@@ -14,8 +14,8 @@ commit wykonany). Kolumna „Blokery" = zależności + decyzje z 02_DECISIONS.
 | 04 UNITS_AND_CANONICAL_PRODUCTS | [x] | — | `batch(04)` na master (hash wpisać po push) |
 | R1 REVIEW_FOUNDATIONS | [x] | — | `batch(R1)` na master (hash wpisać po push) |
 | 05 RECIPES_AND_NUTRITION_ENGINE | [x] | — | `batch(05)` na master (hash wpisać po push) |
-| 06 GOALS_AND_DAY_PLAN | [x] | — | `batch(06)` na master (hash wpisać po push) |
-| 07 WEEK_TEMPLATES_AND_CYCLES | [ ] | 06 | |
+| 06 GOALS_AND_DAY_PLAN | [x] | — | `d6bacd7` batch(06) |
+| 07 WEEK_TEMPLATES_AND_CYCLES | [x] | — | `batch(07)` na master (hash wpisać po push) |
 | R2 REVIEW_PLANNING_CORE | [ ] | 05–07 | |
 | 08 PANTRY | [ ] | 04, R2 | |
 | 09 RETAIL_PRODUCTS_AND_STORES | [ ] | 04, R2 | |
@@ -40,6 +40,111 @@ zmiany dotykające przyszłych batchy trzeba wpisać do ich kart
 (00_MASTER_PLAN §8); dziennik to indeks, nie schowek.
 
 ---
+
+**2026-08-20 — BATCH_07 (WEEK_TEMPLATES_AND_CYCLES)**: tydzień da się złożyć
+w kilku kliknięciach. Migracja `0009` (`day_templates`, `week_templates` z
+`payload JSONB` + **indeksy GIN `jsonb_path_ops`**, `week_cycles` z
+`template_ids BIGINT[]`). Kontrakt payloadu `v:1` (Pydantic, `extra="forbid"`,
+Decimale jako stringi) walidowany przy zapisie I odczycie. Nowy
+`planning/templates_service.py` (CRUD szablonów, instancjacja, cykle + apply)
+i czysty `planning/sequences.py` (rotacja cyklu, sekwencja bloku).
+`PlanningService` dostał JEDEN mechanizm zapisu — `day_payload_from_rows` +
+`append_day_payload` — z którego korzystają `copy`, `copy_block` i instancjacja.
+Frontend: `BarChart` (stacked SVG + linia celu), `PlanTygodniaPage` (widok 4)
+z DnD i obowiązkowym wariantem przyciskowym, pięć dialogów + wspólny
+`PlanningDialog`.
+
+`task check` ZIELONY W CAŁOŚCI (exit 0): migrations-check (3),
+test-unit (240), **test-int (147)**, **test-api (243)**, fe-test (198 w 19
+plikach), typecheck (mypy 116 + vue-tsc), lint, format-check (126), fe-build.
+Cykl migracji `upgrade head → downgrade base → upgrade head` przeszedł na
+realnej bazie razem z asercją dokładnego zestawu tabel.
+
+**Uwaga o środowisku (nie o kodzie)**: pierwsza sesja tego batcha nie mogła
+uruchomić `test-int`/`test-api`, bo silnik WSL2 Docker Desktopa nie startował
+(pipe `dockerDesktopLinuxEngine` nie istniał, `task dev-db` padało na
+`unable to get image 'postgres:17'`). Restart Docker Desktopa to naprawił.
+Pierwszy przebieg z bazą wyłapał wtedy błąd w TEŚCIE (nie w kodzie):
+`text()` traktuje `:1` z literału JSON `"recipe_id":1` jako parametr wiązany,
+więc wzorzec do `EXPLAIN` musi iść parametrem (`CAST(:pattern AS jsonb)`).
+
+**Co MUSZĄ wiedzieć kolejne batche:**
+
+1. **Zliczanie referencji w JSONB używa containmentu `@>`, nie
+   `jsonb_path_exists`** — i to jest wiążące, nie stylistyczne. Indeks GIN
+   założono klasą `jsonb_path_ops`, która obsługuje wyłącznie `@>`, `@?`, `@@`;
+   funkcja `jsonb_path_exists` nie jest operatorem indeksowanym, więc planner
+   zrobiłby seq scan po wszystkich szablonach przy każdym DELETE przepisu.
+   Wzorzec: `payload @> '{"meals":[{"items":[{"recipe_id": X}]}]}'`, a dla
+   tygodnia ten sam wzorzec zagnieżdżony w `days[].day`. ADR-012 domknięty
+   po stronie kodu; test `EXPLAIN` wyłącza `enable_seqscan`, bo na pustej
+   tabeli planner i tak wybrałby skan.
+2. **Instancjacja to KOPIA bez live-sync.** Dni z szablonu/cyklu/bloku to
+   zwykłe wiersze `plan_days/plan_meals/plan_meal_items` — B10 (zakupy) i B13
+   (statystyki) nie muszą o szablonach wiedzieć nic. Konsekwencja dla B10:
+   ten sam `recipe_id` może wystąpić w dniu wielokrotnie (szablon DOPISUJE,
+   nie nadpisuje), więc agregacja musi sumować, nie deduplikować.
+3. **`BarChart` istnieje — B13 go REUŻYWA, nie pisze drugiego.** Słupek jest
+   stackowany, gdy `segments` ma >1 element, więc makro stacked to kwestia
+   danych, nie komponentu. Skala jest wspólna dla wszystkich słupków i wciąga
+   `target`, żeby linia celu nie wypadła z kadru. Kontrakt propsów w karcie B13.
+4. **Payload `v:1` to kontrakt eksportu (B14).** Pełny kształt wpisany do karty
+   B14 razem z ostrzeżeniem: import MUSI przemapować `recipe_id`/`product_id`/
+   `member_profile_id` wewnątrz JSONB oraz `template_ids` w cyklach — baza nie
+   pilnuje tych referencji żadnym FK.
+5. **`start_date = NULL` w cyklu = „pierwszy tydzień ZAKRESU dostaje pierwszy
+   szablon"**, nie „każdy tydzień dostaje pierwszy". Pierwsza implementacja
+   robiła to drugie (cykl w ogóle nie rotował) — wyłapał to test jednostkowy.
+   Rotacja jest cykliczna też przed `start_date` (tydzień wcześniej ⇒ ostatni
+   szablon listy).
+6. **KAŻDY payload przychodzący od użytkownika, który trafia do wiersza planu,
+   MUSI przejść walidację scope na referencjach.** `/security-review` znalazł tu
+   HIGH: payload szablonu przyjmował dowolne `recipe_id`, a `instantiate`
+   przepisywał je do `plan_meal_items` — bez bramki, którą `add_item` ma od B06
+   (`_assert_recipe_available`). Ponieważ `RecipesService.portion_values`
+   ŚWIADOMIE nie filtruje scope (dzień rodzinny może zawierać prywatny przepis
+   właściciela), `GET /plan/days` oddawał wtedy nazwę i wartości odżywcze
+   cudzego prywatnego przepisu. Naprawione filtrem
+   `ScopedQuery.visible_condition` w `_assert_references_alive` (przy zapisie
+   ORAZ przy instancjacji; cudzy i nieistniejący dają ten sam komunikat).
+   **Reguła dla B14 (import) i każdego batcha z payloadem JSONB: sprawdzenie
+   ISTNIENIA id to nie autoryzacja.** Produkty kanoniczne są wyjątkiem —
+   katalog jest globalny.
+7. **Rejestry referencji rozszerza się DOKŁADAJĄC finder**, nie edytując
+   `recipes/service.py` ani `catalog/service.py` — te pliki nie były w tym
+   batchu ruszane. Nowe typy w `used_in`: `day_template`, `week_template`,
+   `week_cycle`.
+8. **Nowe komponenty OpenAPI payloadu mają sufiksy `-Input`/`-Output`**
+   (Pydantic dzieli schemat, gdy walidacja i serializacja pola różnią się
+   typem — `DecimalString` przyjmuje liczbę albo string, zwraca string).
+   Żaden istniejący komponent nie zniknął ani nie zmienił nazwy; frontend
+   trzyma oba aliasy w `api/templates.ts`.
+9. **B06 nie miał commita.** Na starcie tej sesji PROGRESS pokazywał `[x]`,
+   a `git log` stał na `batch(05)` — cała praca B06 leżała niezacommitowana.
+   Właściciel zdecydował „najpierw commit `batch(06)`", więc B06 dostał własny
+   commit `d6bacd7`. **Reguła na przyszłość: bramka wyjścia batcha to `git log`,
+   nie kolumna w tabeli.**
+10. Przy okazji naprawiony `ServingsSplitDrawer.spec.ts` z B06: `get(...)`
+   zwraca wrapper BEZ `exists`, więc `vue-tsc` sypał 2x TS2339 i bramka nie
+   mogła być zielona. Poprawka (`find(...).exists()`) weszła do commita B06.
+11. Kolejna wolna migracja: `0010`. Karty zaktualizowane: B10 (dni z szablonów
+    to zwykłe dni), B13 (kontrakt `BarChart`), B14 (payload `v:1` + remapowanie
+    id). `03_DATABASE §6` i `04_API §2/§3` opisują stan faktyczny.
+12. **Obraz kontenera `app` był przestarzały od B05** — brakowało w nim
+    `Pillow` (`ModuleNotFoundError: No module named 'PIL'` z `core/uploads.py`),
+    więc `app` wysypywał się na importach, a `task dev` dawał kontener
+    `unhealthy`. To NIE jest wina B07 — obraz nie był przebudowany od dołożenia
+    zależności. Lekarstwo: `task dev-detached` (`up --build -d`), nie samo
+    `up -d`. **Reguła: nowa zależność w `pyproject.toml` = przebudowa obrazu,
+    inaczej stack dev kłamie o stanie kodu.**
+13. **E2E URUCHOMIONE pierwszy raz w projekcie (dług U15)**: 4 passed,
+    5 failed — wszystkie pięć na logowaniu, bo `E2E_ADMIN_PASSWORD` w `.env`
+    nie zgadza się z hashem konta admina (konto istnieje, jest aktywne
+    i niezablokowane; `verify_password` = False). Czerwone są WSZYSTKIE specy
+    wymagające sesji, także `smoke`/`households`/`produkty`/
+    `recipe-inline-create` z wcześniejszych batchy — **to jedna przyczyna
+    środowiskowa, nie regresja B07**. Domknięcie U15 wymaga zsynchronizowania
+    hasła konta E2E (operacja właściciela).
 
 **2026-08-17 — BATCH_06 (GOALS_AND_DAY_PLAN)**: plan dnia liczy się naprawdę.
 Migracja `0008` (`user_nutrition_goals` + `plan_days`/`plan_meals`/
@@ -100,7 +205,7 @@ i progów w ustawieniach.
    `04_API` dostało `PATCH /auth/me/ui-settings`, `fit-to-target` oraz zasady
    §2c (łańcuch scope) i §2d (pusty dzień zamiast 404); `03_DATABASE §6` —
    stan faktyczny migracji `0008`.
-10. **E2E `smoke.spec.ts` rozszerzony o plan dnia, ale NIEURUCHOMIONY** (brak
+11. **E2E `smoke.spec.ts` rozszerzony o plan dnia, ale NIEURUCHOMIONY** (brak
     Dockera w tej sesji) — dług U15 z R1 rośnie o ten scenariusz. `/plan-dnia`
     nie jest już placeholderem, więc stary asert `placeholder-page` zniknął.
 
@@ -368,7 +473,7 @@ ruff / eslint / prettier / vite build).
    Kolejna wolna migracja: `0006`. Nowa tabela nadal = wpis w `DB_TABLES`
    (conftest) **i** `EXPECTED_TABLES` (`test_migrations.py`); doszła też stała
    `EXPECTED_ENUM_TYPES` — migracja z enumem dopisuje tam swój typ.
-9. **Karty zaktualizowane**: B05 (units/adapter/rejestr referencji + API
+10. **Karty zaktualizowane**: B05 (units/adapter/rejestr referencji + API
    pickera i AmountInput), B08 i B09 (rejestr referencji, kontrakt komponentów,
    `catalog` jako moduł do rozbudowy, nie do zduplikowania).
 10. **Follow-upy dla R1**: E2E `produkty.spec.ts` i `households.spec.ts`

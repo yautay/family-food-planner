@@ -69,13 +69,18 @@ from app.modules.nutrition.types import (
 from app.modules.planning.models import PlanDay, PlanItemServing, PlanMeal, PlanMealItem
 from app.modules.planning.schemas import (
     MEALS_PER_DAY_LIMIT,
+    DayTemplatePayload,
     ItemCreateRequest,
     ItemUpdateRequest,
     MealCreateRequest,
     MealUpdateRequest,
     PlanCopyRequest,
     PlanServingSplitInput,
+    TemplateItemPayload,
+    TemplateMealPayload,
+    TemplateSplitPayload,
 )
+from app.modules.planning.sequences import block_copy_sequence
 from app.modules.recipes.models import Recipe
 from app.modules.recipes.service import (
     RecipePortion,
@@ -441,63 +446,161 @@ class PlanningService:
             meal, source_day = await self._meal_or_404(payload.source_meal_id, user)
             source_meals = [meal]
 
-        items_by_meal = await self._items_of([meal.id for meal in source_meals])
+        blueprint = await self.day_payload_from_meals(
+            source_meals, title=source_day.title if payload.what == "day" else None
+        )
+
+        targets = sorted(set(payload.target_dates))
+        for target in targets:
+            await self.append_day_payload(user, target, blueprint, scope=source_day.scope)
+
+        await self._session.commit()
+        return [await self.get_day(user, target) for target in targets]
+
+    async def copy_block(self, *, user: User, payload: PlanCopyRequest) -> list[DayView]:
+        """Powiel blok N dni z powtórzeniem K (model 2+2+2 z 01_PDF_AUDIT §6).
+
+        Kolejność wyniku to d1,d1,d2,d2,d3,d3 — dieta stosowana „2 dni pod rząd”
+        wymaga dni SĄSIADUJĄCYCH, nie przeplotu. Sekwencję liczy czysta funkcja
+        `block_copy_sequence`, więc jest testowalna bez bazy.
+
+        Dni źródłowe czytamy RAZ, przed zapisami: gdyby zakres docelowy nachodził
+        na źródłowy, czytanie w pętli zobaczyłoby już dopisane posiłki i lawinowo
+        by je multiplikowało.
+        """
+        assert payload.source_from is not None  # gwarantuje walidator schematu
+        assert payload.source_days is not None
+        assert payload.repeat_each is not None
+        assert payload.target_start is not None
+
+        sequence = block_copy_sequence(
+            payload.source_from, payload.source_days, payload.repeat_each, payload.target_start
+        )
+
+        blueprints: dict[date, tuple[DayTemplatePayload, Scope]] = {}
+        for source_date in sorted({source for source, _target in sequence}):
+            source_day = await self._resolve_day(user, source_date)
+            if source_day is None:
+                # Dziura w bloku źródłowym nie jest błędem: „powiel 3 dni” przy
+                # pustym środkowym dniu ma dać pusty dzień, nie 404 na całość.
+                continue
+            meals = await self._meals_of(source_day.id)
+            blueprints[source_date] = (
+                await self.day_payload_from_meals(meals, title=source_day.title),
+                source_day.scope,
+            )
+
+        for source_date, target in sequence:
+            blueprint = blueprints.get(source_date)
+            if blueprint is None:
+                continue
+            await self.append_day_payload(user, target, blueprint[0], scope=blueprint[1])
+
+        await self._session.commit()
+        targets = sorted({target for _source, target in sequence})
+        return [await self.get_day(user, target) for target in targets]
+
+    # --- wspólny mechanizm „struktura dnia ↔ wiersze planu” -------------------------
+
+    async def day_payload_from_meals(
+        self, meals: Sequence[PlanMeal], *, title: str | None
+    ) -> DayTemplatePayload:
+        """Wiersze planu → payload `v:1` (kopiowanie, zapis szablonu, eksport B14).
+
+        To JEDYNE miejsce zamieniające plan na payload — kopiowanie i szablony
+        muszą widzieć dokładnie tę samą strukturę, inaczej „zapisz jako szablon”
+        dawałoby co innego niż „kopiuj dzień”.
+        """
+        items_by_meal = await self._items_of([meal.id for meal in meals])
         splits_by_item = await self._splits_of(
             [item.id for items in items_by_meal.values() for item in items]
         )
+        return day_payload_from_rows(meals, items_by_meal, splits_by_item, title=title)
 
-        for target in sorted(set(payload.target_dates)):
-            day_entity = await self._resolve_day(user, target)
-            if day_entity is None:
-                day_entity = PlanDay(
-                    day=target,
-                    title=source_day.title if payload.what == "day" else None,
-                    **ScopedQuery.ownership_for_create(user, source_day.scope),
+    async def append_day_payload(
+        self,
+        user: User,
+        target: date,
+        payload: DayTemplatePayload,
+        *,
+        scope: Scope,
+    ) -> PlanDay:
+        """Payload → wiersze planu, DOPISANE na koniec dnia docelowego.
+
+        NIE commituje — instancjacja tygodnia i apply cyklu robią wiele dni
+        w jednej transakcji, więc częściowy wynik nie może zostać w bazie po
+        błędzie (karta B07 §Implementation Notes).
+
+        Dzień docelowy powstaje jako własność WYKONUJĄCEGO użytkownika (owner
+        z sesji) — nie da się instancjować „na cudzy plan” (karta B07 §Security).
+        Tytuł ustawiamy tylko przy TWORZENIU dnia: dopisanie szablonu do dnia,
+        który użytkownik już nazwał, nie ma prawa tej nazwy nadpisać.
+        """
+        day_entity = await self._resolve_day(user, target)
+        if day_entity is None:
+            day_entity = PlanDay(
+                day=target,
+                title=payload.title,
+                **ScopedQuery.ownership_for_create(user, scope),
+            )
+            self._session.add(day_entity)
+            await self._session.flush()
+
+        allowed_profiles = await self._household_profile_ids(day_entity)
+        offset = await self._next_meal_position(day_entity.id)
+        for index, meal in enumerate(sorted(payload.meals, key=lambda entry: entry.position)):
+            created_meal = PlanMeal(
+                plan_day_id=day_entity.id,
+                name=meal.name,
+                kcal_target=meal.kcal_target,
+                position=offset + index,
+            )
+            self._session.add(created_meal)
+            await self._session.flush()
+
+            for item in sorted(meal.items, key=lambda entry: entry.position):
+                created_item = PlanMealItem(
+                    plan_meal_id=created_meal.id,
+                    recipe_id=item.recipe_id,
+                    product_id=item.product_id,
+                    amount=item.amount,
+                    amount_unit=item.amount_unit,
+                    servings=item.servings,
+                    position=item.position,
                 )
-                self._session.add(day_entity)
+                self._session.add(created_item)
                 await self._session.flush()
 
-            allowed_profiles = await self._household_profile_ids(day_entity)
-            offset = await self._next_meal_position(day_entity.id)
-            for index, meal in enumerate(source_meals):
-                copied_meal = PlanMeal(
-                    plan_day_id=day_entity.id,
-                    name=meal.name,
-                    kcal_target=meal.kcal_target,
-                    position=offset + index,
-                )
-                self._session.add(copied_meal)
-                await self._session.flush()
-
-                for item in items_by_meal.get(meal.id, []):
-                    copied_item = PlanMealItem(
-                        plan_meal_id=copied_meal.id,
-                        recipe_id=item.recipe_id,
-                        product_id=item.product_id,
-                        amount=item.amount,
-                        amount_unit=item.amount_unit,
-                        servings=item.servings,
-                        position=item.position,
-                    )
-                    self._session.add(copied_item)
-                    await self._session.flush()
-
-                    split = splits_by_item.get(item.id, [])
-                    # Rozkład kopiujemy tylko w komplecie: profil spoza rodziny
-                    # właściciela dnia docelowego złamałby sumę = servings, więc
-                    # wtedy zostaje sam mnożnik (kopiowanie między rodzinami).
-                    if split and all(row.member_profile_id in allowed_profiles for row in split):
-                        for row in split:
-                            self._session.add(
-                                PlanItemServing(
-                                    plan_meal_item_id=copied_item.id,
-                                    member_profile_id=row.member_profile_id,
-                                    multiplier=row.multiplier,
-                                )
+                # Rozklad kopiujemy tylko w komplecie: profil spoza rodziny
+                # wlasciciela dnia docelowego zlamalby sume = servings, wiec
+                # wtedy zostaje sam mnoznik (kopiowanie miedzy rodzinami).
+                split = item.servings_split
+                if split and all(row.member_profile_id in allowed_profiles for row in split):
+                    for row in split:
+                        self._session.add(
+                            PlanItemServing(
+                                plan_meal_item_id=created_item.id,
+                                member_profile_id=row.member_profile_id,
+                                multiplier=row.multiplier,
                             )
+                        )
+        return day_entity
 
-        await self._session.commit()
-        return [await self.get_day(user, target) for target in sorted(set(payload.target_dates))]
+    # --- wejścia publiczne dla szablonów (BATCH_07) ---------------------------------
+
+    async def resolve_day(self, user: User, day: date) -> PlanDay | None:
+        """Reguła „dzień dla daty" udostępniona szablonom.
+
+        `TemplatesService` MUSI rozstrzygać datę identycznie jak `/plan/*`
+        (najpierw własny dzień, potem widoczny rodzinny) — inaczej ta sama data
+        znaczyłaby co innego w widoku tygodnia i w instancjacji szablonu
+        (karta B07 §Context).
+        """
+        return await self._resolve_day(user, day)
+
+    async def meals_of(self, day_id: int) -> list[PlanMeal]:
+        """Posiłki dnia w kolejności pozycji — wejście budowy payloadu szablonu."""
+        return await self._meals_of(day_id)
 
     # --- pomocnicze: dostęp z kontrolą scope ----------------------------------------
 
@@ -964,6 +1067,58 @@ def _progress(
             status=goal_status(value, target, thresholds),
         )
     return progress
+
+
+# --- wiersze planu -> payload szablonu (czysta funkcja, BATCH_07) -------------------
+
+
+def day_payload_from_rows(
+    meals: Sequence[PlanMeal],
+    items_by_meal: dict[int, list[PlanMealItem]],
+    splits_by_item: dict[int, list[PlanItemServing]],
+    *,
+    title: str | None,
+) -> DayTemplatePayload:
+    """Struktura dnia jako payload `v:1` — bez dat i bez ani jednej wartości odżywczej.
+
+    Payload jest ZAMROŻONĄ KOPIĄ STRUKTURY (02_DOMAIN §7): kopiujemy `recipe_id`
+    i `product_id` jako referencje, a nie policzone kcal. Liczby powstają przy
+    odczycie planu, więc szablon zapisany dziś i użyty za miesiąc uwzględni
+    poprawione wartości produktu (niezmiennik 02_DOMAIN §13.2).
+
+    `servings` jedzie razem z ilością również dla produktu luzem: wartości
+    pozycji to „wartości jednej porcji x servings” także tam (02_DOMAIN §13.3),
+    więc pominięcie mnożnika zmieniłoby treść szablonu.
+    """
+    return DayTemplatePayload(
+        title=title,
+        meals=[
+            TemplateMealPayload(
+                name=meal.name,
+                kcal_target=meal.kcal_target,
+                position=position,
+                items=[
+                    TemplateItemPayload(
+                        recipe_id=item.recipe_id,
+                        product_id=item.product_id,
+                        amount=item.amount,
+                        amount_unit=item.amount_unit,
+                        servings=item.servings,
+                        position=item_position,
+                        servings_split=[
+                            TemplateSplitPayload(
+                                member_profile_id=row.member_profile_id,
+                                multiplier=row.multiplier,
+                            )
+                            for row in splits_by_item.get(item.id, [])
+                        ],
+                    )
+                    for item_position, item in enumerate(items_by_meal.get(meal.id, []))
+                ],
+            )
+            for position, meal in enumerate(meals)
+        ],
+    )
 
 
 # --- rejestry blokad usuwania (ADR-012) ---------------------------------------------------

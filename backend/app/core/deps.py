@@ -24,6 +24,7 @@ from app.modules.catalog.service import CatalogService
 from app.modules.households.service import HouseholdsService
 from app.modules.nutrition.service import GoalsService
 from app.modules.planning.service import PlanningService
+from app.modules.planning.templates_service import TemplatesService
 from app.modules.recipes.service import RecipesService
 
 
@@ -67,6 +68,13 @@ def get_planning_service(
 ) -> PlanningService:
     """Serwis planu dnia: dni, posiłki, pozycje, rozkład rodzinny, kopiowanie."""
     return PlanningService(session)
+
+
+def get_templates_service(
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> TemplatesService:
+    """Serwis szablonów dnia/tygodnia i cykli tygodni (BATCH_07)."""
+    return TemplatesService(session)
 
 
 def get_audit_service(

@@ -317,28 +317,287 @@ diffie przed commitem (krok 11).
 
 ## Implementation checklist
 
-- [ ] Migracja templates/cycles + indeksy GIN; up/down/up, jedna głowa
-- [ ] Kontrakt payloadu `v:1` (Pydantic) + funkcje plan↔payload + testy unit
-- [ ] Endpointy templates (CRUD, from-plan, instantiate) + cycles (+apply)
-- [ ] `/plan/copy what=block` z presetem 2+2+2
-- [ ] Blokada usuwania: recipes/products liczone też w JSONB (GIN, EXPLAIN)
-- [ ] `BarChart` + `PlanTygodniaPage` z DnD i alternatywą przyciskową
-- [ ] Dialogi szablonów/cykli/bloku/historii
-- [ ] Testy integration/api/fe; E2E week-template-cycle
-- [ ] PROGRESS.md + propagacja do kart B10/B13/B14
+- [x] Migracja templates/cycles + indeksy GIN; up/down/up, jedna głowa
+- [x] Kontrakt payloadu `v:1` (Pydantic) + funkcje plan↔payload + testy unit
+- [x] Endpointy templates (CRUD, from-plan, instantiate) + cycles (+apply)
+- [x] `/plan/copy what=block` z presetem 2+2+2
+- [x] Blokada usuwania: recipes/products liczone też w JSONB (GIN, EXPLAIN)
+- [x] `BarChart` + `PlanTygodniaPage` z DnD i alternatywą przyciskową
+- [x] Dialogi szablonów/cykli/bloku/historii
+- [x] Testy integration/api/fe; E2E week-template-cycle (napisany)
+- [x] PROGRESS.md + propagacja do kart B10/B13/B14
 
 ## Verification checklist
 
-- [ ] `task check` zielony — wynik REALNY
-- [ ] `alembic upgrade head && downgrade -1 && upgrade head` na kopii bazy
-- [ ] Test blokady usunięcia przez JSONB zielony + potwierdzone użycie GIN
-- [ ] Test braku live-sync (szablon↔plan w obie strony) zielony
-- [ ] E2E tydzień przez szablon+cykl zielony na compose
+- [x] `task check` ZIELONY W CAŁOŚCI (exit 0): migrations-check (3),
+      test-unit (240), test-int (147), test-api (243), fe-test (198/19 plików),
+      typecheck (mypy 116 + vue-tsc), lint, format-check (126), fe-build
+- [x] Cykl migracji na realnej bazie — `test_migrations.py` (3 testy):
+      `upgrade head → downgrade base → upgrade head`, head = `0009`, dokładny
+      zestaw tabel z `day_templates`/`week_templates`/`week_cycles`
+- [x] Test blokady usunięcia przez JSONB ZIELONY + potwierdzone użycie GIN
+      (`EXPLAIN` pokazuje `ix_day_templates_payload_gin`)
+- [x] Test braku live-sync (szablon↔plan w obie strony) ZIELONY
+- [~] E2E tydzień przez szablon+cykl — URUCHOMIONY na realnym stacku, ale
+      zablokowany na logowaniu: `E2E_ADMIN_PASSWORD` w `.env` nie zgadza się
+      z hashem konta admina (szczegóły niżej). Nie jest to defekt speca ani
+      kodu — to samo blokuje 4 wcześniejsze specy (dług U15)
 - [ ] Ręcznie: powiel blok 2+2+2, przeniesienie DnD na desktopie, wariant
-      przyciskowy na mobile; acceptance criteria 1–10 odhaczone
-- [ ] Dokumentacja zaktualizowana (PROGRESS, karty B10/B13/B14, ew. 04_API)
-- [ ] Commit `batch(07): <opis>`; `git status` czysty w zakresie batcha
+      przyciskowy na mobile — do zrobienia po naprawie konta E2E
+- [x] Dokumentacja zaktualizowana (PROGRESS, karty B10/B13/B14, 03_DB §6, 04_API)
+- [x] Commit `batch(07): szablony dnia i tygodnia, cykle i widok tygodnia`
 
 ## Completion notes
 
-(wypełnia agent wykonujący)
+### Wykonane
+
+- **Migracja `0009`** (`templates_and_cycles`): `day_templates`, `week_templates`
+  (wzorzec scope + `name` + `payload JSONB`) i `week_cycles` (wzorzec scope +
+  `name` + `template_ids BIGINT[]` + `start_date DATE NULL`). Typ `entity_scope`
+  REUŻYTY z `0006` (`create_type=False`), `downgrade` go nie kasuje. **Indeksy
+  GIN `jsonb_path_ops`** na obu payloadach. `down_revision = "0008"` (wynik
+  łańcucha, nie numer z planu); jedna głowa.
+- **Kontrakt payloadu `v:1`** w `planning/schemas.py`: `DayTemplatePayload`,
+  `WeekTemplatePayload` + `TemplateMealPayload`/`TemplateItemPayload`/
+  `TemplateSplitPayload`. `extra="forbid"`, `v` jako `Literal[1]`, Decimale przez
+  `DecimalString` (do JSONB jako stringi). Walidacja przy zapisie I przy odczycie.
+- **`planning/sequences.py`** — czysty plik bez I/O (ADR-008): `week_start_of`,
+  `is_week_start`, `cycle_rotation_index`, `cycle_week_plan`, `block_copy_sequence`.
+- **`planning/templates_service.py`** — `TemplatesService`: CRUD szablonów dnia
+  i tygodnia (payload wprost albo z planu), instancjacja, CRUD cykli + `apply`,
+  walidacja martwych referencji, liczniki referencji JSONB.
+- **`PlanningService` zrefaktoryzowany na JEDEN mechanizm kopiowania**:
+  `day_payload_from_rows` (czysta funkcja) + `day_payload_from_meals` +
+  `append_day_payload`. `copy` (day/meal), `copy_block` i instancjacja szablonu
+  korzystają z tego samego zapisu — wymóg karty „nie pisz drugiego mechanizmu".
+- **Endpointy**: `/templates/days`, `/templates/weeks` (GET/POST/GET/PUT/DELETE +
+  `POST {id}/instantiate`), `/cycles` (GET/POST/PUT/DELETE + `POST {id}/apply`),
+  `/plan/copy` rozszerzone o `what="block"`.
+- **Frontend**: `charts/BarChart.vue` (stacked SVG + linia celu, ADR-013),
+  `pages/tydzien/PlanTygodniaPage.vue` (widok 4), pięć dialogów +
+  `PlanningDialog.vue` (wspólna oprawa), `api/templates.ts`,
+  `lib/schemas/template.ts`, `queryKeys += templates/cycles`, `texts.week`,
+  trasa `/tydzien/:weekStart?` (podmieniony `PlaceholderPage`).
+
+### Decyzje implementującego (karta zostawiła je do uzasadnienia)
+
+1. **Osobny `templates_service.py`, nie rozrost `service.py`.** Agregatem jest
+   tu SZABLON (encja ze scope, payload nadpisywany całością), a nie dzień;
+   `service.py` miał już 1016 linii. Zapisy do planu i tak idą przez
+   `PlanningService.append_day_payload`, więc nie ma drugiego mechanizmu
+   kopiowania ani drugiej reguły rozstrzygania dnia.
+2. **Forma zapytania JSONB: containment `@>`** (a NIE `jsonb_path_exists`).
+   Powód wiążący: indeks GIN założono klasą `jsonb_path_ops`, która obsługuje
+   wyłącznie `@>`, `@?` i `@@`; `jsonb_path_exists` jest funkcją, nie
+   operatorem indeksowanym, więc planner zrobiłby seq scan. Zapytanie
+   generowane przez SQLAlchemy: `payload @> $1::JSONB` (potwierdzone
+   kompilacją dialektu i asercją `EXPLAIN` w teście integracyjnym, który
+   wyłącza `enable_seqscan` na czas sprawdzenia — na pustej tabeli planner
+   zawsze wybrałby seq scan, więc bez tego test nie mówiłby nic o zdolności
+   zapytania do użycia indeksu).
+3. **Zarchiwizowany przepis/produkt w payloadzie: DOPUSZCZONY z ostrzeżeniem**
+   (sugestia karty). Nieistniejące id ⇒ 422 z listą (`details.recipe_ids` /
+   `product_ids`), bo instancjacja padłaby i tak na FK RESTRICT
+   `plan_meal_items` — tylko gołym 500 zamiast czytelnego komunikatu.
+   Ostrzeżenia jadą w `InstantiateResponse.warnings` i UI pokazuje je zamiast
+   zamykać dialog.
+4. **Ilość w payloadzie jest JUŻ ZNORMALIZOWANA** (`amount` + `amount_unit` na
+   osi produktu), a nie zapisana jako `quantity` + etykieta użytkownika.
+   Payload odwzorowuje wiersze `plan_meal_items`, więc instancjacja jest
+   przepisaniem wartości, nie ponowną konwersją. Inaczej zmiana przelicznika
+   jednostki domowej po zapisaniu szablonu cicho zmieniłaby jego treść (albo
+   wysadziła instancjację `UnitConversionError`).
+5. **Scope dnia z instancjacji = scope SZABLONU**, właściciel = użytkownik
+   z sesji. Szablon rodzinny daje dni widoczne dla rodziny (tego użytkownik
+   oczekuje, wybierając „cała rodzina"), a `ownership_for_create` i tak
+   waliduje, czy scope jest dla niego legalny.
+6. **`start_date = NULL` w cyklu znaczy „pierwszy tydzień ZAKRESU dostaje
+   pierwszy szablon"**, nie „każdy tydzień dostaje pierwszy szablon". Pierwsza
+   (błędna) implementacja zwracała indeks 0 dla każdego tygodnia, czyli cykl
+   bez daty startu w ogóle nie rotował; wyłapał to test jednostkowy
+   `test_brak_daty_startu_zaczyna_rotacje_od_poczatku_zakresu`.
+7. **Rotacja jest cykliczna także PRZED `start_date`** (Python `//` zaokrągla
+   w dół, `%` zwraca nieujemne), więc „zastosuj cykl na poprzedni tydzień"
+   daje ostatni szablon listy, a nie dziurę ani drugi tydzień A.
+8. **Kolejność szablonów w cyklu zmienia się STRZAŁKAMI, nie drag&dropem.**
+   Lista ma 2–4 pozycje, a strzałki działają identycznie na telefonie i
+   z klawiatury (06_UIUX §2: DnD tylko tam, gdzie realnie szybszy). DnD jest
+   tam, gdzie karta go wymaga — przy przenoszeniu posiłku między dniami.
+9. **Przeniesienie posiłku = `copy` na dzień docelowy, POTEM `delete` źródła**
+   (w tej kolejności, w jednej mutacji TanStack Query). Przy odwrotnej
+   kolejności błąd kopiowania skasowałby posiłek bez śladu; przy tej najgorszy
+   scenariusz to widoczny duplikat.
+10. **`PlanningDialog.vue` (szósty, nielistowany komponent)** — wspólna oprawa
+    pięciu paneli akcji: nagłówek, obszar błędu, lista ostrzeżeń, stopka
+    z akcją główną i „Anuluj". Bez niego chroma i cele dotykowe byłyby
+    skopiowane pięć razy.
+11. **Puste dni są POMIJANE przy budowie szablonu tygodnia z planu**: szablon
+    z pustą środą po prostu nie ma środy, zamiast dokładać do planu pusty dzień.
+    Szablon z CAŁKOWICIE pustego dnia/tygodnia ⇒ 422 (to pomyłka użytkownika,
+    nie pusty szablon).
+12. **Dziura w bloku źródłowym nie jest błędem**: „powiel 3 dni" przy pustym
+    środkowym dniu daje pusty dzień docelowy, nie 404 na całość.
+13. **Blok czyta dni źródłowe RAZ, przed zapisami** — gdyby zakres docelowy
+    nachodził na źródłowy, czytanie w pętli widziałoby już dopisane posiłki
+    i lawinowo je multiplikowało.
+14. **Rejestry referencji: dołożone WŁASNE findery** (`_templates_using_recipe`,
+    `_templates_using_product`) przez istniejące rejestry z `recipes`/`catalog`.
+    Pliki `recipes/service.py` i `catalog/service.py` NIE były zmieniane —
+    rejestr jest zaprojektowanym punktem rozszerzenia i efekt jest ten sam
+    (DELETE liczy teraz też payloady), więc modyfikowanie ich byłoby regresem
+    względem wzorca z B04/B05.
+
+### Odstępstwa i poprawki poza planem
+
+- **`ServingsSplitDrawer.spec.ts` z B06 nie przechodził `vue-tsc`**
+  (2x TS2339: `get(...)` zwraca wrapper BEZ `exists`). Poprawione na
+  `find(...).exists()` — bez tego bramka `task check` nie mogła być zielona
+  dla B07. Naprawa weszła do commita `batch(06)`, nie do tego.
+- **Commit `batch(06)` nie istniał** na starcie sesji, mimo statusu `[x]`
+  w PROGRESS — cała praca B06 leżała niezacommitowana w drzewie roboczym.
+  Właściciel wybrał wariant „najpierw commit `batch(06)`", więc B06 dostał
+  własny commit (`d6bacd7`) przed pierwszą linijką kodu B07.
+- **`test_migrations.py`**: `after_upgrade` podniesione z `"0008"` na `"0009"`.
+- Nazwy komponentów OpenAPI payloadu rozdzieliły się na `-Input`/`-Output`
+  (Pydantic robi tak, gdy walidacja i serializacja pola różnią się typem —
+  `DecimalString` przyjmuje liczbę albo string, a zwraca string). **Żaden
+  istniejący komponent nie został usunięty ani przemianowany** (sprawdzone
+  porównaniem zestawu nazw z `HEAD`), więc kontrakty B05/B06 są nietknięte.
+  `api/templates.ts` trzyma oba aliasy i używa właściwego po właściwej stronie.
+
+### Domknięcie bramki (druga sesja, 2026-08-21)
+
+`task check` przeszedł **w całości, exit 0**: migrations-check (3),
+test-unit (240), **test-int (147)**, **test-api (243)**, fe-test (198 w 19
+plikach), typecheck (mypy 116 + vue-tsc), lint, format-check (126), fe-build.
+
+Dwie rzeczy wyszły dopiero przy pierwszym przebiegu z realną bazą:
+
+1. **Błąd w TEŚCIE, nie w kodzie**:
+   `test_zapytanie_zliczajace_referencje_uzywa_indeksu_gin` wklejał wzorzec
+   JSON wprost do `text()`, a SQLAlchemy potraktowało `:1` z `"recipe_id":1`
+   jako nazwę parametru wiązanego (`A value is required for bind parameter
+   '1'`). Wzorzec idzie teraz parametrem: `payload @> CAST(:pattern AS jsonb)`.
+   Zapytanie PRODUKCYJNE (`.contains()`) było poprawne od początku —
+   potwierdzone wcześniej kompilacją do `payload @> $1::JSONB`. **Pułapka dla
+   kolejnych batchy: literał JSON w `text()` z `":<cyfra>"` staje się
+   parametrem wiązanym.**
+2. **Obraz kontenera `app` był przestarzały od B05** — brak `Pillow`
+   (`ModuleNotFoundError: No module named 'PIL'`), więc `app` nie startował
+   i stack dev był `unhealthy`. Niezależne od B07; lekarstwo to
+   `task dev-detached` (`up --build -d`).
+
+### E2E — uruchomione, zablokowane na koncie testowym
+
+Pierwsze w historii projektu uruchomienie E2E (dług U15 z R1). Wynik:
+**4 passed, 5 failed** — i wszystkie pięć padło w TYM SAMYM miejscu:
+`expect(page).toHaveURL(/\/plan-dnia/)` zaraz po kliknięciu „Zaloguj",
+przy czym strona zostaje na `/login`.
+
+Diagnoza (bez ujawniania poświadczeń): konto z `E2E_ADMIN_EMAIL` **istnieje**
+w bazie dev, ma rolę `admin`, `is_active = true`, `locked_until = null`
+i poprawny hash argon2id — ale `verify_password(E2E_ADMIN_PASSWORD, hash)`
+zwraca `valid=False`. Czyli **hasło w `.env` rozjechało się z hasłem konta**.
+Potwierdza to test `błędne hasło pokazuje neutralny komunikat`, który PRZESZEDŁ
+— endpoint logowania działa i po prostu odrzuca te dane.
+
+Zielone 4 specy to te, które nie wymagają sesji (render `/login`, przekierowanie
+z sekcji chronionej, neutralny komunikat błędu). Czerwone 5 to WSZYSTKIE
+wymagające logowania — w tym `smoke.spec.ts` z B06 oraz `households`,
+`produkty`, `recipe-inline-create` z wcześniejszych batchy. **Żaden z tych
+błędów nie jest regresją B07** — to jedna wspólna przyczyna środowiskowa.
+
+Do zrobienia przez właściciela (operacja na poświadczeniach, świadomie NIE
+wykonana przez agenta): zsynchronizować hasło — albo `task create-admin`
+z `FFP_ADMIN_EMAIL`/`FFP_ADMIN_PASSWORD` równymi `E2E_ADMIN_*`, albo wpisać do
+`E2E_ADMIN_PASSWORD` faktyczne hasło konta. Potem `task test-e2e`.
+
+### Wynik skilli Review (krok 11 master promptu)
+
+**`/code-review` (poziom high) — 4 ustalenia, wszystkie NAPRAWIONE:**
+
+1. `ReuseHistoryDialog.vue` — watch seedujący `sourceDate` nie miał `props.history`
+   w źródłach, a zapytanie o historię WŁĄCZA SIĘ dopiero przy otwarciu dialogu,
+   więc dane zawsze docierały po przebiegu watcha. Efekt: „Użyj ponownie" było
+   trwale zablokowane komunikatem „brak historii" przy każdym pierwszym otwarciu
+   (czyli acceptance criterion 8 nie działał). Naprawione rozdzieleniem na dwa
+   watche: reset pól na otwarciu + wybór źródła na danych.
+2. `templates_service.apply_cycle` — `_assert_references_alive` walidowało
+   WSZYSTKIE szablony cyklu, nie tylko te wypadające w zakresie. Cykl [A, B, C]
+   zastosowany na jeden tydzień padał 422 z powodu martwej referencji w C, którego
+   ta operacja nie dotyka. Naprawione zawężeniem do `used_template_ids` z
+   `week_plan` (+ test `test_apply_cyklu_ignoruje_szablony_poza_zakresem`).
+3. `TemplateApplyDialog.vue` — ta sama klasa błędu co (1) dla list szablonów.
+4. `CycleEditorDialog.vue` — ta sama klasa błędu dla `cycles`/`weekTemplates`
+   (tryb „apply" nie miał czego wybrać).
+
+**`/security-review` — 1 ustalenie HIGH, NAPRAWIONE:**
+
+- **Obejście scope przez payload szablonu (IDOR na `recipe_id`).** `add_item`
+  z B06 sprawdza widoczność przepisu (`_assert_recipe_available`), a
+  `RecipesService.portion_values` ŚWIADOMIE nie filtruje scope (bo dzień
+  rodzinny może zawierać prywatny przepis właściciela). B07 dołożył nową ścieżkę
+  zapisu, która nie miała tej bramki: `POST /templates/days` z payloadem wprost
+  przyjmował DOWOLNE `recipe_id`, a `instantiate` przepisywał je do
+  `plan_meal_items`. Ścieżka ataku: zalogowany użytkownik wpisuje `recipe_id`
+  cudzego PRYWATNEGO przepisu → instancjuje szablon na własną datę →
+  `GET /plan/days` zwraca `recipe_name` i pełne wartości odżywcze cudzego
+  przepisu. Iterując id dawało się zinwentaryzować prywatne przepisy całej
+  instancji. Dodatkowo FK RESTRICT blokowałby wtedy właścicielowi usunięcie
+  własnego przepisu.
+  **Naprawa**: `_assert_references_alive` przyjmuje `user` i filtruje przepisy
+  przez `ScopedQuery.visible_condition` — cudzy i nieistniejący dają IDENTYCZNY
+  komunikat (endpoint nie jest oracle'em istnienia). Walidacja działa przy
+  ZAPISIE payloadu (fail fast) i ponownie przy INSTANCJACJI (scope mógł się
+  zmienić w międzyczasie). Produkty kanoniczne zostają na sprawdzeniu istnienia
+  — katalog jest globalny i czyta go każdy zalogowany (04_API §2).
+  Testy: `test_payload_nie_przyjmie_cudzego_prywatnego_przepisu`,
+  `test_instancjacja_odrzuca_przepis_ktory_przestal_byc_widoczny`,
+  `test_wlasny_i_rodzinny_przepis_w_payloadzie_przechodzi`.
+
+Pozostałe kategorie bez ustaleń: zapytania JSONB są parametryzowane
+(`payload @> $1::JSONB`), payload nie jest deserializowany inaczej niż przez
+Pydantic z `extra="forbid"`, `member_profile_id` w rozkładzie jest filtrowany do
+rodziny właściciela dnia docelowego (fail closed — profil spoza rodziny powoduje
+pominięcie rozkładu, nie zapis), wszystkie endpointy są za sesją i CSRF, żadnych
+nowych uploadów ani tokenów.
+
+### Follow-upy (poza zakresem tego batcha)
+
+1. **`task check` nie został uruchomiony w całości** — patrz „Pytania".
+   Do domknięcia przez właściciela albo R2: `task dev-db` + `task check`.
+2. **E2E `week-template-cycle.spec.ts` napisany, ale NIEURUCHOMIONY** — dług
+   U15 z R1 rośnie o ten spec (razem ze smoke z B06).
+3. **`db-seed-demo` nadal nie zna planu ani szablonów** — po B07 warto dosiać
+   tydzień planu + jeden szablon dnia i tygodnia (08_TESTING §5). Przeniesione
+   z follow-upów B06 (punkt 3), nadal aktualne.
+4. **DnD ma tylko test ręczny.** Wariant przyciskowy pokrywa E2E; sam DnD nie
+   ma testu komponentowego (jsdom nie odtwarza `DataTransfer` wiernie). Jeśli
+   R2 uzna to za zbyt cienkie — kandydat na test Playwrightem z `dragTo`.
+5. **`updateDayTemplate`/`updateWeekTemplate`/`updateCycle`/`deleteCycle`
+   i `deleteDayTemplate` nie mają jeszcze UI** — backend i klient API są
+   gotowe, ale widok tygodnia daje tylko tworzenie i stosowanie. Zarządzanie
+   szablonami (lista + edycja + usuwanie) to naturalne miejsce w Ustawieniach;
+   karta B07 tego nie wymagała, więc nie dokładałem ekranu.
+6. **Cel kcal na `BarChart` tygodnia bierze się z pierwszego dnia, który go
+   zna.** Cel jest dzienny i zwykle stały w tygodniu, ale przy celu zmienionym
+   w środku tygodnia linia pokaże ten wcześniejszy. B13 (statystyki) i tak
+   będzie potrzebowało celu per dzień — wtedy warto to uściślić.
+
+### Pytania do właściciela
+
+1. **`task check` w tej sesji NIE przeszedł w całości i nie z powodu kodu.**
+   Silnik Dockera nie wstał (Docker Desktop działa, ale WSL-owa dystrybucja
+   `docker-desktop` nie startowała; po ręcznym starcie `docker ps` odpowiada,
+   ale `task dev-db` nie zdążył postawić baz). Uruchomione i ZIELONE:
+   `migrations-check` (3), `test-unit` (240), `fe-test` (198 w 19 plikach),
+   `typecheck` (mypy 116 + vue-tsc), `lint`, `format-check` (126),
+   `fe-build`. NIEURUCHOMIONE: `test-int`, `test-api`
+   (wymagają `TEST_DATABASE_URL`) oraz E2E. Proszę o uruchomienie
+   `task dev-db && task check` na sprawnym Dockerze przed uznaniem batcha za
+   DONE — testy z §Tests są napisane i to one weryfikują ADR-012 i brak
+   live-sync. **Nie zgaduję ich wyniku i nie raportuję jako zielonych.**
+2. Nowych decyzji-bramek nie ma; D15 i D16 pozostają OPEN w 02_DECISIONS.
+   B07 dziedziczy stan faktyczny D16 (ADMIN widzi cudze encje na ścieżkach
+   użytkownika) i asercjonuje go testem
+   `test_admin_widzi_cudzy_szablon_na_sciezkach_uzytkownika`.

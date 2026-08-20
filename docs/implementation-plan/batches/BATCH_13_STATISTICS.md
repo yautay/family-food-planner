@@ -23,6 +23,16 @@ Batch zastaje (po B06 + R3):
 - `backend/app/modules/planning/` — `plan_days/plan_meals/plan_meal_items`
   + serwis z `ScopedQuery`; `GET /plan/days?from=&to=` już zwraca nutrition
   per dzień (04_API §2).
+- **`frontend/src/components/charts/BarChart.vue` ISTNIEJE od B07 — REUŻYJ,
+  nie pisz drugiego.** Kontrakt: `data: BarDatum[]`, gdzie
+  `BarDatum = {label, title?, segments: BarSegment[], highlighted?}`
+  i `BarSegment = {label, value (string dziesiętny), colorClass}`; do tego
+  `target?: string | null` (linia celu), `unit`, `title`, `testid`.
+  Słupek jest STACKOWANY, gdy `segments` ma więcej niż jeden element — czyli
+  makro stacked z karty B13 nie wymaga zmian w komponencie, tylko innych
+  danych. Skala jest WSPÓLNA dla wszystkich słupków i wciąga `target`, więc
+  linia celu nigdy nie wypada z kadru. Testy: `BarChart.spec.ts` (9 przypadków).
+  `TrendLine` nadal do napisania w tym batchu.
 - `user_nutrition_goals` (03_DATABASE §2): historia celów po `valid_from`,
   `UNIQUE(user_id, valid_from)`; `users.ui_settings` JSONB — progi statusów
   (D9: domyślnie 90–110%, konfigurowalne).

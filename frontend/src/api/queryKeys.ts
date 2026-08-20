@@ -48,6 +48,16 @@ export const queryKeys = {
   goals: {
     all: ['goals'] as const,
   },
+  templates: {
+    all: ['templates'] as const,
+    days: ['templates', 'days'] as const,
+    day: (id: number) => ['templates', 'days', id] as const,
+    weeks: ['templates', 'weeks'] as const,
+    week: (id: number) => ['templates', 'weeks', id] as const,
+  },
+  cycles: {
+    all: ['cycles'] as const,
+  },
   recipes: {
     all: ['recipes'] as const,
     list: (filters: RecipesFilters) => ['recipes', 'list', filters] as const,

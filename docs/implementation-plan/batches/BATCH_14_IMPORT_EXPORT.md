@@ -25,6 +25,26 @@ Batch zastaje (po R3):
   kanoniczne, kategorie, unit-weights, retail, sklepy, tagi), recipes,
   planning (dni/szablony/cykle), pantry, shopping (konfiguracje tur, listy),
   goals, member_profiles.
+- **Kontrakt payloadu szablonów (stan faktyczny po B07)** — eksport i import
+  MUSZĄ go respektować, bo payload to JSONB, a nie relacje:
+  - `day_templates.payload`:
+    `{v: 1, title: str|null, meals: [{name, kcal_target: str|null, position,
+    items: [{recipe_id|product_id, amount: str|null, amount_unit: str|null,
+    servings: str, position, servings_split: [{member_profile_id,
+    multiplier: str}]}]}]}`,
+  - `week_templates.payload`: `{v: 1, days: [{offset: 0..6, day: <payload dnia>}]}`,
+  - `week_cycles`: `name`, `template_ids BIGINT[]` (kolejność = rotacja),
+    `start_date DATE|null`.
+  Wszystkie liczby w payloadzie są STRINGAMI dziesiętnymi (ADR-008) — import,
+  który wpuści floaty, cicho zepsuje ilości. Schematy Pydantic do reużycia:
+  `planning/schemas.py::{DayTemplatePayload, WeekTemplatePayload}` (walidują
+  też przy odczycie, `extra="forbid"`, `v` jako `Literal[1]`).
+  **Import MUSI przemapować id**: `recipe_id`/`product_id`/`member_profile_id`
+  wewnątrz payloadu i `template_ids` w cyklach to referencje, których baza nie
+  pilnuje FK — po remapowaniu trzeba je zwalidować, inaczej instancjacja
+  szablonu padnie 422 (`_assert_references_alive`) albo zostawi cykl
+  wskazujący w pustkę. Zmiana kształtu payloadu = `v: 2` + konwersja przy
+  odczycie (nie ma jej jeszcze).
 - `audit_entries` (03_DATABASE §10) + serwis audytu z B03; storage uploadów
   `/data/uploads` (03_DATABASE §11) ze zdjęciami przepisów/produktów.
 - Strony `UstawieniaPage` i `AdminPage` (05_FRONTEND §3).

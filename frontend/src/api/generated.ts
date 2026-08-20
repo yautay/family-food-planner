@@ -651,8 +651,169 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Głęboka kopia dnia na daty albo posiłku do dnia (dopisuje, nie nadpisuje) */
+        /** Głęboka kopia dnia/posiłku albo powielenie bloku N dni (dopisuje, nie nadpisuje) */
         post: operations["copy_api_v1_plan_copy_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/templates/days": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Widoczne szablony dnia (bez payloadów) */
+        get: operations["list_day_templates_api_v1_templates_days_get"];
+        put?: never;
+        /** Nowy szablon dnia — payload wprost albo zbudowany z dnia planu */
+        post: operations["create_day_template_api_v1_templates_days_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/templates/days/{template_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Szablon dnia z payloadem */
+        get: operations["get_day_template_api_v1_templates_days__template_id__get"];
+        /** Nadpisanie CAŁEGO szablonu dnia (edycji per posiłek nie ma — 03_DB §6) */
+        put: operations["update_day_template_api_v1_templates_days__template_id__put"];
+        post?: never;
+        /** Usunięcie szablonu dnia (właściciel albo ADMIN) */
+        delete: operations["delete_day_template_api_v1_templates_days__template_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/templates/days/{template_id}/instantiate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Szablon dnia → plan na wskazane daty (dopisuje, jak /plan/copy) */
+        post: operations["instantiate_day_template_api_v1_templates_days__template_id__instantiate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/templates/weeks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Widoczne szablony tygodnia (bez payloadów) */
+        get: operations["list_week_templates_api_v1_templates_weeks_get"];
+        put?: never;
+        /** Nowy szablon tygodnia — payload wprost albo z 7 dni planu */
+        post: operations["create_week_template_api_v1_templates_weeks_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/templates/weeks/{template_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Szablon tygodnia z payloadem */
+        get: operations["get_week_template_api_v1_templates_weeks__template_id__get"];
+        /** Nadpisanie CAŁEGO szablonu tygodnia */
+        put: operations["update_week_template_api_v1_templates_weeks__template_id__put"];
+        post?: never;
+        /** Usunięcie szablonu tygodnia (409, gdy używa go cykl) */
+        delete: operations["delete_week_template_api_v1_templates_weeks__template_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/templates/weeks/{template_id}/instantiate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Szablon tygodnia → 7 dni planu od poniedziałku (jedna transakcja) */
+        post: operations["instantiate_week_template_api_v1_templates_weeks__template_id__instantiate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cycles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Widoczne cykle tygodni */
+        get: operations["list_cycles_api_v1_cycles_get"];
+        put?: never;
+        /** Nowy cykl — kolejność szablonów JEST rotacją */
+        post: operations["create_cycle_api_v1_cycles_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cycles/{cycle_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Edycja cyklu (nazwa, kolejność szablonów, start rotacji) */
+        put: operations["update_cycle_api_v1_cycles__cycle_id__put"];
+        post?: never;
+        /** Usunięcie cyklu (szablonów nie rusza) */
+        delete: operations["delete_cycle_api_v1_cycles__cycle_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cycles/{cycle_id}/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rotacyjna instancjacja szablonów cyklu na zakres dat (od poniedziałku) */
+        post: operations["apply_cycle_api_v1_cycles__cycle_id__apply_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -818,6 +979,72 @@ export interface components {
             household?: components["schemas"]["HouseholdSummary"] | null;
         };
         /**
+         * CycleApplyRequest
+         * @description Zastosowanie cyklu na zakres dat. `date_from` MUSI być poniedziałkiem.
+         */
+        CycleApplyRequest: {
+            /**
+             * Date From
+             * Format: date
+             */
+            date_from: string;
+            /**
+             * Date To
+             * Format: date
+             */
+            date_to: string;
+        };
+        /** CycleListResponse */
+        CycleListResponse: {
+            /** Items */
+            items: components["schemas"]["CycleRead"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * CycleRead
+         * @description Cykl w odczycie — z nazwami szablonów, żeby UI nie dociągał ich osobno.
+         */
+        CycleRead: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            scope: components["schemas"]["Scope"];
+            /** Owner User Id */
+            owner_user_id: number;
+            /** Template Ids */
+            template_ids: number[];
+            /** Template Names */
+            template_names: (string | null)[];
+            /** Start Date */
+            start_date: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * CycleWriteRequest
+         * @description POST/PUT cyklu: nazwa + kolejność szablonów tygodnia (rotacja A→B→C).
+         */
+        CycleWriteRequest: {
+            /** Name */
+            name: string;
+            /** @default private */
+            scope: components["schemas"]["Scope"];
+            /** Template Ids */
+            template_ids: number[];
+            /** Start Date */
+            start_date?: string | null;
+        };
+        /**
          * DayGoalProgressRead
          * @description Cztery kafelki widoku 1: wartość/cel/delta/status dla kcal i makro.
          */
@@ -858,6 +1085,80 @@ export interface components {
             created_at: string | null;
             /** Updated At */
             updated_at: string | null;
+        };
+        /**
+         * DayTemplatePayload
+         * @description Payload szablonu dnia (`v:1`): tytuł dnia + posiłki. Bez ani jednej daty.
+         */
+        "DayTemplatePayload-Input": {
+            /**
+             * V
+             * @default 1
+             * @constant
+             */
+            v: 1;
+            /** Title */
+            title?: string | null;
+            /** Meals */
+            meals?: components["schemas"]["TemplateMealPayload-Input"][];
+        };
+        /**
+         * DayTemplatePayload
+         * @description Payload szablonu dnia (`v:1`): tytuł dnia + posiłki. Bez ani jednej daty.
+         */
+        "DayTemplatePayload-Output": {
+            /**
+             * V
+             * @default 1
+             * @constant
+             */
+            v: 1;
+            /** Title */
+            title?: string | null;
+            /** Meals */
+            meals?: components["schemas"]["TemplateMealPayload-Output"][];
+        };
+        /**
+         * DayTemplateReadFull
+         * @description Szablon dnia z payloadem — odczyt pojedynczego szablonu.
+         */
+        DayTemplateReadFull: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            scope: components["schemas"]["Scope"];
+            /** Owner User Id */
+            owner_user_id: number;
+            /** Summary */
+            summary: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            payload: components["schemas"]["DayTemplatePayload-Output"];
+        };
+        /**
+         * DayTemplateWriteRequest
+         * @description POST/PUT szablonu dnia: payload wprost ALBO `from_date` (zbuduj z planu).
+         *
+         *     PUT nadpisuje CAŁY payload (03_DATABASE §6) — edycji „per posiłek" nie ma
+         *     i mieć nie będzie; edycją jest plan plus ponowny zapis szablonu.
+         */
+        DayTemplateWriteRequest: {
+            /** Name */
+            name: string;
+            /** @default private */
+            scope: components["schemas"]["Scope"];
+            payload?: components["schemas"]["DayTemplatePayload-Input"] | null;
+            /** From Date */
+            from_date?: string | null;
         };
         /**
          * DaysResponse
@@ -1122,6 +1423,41 @@ export interface components {
         HouseholdUpdateRequest: {
             /** Name */
             name?: string | null;
+        };
+        /**
+         * InstantiateDayRequest
+         * @description Instancjacja szablonu dnia na wskazane daty (dopisuje, jak `/plan/copy`).
+         */
+        InstantiateDayRequest: {
+            /** Dates */
+            dates: string[];
+        };
+        /**
+         * InstantiateResponse
+         * @description Dni utworzone przez instancjację albo apply cyklu.
+         *
+         *     `warnings` niesie ostrzeżenia miękkie (np. zarchiwizowany przepis w payloadzie):
+         *     instancjacja się udała, ale użytkownik powinien wiedzieć, co wpadło do planu.
+         *     Twarde braki (nieistniejący przepis/produkt) kończą się 422, nie ostrzeżeniem.
+         */
+        InstantiateResponse: {
+            /** Items */
+            items: components["schemas"]["DayRead"][];
+            /** Total */
+            total: number;
+            /** Warnings */
+            warnings?: string[];
+        };
+        /**
+         * InstantiateWeekRequest
+         * @description Instancjacja szablonu tygodnia — `week_start` MUSI być poniedziałkiem.
+         */
+        InstantiateWeekRequest: {
+            /**
+             * Week Start
+             * Format: date
+             */
+            week_start: string;
         };
         /**
          * ItemCreateRequest
@@ -1392,13 +1728,21 @@ export interface components {
              * What
              * @enum {string}
              */
-            what: "day" | "meal";
+            what: "day" | "meal" | "block";
             /** Source Date */
             source_date?: string | null;
             /** Source Meal Id */
             source_meal_id?: number | null;
             /** Target Dates */
-            target_dates: string[];
+            target_dates?: string[];
+            /** Source From */
+            source_from?: string | null;
+            /** Source Days */
+            source_days?: number | null;
+            /** Repeat Each */
+            repeat_each?: number | null;
+            /** Target Start */
+            target_start?: string | null;
         };
         /**
          * PlanDayUpsertRequest
@@ -1868,6 +2212,145 @@ export interface components {
             is_system: boolean;
         };
         /**
+         * TemplateItemPayload
+         * @description Pozycja posiłku w szablonie: przepis ALBO produkt luzem ze znormalizowaną ilością.
+         */
+        "TemplateItemPayload-Input": {
+            /** Recipe Id */
+            recipe_id?: number | null;
+            /** Product Id */
+            product_id?: number | null;
+            /** Amount */
+            amount?: number | string | null;
+            amount_unit?: components["schemas"]["AmountUnit"] | null;
+            /**
+             * Servings
+             * @default 1
+             */
+            servings: number | string;
+            /**
+             * Position
+             * @default 0
+             */
+            position: number;
+            /** Servings Split */
+            servings_split?: components["schemas"]["TemplateSplitPayload-Input"][];
+        };
+        /**
+         * TemplateItemPayload
+         * @description Pozycja posiłku w szablonie: przepis ALBO produkt luzem ze znormalizowaną ilością.
+         */
+        "TemplateItemPayload-Output": {
+            /** Recipe Id */
+            recipe_id?: number | null;
+            /** Product Id */
+            product_id?: number | null;
+            /** Amount */
+            amount?: string | null;
+            amount_unit?: components["schemas"]["AmountUnit"] | null;
+            /**
+             * Servings
+             * @default 1
+             */
+            servings: string;
+            /**
+             * Position
+             * @default 0
+             */
+            position: number;
+            /** Servings Split */
+            servings_split?: components["schemas"]["TemplateSplitPayload-Output"][];
+        };
+        /**
+         * TemplateListResponse
+         * @description Lista szablonów (jeden kształt dla dni i tygodni).
+         */
+        TemplateListResponse: {
+            /** Items */
+            items: components["schemas"]["TemplateSummaryRead"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * TemplateMealPayload
+         * @description Posiłek w szablonie: nazwa, opcjonalny cel kcal, kolejność i pozycje.
+         */
+        "TemplateMealPayload-Input": {
+            /** Name */
+            name: string;
+            /** Kcal Target */
+            kcal_target?: number | string | null;
+            /**
+             * Position
+             * @default 0
+             */
+            position: number;
+            /** Items */
+            items?: components["schemas"]["TemplateItemPayload-Input"][];
+        };
+        /**
+         * TemplateMealPayload
+         * @description Posiłek w szablonie: nazwa, opcjonalny cel kcal, kolejność i pozycje.
+         */
+        "TemplateMealPayload-Output": {
+            /** Name */
+            name: string;
+            /** Kcal Target */
+            kcal_target?: string | null;
+            /**
+             * Position
+             * @default 0
+             */
+            position: number;
+            /** Items */
+            items?: components["schemas"]["TemplateItemPayload-Output"][];
+        };
+        /**
+         * TemplateSplitPayload
+         * @description Rozkład rodzinny pozycji w szablonie — te same pola, co w planie.
+         */
+        "TemplateSplitPayload-Input": {
+            /** Member Profile Id */
+            member_profile_id: number;
+            /** Multiplier */
+            multiplier: number | string;
+        };
+        /**
+         * TemplateSplitPayload
+         * @description Rozkład rodzinny pozycji w szablonie — te same pola, co w planie.
+         */
+        "TemplateSplitPayload-Output": {
+            /** Member Profile Id */
+            member_profile_id: number;
+            /** Multiplier */
+            multiplier: string;
+        };
+        /**
+         * TemplateSummaryRead
+         * @description Szablon na liście — bez payloadu (lista szablonów nie jest eksportem).
+         */
+        TemplateSummaryRead: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            scope: components["schemas"]["Scope"];
+            /** Owner User Id */
+            owner_user_id: number;
+            /** Summary */
+            summary: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
          * UiSettingsPatchRequest
          * @description Częściowa zmiana ustawień UI zalogowanego użytkownika (04_API §2).
          *
@@ -2019,6 +2502,91 @@ export interface components {
          * @enum {string}
          */
         VerificationStatus: "unverified" | "verified";
+        /**
+         * WeekTemplateDayPayload
+         * @description Jeden dzień szablonu tygodnia: offset 0-6 od poniedziałku + payload dnia.
+         */
+        "WeekTemplateDayPayload-Input": {
+            /** Offset */
+            offset: number;
+            day: components["schemas"]["DayTemplatePayload-Input"];
+        };
+        /**
+         * WeekTemplateDayPayload
+         * @description Jeden dzień szablonu tygodnia: offset 0-6 od poniedziałku + payload dnia.
+         */
+        "WeekTemplateDayPayload-Output": {
+            /** Offset */
+            offset: number;
+            day: components["schemas"]["DayTemplatePayload-Output"];
+        };
+        /**
+         * WeekTemplatePayload
+         * @description Payload szablonu tygodnia (`v:1`): dni po offsetach, każdy w kształcie dnia.
+         */
+        "WeekTemplatePayload-Input": {
+            /**
+             * V
+             * @default 1
+             * @constant
+             */
+            v: 1;
+            /** Days */
+            days?: components["schemas"]["WeekTemplateDayPayload-Input"][];
+        };
+        /**
+         * WeekTemplatePayload
+         * @description Payload szablonu tygodnia (`v:1`): dni po offsetach, każdy w kształcie dnia.
+         */
+        "WeekTemplatePayload-Output": {
+            /**
+             * V
+             * @default 1
+             * @constant
+             */
+            v: 1;
+            /** Days */
+            days?: components["schemas"]["WeekTemplateDayPayload-Output"][];
+        };
+        /**
+         * WeekTemplateReadFull
+         * @description Szablon tygodnia z payloadem.
+         */
+        WeekTemplateReadFull: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            scope: components["schemas"]["Scope"];
+            /** Owner User Id */
+            owner_user_id: number;
+            /** Summary */
+            summary: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            payload: components["schemas"]["WeekTemplatePayload-Output"];
+        };
+        /**
+         * WeekTemplateWriteRequest
+         * @description POST/PUT szablonu tygodnia: payload wprost ALBO `from_week_start` (7 dni planu).
+         */
+        WeekTemplateWriteRequest: {
+            /** Name */
+            name: string;
+            /** @default private */
+            scope: components["schemas"]["Scope"];
+            payload?: components["schemas"]["WeekTemplatePayload-Input"] | null;
+            /** From Week Start */
+            from_week_start?: string | null;
+        };
     };
     responses: never;
     parameters: never;
@@ -4050,6 +4618,551 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DaysResponse"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_day_templates_api_v1_templates_days_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateListResponse"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_day_template_api_v1_templates_days_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DayTemplateWriteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DayTemplateReadFull"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_day_template_api_v1_templates_days__template_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DayTemplateReadFull"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_day_template_api_v1_templates_days__template_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DayTemplateWriteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DayTemplateReadFull"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_day_template_api_v1_templates_days__template_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    instantiate_day_template_api_v1_templates_days__template_id__instantiate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InstantiateDayRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstantiateResponse"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_week_templates_api_v1_templates_weeks_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateListResponse"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_week_template_api_v1_templates_weeks_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WeekTemplateWriteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WeekTemplateReadFull"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_week_template_api_v1_templates_weeks__template_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WeekTemplateReadFull"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_week_template_api_v1_templates_weeks__template_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WeekTemplateWriteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WeekTemplateReadFull"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_week_template_api_v1_templates_weeks__template_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    instantiate_week_template_api_v1_templates_weeks__template_id__instantiate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InstantiateWeekRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstantiateResponse"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_cycles_api_v1_cycles_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CycleListResponse"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_cycle_api_v1_cycles_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CycleWriteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CycleRead"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_cycle_api_v1_cycles__cycle_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cycle_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CycleWriteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CycleRead"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_cycle_api_v1_cycles__cycle_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cycle_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    apply_cycle_api_v1_cycles__cycle_id__apply_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cycle_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CycleApplyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstantiateResponse"];
                 };
             };
             /** @description Błąd */

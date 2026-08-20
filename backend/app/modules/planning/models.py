@@ -14,6 +14,14 @@ produktu użytego w planie nie da się usunąć (02_DOMAIN §13.4, ADR-012).
 Wartości odżywcze NIE mają tu żadnej kolumny i mieć nie będą: liczy je silnik
 przy każdym odczycie (niezmiennik 02_DOMAIN §13.2), dzięki czemu zmiana mnożnika
 porcji zmienia wszystko spójnie (§13.3).
+
+Szablony i cykle (BATCH_07, 03_DATABASE §6) siedzą w tym samym module, bo ich
+jedyną treścią jest struktura planu: `day_templates`/`week_templates` trzymają
+ZAMROŻONĄ kopię struktury w `payload JSONB` (bez dat), a `week_cycles` — samą
+kolejność szablonów. Szablon nie jest edytowalny relacyjnie: PUT nadpisuje cały
+payload (03_DATABASE §6). Referencje `recipe_id`/`product_id` żyją WEWNĄTRZ
+payloadu, więc baza nie ma na nie FK — blokadę usuwania liczy serwis zapytaniem
+po indeksie GIN (ADR-012), a nie RESTRICT.
 """
 
 from __future__ import annotations
@@ -27,12 +35,14 @@ from sqlalchemy import (
     Date,
     ForeignKey,
     Identity,
+    Index,
     Integer,
     Numeric,
     Text,
     UniqueConstraint,
     text,
 )
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base, TimestampMixin
@@ -40,7 +50,16 @@ from app.core.scope import ScopedMixin, scope_check_constraint
 from app.modules.catalog.units import AmountUnit
 from app.modules.recipes.models import AMOUNT_UNIT_ENUM
 
-__all__ = ["PlanDay", "PlanItemServing", "PlanMeal", "PlanMealItem"]
+__all__ = [
+    "PAYLOAD_GIN_OPS",
+    "DayTemplate",
+    "PlanDay",
+    "PlanItemServing",
+    "PlanMeal",
+    "PlanMealItem",
+    "WeekCycle",
+    "WeekTemplate",
+]
 
 #: Pozycja pozycji/posiłku na liście — porządek ustala użytkownik, nie baza.
 _POSITION_DEFAULT = 0
@@ -188,3 +207,81 @@ class PlanItemServing(TimestampMixin, Base):
     multiplier: Mapped[Decimal] = mapped_column(Numeric(4, 2), nullable=False)
 
     item: Mapped[PlanMealItem] = relationship(back_populates="servings_split")
+
+
+# --- szablony i cykle (BATCH_07, 03_DATABASE §6) -------------------------------------
+
+#: Klasa operatorów GIN dla payloadów szablonów (ADR-012). `jsonb_path_ops` jest
+#: mniejszy i szybszy od domyślnego `jsonb_ops`, ale obsługuje WYŁĄCZNIE operatory
+#: `@>`, `@?` i `@@` — dlatego zliczanie referencji MUSI używać containmentu `@>`,
+#: a nie `?`/`->`. Wybór jest wiążący dla serwisu: zmiana operatora bez zmiany tej
+#: klasy cicho zdegraduje zapytanie do seq scanu.
+PAYLOAD_GIN_OPS = "jsonb_path_ops"
+
+
+class DayTemplate(TimestampMixin, ScopedMixin, Base):
+    """Szablon dnia: nazwa + zamrożona struktura posiłków w `payload` (02_DOMAIN §7).
+
+    Payload NIE ma dat — szablon jest przepisem na dzień, nie dniem. Kształt
+    pilnuje Pydantic (`DayTemplatePayload`, wersja `v:1`); baza widzi tylko JSONB,
+    bo szablon nadpisywany jest całością i nie ma po nim zapytań strukturalnych
+    poza zliczaniem referencji.
+    """
+
+    __tablename__ = "day_templates"
+    __table_args__ = (
+        # Własne __table_args__ MUSZĄ zawierać CHECK-a wzorca scope (03_DATABASE §4).
+        scope_check_constraint(),
+        Index(
+            "ix_day_templates_payload_gin",
+            "payload",
+            postgresql_using="gin",
+            postgresql_ops={"payload": PAYLOAD_GIN_OPS},
+        ),
+    )
+
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    payload: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+
+
+class WeekTemplate(TimestampMixin, ScopedMixin, Base):
+    """Szablon tygodnia: `payload` z listą dni po offsetach 0-6 (02_DOMAIN §7).
+
+    Każdy dzień w payloadzie ma dokładnie ten sam kształt, co payload szablonu
+    dnia — jeden kontrakt zamiast dwóch, więc instancjacja tygodnia to siedem
+    razy ta sama operacja co instancjacja dnia.
+    """
+
+    __tablename__ = "week_templates"
+    __table_args__ = (
+        scope_check_constraint(),
+        Index(
+            "ix_week_templates_payload_gin",
+            "payload",
+            postgresql_using="gin",
+            postgresql_ops={"payload": PAYLOAD_GIN_OPS},
+        ),
+    )
+
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    payload: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+
+
+class WeekCycle(TimestampMixin, ScopedMixin, Base):
+    """Cykl tygodni A→B→C: uporządkowana lista szablonów tygodnia + start rotacji.
+
+    `template_ids` jest TABLICĄ bez FK (03_DATABASE §6) — Postgres nie potrafi
+    postawić klucza obcego na elemencie tablicy. Spójności pilnuje serwis:
+    usunięcie szablonu użytego w cyklu kończy się 409 z nazwą cyklu w `used_in`,
+    a `apply` odrzuca cykl wskazujący na nieistniejący szablon.
+
+    `start_date` wyznacza, od którego szablonu startuje rotacja dla danego
+    tygodnia; `NULL` znaczy „od pierwszego z listy".
+    """
+
+    __tablename__ = "week_cycles"
+
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    #: Kolejność ma znaczenie — to ona jest rotacją A→B→C→A.
+    template_ids: Mapped[list[int]] = mapped_column(ARRAY(BigInteger), nullable=False)
+    start_date: Mapped[date | None] = mapped_column(Date, nullable=True)

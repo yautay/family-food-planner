@@ -27,7 +27,15 @@ from app.modules.catalog.naming import normalize_name
 from app.modules.catalog.units import AmountUnit, normalize_unit_label
 from app.modules.households.models import Household, MemberProfile
 from app.modules.nutrition.models import UserNutritionGoal
-from app.modules.planning.models import PlanDay, PlanItemServing, PlanMeal, PlanMealItem
+from app.modules.planning.models import (
+    DayTemplate,
+    PlanDay,
+    PlanItemServing,
+    PlanMeal,
+    PlanMealItem,
+    WeekCycle,
+    WeekTemplate,
+)
 from app.modules.recipes.models import Recipe, RecipeIngredient, RecipeRating, Tag, recipe_tags
 
 #: Hasło używane przez fabryki. Nie jest sekretem — istnieje wyłącznie w testach.
@@ -407,3 +415,125 @@ async def assign_to_household(
     await session.commit()
     await session.refresh(user)
     return user
+
+
+async def create_day_template(
+    session: AsyncSession,
+    *,
+    owner: User,
+    name: str = "Dzień warzywny",
+    payload: dict[str, object] | None = None,
+    scope: Scope = Scope.PRIVATE,
+) -> DayTemplate:
+    """Szablon dnia z payloadem `v:1` (domyślnie pusty — testy scope go nie potrzebują).
+
+    Fabryka zapisuje payload TAK, JAK ROBI TO SERWIS: Decimale jako stringi
+    dziesiętne (ADR-008). Podanie floatów w teście złamałoby ten kontrakt cicho.
+    """
+    template = DayTemplate(
+        name=name,
+        payload=payload if payload is not None else {"v": 1, "title": None, "meals": []},
+        **ScopedQuery.ownership_for_create(owner, scope),
+    )
+    session.add(template)
+    await session.commit()
+    await session.refresh(template)
+    return template
+
+
+async def create_week_template(
+    session: AsyncSession,
+    *,
+    owner: User,
+    name: str = "Tydzień bazowy",
+    payload: dict[str, object] | None = None,
+    scope: Scope = Scope.PRIVATE,
+) -> WeekTemplate:
+    """Szablon tygodnia z payloadem `v:1`."""
+    template = WeekTemplate(
+        name=name,
+        payload=payload if payload is not None else {"v": 1, "days": []},
+        **ScopedQuery.ownership_for_create(owner, scope),
+    )
+    session.add(template)
+    await session.commit()
+    await session.refresh(template)
+    return template
+
+
+async def create_week_cycle(
+    session: AsyncSession,
+    *,
+    owner: User,
+    name: str = "Cykl A-B",
+    template_ids: list[int] | None = None,
+    start_date: date | None = None,
+    scope: Scope = Scope.PRIVATE,
+) -> WeekCycle:
+    """Cykl tygodni — kolejność `template_ids` JEST rotacją."""
+    cycle = WeekCycle(
+        name=name,
+        template_ids=template_ids if template_ids is not None else [],
+        start_date=start_date,
+        **ScopedQuery.ownership_for_create(owner, scope),
+    )
+    session.add(cycle)
+    await session.commit()
+    await session.refresh(cycle)
+    return cycle
+
+
+def day_payload(
+    *,
+    title: str | None = None,
+    meals: list[dict[str, object]] | None = None,
+) -> dict[str, object]:
+    """Payload szablonu dnia w kształcie kontraktu `v:1` (skrót dla testów)."""
+    return {"v": 1, "title": title, "meals": meals if meals is not None else []}
+
+
+def template_meal(
+    *,
+    name: str = "Obiad",
+    position: int = 0,
+    kcal_target: str | None = None,
+    items: list[dict[str, object]] | None = None,
+) -> dict[str, object]:
+    """Posiłek w payloadzie szablonu."""
+    return {
+        "name": name,
+        "kcal_target": kcal_target,
+        "position": position,
+        "items": items if items is not None else [],
+    }
+
+
+def template_recipe_item(
+    recipe_id: int, *, servings: str = "1", position: int = 0
+) -> dict[str, object]:
+    """Pozycja szablonu z przepisem (bez ilości — steruje nią mnożnik)."""
+    return {
+        "recipe_id": recipe_id,
+        "servings": servings,
+        "position": position,
+        "servings_split": [],
+    }
+
+
+def template_product_item(
+    product_id: int,
+    *,
+    amount: str = "100.000",
+    amount_unit: str = "g",
+    servings: str = "1",
+    position: int = 0,
+) -> dict[str, object]:
+    """Pozycja szablonu z produktem luzem (ilość ZNORMALIZOWANA, jak w planie)."""
+    return {
+        "product_id": product_id,
+        "amount": amount,
+        "amount_unit": amount_unit,
+        "servings": servings,
+        "position": position,
+        "servings_split": [],
+    }

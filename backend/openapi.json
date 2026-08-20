@@ -2900,7 +2900,7 @@
         "tags": [
           "planning"
         ],
-        "summary": "Głęboka kopia dnia na daty albo posiłku do dnia (dopisuje, nie nadpisuje)",
+        "summary": "Głęboka kopia dnia/posiłku albo powielenie bloku N dni (dopisuje, nie nadpisuje)",
         "operationId": "copy_api_v1_plan_copy_post",
         "requestBody": {
           "content": {
@@ -2919,6 +2919,707 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/DaysResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/templates/days": {
+      "get": {
+        "tags": [
+          "planning"
+        ],
+        "summary": "Widoczne szablony dnia (bez payloadów)",
+        "operationId": "list_day_templates_api_v1_templates_days_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemplateListResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "planning"
+        ],
+        "summary": "Nowy szablon dnia — payload wprost albo zbudowany z dnia planu",
+        "operationId": "create_day_template_api_v1_templates_days_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DayTemplateWriteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DayTemplateReadFull"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/templates/days/{template_id}": {
+      "get": {
+        "tags": [
+          "planning"
+        ],
+        "summary": "Szablon dnia z payloadem",
+        "operationId": "get_day_template_api_v1_templates_days__template_id__get",
+        "parameters": [
+          {
+            "name": "template_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Template Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DayTemplateReadFull"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "planning"
+        ],
+        "summary": "Nadpisanie CAŁEGO szablonu dnia (edycji per posiłek nie ma — 03_DB §6)",
+        "operationId": "update_day_template_api_v1_templates_days__template_id__put",
+        "parameters": [
+          {
+            "name": "template_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Template Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DayTemplateWriteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DayTemplateReadFull"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "planning"
+        ],
+        "summary": "Usunięcie szablonu dnia (właściciel albo ADMIN)",
+        "operationId": "delete_day_template_api_v1_templates_days__template_id__delete",
+        "parameters": [
+          {
+            "name": "template_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Template Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/templates/days/{template_id}/instantiate": {
+      "post": {
+        "tags": [
+          "planning"
+        ],
+        "summary": "Szablon dnia → plan na wskazane daty (dopisuje, jak /plan/copy)",
+        "operationId": "instantiate_day_template_api_v1_templates_days__template_id__instantiate_post",
+        "parameters": [
+          {
+            "name": "template_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Template Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InstantiateDayRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstantiateResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/templates/weeks": {
+      "get": {
+        "tags": [
+          "planning"
+        ],
+        "summary": "Widoczne szablony tygodnia (bez payloadów)",
+        "operationId": "list_week_templates_api_v1_templates_weeks_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemplateListResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "planning"
+        ],
+        "summary": "Nowy szablon tygodnia — payload wprost albo z 7 dni planu",
+        "operationId": "create_week_template_api_v1_templates_weeks_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WeekTemplateWriteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WeekTemplateReadFull"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/templates/weeks/{template_id}": {
+      "get": {
+        "tags": [
+          "planning"
+        ],
+        "summary": "Szablon tygodnia z payloadem",
+        "operationId": "get_week_template_api_v1_templates_weeks__template_id__get",
+        "parameters": [
+          {
+            "name": "template_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Template Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WeekTemplateReadFull"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "planning"
+        ],
+        "summary": "Nadpisanie CAŁEGO szablonu tygodnia",
+        "operationId": "update_week_template_api_v1_templates_weeks__template_id__put",
+        "parameters": [
+          {
+            "name": "template_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Template Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WeekTemplateWriteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WeekTemplateReadFull"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "planning"
+        ],
+        "summary": "Usunięcie szablonu tygodnia (409, gdy używa go cykl)",
+        "operationId": "delete_week_template_api_v1_templates_weeks__template_id__delete",
+        "parameters": [
+          {
+            "name": "template_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Template Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/templates/weeks/{template_id}/instantiate": {
+      "post": {
+        "tags": [
+          "planning"
+        ],
+        "summary": "Szablon tygodnia → 7 dni planu od poniedziałku (jedna transakcja)",
+        "operationId": "instantiate_week_template_api_v1_templates_weeks__template_id__instantiate_post",
+        "parameters": [
+          {
+            "name": "template_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Template Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InstantiateWeekRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstantiateResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cycles": {
+      "get": {
+        "tags": [
+          "planning"
+        ],
+        "summary": "Widoczne cykle tygodni",
+        "operationId": "list_cycles_api_v1_cycles_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CycleListResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "planning"
+        ],
+        "summary": "Nowy cykl — kolejność szablonów JEST rotacją",
+        "operationId": "create_cycle_api_v1_cycles_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CycleWriteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CycleRead"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cycles/{cycle_id}": {
+      "put": {
+        "tags": [
+          "planning"
+        ],
+        "summary": "Edycja cyklu (nazwa, kolejność szablonów, start rotacji)",
+        "operationId": "update_cycle_api_v1_cycles__cycle_id__put",
+        "parameters": [
+          {
+            "name": "cycle_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Cycle Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CycleWriteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CycleRead"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "planning"
+        ],
+        "summary": "Usunięcie cyklu (szablonów nie rusza)",
+        "operationId": "delete_cycle_api_v1_cycles__cycle_id__delete",
+        "parameters": [
+          {
+            "name": "cycle_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Cycle Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cycles/{cycle_id}/apply": {
+      "post": {
+        "tags": [
+          "planning"
+        ],
+        "summary": "Rotacyjna instancjacja szablonów cyklu na zakres dat (od poniedziałku)",
+        "operationId": "apply_cycle_api_v1_cycles__cycle_id__apply_post",
+        "parameters": [
+          {
+            "name": "cycle_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Cycle Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CycleApplyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstantiateResponse"
                 }
               }
             }
@@ -3357,6 +4058,166 @@
         "title": "CurrentUser",
         "description": "Odpowiedź `GET /auth/me` — to, co frontend wie o zalogowanym użytkowniku.\n\n`email` jako zwykły `str` (nie `EmailStr`) świadomie: walidacja adresu\nnależy do wejścia. Gdyby reguły `email-validator` się zaostrzyły, wiersz\nzapisany wcześniej wysadzałby ODCZYT (500) zamiast po prostu się wyświetlić."
       },
+      "CycleApplyRequest": {
+        "properties": {
+          "date_from": {
+            "type": "string",
+            "format": "date",
+            "title": "Date From"
+          },
+          "date_to": {
+            "type": "string",
+            "format": "date",
+            "title": "Date To"
+          }
+        },
+        "type": "object",
+        "required": [
+          "date_from",
+          "date_to"
+        ],
+        "title": "CycleApplyRequest",
+        "description": "Zastosowanie cyklu na zakres dat. `date_from` MUSI być poniedziałkiem."
+      },
+      "CycleListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CycleRead"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "CycleListResponse"
+      },
+      "CycleRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/Scope"
+          },
+          "owner_user_id": {
+            "type": "integer",
+            "title": "Owner User Id"
+          },
+          "template_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Template Ids"
+          },
+          "template_names": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Template Names"
+          },
+          "start_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Date"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "scope",
+          "owner_user_id",
+          "template_ids",
+          "template_names",
+          "start_date",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "CycleRead",
+        "description": "Cykl w odczycie — z nazwami szablonów, żeby UI nie dociągał ich osobno."
+      },
+      "CycleWriteRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/Scope",
+            "default": "private"
+          },
+          "template_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "maxItems": 26,
+            "minItems": 1,
+            "title": "Template Ids"
+          },
+          "start_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Date"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "template_ids"
+        ],
+        "title": "CycleWriteRequest",
+        "description": "POST/PUT cyklu: nazwa + kolejność szablonów tygodnia (rotacja A→B→C)."
+      },
       "DayGoalProgressRead": {
         "properties": {
           "kcal": {
@@ -3491,6 +4352,167 @@
         ],
         "title": "DayRead",
         "description": "Dzień planu razem z posiłkami, wartościami i postępem względem celu.\n\n`id` jest `null` dla dnia, którego jeszcze nie ma w bazie: otwarcie pustej\ndaty to normalna sytuacja, nie błąd 404 (dzień powstaje przy pierwszym\nposiłku albo przez PUT)."
+      },
+      "DayTemplatePayload-Input": {
+        "properties": {
+          "v": {
+            "type": "integer",
+            "const": 1,
+            "title": "V",
+            "default": 1
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "meals": {
+            "items": {
+              "$ref": "#/components/schemas/TemplateMealPayload-Input"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Meals"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "DayTemplatePayload",
+        "description": "Payload szablonu dnia (`v:1`): tytuł dnia + posiłki. Bez ani jednej daty."
+      },
+      "DayTemplatePayload-Output": {
+        "properties": {
+          "v": {
+            "type": "integer",
+            "const": 1,
+            "title": "V",
+            "default": 1
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "meals": {
+            "items": {
+              "$ref": "#/components/schemas/TemplateMealPayload-Output"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Meals"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "DayTemplatePayload",
+        "description": "Payload szablonu dnia (`v:1`): tytuł dnia + posiłki. Bez ani jednej daty."
+      },
+      "DayTemplateReadFull": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/Scope"
+          },
+          "owner_user_id": {
+            "type": "integer",
+            "title": "Owner User Id"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/DayTemplatePayload-Output"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "scope",
+          "owner_user_id",
+          "summary",
+          "created_at",
+          "updated_at",
+          "payload"
+        ],
+        "title": "DayTemplateReadFull",
+        "description": "Szablon dnia z payloadem — odczyt pojedynczego szablonu."
+      },
+      "DayTemplateWriteRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/Scope",
+            "default": "private"
+          },
+          "payload": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DayTemplatePayload-Input"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "from_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Date"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "DayTemplateWriteRequest",
+        "description": "POST/PUT szablonu dnia: payload wprost ALBO `from_date` (zbuduj z planu).\n\nPUT nadpisuje CAŁY payload (03_DATABASE §6) — edycji „per posiłek\" nie ma\ni mieć nie będzie; edycją jest plan plus ponowny zapis szablonu."
       },
       "DaysResponse": {
         "properties": {
@@ -4077,6 +5099,70 @@
         "type": "object",
         "title": "HouseholdUpdateRequest",
         "description": "Zmiana nazwy rodziny."
+      },
+      "InstantiateDayRequest": {
+        "properties": {
+          "dates": {
+            "items": {
+              "type": "string",
+              "format": "date"
+            },
+            "type": "array",
+            "maxItems": 62,
+            "minItems": 1,
+            "title": "Dates"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dates"
+        ],
+        "title": "InstantiateDayRequest",
+        "description": "Instancjacja szablonu dnia na wskazane daty (dopisuje, jak `/plan/copy`)."
+      },
+      "InstantiateResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DayRead"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "InstantiateResponse",
+        "description": "Dni utworzone przez instancjację albo apply cyklu.\n\n`warnings` niesie ostrzeżenia miękkie (np. zarchiwizowany przepis w payloadzie):\ninstancjacja się udała, ale użytkownik powinien wiedzieć, co wpadło do planu.\nTwarde braki (nieistniejący przepis/produkt) kończą się 422, nie ostrzeżeniem."
+      },
+      "InstantiateWeekRequest": {
+        "properties": {
+          "week_start": {
+            "type": "string",
+            "format": "date",
+            "title": "Week Start"
+          }
+        },
+        "type": "object",
+        "required": [
+          "week_start"
+        ],
+        "title": "InstantiateWeekRequest",
+        "description": "Instancjacja szablonu tygodnia — `week_start` MUSI być poniedziałkiem."
       },
       "ItemCreateRequest": {
         "properties": {
@@ -4829,7 +5915,8 @@
             "type": "string",
             "enum": [
               "day",
-              "meal"
+              "meal",
+              "block"
             ],
             "title": "What"
           },
@@ -4864,14 +5951,62 @@
             },
             "type": "array",
             "maxItems": 62,
-            "minItems": 1,
             "title": "Target Dates"
+          },
+          "source_from": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source From"
+          },
+          "source_days": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 31.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Days"
+          },
+          "repeat_each": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 7.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repeat Each"
+          },
+          "target_start": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Start"
           }
         },
         "type": "object",
         "required": [
-          "what",
-          "target_dates"
+          "what"
         ],
         "title": "PlanCopyRequest",
         "description": "Kopiowanie dnia na datę/daty albo posiłku do dnia (04_API §2).\n\nKopia jest GŁĘBOKA (nowe id posiłków, pozycji i rozkładów) i DOPISUJE się\ndo dnia docelowego — istniejących posiłków nie nadpisuje (karta B06)."
@@ -6320,6 +7455,379 @@
         "title": "TagRead",
         "description": "Tag ze słownika globalnego."
       },
+      "TemplateItemPayload-Input": {
+        "properties": {
+          "recipe_id": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recipe Id"
+          },
+          "product_id": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Id"
+          },
+          "amount": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 9999999.999,
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,7}|(?=[\\d.]{1,11}0*$)\\d{0,7}\\.\\d{0,3}0*$)"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount"
+          },
+          "amount_unit": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AmountUnit"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "servings": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 9999.99,
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,4}|(?=[\\d.]{1,7}0*$)\\d{0,4}\\.\\d{0,2}0*$)"
+              }
+            ],
+            "title": "Servings",
+            "default": "1"
+          },
+          "position": {
+            "type": "integer",
+            "maximum": 10000.0,
+            "minimum": 0.0,
+            "title": "Position",
+            "default": 0
+          },
+          "servings_split": {
+            "items": {
+              "$ref": "#/components/schemas/TemplateSplitPayload-Input"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Servings Split"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "TemplateItemPayload",
+        "description": "Pozycja posiłku w szablonie: przepis ALBO produkt luzem ze znormalizowaną ilością."
+      },
+      "TemplateItemPayload-Output": {
+        "properties": {
+          "recipe_id": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recipe Id"
+          },
+          "product_id": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Id"
+          },
+          "amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount"
+          },
+          "amount_unit": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AmountUnit"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "servings": {
+            "type": "string",
+            "title": "Servings",
+            "default": "1"
+          },
+          "position": {
+            "type": "integer",
+            "maximum": 10000.0,
+            "minimum": 0.0,
+            "title": "Position",
+            "default": 0
+          },
+          "servings_split": {
+            "items": {
+              "$ref": "#/components/schemas/TemplateSplitPayload-Output"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Servings Split"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "TemplateItemPayload",
+        "description": "Pozycja posiłku w szablonie: przepis ALBO produkt luzem ze znormalizowaną ilością."
+      },
+      "TemplateListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TemplateSummaryRead"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "TemplateListResponse",
+        "description": "Lista szablonów (jeden kształt dla dni i tygodni)."
+      },
+      "TemplateMealPayload-Input": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "kcal_target": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 99999.0,
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d{0,0}0*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kcal Target"
+          },
+          "position": {
+            "type": "integer",
+            "maximum": 10000.0,
+            "minimum": 0.0,
+            "title": "Position",
+            "default": 0
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TemplateItemPayload-Input"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Items"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "TemplateMealPayload",
+        "description": "Posiłek w szablonie: nazwa, opcjonalny cel kcal, kolejność i pozycje."
+      },
+      "TemplateMealPayload-Output": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "kcal_target": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kcal Target"
+          },
+          "position": {
+            "type": "integer",
+            "maximum": 10000.0,
+            "minimum": 0.0,
+            "title": "Position",
+            "default": 0
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TemplateItemPayload-Output"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Items"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "TemplateMealPayload",
+        "description": "Posiłek w szablonie: nazwa, opcjonalny cel kcal, kolejność i pozycje."
+      },
+      "TemplateSplitPayload-Input": {
+        "properties": {
+          "member_profile_id": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Member Profile Id"
+          },
+          "multiplier": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 99.99,
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,2}|(?=[\\d.]{1,5}0*$)\\d{0,2}\\.\\d{0,2}0*$)"
+              }
+            ],
+            "title": "Multiplier"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "member_profile_id",
+          "multiplier"
+        ],
+        "title": "TemplateSplitPayload",
+        "description": "Rozkład rodzinny pozycji w szablonie — te same pola, co w planie."
+      },
+      "TemplateSplitPayload-Output": {
+        "properties": {
+          "member_profile_id": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Member Profile Id"
+          },
+          "multiplier": {
+            "type": "string",
+            "title": "Multiplier"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "member_profile_id",
+          "multiplier"
+        ],
+        "title": "TemplateSplitPayload",
+        "description": "Rozkład rodzinny pozycji w szablonie — te same pola, co w planie."
+      },
+      "TemplateSummaryRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/Scope"
+          },
+          "owner_user_id": {
+            "type": "integer",
+            "title": "Owner User Id"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "scope",
+          "owner_user_id",
+          "summary",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "TemplateSummaryRead",
+        "description": "Szablon na liście — bez payloadu (lista szablonów nie jest eksportem)."
+      },
       "UiSettingsPatchRequest": {
         "properties": {
           "nutrition_thresholds": {
@@ -6693,6 +8201,183 @@
         ],
         "title": "VerificationStatus",
         "description": "Cykl weryfikacji produktu (02_DOMAIN §4.9)."
+      },
+      "WeekTemplateDayPayload-Input": {
+        "properties": {
+          "offset": {
+            "type": "integer",
+            "maximum": 6.0,
+            "minimum": 0.0,
+            "title": "Offset"
+          },
+          "day": {
+            "$ref": "#/components/schemas/DayTemplatePayload-Input"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "offset",
+          "day"
+        ],
+        "title": "WeekTemplateDayPayload",
+        "description": "Jeden dzień szablonu tygodnia: offset 0-6 od poniedziałku + payload dnia."
+      },
+      "WeekTemplateDayPayload-Output": {
+        "properties": {
+          "offset": {
+            "type": "integer",
+            "maximum": 6.0,
+            "minimum": 0.0,
+            "title": "Offset"
+          },
+          "day": {
+            "$ref": "#/components/schemas/DayTemplatePayload-Output"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "offset",
+          "day"
+        ],
+        "title": "WeekTemplateDayPayload",
+        "description": "Jeden dzień szablonu tygodnia: offset 0-6 od poniedziałku + payload dnia."
+      },
+      "WeekTemplatePayload-Input": {
+        "properties": {
+          "v": {
+            "type": "integer",
+            "const": 1,
+            "title": "V",
+            "default": 1
+          },
+          "days": {
+            "items": {
+              "$ref": "#/components/schemas/WeekTemplateDayPayload-Input"
+            },
+            "type": "array",
+            "maxItems": 7,
+            "title": "Days"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "WeekTemplatePayload",
+        "description": "Payload szablonu tygodnia (`v:1`): dni po offsetach, każdy w kształcie dnia."
+      },
+      "WeekTemplatePayload-Output": {
+        "properties": {
+          "v": {
+            "type": "integer",
+            "const": 1,
+            "title": "V",
+            "default": 1
+          },
+          "days": {
+            "items": {
+              "$ref": "#/components/schemas/WeekTemplateDayPayload-Output"
+            },
+            "type": "array",
+            "maxItems": 7,
+            "title": "Days"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "WeekTemplatePayload",
+        "description": "Payload szablonu tygodnia (`v:1`): dni po offsetach, każdy w kształcie dnia."
+      },
+      "WeekTemplateReadFull": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/Scope"
+          },
+          "owner_user_id": {
+            "type": "integer",
+            "title": "Owner User Id"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/WeekTemplatePayload-Output"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "scope",
+          "owner_user_id",
+          "summary",
+          "created_at",
+          "updated_at",
+          "payload"
+        ],
+        "title": "WeekTemplateReadFull",
+        "description": "Szablon tygodnia z payloadem."
+      },
+      "WeekTemplateWriteRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/Scope",
+            "default": "private"
+          },
+          "payload": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WeekTemplatePayload-Input"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "from_week_start": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Week Start"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "WeekTemplateWriteRequest",
+        "description": "POST/PUT szablonu tygodnia: payload wprost ALBO `from_week_start` (7 dni planu)."
       }
     }
   }

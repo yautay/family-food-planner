@@ -1,4 +1,4 @@
-"""HTTP modułu planning: `/plan/*` (04_API §2).
+"""HTTP modułu planning: `/plan/*`, `/templates/*` i `/cycles` (04_API §2).
 
 Router waliduje wejście, woła serwis i mapuje widoki na schematy. Nie ma tu
 żadnego filtra widoczności ani reguły domenowej — scope egzekwuje `ScopedQuery`
@@ -7,6 +7,11 @@ w serwisie (04_API §3), a wartości liczy silnik.
 Mutacje odpowiadają CAŁYM dniem po zmianie: interfejs planu i tak pokazuje
 dzień w całości (kafelki, posiłki, panel makro), więc jedna odpowiedź zamiast
 „204 + refetch" oszczędza rundę i eliminuje moment, w którym widok kłamie.
+
+Szablony i cykle (BATCH_07) trzymają się tej samej zasady: instancjacja i apply
+odpowiadają listą utworzonych dni, więc widok tygodnia od razu ma czym się
+odświeżyć. Lista szablonów NIE zwraca payloadów — payload jedzie tylko przy
+odczycie pojedynczego szablonu (i przy eksporcie w B14).
 """
 
 from __future__ import annotations
@@ -16,15 +21,26 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, status
 
-from app.core.deps import CurrentUser, get_planning_service
+from app.core.deps import CurrentUser, get_planning_service, get_templates_service
 from app.core.scope import Scope
 from app.core.uploads import thumbnail_path_for
 from app.modules.nutrition.schemas import GoalMetricRead, nutrition_read
+from app.modules.planning.models import DayTemplate, WeekTemplate
 from app.modules.planning.schemas import (
+    CycleApplyRequest,
+    CycleListResponse,
+    CycleRead,
+    CycleWriteRequest,
     DayGoalProgressRead,
     DayRead,
     DaysResponse,
+    DayTemplatePayload,
+    DayTemplateReadFull,
+    DayTemplateWriteRequest,
     FitToTargetResponse,
+    InstantiateDayRequest,
+    InstantiateResponse,
+    InstantiateWeekRequest,
     ItemCreateRequest,
     ItemUpdateRequest,
     MealCreateRequest,
@@ -34,11 +50,24 @@ from app.modules.planning.schemas import (
     PlanDayUpsertRequest,
     PlanItemRead,
     PlanServingSplitRead,
+    TemplateListResponse,
+    TemplateSummaryRead,
+    WeekTemplatePayload,
+    WeekTemplateReadFull,
+    WeekTemplateWriteRequest,
 )
 from app.modules.planning.service import DayView, FitProposal, ItemView, MealView, PlanningService
+from app.modules.planning.templates_service import (
+    CycleView,
+    InstantiateResult,
+    TemplatesService,
+    day_summary,
+    week_summary,
+)
 from app.modules.recipes.router import UPLOADS_URL_PREFIX
 
 ServiceDep = Annotated[PlanningService, Depends(get_planning_service)]
+TemplatesDep = Annotated[TemplatesService, Depends(get_templates_service)]
 
 
 def _thumb_url(photo_path: str | None) -> str | None:
@@ -110,6 +139,40 @@ def _to_day(view: DayView) -> DayRead:
         goal_valid_from=None if view.goal is None else view.goal.valid_from,
         created_at=None if entity is None else entity.created_at,
         updated_at=None if entity is None else entity.updated_at,
+    )
+
+
+def _to_day_template(template: DayTemplate) -> DayTemplateReadFull:
+    """Szablon dnia → odpowiedź z payloadem zwalidowanym kontraktem `v:1`.
+
+    Payload z bazy przechodzi walidację także przy ODCZYCIE: szablon zapisany
+    przez starszą wersję kontraktu ma paść jawnie, a nie wyciec do UI w kształcie,
+    którego frontend nie zna.
+    """
+    content = DayTemplatePayload.model_validate(template.payload)
+    return DayTemplateReadFull(
+        id=template.id,
+        name=template.name,
+        scope=template.scope,
+        owner_user_id=template.owner_user_id,
+        summary=day_summary(content),
+        payload=content,
+        created_at=template.created_at,
+        updated_at=template.updated_at,
+    )
+
+
+def _to_week_template(template: WeekTemplate) -> WeekTemplateReadFull:
+    content = WeekTemplatePayload.model_validate(template.payload)
+    return WeekTemplateReadFull(
+        id=template.id,
+        name=template.name,
+        scope=template.scope,
+        owner_user_id=template.owner_user_id,
+        summary=week_summary(content),
+        payload=content,
+        created_at=template.created_at,
+        updated_at=template.updated_at,
     )
 
 
@@ -231,12 +294,265 @@ def build_plan_router() -> APIRouter:
     @router.post(
         "/copy",
         response_model=DaysResponse,
-        summary="Głęboka kopia dnia na daty albo posiłku do dnia (dopisuje, nie nadpisuje)",
+        summary="Głęboka kopia dnia/posiłku albo powielenie bloku N dni (dopisuje, nie nadpisuje)",
     )
     async def copy(
         payload: PlanCopyRequest, user: CurrentUser, service: ServiceDep
     ) -> DaysResponse:
-        views = await service.copy(user=user, payload=payload)
+        # Blok ma inną arytmetykę wejścia (od kiedy, ile dni, ile powtórzeń), ale
+        # ten sam mechanizm zapisu — dlatego jedna ścieżka HTTP, dwie metody serwisu.
+        views = (
+            await service.copy_block(user=user, payload=payload)
+            if payload.what == "block"
+            else await service.copy(user=user, payload=payload)
+        )
         return DaysResponse(items=[_to_day(view) for view in views], total=len(views))
+
+    return router
+
+
+def _to_instantiate(result: InstantiateResult) -> InstantiateResponse:
+    return InstantiateResponse(
+        items=[_to_day(view) for view in result.days],
+        total=len(result.days),
+        warnings=result.warnings,
+    )
+
+
+def _to_cycle(view: CycleView) -> CycleRead:
+    cycle = view.cycle
+    return CycleRead(
+        id=cycle.id,
+        name=cycle.name,
+        scope=cycle.scope,
+        owner_user_id=cycle.owner_user_id,
+        template_ids=list(cycle.template_ids),
+        template_names=view.template_names,
+        start_date=cycle.start_date,
+        created_at=cycle.created_at,
+        updated_at=cycle.updated_at,
+    )
+
+
+def build_templates_router() -> APIRouter:
+    """Router `/templates` — szablony dnia i tygodnia (CRUD + instancjacja)."""
+    router = APIRouter(prefix="/templates", tags=["planning"])
+
+    # --- szablony dnia ---------------------------------------------------------------
+
+    @router.get(
+        "/days",
+        response_model=TemplateListResponse,
+        summary="Widoczne szablony dnia (bez payloadów)",
+    )
+    async def list_day_templates(user: CurrentUser, service: TemplatesDep) -> TemplateListResponse:
+        templates = await service.list_day_templates(user)
+        items = [
+            TemplateSummaryRead(
+                id=template.id,
+                name=template.name,
+                scope=template.scope,
+                owner_user_id=template.owner_user_id,
+                summary=day_summary(DayTemplatePayload.model_validate(template.payload)),
+                created_at=template.created_at,
+                updated_at=template.updated_at,
+            )
+            for template in templates
+        ]
+        return TemplateListResponse(items=items, total=len(items))
+
+    @router.post(
+        "/days",
+        response_model=DayTemplateReadFull,
+        status_code=status.HTTP_201_CREATED,
+        summary="Nowy szablon dnia — payload wprost albo zbudowany z dnia planu",
+    )
+    async def create_day_template(
+        payload: DayTemplateWriteRequest, user: CurrentUser, service: TemplatesDep
+    ) -> DayTemplateReadFull:
+        return _to_day_template(await service.create_day_template(user=user, payload=payload))
+
+    @router.get(
+        "/days/{template_id}",
+        response_model=DayTemplateReadFull,
+        summary="Szablon dnia z payloadem",
+    )
+    async def get_day_template(
+        template_id: int, user: CurrentUser, service: TemplatesDep
+    ) -> DayTemplateReadFull:
+        return _to_day_template(await service.get_day_template(template_id, user=user))
+
+    @router.put(
+        "/days/{template_id}",
+        response_model=DayTemplateReadFull,
+        summary="Nadpisanie CAŁEGO szablonu dnia (edycji per posiłek nie ma — 03_DB §6)",
+    )
+    async def update_day_template(
+        template_id: int,
+        payload: DayTemplateWriteRequest,
+        user: CurrentUser,
+        service: TemplatesDep,
+    ) -> DayTemplateReadFull:
+        template = await service.update_day_template(template_id, user=user, payload=payload)
+        return _to_day_template(template)
+
+    @router.delete(
+        "/days/{template_id}",
+        status_code=status.HTTP_204_NO_CONTENT,
+        summary="Usunięcie szablonu dnia (właściciel albo ADMIN)",
+    )
+    async def delete_day_template(
+        template_id: int, user: CurrentUser, service: TemplatesDep
+    ) -> None:
+        await service.delete_day_template(template_id, user=user)
+
+    @router.post(
+        "/days/{template_id}/instantiate",
+        response_model=InstantiateResponse,
+        summary="Szablon dnia → plan na wskazane daty (dopisuje, jak /plan/copy)",
+    )
+    async def instantiate_day_template(
+        template_id: int,
+        payload: InstantiateDayRequest,
+        user: CurrentUser,
+        service: TemplatesDep,
+    ) -> InstantiateResponse:
+        result = await service.instantiate_day_template(template_id, user=user, dates=payload.dates)
+        return _to_instantiate(result)
+
+    # --- szablony tygodnia -----------------------------------------------------------
+
+    @router.get(
+        "/weeks",
+        response_model=TemplateListResponse,
+        summary="Widoczne szablony tygodnia (bez payloadów)",
+    )
+    async def list_week_templates(user: CurrentUser, service: TemplatesDep) -> TemplateListResponse:
+        templates = await service.list_week_templates(user)
+        items = [
+            TemplateSummaryRead(
+                id=template.id,
+                name=template.name,
+                scope=template.scope,
+                owner_user_id=template.owner_user_id,
+                summary=week_summary(WeekTemplatePayload.model_validate(template.payload)),
+                created_at=template.created_at,
+                updated_at=template.updated_at,
+            )
+            for template in templates
+        ]
+        return TemplateListResponse(items=items, total=len(items))
+
+    @router.post(
+        "/weeks",
+        response_model=WeekTemplateReadFull,
+        status_code=status.HTTP_201_CREATED,
+        summary="Nowy szablon tygodnia — payload wprost albo z 7 dni planu",
+    )
+    async def create_week_template(
+        payload: WeekTemplateWriteRequest, user: CurrentUser, service: TemplatesDep
+    ) -> WeekTemplateReadFull:
+        return _to_week_template(await service.create_week_template(user=user, payload=payload))
+
+    @router.get(
+        "/weeks/{template_id}",
+        response_model=WeekTemplateReadFull,
+        summary="Szablon tygodnia z payloadem",
+    )
+    async def get_week_template(
+        template_id: int, user: CurrentUser, service: TemplatesDep
+    ) -> WeekTemplateReadFull:
+        return _to_week_template(await service.get_week_template(template_id, user=user))
+
+    @router.put(
+        "/weeks/{template_id}",
+        response_model=WeekTemplateReadFull,
+        summary="Nadpisanie CAŁEGO szablonu tygodnia",
+    )
+    async def update_week_template(
+        template_id: int,
+        payload: WeekTemplateWriteRequest,
+        user: CurrentUser,
+        service: TemplatesDep,
+    ) -> WeekTemplateReadFull:
+        template = await service.update_week_template(template_id, user=user, payload=payload)
+        return _to_week_template(template)
+
+    @router.delete(
+        "/weeks/{template_id}",
+        status_code=status.HTTP_204_NO_CONTENT,
+        summary="Usunięcie szablonu tygodnia (409, gdy używa go cykl)",
+    )
+    async def delete_week_template(
+        template_id: int, user: CurrentUser, service: TemplatesDep
+    ) -> None:
+        await service.delete_week_template(template_id, user=user)
+
+    @router.post(
+        "/weeks/{template_id}/instantiate",
+        response_model=InstantiateResponse,
+        summary="Szablon tygodnia → 7 dni planu od poniedziałku (jedna transakcja)",
+    )
+    async def instantiate_week_template(
+        template_id: int,
+        payload: InstantiateWeekRequest,
+        user: CurrentUser,
+        service: TemplatesDep,
+    ) -> InstantiateResponse:
+        result = await service.instantiate_week_template(
+            template_id, user=user, week_start=payload.week_start
+        )
+        return _to_instantiate(result)
+
+    return router
+
+
+def build_cycles_router() -> APIRouter:
+    """Router `/cycles` — cykle tygodni A→B→C i ich stosowanie na zakres dat."""
+    router = APIRouter(prefix="/cycles", tags=["planning"])
+
+    @router.get("", response_model=CycleListResponse, summary="Widoczne cykle tygodni")
+    async def list_cycles(user: CurrentUser, service: TemplatesDep) -> CycleListResponse:
+        views = await service.list_cycles(user)
+        return CycleListResponse(items=[_to_cycle(view) for view in views], total=len(views))
+
+    @router.post(
+        "",
+        response_model=CycleRead,
+        status_code=status.HTTP_201_CREATED,
+        summary="Nowy cykl — kolejność szablonów JEST rotacją",
+    )
+    async def create_cycle(
+        payload: CycleWriteRequest, user: CurrentUser, service: TemplatesDep
+    ) -> CycleRead:
+        return _to_cycle(await service.create_cycle(user=user, payload=payload))
+
+    @router.put(
+        "/{cycle_id}",
+        response_model=CycleRead,
+        summary="Edycja cyklu (nazwa, kolejność szablonów, start rotacji)",
+    )
+    async def update_cycle(
+        cycle_id: int, payload: CycleWriteRequest, user: CurrentUser, service: TemplatesDep
+    ) -> CycleRead:
+        return _to_cycle(await service.update_cycle(cycle_id, user=user, payload=payload))
+
+    @router.delete(
+        "/{cycle_id}",
+        status_code=status.HTTP_204_NO_CONTENT,
+        summary="Usunięcie cyklu (szablonów nie rusza)",
+    )
+    async def delete_cycle(cycle_id: int, user: CurrentUser, service: TemplatesDep) -> None:
+        await service.delete_cycle(cycle_id, user=user)
+
+    @router.post(
+        "/{cycle_id}/apply",
+        response_model=InstantiateResponse,
+        summary="Rotacyjna instancjacja szablonów cyklu na zakres dat (od poniedziałku)",
+    )
+    async def apply_cycle(
+        cycle_id: int, payload: CycleApplyRequest, user: CurrentUser, service: TemplatesDep
+    ) -> InstantiateResponse:
+        return _to_instantiate(await service.apply_cycle(cycle_id, user=user, payload=payload))
 
     return router

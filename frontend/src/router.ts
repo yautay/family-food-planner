@@ -31,7 +31,12 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/pages/plan-dnia/PlanDniaPage.vue'),
         meta: { title: 'Plan dnia' },
       },
-      { path: 'tydzien', name: 'tydzien', component: PlaceholderPage, meta: { title: 'Tydzień' } },
+      {
+        path: 'tydzien/:weekStart?',
+        name: 'tydzien',
+        component: () => import('@/pages/tydzien/PlanTygodniaPage.vue'),
+        meta: { title: 'Tydzień' },
+      },
       {
         path: 'przepisy',
         name: 'przepisy',

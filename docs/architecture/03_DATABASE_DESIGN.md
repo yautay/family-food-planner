@@ -207,8 +207,7 @@ liczą się do blokady usuwania przepisów przez zliczenie w serwisie
 Stan faktyczny (BATCH_06, migracja `0008`):
 
 - Powstały `user_nutrition_goals` (§2) oraz `plan_days`, `plan_meals`,
-  `plan_meal_items`, `plan_item_servings`. `day_templates`, `week_templates`
-  i `week_cycles` dokłada BATCH_07.
+  `plan_meal_items`, `plan_item_servings`.
 - Typy `entity_scope` i `amount_unit` są REUŻYWANE z migracji `0006`
   (`postgresql.ENUM(..., create_type=False)`); `downgrade` migracji `0008`
   świadomie ich NIE kasuje — należą do `0006` i używa ich moduł przepisów.
@@ -223,6 +222,33 @@ Stan faktyczny (BATCH_06, migracja `0008`):
 - Suma multiplierów rozkładu = `servings` pozycji pozostaje regułą SERWISU
   (baza nie widzi całej kolekcji przy pojedynczym INSERT); pilnuje jej
   `planning/service.py::assert_split_matches_servings` (czysta funkcja).
+
+Stan faktyczny (BATCH_07, migracja `0009`):
+
+- Powstały `day_templates`, `week_templates` (wzorzec scope + `name` +
+  `payload JSONB`) i `week_cycles` (wzorzec scope + `name` +
+  `template_ids BIGINT[]` + `start_date DATE NULL`). Typ `entity_scope` jest
+  REUŻYWANY z `0006`; `downgrade` go nie kasuje.
+- **Indeksy GIN `jsonb_path_ops`** na obu payloadach
+  (`ix_day_templates_payload_gin`, `ix_week_templates_payload_gin`) — warunek
+  sprawności blokady usuwania z ADR-012. Wybór klasy operatorów jest WIĄŻĄCY
+  dla zapytań: `jsonb_path_ops` obsługuje wyłącznie `@>`, `@?` i `@@`, więc
+  zliczanie referencji używa containmentu `@>`
+  (`payload @> '{"meals":[{"items":[{"recipe_id": X}]}]}'`), a dla szablonu
+  tygodnia tego samego wzorca zagnieżdżonego w `days[].day`. Forma
+  potwierdzona `EXPLAIN`-em w
+  `tests/integration/planning/test_templates_service.py`.
+- Referencje `recipe_id`/`product_id` siedzą WEWNĄTRZ payloadu, więc te tabele
+  nie mają na nie FK — jedyną obroną jest licznik referencji w serwisie
+  (`templates_service.py`), inaczej DELETE przepisu użytego tylko w szablonie
+  przeszedłby bez 409.
+- `week_cycles.template_ids` nie ma FK (tablica): usunięcie szablonu użytego
+  w cyklu daje 409 z nazwą cyklu w `details.used_in`, a `apply` odrzuca cykl
+  wskazujący na nieistniejący/niewidoczny szablon (422).
+- Payload jest wersjonowany polem `v: 1` i walidowany Pydantic ZARÓWNO przy
+  zapisie, JAK I przy odczycie; Decimale jedzą do JSONB jako stringi
+  dziesiętne (`model_dump(mode="json")`, ADR-008) — float po drodze zmieniłby
+  ilości w szablonie.
 
 ## 7. Schemat — pantry
 

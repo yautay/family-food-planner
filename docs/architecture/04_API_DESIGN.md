@@ -55,7 +55,10 @@ U      /plan/days?from=&to=                — dni z posiłkami+pozycjami+nutrit
 U      /plan/days/{date} (+meals, +items)  — CRUD; PATCH mnożników
 U      /plan/items/{id}/fit-to-target      — PROPOZYCJA mnożnika (nic nie zapisuje)
 U      /plan/copy                          — {source, target(s), what: day|meal|block}
-U      /templates/days /templates/weeks /cycles — CRUD + instantiate
+                                             block: {source_from, source_days,
+                                             repeat_each, target_start} — model 2+2+2
+U      /templates/days /templates/weeks    — CRUD + POST {id}/instantiate
+U      /cycles                             — CRUD + POST {id}/apply (rotacja A→B→C)
 U      /pantry                             — CRUD pozycji, filtr ważności
 
 U      /shopping/round-configs             — konfiguracja tur (preset seed)
@@ -102,6 +105,10 @@ z podpowiedzią archiwizacji. Mutacje `/categories`: ADMIN; odczyt: każdy.
    własnego scope — widoczność dziedziczą po rodzicu, a serwis sprawdza CAŁY
    łańcuch (`item → meal → day → warunek scope`), nie samo istnienie id.
    Cudze zagnieżdżone id daje 404, identycznie jak nieistniejące (BATCH_06).
+2c-bis. Szablony i cykle to encje ze scope: cudzy PRYWATNY szablon daje 404
+   także na AKCJACH (`instantiate`, `apply`), nie tylko na odczycie. Instancjacja
+   i apply tworzą dni WYŁĄCZNIE jako własność wykonującego użytkownika (owner
+   z sesji) — nie da się instancjować „na cudzy plan" (BATCH_07).
 2d. Data bez zapisanego planu to 200 z pustym dniem (`id: null`), nie 404:
    otwarcie kalendarza na wolnej dacie jest normalną sytuacją, a nie błędem.
    Ten sam wyjątek NIE dotyczy pojedynczych encji (przepis, produkt) — tam

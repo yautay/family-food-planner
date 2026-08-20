@@ -27,6 +27,15 @@ Co już istnieje:
   suma multiplierów jest zawsze równa `servings` (pilnuje tego serwis), więc
   agregacja czyta `servings` i nie musi sumować rozkładu — rozkład służy
   podziałowi porcji między osoby, nie skalowaniu ilości.
+  **Stan faktyczny po B07**: dni powstałe z szablonu, cyklu albo „powiel
+  blok" to ZWYKŁE wiersze `plan_days`/`plan_meals`/`plan_meal_items` —
+  instancjacja jest kopią bez live-sync (02_DOMAIN §7), więc silnik zakupowy
+  nie musi o szablonach wiedzieć NIC i kontrakt wejścia się nie zmienia.
+  Praktyczna konsekwencja: zakres generacji to zwykle tydzień z widoku
+  `/tydzien/:weekStart` (poniedziałek–niedziela), a ten sam dzień może mieć
+  posiłki dopisane z kilku źródeł (szablon dopisuje, nie nadpisuje) — czyli
+  wiele pozycji z tym samym `recipe_id` w jednym dniu jest normalne i musi się
+  zagregować, a nie zdeduplikować.
   Wejście do planu: `PlanningService.list_days(user, date_from=, date_to=)`
   (max 366 dni na żądanie), zwraca `DayView` z posiłkami i pozycjami.
 - `modules/nutrition/engine.py` jako wzorzec czystego silnika (ADR-008).

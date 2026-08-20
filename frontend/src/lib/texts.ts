@@ -236,6 +236,108 @@ export const plan = {
   noTarget: 'brak celu',
 } as const
 
+export const week = {
+  title: 'Plan tygodnia',
+  previousWeek: 'Poprzedni tydzień',
+  nextWeek: 'Następny tydzień',
+  currentWeek: 'Bieżący tydzień',
+  weekOf: 'Tydzień od',
+  emptyWeek: 'Ten tydzień jest jeszcze pusty. Zacznij od dnia albo zastosuj szablon.',
+  dayEmpty: 'Brak posiłków',
+  addMeal: 'Dodaj posiłek',
+  openDay: 'Otwórz plan dnia',
+  chartTitle: 'Kalorie w tygodniu',
+  sumKcal: 'Suma',
+  targetKcal: 'Cel',
+
+  // pasek akcji
+  copyDay: 'Kopiuj dzień',
+  duplicateBlock: 'Powiel blok',
+  saveAsTemplate: 'Zapisz jako szablon',
+  applyTemplate: 'Zastosuj szablon',
+  applyCycle: 'Zastosuj cykl',
+  reuse: 'Użyj ponownie',
+
+  // przenoszenie posiłku
+  moveMeal: 'Przenieś do dnia…',
+  moveMealTitle: 'Przenieś posiłek do innego dnia',
+  moveMealSubtitle: 'Posiłek zniknie z dnia źródłowego i dopisze się na końcu dnia docelowego.',
+  moveMealTarget: 'Dzień docelowy',
+  moveMealApply: 'Przenieś',
+  dropHere: 'Upuść posiłek tutaj',
+
+  // blok
+  blockTitle: 'Powiel blok dni',
+  blockSubtitle:
+    'Dietę stosuje się zwykle 2 dni pod rząd — blok kopiuje kolejne dni parami (d1, d1, d2, d2…).',
+  blockFrom: 'Pierwszy dzień bloku',
+  blockDays: 'Ile dni',
+  blockRepeat: 'Ile powtórzeń',
+  blockTargetStart: 'Od kiedy wstawić',
+  blockPreset: 'Preset 2+2+2',
+  blockPresetHint: '3 dni, każdy 2 razy pod rząd',
+  blockPreview: 'Powstanie dni',
+  blockApply: 'Powiel',
+
+  // szablony
+  templateSaveTitle: 'Zapisz jako szablon',
+  templateSaveSubtitle: 'Szablon zapamiętuje strukturę — bez dat i bez wyliczonych wartości.',
+  templateName: 'Nazwa szablonu',
+  templateScope: 'Widoczność',
+  templateScopePrivate: 'Tylko ja',
+  templateScopeHousehold: 'Cała rodzina',
+  templateKind: 'Co zapisać',
+  templateKindDay: 'Dzień',
+  templateKindWeek: 'Cały tydzień',
+  templateSourceDay: 'Dzień źródłowy',
+  templateSaveApply: 'Zapisz szablon',
+  templateApplyTitle: 'Zastosuj szablon',
+  templateApplySubtitle:
+    'Posiłki dopisują się na koniec wskazanych dni — nic nie jest nadpisywane.',
+  templateApplyPick: 'Szablon',
+  templateApplyDates: 'Daty docelowe',
+  templateApplyWeekStart: 'Tydzień od poniedziałku',
+  templateApplyApply: 'Zastosuj',
+  templateEmpty: 'Nie masz jeszcze szablonów. Zbuduj dzień i zapisz go jako szablon.',
+  templateItemsSuffix: 'w szablonie',
+
+  // cykle
+  cycleTitle: 'Cykle tygodni',
+  cycleSubtitle: 'Cykl stosuje szablony tygodnia po kolei: A, B, C, znowu A…',
+  cycleName: 'Nazwa cyklu',
+  cycleTemplates: 'Szablony w kolejności rotacji',
+  cycleAddTemplate: 'Dodaj szablon do cyklu',
+  cycleMoveUp: 'Przenieś wyżej',
+  cycleMoveDown: 'Przenieś niżej',
+  cycleRemoveTemplate: 'Usuń z cyklu',
+  cycleStartDate: 'Start rotacji (opcjonalnie)',
+  cycleStartHint: 'Bez daty rotacja startuje od pierwszego tygodnia zakresu.',
+  cycleSave: 'Zapisz cykl',
+  cycleApplyTitle: 'Zastosuj cykl na zakres dat',
+  cycleApplyPick: 'Cykl',
+  cycleApplyFrom: 'Od (poniedziałek)',
+  cycleApplyTo: 'Do',
+  cycleApplyApply: 'Zastosuj cykl',
+  cycleEmpty: 'Nie masz jeszcze cyklu. Utwórz go z szablonów tygodnia.',
+  cycleNeedsTemplate: 'Dodaj przynajmniej jeden szablon tygodnia.',
+  cycleNeedsWeekTemplates: 'Najpierw zapisz szablon tygodnia — cykl układa się z nich.',
+  mondayRequired: 'Wybierz poniedziałek — cykl operuje pełnymi tygodniami.',
+
+  // historia
+  reuseTitle: 'Użyj ponownie',
+  reuseSubtitle: 'Skopiuj dzień z przeszłości na nowe daty. Wartości przeliczą się na żywo.',
+  reuseSource: 'Dzień źródłowy',
+  reuseTargets: 'Daty docelowe',
+  reuseEmpty: 'Nie ma jeszcze historii planów do ponownego użycia.',
+  reuseApply: 'Kopiuj na wskazane daty',
+
+  // wynik
+  warningsTitle: 'Uwagi',
+  datesHint: 'Po jednej dacie w wierszu (RRRR-MM-DD).',
+  datesRequired: 'Podaj przynajmniej jedną datę.',
+  datesInvalid: 'Popraw daty — wymagany format RRRR-MM-DD.',
+} as const
+
 export const recipePicker = {
   label: 'Przepis',
   placeholder: 'Wpisz nazwę przepisu…',
