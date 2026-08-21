@@ -116,10 +116,18 @@ opakowań i wyliczania resztek.
 
 ### 4.5 Store i StoreProfile
 
-- **Store**: nazwa (Biedronka, Lidl…), opcjonalne logo/kolor.
+- **Store**: nazwa (Biedronka, Lidl…) + opcjonalny kolor. Stan faktyczny po
+  BATCH_09: kolor jest ETYKIETĄ tokenu z palety UI (06_UIUX §1), a nie wartością
+  hex — motyw musi dać się zmienić bez migracji danych. **Logo NIE istnieje**:
+  wymagałoby drugiego pipeline'u uploadu dla obrazka o zupełnie innym reżimie
+  (przezroczystość, skala), a wartości UX nie wnosi ponad kolor i nazwę.
+  Sklep ma też `is_archived` — usuwanie idzie wzorcem ADR-012 (409 z listą użyć,
+  archiwizacja jako odwracalna alternatywa).
 - Profil sklepu = uporządkowana lista kategorii zakupowych (kolejność
-  fizycznego przejścia po sklepie). Lista zakupowa sortowana wg profilu
-  wybranego sklepu.
+  fizycznego przejścia po sklepie), PODMIENIANA W CAŁOŚCI
+  (`PUT /stores/{id}/category-order` z listą `category_id`). Kategorie spoza
+  listy są poza profilem — silnik listy (B11) umieści je na końcu. Lista
+  zakupowa sortowana wg profilu wybranego sklepu.
 
 ### 4.6 Usuwanie i archiwizacja (ADR-012)
 

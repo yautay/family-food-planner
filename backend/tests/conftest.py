@@ -62,6 +62,9 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 DB_TABLES = (
     "audit_entries",
     "pantry_items",
+    "retail_products",
+    "store_category_order",
+    "stores",
     "week_cycles",
     "week_templates",
     "day_templates",

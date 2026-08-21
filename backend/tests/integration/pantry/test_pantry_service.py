@@ -29,6 +29,7 @@ from tests.factories import (
     create_household,
     create_pantry_item,
     create_product,
+    create_retail_product,
     create_user,
 )
 
@@ -179,18 +180,28 @@ async def test_check_wymaga_produktu_kanonicznego_albo_sklepowego(
 
 
 async def test_pozycja_tylko_z_produktem_sklepowym_przechodzi(db_session: AsyncSession) -> None:
-    """CHECK dopuszcza wiersz z samym `retail_product_id` (kolumna czeka na B09).
+    """CHECK dopuszcza wiersz z samym `retail_product_id` (wariant sklepowy z B09).
 
     Odczyt takiej pozycji NIE MOŻE jej gubić: join produktu kanonicznego jest
     LEFT, więc pozycja zostaje na liście z pustą nazwą produktu.
+
+    Wariant musi ISTNIEĆ: od migracji `0011` kolumna ma FK RESTRICT (B09 dopiął
+    constraint odroczony w B08), więc wcześniejsze „id z powietrza" nie ma prawa
+    się zapisać — i to jest ta zmiana, którą test dokumentuje.
     """
     user = await create_user(db_session)
-    item = await create_pantry_item(db_session, owner=user, product=None, retail_product_id=77)
+    category = await create_category(db_session)
+    canonical = await create_product(db_session, category=category, name="Jogurt naturalny")
+    retail = await create_retail_product(db_session, product=canonical)
+    item = await create_pantry_item(
+        db_session, owner=user, product=None, retail_product_id=retail.id
+    )
 
     views, total = await PantryService(db_session).list_items(user, limit=50, offset=0, today=TODAY)
 
     assert total == 1
     assert views[0].item.id == item.id
+    assert views[0].item.retail_product_id == retail.id
     assert views[0].product is None
 
 

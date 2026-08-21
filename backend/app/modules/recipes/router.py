@@ -18,7 +18,7 @@ from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 
 from app.core.deps import CurrentUser, get_recipes_service
 from app.core.scope import Scope
-from app.core.uploads import MAX_IMAGE_BYTES, thumbnail_path_for
+from app.core.uploads import MAX_IMAGE_BYTES, image_urls
 from app.modules.nutrition.schemas import nutrition_read
 from app.modules.nutrition.types import NutritionValues
 from app.modules.recipes.schemas import (
@@ -42,18 +42,14 @@ from app.modules.recipes.service import (
 
 ServiceDep = Annotated[RecipesService, Depends(get_recipes_service)]
 
-#: Prefiks URL serwowania uploadów (endpoint w `app/main.py`, poza `/api/v1`).
-UPLOADS_URL_PREFIX = "/uploads"
-
 
 def _photo_urls(photo_path: str | None) -> tuple[str | None, str | None]:
-    """Ścieżka względna z DB → URL-e endpointu `/uploads/*` (oryginał + miniatura)."""
-    if not photo_path:
-        return None, None
-    return (
-        f"{UPLOADS_URL_PREFIX}/{photo_path}",
-        f"{UPLOADS_URL_PREFIX}/{thumbnail_path_for(photo_path)}",
-    )
+    """Ścieżka względna z DB → URL-e endpointu `/uploads/*` (oryginał + miniatura).
+
+    Konwencja URL mieszka w `core/uploads` (jedno miejsce dla przepisów B05
+    i wariantów sklepowych B09) — tutaj zostaje tylko nazwa lokalna.
+    """
+    return image_urls(photo_path)
 
 
 def _to_summary(view: RecipeView, *, nutrition: NutritionValues | None = None) -> RecipeSummary:

@@ -102,6 +102,8 @@ wynikiem, nie jednorazowe zielone.
 | edycja HOUSEHOLD | 401 | 404 | 200 | 200 | 200 |
 | zmiana scope / delete | 401 | 404 | 403 | 200 | 200 |
 | nutrition produktu (edycja) | 401 | 403 | 403 | 403 | 200 |
+| `measure_kind` / `piece_weight_g` produktu (D15) | 401 | 403 | 403 | 403 | 200 |
+| sklepy i produkty sklepowe (CRUD) | 401 | 200 | 200 | 200 | 200 |
 | publiczna lista (token) | 200 | 200 | 200 | 200 | 200 |
 
 **Wyjątek: encje „zawsze household" (spiżarnia — `pantry_items`).** Nie mają
@@ -110,6 +112,15 @@ połową: zmiany scope'u nie ma, a usunięcie jest zwykłą operacją członka r
 (**200/204 zamiast 403** — decyzja właściciela D17). Obcy USER nadal dostaje
 404. Testy: `tests/api/pantry/test_pantry_api.py::test_czlonek_rodziny_usuwa_cudza_pozycje`
 i `tests/integration/pantry/test_pantry_service.py::test_kazdy_czlonek_rodziny_usuwa_cudza_pozycje`.
+
+**Słowniki globalne bez scope'u (kategorie, produkty, sklepy, warianty retail).**
+Nie mają właściciela ani rodziny, więc kolumny „USER (obcy)" i „właściciel"
+znaczą dla nich to samo — cudzych zasobów tu nie ma, jest jedna widoczność
+i różne prawa ZAPISU. Dla sklepów i produktów sklepowych USER może wszystko
+(02_DOMAIN §3.1 pkt 3 i 4), a wyjątki katalogu są wymienione wyżej: wartości
+odżywcze i weryfikacja (ADMIN), usunięcie produktu (D13) oraz sposób liczenia
+i waga sztuki (D15). Testy: `tests/api/catalog/test_stores_api.py`,
+`tests/api/catalog/test_retail_api.py`, `tests/api/test_products.py::test_d15_*`.
 
 Macierz jest udowodniona raz, na poziomie mechanizmu: BATCH_03 dostarczył
 `tests/integration/test_scope_matrix.py` na encji testowej `ScopedNote`

@@ -6,6 +6,7 @@ Hasła w testach są jawne i celowo trywialne; hash liczony jest raz na wartoś�
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import date, timedelta
 from decimal import Decimal
 from functools import lru_cache
@@ -21,10 +22,13 @@ from app.modules.catalog.models import (
     Perishability,
     ProductCategory,
     ProductUnitWeight,
+    RetailProduct,
+    Store,
+    StoreCategoryOrder,
     VerificationStatus,
 )
 from app.modules.catalog.naming import normalize_name
-from app.modules.catalog.units import AmountUnit, normalize_unit_label
+from app.modules.catalog.units import AmountUnit, base_unit, normalize_unit_label
 from app.modules.households.models import Household, MemberProfile
 from app.modules.nutrition.models import UserNutritionGoal
 from app.modules.pantry.models import PantryItem
@@ -220,6 +224,73 @@ async def create_unit_weight(
     await session.commit()
     await session.refresh(weight)
     return weight
+
+
+async def create_store(
+    session: AsyncSession,
+    *,
+    name: str = "Biedronka",
+    color: str | None = None,
+    is_archived: bool = False,
+) -> Store:
+    """Sklep ze słownika globalnego (bez profilu kolejności kategorii)."""
+    store = Store(name=name, color=color, is_archived=is_archived)
+    session.add(store)
+    await session.commit()
+    await session.refresh(store)
+    return store
+
+
+async def create_category_order(
+    session: AsyncSession,
+    *,
+    store: Store,
+    categories: Sequence[ProductCategory],
+) -> list[StoreCategoryOrder]:
+    """Profil sklepu: kategorie w podanej kolejności (pozycje z indeksów listy)."""
+    rows = [
+        StoreCategoryOrder(store_id=store.id, category_id=category.id, position=position)
+        for position, category in enumerate(categories)
+    ]
+    session.add_all(rows)
+    await session.commit()
+    return rows
+
+
+async def create_retail_product(
+    session: AsyncSession,
+    *,
+    product: CanonicalProduct,
+    name: str = "Pilos Jogurt naturalny 400 g",
+    brand: str | None = "Pilos",
+    store: Store | None = None,
+    package_amount: Decimal = Decimal("400.00"),
+    package_unit: AmountUnit | None = None,
+    pieces_per_package: int | None = None,
+    photo_path: str | None = None,
+    is_archived: bool = False,
+) -> RetailProduct:
+    """Wariant sklepowy produktu kanonicznego (fabryka omija serwis).
+
+    `package_unit` domyślnie bierze oś produktu (`base_unit`), więc fabryka nie
+    tworzy danych, których serwis by nie przyjął (g dla masy, ml dla objętości,
+    sztuki dla sztuk).
+    """
+    retail = RetailProduct(
+        canonical_product_id=product.id,
+        name=name,
+        brand=brand,
+        store_id=store.id if store is not None else None,
+        package_amount=package_amount,
+        package_unit=package_unit or base_unit(product.measure_kind),
+        pieces_per_package=pieces_per_package,
+        photo_path=photo_path,
+        is_archived=is_archived,
+    )
+    session.add(retail)
+    await session.commit()
+    await session.refresh(retail)
+    return retail
 
 
 async def create_recipe(

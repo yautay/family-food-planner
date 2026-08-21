@@ -79,8 +79,17 @@ przyciskową (mobile/dostępność).
    tydzień/zakres, linie celów; średnie dzienne vs cele.
 8. **Edycja produktu** — formularz z kategorią, jednostkami, wartościami
    /100 g (+ IG), zdjęciem, datą ważności domyślną; sekcja przeliczników
-   jednostek domowych.
+   jednostek domowych. Stan po BATCH_09: dodatkowo sekcja **„Produkty
+   sklepowe"** (warianty z półki: nazwa, marka, sklep, opakowanie, miniatura
+   zdjęcia) z dodawaniem w drawerze, czyli bez opuszczania karty; sposób
+   liczenia i waga sztuki są dla nie-ADMIN-a wyłączone z podpowiedzią (D15).
 9. **Mobile** — patrz §5.
+10. **Ustawienia → „Sklepy"** (BATCH_09, bez osobnej wizualizacji) — lista
+   sklepów (nazwa, kolor, archiwum) z edycją w miejscu oraz edytor profilu:
+   kolejność kategorii przestawiana **przeciąganiem ORAZ strzałkami** (§2 —
+   alternatywa przyciskowa jest obowiązkowa, nie opcjonalna), zapis podmienia
+   całą kolejność. Numeracja 1–9 odpowiada wizualizacjom z fazy projektu,
+   dlatego nowy widok dostaje kolejny numer, a nie miejsce w środku listy.
 
 ## 5. Mobile = klient równorzędny
 

@@ -363,9 +363,13 @@ async def test_produkt_w_sztukach_wymaga_wagi_sztuki(db_session: AsyncSession) -
 
 
 async def test_zmiana_typu_miary_czysci_wage_sztuki(db_session: AsyncSession) -> None:
-    """Waga sztuki bez sztuk to dane, których nikt nie aktualizuje — kasujemy je."""
+    """Waga sztuki bez sztuk to dane, których nikt nie aktualizuje — kasujemy je.
+
+    Aktorem jest ADMIN, bo od BATCH_09 `measure_kind` zmienia wyłącznie on
+    (D15) — samo czyszczenie wagi sztuki działa jak wcześniej.
+    """
     service = CatalogService(db_session)
-    user = await create_user(db_session)
+    user = await create_admin(db_session)
     category = await create_category(db_session)
     product = await create_product(
         db_session,
@@ -380,6 +384,35 @@ async def test_zmiana_typu_miary_czysci_wage_sztuki(db_session: AsyncSession) ->
     )
 
     assert view.product.piece_weight_g is None
+
+
+async def test_d15_bramka_miary_dotyczy_tylko_realnej_zmiany(db_session: AsyncSession) -> None:
+    """D15 w serwisie: USER dostaje 403 za ZMIANĘ miary, nie za jej przysłanie.
+
+    Formularz produktu wysyła `measure_kind` przy każdym zapisie, więc bramka
+    porównuje WARTOŚCI. Test pilnuje obu stron tej reguły naraz: to samo pole
+    w tym samym żądaniu raz przechodzi, raz nie.
+    """
+    service = CatalogService(db_session)
+    user = await create_user(db_session)
+    category = await create_category(db_session)
+    product = await create_product(
+        db_session, category=category, name="Cebula", measure_kind=MeasureKind.MASS
+    )
+
+    # Ta sama miara + nowa nazwa: przechodzi.
+    view = await service.update_product(
+        product.id,
+        actor=user,
+        changes={"name": "Cebula czerwona", "measure_kind": MeasureKind.MASS},
+    )
+    assert view.product.name == "Cebula czerwona"
+
+    # Inna miara: 403, niezależnie od tego, że produkt nie ma wartości odżywczych.
+    with pytest.raises(ForbiddenError):
+        await service.update_product(
+            product.id, actor=user, changes={"measure_kind": MeasureKind.VOLUME}
+        )
 
 
 async def test_weryfikacja_bez_kompletu_wartosci_jest_odrzucana(

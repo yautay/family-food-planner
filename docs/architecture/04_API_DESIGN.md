@@ -40,7 +40,9 @@ A      /products/{id}/verify               — UNVERIFIED → VERIFIED (komplet 
 U      /products/{id}/archive              — POST archiwizuj / DELETE przywróć
 U      /products/{id}/unit-weights         — przeliczniki jednostek domowych
 U      /categories, /stores, /stores/{id}/category-order
-U      /retail-products                    — CRUD + upload zdjęcia
+U      /retail-products                    — CRUD (?canonical_product_id=,
+                                             ?store_id=, ?q=, ?include_archived=)
+U      /retail-products/{id}/photo         — PUT (multipart) / DELETE zdjęcia
 U      /tags
 
 U      /recipes                            — CRUD, filtry: tag, tekst, czas,

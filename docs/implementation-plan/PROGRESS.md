@@ -18,7 +18,7 @@ commit wykonany). Kolumna „Blokery" = zależności + decyzje z 02_DECISIONS.
 | 07 WEEK_TEMPLATES_AND_CYCLES | [x] | — | `batch(07)` na master (hash wpisać po push) |
 | R2 REVIEW_PLANNING_CORE | [x] | — | `batch(R2)` na master (hash wpisać po push) |
 | 08 PANTRY | [x] | — | `batch(08)` na master (hash wpisać po push) |
-| 09 RETAIL_PRODUCTS_AND_STORES | [ ] | 04, R2 ✔ (PASS) | |
+| 09 RETAIL_PRODUCTS_AND_STORES | [x] | — | `batch(09)` na master (hash wpisać po push) |
 | 10 SHOPPING_ENGINE | [ ] | 06, 08, 09 | |
 | 11 SHOPPING_LISTS_AND_SHARING | [ ] | 10 | |
 | R3 REVIEW_SHOPPING | [ ] | 08–11 | |
@@ -40,6 +40,68 @@ zmiany dotykające przyszłych batchy trzeba wpisać do ich kart
 (00_MASTER_PLAN §8); dziennik to indeks, nie schowek.
 
 ---
+
+**2026-08-21 — BATCH_09 (RETAIL_PRODUCTS_AND_STORES): produkty sklepowe, sklepy
+i profile kolejności kategorii; D15 domknięta.** Weszły: migracja `0011`
+(`stores`, `store_category_order`, `retail_products`, head = `0011`), dwa nowe
+serwisy w module `catalog` (`stores_service.py`, `retail_service.py`) z routerami
+`/stores`, `/stores/{id}/category-order` (GET/PUT) i `/retail-products`
+(+ `PUT|DELETE /photo`), sekcja „Sklepy" w Ustawieniach z edytorem kolejności
+(DnD **i** strzałki), sekcja „Produkty sklepowe" na karcie produktu oraz E2E
+`retail-stores.spec.ts`. Sześć rzeczy, o których muszą wiedzieć następne batche:
+
+1. **Odroczony FK z B08 jest DOPIĘTY.** `pantry_items.retail_product_id` ma
+   `fk_pantry_items_retail_product_id_retail_products` z `ON DELETE RESTRICT`,
+   a `pantry/service.py` rejestruje licznik referencji przez
+   `retail_service.register_retail_reference_finder`, więc 409 przy usuwaniu
+   wariantu pokazuje pozycje spiżarni. **Konsekwencja dla testów**: nie da się
+   już wstawić pozycji spiżarni z wymyślonym `retail_product_id` — trzeba
+   PRAWDZIWEGO wariantu (fabryka `create_retail_product`). Jeden test B08 tak
+   robił i `task check` go złapał; został poprawiony, nie osłabiony.
+2. **Dwa nowe rejestry liczników referencji.**
+   `retail_service.register_retail_reference_finder` (dla FK do
+   `retail_products` — pozycje list zakupowych w B11) i
+   `stores_service.register_store_reference_finder` (dla `shopping_lists.store_id`
+   w B11). Bez wpisu 409 wyjdzie z PUSTĄ listą „Używane w:", a przy sklepie nie
+   ma nawet drugiej linii obrony — FK listy ma `SET NULL`, więc lista po cichu
+   straciłaby profil sortowania. Karty B10 i B11 mają to wpisane.
+3. **`package_unit` to TEN SAM typ PG co `amount_unit`** z migracji `0006`
+   (`postgresql.ENUM(..., create_type=False)` również w modelu, nie tylko
+   w migracji). Kolejna tabela z jednostką ilości robi tak samo — osobnego typu
+   nie tworzymy, `EXPECTED_ENUM_TYPES` bez zmian.
+4. **Jednostka opakowania jest zawsze na osi produktu kanonicznego** —
+   serwis liczy ją przez `units.base_unit(product.measure_kind)` i odrzuca
+   niezgodność 422-ką. Silnik zakupowy (B10) może więc robić
+   `ceil(potrzeba / package_amount)` BEZ konwersji; to niezmiennik, nie
+   założenie. Warianty archiwalne domyślnie nie wchodzą do listy.
+5. **Kontrakt `RetailProductCreateDrawer`** (dla preview zakupów w B10/B11):
+   props `{ open, canonicalProductId, prefillName? }`, emits
+   `created(retailProduct)` / `close()`. Poza id produktu nie wymaga niczego —
+   sposób liczenia dociąga sam z `/products/{id}`. Sprawdzone testami
+   `RetailProductCreateDrawer.spec.ts`; karta B10 zaktualizowana.
+6. **Sprzątanie E2E ma dwa nowe ogniwa w USTALONEJ kolejności**: spiżarnia →
+   **warianty retail → sklepy** → produkty kanoniczne (`clearRetailProducts`
+   i `clearStores` w `e2e/cleanup.ts`, wpięte też w `purgeE2eLeftovers`).
+   Odwrotna kolejność zostawia śmieci: wariant trzyma produkt FK RESTRICT,
+   a sklep jest trzymany przez wariant 409-ką.
+
+**D15 ZAMKNIĘTA I WDROŻONA W CAŁOŚCI.** Bramka `_assert_measure_change_allowed`
+siedzi w `catalog/service.py::update_product` (403 z podpowiedzią wyjścia, wzorzec
+D13), obejmuje `measure_kind` ORAZ `piece_weight_g`, a pola są wyłączone dla
+nie-ADMIN-a w `ProduktFormPage.vue`. **Doprecyzowanie wykonawcze, o którym musi
+wiedzieć każdy, kto tknie ten formularz: bramka porównuje WARTOŚCI, nie obecność
+klucza w żądaniu** — formularz wysyła oba pola przy każdym zapisie, więc blokada
+na obecności odebrałaby USEROWI edycję nazwy i kategorii, czego decyzja jawnie
+zakazywała. Macierz uprawnień w `tests/api/test_products.py::test_d15_*` sprawdza
+oba kierunki (USER 403 na zmianę, USER 200 na pozostałe pola, ADMIN 200).
+Rejestr 02_DECISIONS nie ma już ŻADNEJ decyzji dotyczącej batchy 09–17 — otwarte
+zostają D6/D7 (bramki B18) i cztery pozycje bez konsumenta.
+
+**Konwencja pliku modułu potwierdzona**: obszar dokładany do istniejącego modułu
+dostaje własny plik SERWISU (`stores_service.py`, `retail_service.py` — wzorem
+`planning/templates_service.py`), ale modele i schematy zostają w jednym
+`models.py`/`schemas.py` modułu, bo `app/models.py` importuje właśnie moduł
+modeli i to on decyduje, co widzi Alembic.
 
 **2026-08-21 — BATCH_08 (PANTRY): spiżarnia jako stan domowy, bez żadnego
 automatycznego odejmowania.** Weszły: migracja `0010_pantry_items` (head = `0010`),

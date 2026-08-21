@@ -24,7 +24,10 @@ import type { APIRequestContext } from '@playwright/test'
  * `used_in`), a pozycje planu blokują usunięcie przepisu i produktu (FK
  * RESTRICT, ADR-012). Dlatego `cleanupE2eData` idzie od najbardziej zależnych
  * encji do najmniej: cykle → szablony → posiłki planu → przepisy → spiżarnia →
- * produkty (pozycja spiżarni też trzyma produkt FK RESTRICT — B08).
+ * **produkty sklepowe → sklepy** → produkty kanoniczne. Dwa ostatnie ogniwa
+ * doszły w B09: wariant retail trzyma produkt kanoniczny (FK RESTRICT), a sklep
+ * jest trzymany przez wariant (409 `used_in`), więc odwrotna kolejność zostawia
+ * śmieci i blokuje kolejny przebieg.
  */
 const API = '/api/v1'
 const CSRF_COOKIE = 'csrf_token'
@@ -223,6 +226,52 @@ async function deleteRecipes(
   }
 }
 
+/**
+ * Kasuje produkty sklepowe o nazwie z danym prefiksem.
+ *
+ * MUSI iść przed `clearProducts` i `clearStores`: `retail_products` trzyma
+ * produkt kanoniczny FK RESTRICT, a sklep — blokadą 409 z listą użyć (B09).
+ */
+export async function clearRetailProducts(
+  request: APIRequestContext,
+  prefix: string,
+): Promise<void> {
+  const headers = await csrfHeaders(request)
+  await deleteRetailProducts(request, headers, byPrefix(prefix))
+}
+
+async function deleteRetailProducts(
+  request: APIRequestContext,
+  headers: Record<string, string>,
+  matches: (name: string) => boolean,
+): Promise<void> {
+  const rows = await listNamed(
+    request,
+    `${API}/retail-products?limit=${PAGE}&offset=0&include_archived=true`,
+    matches,
+  )
+  for (const retail of rows) {
+    await tryDelete(request, `${API}/retail-products/${retail.id}`, headers)
+  }
+}
+
+/** Kasuje sklepy o nazwie z danym prefiksem (po wariantach retail!). */
+export async function clearStores(request: APIRequestContext, prefix: string): Promise<void> {
+  const headers = await csrfHeaders(request)
+  await deleteStores(request, headers, byPrefix(prefix))
+}
+
+async function deleteStores(
+  request: APIRequestContext,
+  headers: Record<string, string>,
+  matches: (name: string) => boolean,
+): Promise<void> {
+  const rows = await listNamed(request, `${API}/stores?include_archived=true`, matches)
+  for (const store of rows) {
+    await tryDelete(request, `${API}/stores/${store.id}`, headers)
+  }
+}
+
 /** Kasuje produkty kanoniczne o nazwie z danym prefiksem (konto E2E jest ADMIN-em). */
 export async function clearProducts(request: APIRequestContext, prefix: string): Promise<void> {
   const headers = await csrfHeaders(request)
@@ -258,6 +307,8 @@ export async function cleanupE2eData(
   await clearPlanDays(request, dates)
   await clearRecipes(request, namePrefix)
   await clearPantry(request, namePrefix)
+  await clearRetailProducts(request, namePrefix)
+  await clearStores(request, namePrefix)
   await clearProducts(request, namePrefix)
 }
 
@@ -290,8 +341,8 @@ export const E2E_YEARS = [2030, 2031, 2032, 2033, 2034, 2035] as const
  * W `afterAll` specu byłoby to wyścigiem — dlatego tam obowiązuje prefiks.
  *
  * **Bramka `baseURL` jest obowiązkowa.** Ta funkcja kasuje szeroko: wszystkie
- * posiłki planu z okna 2030+ NIEZALEŻNIE od nazwy oraz przepisy i produkty
- * kanoniczne, których nazwa nosi ślad testu, a konto E2E jest ADMIN-em, więc
+ * posiłki planu z okna 2030+ NIEZALEŻNIE od nazwy oraz przepisy, warianty sklepowe,
+ * sklepy i produkty kanoniczne, których nazwa nosi ślad testu, a konto E2E jest ADMIN-em, więc
  * `DELETE /products/{id}` mu przechodzi. Wskazanie `E2E_BASE_URL` na
  * współdzieloną instancję skasowałoby czyjeś dane bez pytania, dlatego
  * purge działa TYLKO przeciw localhostowi (ustalenie `/security-review` w R2).
@@ -334,5 +385,7 @@ export async function purgeE2eLeftovers(
 
   await deleteRecipes(request, headers, anyE2e)
   await deletePantryItems(request, headers, anyE2e)
+  await deleteRetailProducts(request, headers, anyE2e)
+  await deleteStores(request, headers, anyE2e)
   await deleteProducts(request, headers, anyE2e)
 }

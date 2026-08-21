@@ -21,7 +21,18 @@ Co już istnieje (stan po B10):
   `label` (render bez słowników); finalize tworzy listy per tura.
 - Placeholder route `/zakupy/listy/:id` (B10, Implementation Notes pkt 5)
   — ten batch go ZASTĘPUJE.
-- Profile sklepów `store_category_order` (B09).
+- Profile sklepów `store_category_order` — **DOSTARCZONE przez B09**
+  (migracja `0011`). Do sortowania listy służy
+  `StoresService.category_order(store_id) -> list[CategoryOrderEntry]`
+  (`app/modules/catalog/stores_service.py`; `CategoryOrderEntry` to frozen
+  dataclass `category_id` / `category_name` / `position`). Trzy rzeczy wiążące:
+  1. Profil zawiera WYŁĄCZNIE kategorie do niego dopisane — kategorie spoza
+     profilu idą na koniec wg globalnego `product_categories.position`
+     (tak samo jak dla listy bez sklepu). To nie jest brak danych, to kontrakt.
+  2. `position` jest ciągłe od 0 i bez duplikatów, bo PUT podmienia całą
+     kolejność, a serwis liczy pozycje z indeksów listy — funkcja sortująca
+     może na tym polegać.
+  3. Sklep bez profilu (`items == []`) jest dozwolonym stanem, nie błędem.
 - Spiżarnia (B08): akcja „przyjmij zakupy do spiżarni" woła
   `PantryService.create_item(actor=..., payload=PantryItemCreateRequest(...))`
   — B08 NIE dostarczył osobnej metody „dodaj albo zwiększ". Świadomie: reguła
@@ -107,6 +118,17 @@ Zasady:
   jest już zarejestrowany (`register_rate_limit_handler`).
 - Rozszerzenie blokady usuwania sklepu (z B09): store referencowany przez
   `shopping_lists.store_id` → 409 z `used_in` (Cross-Batch Impact B09).
+  **Mechanizm jest gotowy — trzeba go tylko użyć**: `stores_service.py`
+  eksportuje `register_store_reference_finder(finder)` z sygnaturą
+  `finder(session, store_id) -> Sequence[UsedInRef]`, a `delete_store` sumuje
+  wyniki wszystkich zarejestrowanych liczników z własnym (warianty retail).
+  Rejestracja przy imporcie modułu, wzorzec `pantry/service.py`. Bez wpisu
+  usunięcie sklepu z listami skończy się 409 z PUSTĄ listą „Używane w:" —
+  FK `shopping_lists.store_id` ma `SET NULL`, więc drugiej linii obrony tu
+  nie ma i lista po cichu straciłaby profil sortowania.
+  **Analogicznie dla pozycji list**: FK do `retail_products` wymaga
+  `retail_service.register_retail_reference_finder`, inaczej 409 przy usuwaniu
+  wariantu sklepowego wyjdzie bez listy użyć.
 
 ## Frontend
 

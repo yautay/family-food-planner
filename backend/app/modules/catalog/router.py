@@ -1,11 +1,17 @@
-"""HTTP modułu catalog: `/products`, `/categories` i przeliczniki jednostek.
+"""HTTP modułu catalog: `/products`, `/categories`, `/stores`, `/retail-products`.
 
 Podział uprawnień (04_API §2, 08_TESTING §4) jest widoczny wprost w sygnaturach:
 
 - `CurrentUser` — lista i szczegóły produktów, tworzenie (inline create),
-  edycja pól opisowych, archiwizacja, przeliczniki jednostek domowych,
-- `AdminUser` — wartości odżywcze (`PUT /nutrition`), weryfikacja, usuwanie
-  produktu (D13) i mutacje słownika kategorii.
+  edycja pól opisowych, archiwizacja, przeliczniki jednostek domowych oraz
+  CAŁE sklepy i produkty sklepowe (02_DOMAIN §3.1 pkt 3 i 4),
+- `AdminUser` — wartości odżywcze (`PUT /nutrition`), weryfikacja i mutacje
+  słownika kategorii.
+
+Dwa endpointy stoją na `CurrentUser`, choć reguła jest administracyjna:
+`DELETE /products/{id}` (D13) i `PATCH /products/{id}` ze zmianą `measure_kind`
+(D15). Bramkę egzekwuje serwis, żeby komunikat 403 mógł podpowiedzieć wyjście
+(archiwizację, prośbę do administratora), a nie tylko odmówić.
 
 Router nie zna reguł domenowych: sprawdza wejście, woła serwis, mapuje wynik.
 Kompletność wartości liczy adapter `ProductNutrition` (przez `ProductView`),
@@ -16,10 +22,23 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 
-from app.core.deps import AdminUser, CurrentUser, get_catalog_service
-from app.modules.catalog.models import ProductCategory, ProductUnitWeight, VerificationStatus
+from app.core.deps import (
+    AdminUser,
+    CurrentUser,
+    get_catalog_service,
+    get_retail_service,
+    get_stores_service,
+)
+from app.core.uploads import MAX_IMAGE_BYTES, image_urls
+from app.modules.catalog.models import (
+    ProductCategory,
+    ProductUnitWeight,
+    Store,
+    VerificationStatus,
+)
+from app.modules.catalog.retail_service import RetailProductView, RetailService
 from app.modules.catalog.schemas import (
     CategoryCreateRequest,
     CategoryListResponse,
@@ -33,14 +52,28 @@ from app.modules.catalog.schemas import (
     ProductNutritionRequest,
     ProductRead,
     ProductUpdateRequest,
+    RetailProductCreateRequest,
+    RetailProductListResponse,
+    RetailProductRead,
+    RetailProductUpdateRequest,
+    StoreCategoryOrderEntry,
+    StoreCategoryOrderRequest,
+    StoreCategoryOrderResponse,
+    StoreCreateRequest,
+    StoreListResponse,
+    StoreRead,
+    StoreUpdateRequest,
     UnitWeightCreateRequest,
     UnitWeightListResponse,
     UnitWeightRead,
     UnitWeightUpdateRequest,
 )
 from app.modules.catalog.service import NUTRITION_FIELDS, CatalogService, ProductView
+from app.modules.catalog.stores_service import CategoryOrderEntry, StoresService
 
 ServiceDep = Annotated[CatalogService, Depends(get_catalog_service)]
+StoresServiceDep = Annotated[StoresService, Depends(get_stores_service)]
+RetailServiceDep = Annotated[RetailService, Depends(get_retail_service)]
 
 
 def _to_read(view: ProductView) -> ProductRead:
@@ -89,6 +122,46 @@ def _categories_response(categories: list[ProductCategory]) -> CategoryListRespo
 def _unit_weights_response(weights: list[ProductUnitWeight]) -> UnitWeightListResponse:
     items = [UnitWeightRead.model_validate(weight) for weight in weights]
     return UnitWeightListResponse(items=items, total=len(items))
+
+
+def _stores_response(stores: list[Store]) -> StoreListResponse:
+    items = [StoreRead.model_validate(store) for store in stores]
+    return StoreListResponse(items=items, total=len(items))
+
+
+def _category_order_response(entries: list[CategoryOrderEntry]) -> StoreCategoryOrderResponse:
+    items = [
+        StoreCategoryOrderEntry(
+            category_id=entry.category_id,
+            category_name=entry.category_name,
+            position=entry.position,
+        )
+        for entry in entries
+    ]
+    return StoreCategoryOrderResponse(items=items, total=len(items))
+
+
+def _to_retail_read(view: RetailProductView) -> RetailProductRead:
+    """`RetailProductView` → schemat odpowiedzi (URL-e zdjęcia, nie ścieżki z dysku)."""
+    retail = view.retail
+    photo_url, photo_thumb_url = image_urls(retail.photo_path)
+    return RetailProductRead(
+        id=retail.id,
+        canonical_product_id=retail.canonical_product_id,
+        canonical_product_name=view.product.name,
+        name=retail.name,
+        brand=retail.brand,
+        store_id=retail.store_id,
+        store_name=view.store.name if view.store is not None else None,
+        package_amount=retail.package_amount,
+        package_unit=retail.package_unit,
+        pieces_per_package=retail.pieces_per_package,
+        photo_url=photo_url,
+        photo_thumb_url=photo_thumb_url,
+        is_archived=retail.is_archived,
+        created_at=retail.created_at,
+        updated_at=retail.updated_at,
+    )
 
 
 def build_products_router() -> APIRouter:
@@ -332,5 +405,186 @@ def build_categories_router() -> APIRouter:
     )
     async def delete_category(category_id: int, actor: AdminUser, service: ServiceDep) -> None:
         await service.delete_category(category_id, actor=actor)
+
+    return router
+
+
+def build_stores_router() -> APIRouter:
+    """Router `/stores` — słownik globalny; wszystko dla zalogowanego USERA.
+
+    Nie ma tu `AdminUser` ani jednego endpointu: sklepy i ich profile edytuje
+    każdy członek instancji (02_DOMAIN §3.1 pkt 3), bo kolejność przejścia po
+    sklepie to wiedza tego, kto w nim robi zakupy, a nie decyzja administratora.
+    """
+    router = APIRouter(prefix="/stores", tags=["catalog"])
+
+    @router.get("", response_model=StoreListResponse, summary="Lista sklepów")
+    async def list_stores(
+        user: CurrentUser, service: StoresServiceDep, include_archived: bool = False
+    ) -> StoreListResponse:
+        return _stores_response(await service.list_stores(include_archived=include_archived))
+
+    @router.post(
+        "",
+        response_model=StoreRead,
+        status_code=status.HTTP_201_CREATED,
+        summary="Dodanie sklepu (także inline z pickera)",
+    )
+    async def create_store(
+        payload: StoreCreateRequest, user: CurrentUser, service: StoresServiceDep
+    ) -> StoreRead:
+        store = await service.create_store(actor=user, name=payload.name, color=payload.color)
+        return StoreRead.model_validate(store)
+
+    @router.patch("/{store_id}", response_model=StoreRead, summary="Edycja sklepu")
+    async def update_store(
+        store_id: int,
+        payload: StoreUpdateRequest,
+        user: CurrentUser,
+        service: StoresServiceDep,
+    ) -> StoreRead:
+        store = await service.update_store(
+            store_id, actor=user, changes=payload.model_dump(exclude_unset=True)
+        )
+        return StoreRead.model_validate(store)
+
+    @router.delete(
+        "/{store_id}",
+        status_code=status.HTTP_204_NO_CONTENT,
+        summary="Usunięcie sklepu (tylko nieużywanego — 409 z listą użyć)",
+    )
+    async def delete_store(store_id: int, user: CurrentUser, service: StoresServiceDep) -> None:
+        await service.delete_store(store_id, actor=user)
+
+    @router.get(
+        "/{store_id}/category-order",
+        response_model=StoreCategoryOrderResponse,
+        summary="Kolejność kategorii w tym sklepie",
+    )
+    async def get_category_order(
+        store_id: int, user: CurrentUser, service: StoresServiceDep
+    ) -> StoreCategoryOrderResponse:
+        return _category_order_response(await service.category_order(store_id))
+
+    @router.put(
+        "/{store_id}/category-order",
+        response_model=StoreCategoryOrderResponse,
+        summary="Pełna podmiana kolejności kategorii (lista `category_id` w kolejności)",
+    )
+    async def set_category_order(
+        store_id: int,
+        payload: StoreCategoryOrderRequest,
+        user: CurrentUser,
+        service: StoresServiceDep,
+    ) -> StoreCategoryOrderResponse:
+        entries = await service.set_category_order(
+            store_id, actor=user, category_ids=payload.category_ids
+        )
+        return _category_order_response(entries)
+
+    return router
+
+
+def build_retail_products_router() -> APIRouter:
+    """Router `/retail-products` — warianty sklepowe produktów kanonicznych."""
+    router = APIRouter(prefix="/retail-products", tags=["catalog"])
+
+    @router.get("", response_model=RetailProductListResponse, summary="Lista produktów sklepowych")
+    async def list_retail_products(
+        user: CurrentUser,
+        service: RetailServiceDep,
+        limit: Annotated[int, Query(ge=1, le=200)] = 50,
+        offset: Annotated[int, Query(ge=0)] = 0,
+        canonical_product_id: Annotated[int | None, Query(ge=1)] = None,
+        store_id: Annotated[int | None, Query(ge=1)] = None,
+        q: Annotated[str | None, Query(max_length=200)] = None,
+        include_archived: bool = False,
+    ) -> RetailProductListResponse:
+        views, total = await service.list_retail_products(
+            limit=limit,
+            offset=offset,
+            canonical_product_id=canonical_product_id,
+            store_id=store_id,
+            query=q,
+            include_archived=include_archived,
+        )
+        return RetailProductListResponse(
+            items=[_to_retail_read(view) for view in views], total=total
+        )
+
+    @router.post(
+        "",
+        response_model=RetailProductRead,
+        status_code=status.HTTP_201_CREATED,
+        summary="Dodanie produktu sklepowego (wymaga produktu kanonicznego)",
+    )
+    async def create_retail_product(
+        payload: RetailProductCreateRequest, user: CurrentUser, service: RetailServiceDep
+    ) -> RetailProductRead:
+        return _to_retail_read(
+            await service.create_retail_product(
+                actor=user,
+                canonical_product_id=payload.canonical_product_id,
+                name=payload.name,
+                brand=payload.brand,
+                store_id=payload.store_id,
+                package_amount=payload.package_amount,
+                package_unit=payload.package_unit,
+                pieces_per_package=payload.pieces_per_package,
+            )
+        )
+
+    @router.patch(
+        "/{retail_id}",
+        response_model=RetailProductRead,
+        summary="Edycja produktu sklepowego (także archiwizacja przez `is_archived`)",
+    )
+    async def update_retail_product(
+        retail_id: int,
+        payload: RetailProductUpdateRequest,
+        user: CurrentUser,
+        service: RetailServiceDep,
+    ) -> RetailProductRead:
+        return _to_retail_read(
+            await service.update_retail_product(
+                retail_id, actor=user, changes=payload.model_dump(exclude_unset=True)
+            )
+        )
+
+    @router.delete(
+        "/{retail_id}",
+        status_code=status.HTTP_204_NO_CONTENT,
+        summary="Usunięcie produktu sklepowego (tylko nieużywanego — 409 z listą użyć)",
+    )
+    async def delete_retail_product(
+        retail_id: int, user: CurrentUser, service: RetailServiceDep
+    ) -> None:
+        await service.delete_retail_product(retail_id, actor=user)
+
+    @router.put(
+        "/{retail_id}/photo",
+        response_model=RetailProductRead,
+        summary="Zdjęcie opakowania (multipart; sniffing, re-encode, miniatura)",
+    )
+    async def upload_photo(
+        retail_id: int,
+        user: CurrentUser,
+        service: RetailServiceDep,
+        file: Annotated[UploadFile, File(description="Plik obrazu, maks. 10 MB")],
+    ) -> RetailProductRead:
+        # Odczyt z sufitem: do RAM trafia najwyżej limit + 1 bajt — plik ponad
+        # limit dostaje 413 z `save_image` bez materializowania całości (jak B05).
+        data = await file.read(MAX_IMAGE_BYTES + 1)
+        return _to_retail_read(await service.set_photo(retail_id, actor=user, data=data))
+
+    @router.delete(
+        "/{retail_id}/photo",
+        response_model=RetailProductRead,
+        summary="Usunięcie zdjęcia produktu sklepowego",
+    )
+    async def delete_photo(
+        retail_id: int, user: CurrentUser, service: RetailServiceDep
+    ) -> RetailProductRead:
+        return _to_retail_read(await service.delete_photo(retail_id, actor=user))
 
     return router

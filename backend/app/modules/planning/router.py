@@ -23,7 +23,7 @@ from fastapi import APIRouter, Depends, Query, status
 
 from app.core.deps import CurrentUser, get_planning_service, get_templates_service
 from app.core.scope import Scope
-from app.core.uploads import thumbnail_path_for
+from app.core.uploads import image_urls
 from app.modules.nutrition.schemas import GoalMetricRead, nutrition_read
 from app.modules.planning.models import DayTemplate, WeekTemplate
 from app.modules.planning.schemas import (
@@ -64,7 +64,6 @@ from app.modules.planning.templates_service import (
     day_summary,
     week_summary,
 )
-from app.modules.recipes.router import UPLOADS_URL_PREFIX
 
 ServiceDep = Annotated[PlanningService, Depends(get_planning_service)]
 TemplatesDep = Annotated[TemplatesService, Depends(get_templates_service)]
@@ -72,9 +71,7 @@ TemplatesDep = Annotated[TemplatesService, Depends(get_templates_service)]
 
 def _thumb_url(photo_path: str | None) -> str | None:
     """Miniatura zdjęcia przepisu jako URL endpointu `/uploads/*` (albo `None`)."""
-    if not photo_path:
-        return None
-    return f"{UPLOADS_URL_PREFIX}/{thumbnail_path_for(photo_path)}"
+    return image_urls(photo_path)[1]
 
 
 def _to_item(view: ItemView) -> PlanItemRead:

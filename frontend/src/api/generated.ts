@@ -394,6 +394,114 @@ export interface paths {
         patch: operations["update_category_api_v1_categories__category_id__patch"];
         trace?: never;
     };
+    "/api/v1/stores": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lista sklepów */
+        get: operations["list_stores_api_v1_stores_get"];
+        put?: never;
+        /** Dodanie sklepu (także inline z pickera) */
+        post: operations["create_store_api_v1_stores_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/stores/{store_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Usunięcie sklepu (tylko nieużywanego — 409 z listą użyć) */
+        delete: operations["delete_store_api_v1_stores__store_id__delete"];
+        options?: never;
+        head?: never;
+        /** Edycja sklepu */
+        patch: operations["update_store_api_v1_stores__store_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/stores/{store_id}/category-order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Kolejność kategorii w tym sklepie */
+        get: operations["get_category_order_api_v1_stores__store_id__category_order_get"];
+        /** Pełna podmiana kolejności kategorii (lista `category_id` w kolejności) */
+        put: operations["set_category_order_api_v1_stores__store_id__category_order_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail-products": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lista produktów sklepowych */
+        get: operations["list_retail_products_api_v1_retail_products_get"];
+        put?: never;
+        /** Dodanie produktu sklepowego (wymaga produktu kanonicznego) */
+        post: operations["create_retail_product_api_v1_retail_products_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail-products/{retail_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Usunięcie produktu sklepowego (tylko nieużywanego — 409 z listą użyć) */
+        delete: operations["delete_retail_product_api_v1_retail_products__retail_id__delete"];
+        options?: never;
+        head?: never;
+        /** Edycja produktu sklepowego (także archiwizacja przez `is_archived`) */
+        patch: operations["update_retail_product_api_v1_retail_products__retail_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/retail-products/{retail_id}/photo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Zdjęcie opakowania (multipart; sniffing, re-encode, miniatura) */
+        put: operations["upload_photo_api_v1_retail_products__retail_id__photo_put"];
+        post?: never;
+        /** Usunięcie zdjęcia produktu sklepowego */
+        delete: operations["delete_photo_api_v1_retail_products__retail_id__photo_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/recipes": {
         parameters: {
             query?: never;
@@ -937,6 +1045,14 @@ export interface components {
         };
         /** Body_upload_photo_api_v1_recipes__recipe_id__photo_post */
         Body_upload_photo_api_v1_recipes__recipe_id__photo_post: {
+            /**
+             * File
+             * @description Plik obrazu, maks. 10 MB
+             */
+            file: string;
+        };
+        /** Body_upload_photo_api_v1_retail_products__retail_id__photo_put */
+        Body_upload_photo_api_v1_retail_products__retail_id__photo_put: {
             /**
              * File
              * @description Plik obrazu, maks. 10 MB
@@ -2319,11 +2435,208 @@ export interface components {
             updated_at: string;
         };
         /**
+         * RetailProductCreateRequest
+         * @description Nowy produkt sklepowy.
+         *
+         *     `canonical_product_id` jest WYMAGANY (02_DOMAIN §4.4): retail bez produktu
+         *     kanonicznego nie istnieje, bo nie miałby wartości odżywczych ani miejsca
+         *     w agregacji zakupów. Zgodność `package_unit` z `measure_kind` produktu
+         *     sprawdza serwis — tutaj nie znamy jeszcze produktu.
+         */
+        RetailProductCreateRequest: {
+            /** Canonical Product Id */
+            canonical_product_id: number;
+            /** Name */
+            name: string;
+            /** Brand */
+            brand?: string | null;
+            /** Store Id */
+            store_id?: number | null;
+            /** Package Amount */
+            package_amount: number | string;
+            package_unit: components["schemas"]["AmountUnit"];
+            /** Pieces Per Package */
+            pieces_per_package?: number | null;
+        };
+        /**
+         * RetailProductListResponse
+         * @description Lista wariantów sklepowych z paginacją (04_API §1).
+         */
+        RetailProductListResponse: {
+            /** Items */
+            items: components["schemas"]["RetailProductRead"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * RetailProductRead
+         * @description Wariant sklepowy produktu kanonicznego (02_DOMAIN §4.4).
+         *
+         *     `package_amount` jest stringiem dziesiętnym (ADR-008), a URL-e zdjęcia
+         *     prowadzą do endpointu `/uploads/*` z sesją (07_SECURITY §6) — nigdy do
+         *     ścieżki na dysku.
+         */
+        RetailProductRead: {
+            /** Id */
+            id: number;
+            /** Canonical Product Id */
+            canonical_product_id: number;
+            /** Canonical Product Name */
+            canonical_product_name: string;
+            /** Name */
+            name: string;
+            /** Brand */
+            brand: string | null;
+            /** Store Id */
+            store_id: number | null;
+            /** Store Name */
+            store_name: string | null;
+            /** Package Amount */
+            package_amount: string;
+            package_unit: components["schemas"]["AmountUnit"];
+            /** Pieces Per Package */
+            pieces_per_package: number | null;
+            /** Photo Url */
+            photo_url: string | null;
+            /** Photo Thumb Url */
+            photo_thumb_url: string | null;
+            /** Is Archived */
+            is_archived: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * RetailProductUpdateRequest
+         * @description Częściowa edycja wariantu sklepowego.
+         *
+         *     `canonical_product_id` NIE jest edytowalny: przepięcie wariantu na inny
+         *     produkt kanoniczny zmieniałoby znaczenie danych historycznych (spiżarnia,
+         *     listy zakupowe) bez śladu. Pomyłkę naprawia się nowym wariantem
+         *     i archiwizacją starego (ADR-012).
+         */
+        RetailProductUpdateRequest: {
+            /** Name */
+            name?: string | null;
+            /** Brand */
+            brand?: string | null;
+            /** Store Id */
+            store_id?: number | null;
+            /** Package Amount */
+            package_amount?: number | string | null;
+            package_unit?: components["schemas"]["AmountUnit"] | null;
+            /** Pieces Per Package */
+            pieces_per_package?: number | null;
+            /** Is Archived */
+            is_archived?: boolean | null;
+        };
+        /**
          * Scope
          * @description Zakres widoczności encji współdzielnej (ADR-006).
          * @enum {string}
          */
         Scope: "private" | "household";
+        /**
+         * StoreCategoryOrderEntry
+         * @description Jedna kategoria w profilu sklepu — z nazwą, żeby UI nie dociągał słownika.
+         */
+        StoreCategoryOrderEntry: {
+            /** Category Id */
+            category_id: number;
+            /** Category Name */
+            category_name: string;
+            /** Position */
+            position: number;
+        };
+        /**
+         * StoreCategoryOrderRequest
+         * @description PEŁNA podmiana kolejności: lista `category_id` w docelowej kolejności.
+         *
+         *     Pozycje (`position`) liczy serwis z indeksów listy — klient nie ma prawa
+         *     przysłać dziur ani duplikatów numerów, bo to jedna spójna permutacja.
+         *     Pusta lista jest dozwolona i znaczy „ten sklep nie ma profilu".
+         */
+        StoreCategoryOrderRequest: {
+            /** Category Ids */
+            category_ids?: number[];
+        };
+        /**
+         * StoreCategoryOrderResponse
+         * @description Profil sklepu: kategorie w kolejności przejścia po sklepie.
+         *
+         *     Zawiera WYŁĄCZNIE kategorie należące do profilu. Kategorie spoza listy są
+         *     poza profilem (karta B09, nota 4) — silnik listy zakupowej (B11) umieści je
+         *     na końcu, a edytor pobiera pełny słownik z `/categories`.
+         */
+        StoreCategoryOrderResponse: {
+            /** Items */
+            items: components["schemas"]["StoreCategoryOrderEntry"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * StoreCreateRequest
+         * @description Nowy sklep — tworzy go także USER, także inline z `StorePicker` (02 §3.1 pkt 3).
+         */
+        StoreCreateRequest: {
+            /** Name */
+            name: string;
+            /** Color */
+            color?: string | null;
+        };
+        /**
+         * StoreListResponse
+         * @description Lista sklepów (kształt `{items, total}` także bez paginacji — 04_API §1).
+         */
+        StoreListResponse: {
+            /** Items */
+            items: components["schemas"]["StoreRead"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * StoreRead
+         * @description Sklep ze słownika globalnego.
+         */
+        StoreRead: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Color */
+            color: string | null;
+            /** Is Archived */
+            is_archived: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * StoreUpdateRequest
+         * @description Częściowa edycja sklepu; pole pominięte zostaje bez zmian.
+         */
+        StoreUpdateRequest: {
+            /** Name */
+            name?: string | null;
+            /** Color */
+            color?: string | null;
+            /** Is Archived */
+            is_archived?: boolean | null;
+        };
         /**
          * TagCreateRequest
          * @description Inline create tagu użytkowego (`is_system=false`) z multi-pickera.
@@ -3936,6 +4249,399 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CategoryRead"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_stores_api_v1_stores_get: {
+        parameters: {
+            query?: {
+                include_archived?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoreListResponse"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_store_api_v1_stores_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StoreCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoreRead"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_store_api_v1_stores__store_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_store_api_v1_stores__store_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StoreUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoreRead"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_category_order_api_v1_stores__store_id__category_order_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoreCategoryOrderResponse"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    set_category_order_api_v1_stores__store_id__category_order_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StoreCategoryOrderRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoreCategoryOrderResponse"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_retail_products_api_v1_retail_products_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+                canonical_product_id?: number | null;
+                store_id?: number | null;
+                q?: string | null;
+                include_archived?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailProductListResponse"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_retail_product_api_v1_retail_products_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailProductCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailProductRead"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_retail_product_api_v1_retail_products__retail_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                retail_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_retail_product_api_v1_retail_products__retail_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                retail_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailProductUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailProductRead"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    upload_photo_api_v1_retail_products__retail_id__photo_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                retail_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_photo_api_v1_retail_products__retail_id__photo_put"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailProductRead"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_photo_api_v1_retail_products__retail_id__photo_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                retail_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailProductRead"];
                 };
             };
             /** @description Błąd */

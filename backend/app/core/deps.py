@@ -20,7 +20,9 @@ from app.core.security import CSRF_COOKIE_NAME, SESSION_COOKIE_NAME
 from app.modules.accounts.models import User, UserRole
 from app.modules.accounts.service import SESSION_REQUIRED, AccountsService
 from app.modules.audit.service import AuditService
+from app.modules.catalog.retail_service import RetailService
 from app.modules.catalog.service import CatalogService
+from app.modules.catalog.stores_service import StoresService
 from app.modules.households.service import HouseholdsService
 from app.modules.nutrition.service import GoalsService
 from app.modules.pantry.service import PantryService
@@ -48,6 +50,20 @@ def get_catalog_service(
 ) -> CatalogService:
     """Serwis katalogu: produkty kanoniczne, kategorie, przeliczniki jednostek."""
     return CatalogService(session)
+
+
+def get_stores_service(
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> StoresService:
+    """Serwis sklepów i profili kolejności kategorii (BATCH_09)."""
+    return StoresService(session)
+
+
+def get_retail_service(
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> RetailService:
+    """Serwis produktów sklepowych: warianty, opakowania, zdjęcia (BATCH_09)."""
+    return RetailService(session)
 
 
 def get_recipes_service(

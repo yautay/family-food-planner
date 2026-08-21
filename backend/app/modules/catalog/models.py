@@ -41,13 +41,15 @@ from sqlalchemy import (
     UniqueConstraint,
     text,
 )
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base, TimestampMixin
-from app.modules.catalog.units import MeasureKind
+from app.modules.catalog.units import AmountUnit, MeasureKind
 
 __all__ = [
     "MEASURE_KIND_ENUM",
+    "PACKAGE_UNIT_ENUM",
     "PERISHABILITY_ENUM",
     "VERIFICATION_STATUS_ENUM",
     "CanonicalProduct",
@@ -57,6 +59,9 @@ __all__ = [
     "ProductCategory",
     "ProductNutrientValue",
     "ProductUnitWeight",
+    "RetailProduct",
+    "Store",
+    "StoreCategoryOrder",
     "VerificationStatus",
 ]
 
@@ -84,6 +89,17 @@ def _pg_enum(enum: type[StrEnum], name: str) -> Enum:
 PERISHABILITY_ENUM = _pg_enum(Perishability, "perishability")
 MEASURE_KIND_ENUM = _pg_enum(MeasureKind, "measure_kind")
 VERIFICATION_STATUS_ENUM = _pg_enum(VerificationStatus, "verification_status")
+
+#: Jednostka opakowania produktu sklepowego (03_DATABASE §3: `ENUM(g,ml,piece)`).
+#: To DOKŁADNIE ten sam typ PG co `recipes.amount_unit` — powstał w migracji
+#: `0006`, więc tutaj jest wyłącznie REFERENCJĄ (`create_type=False`, CLAUDE.md §4).
+#: Osobny typ „package_unit" byłby duplikatem tej samej dziedziny wartości.
+PACKAGE_UNIT_ENUM = postgresql.ENUM(
+    AmountUnit,
+    name="amount_unit",
+    create_type=False,
+    values_callable=lambda members: [m.value for m in members],
+)
 
 
 class ProductCategory(TimestampMixin, Base):
@@ -286,3 +302,120 @@ class ProductNutrientValue(TimestampMixin, Base):
     amount_per_100: Mapped[Decimal] = mapped_column(Numeric(9, 3), nullable=False)
 
     product: Mapped[CanonicalProduct] = relationship(back_populates="nutrient_values")
+
+
+class Store(TimestampMixin, Base):
+    """Sklep — słownik globalny, edytowalny przez USERA (02_DOMAIN §3.1 pkt 3, §4.5).
+
+    Sklep sam z siebie niesie mało: nazwę i opcjonalny kolor do odróżnienia na
+    liście. Wartość dokłada mu PROFIL (`store_category_order`) — kolejność
+    fizycznego przejścia po sklepie, wg której B11 sortuje listę zakupową.
+
+    `is_archived` zamiast usuwania (ADR-012, rozstrzygnięcie planu B09 pkt 2):
+    sklep, którego już nie odwiedzamy, znika z pickerów, ale zostaje przy
+    historycznych produktach sklepowych.
+    """
+
+    __tablename__ = "stores"
+    __table_args__ = (UniqueConstraint("name", name="uq_stores_name"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    #: Token/etykieta koloru z palety UI (06_UIUX §1) — nigdy hex z komponentu.
+    color: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_archived: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+
+    # Kolekcja istnieje dla konfiguracji kaskady, NIE do odczytu w warstwie HTTP
+    # (lekcja z BATCH_03: leniwa relacja tknięta poza greenletem = 500).
+    category_order: Mapped[list[StoreCategoryOrder]] = relationship(
+        back_populates="store", passive_deletes=True
+    )
+
+
+class StoreCategoryOrder(TimestampMixin, Base):
+    """Jedna pozycja profilu sklepu: kategoria + jej miejsce w kolejności (02_DOMAIN §4.5).
+
+    Klucz główny jest złożony (`store_id`, `category_id`) — kategoria występuje
+    w profilu sklepu najwyżej raz, więc osobne `id` byłoby tylko dodatkowym
+    sposobem zapisania duplikatu.
+
+    Obie strony kasują się KASKADĄ, nie RESTRICT-em: profil to atrybut sklepu
+    (kompozycja rodzic→dziecko, ADR-012), a kategoria usunięta ze słownika nie
+    ma prawa blokować sklepu — sama kategoria jest chroniona 409-ką od strony
+    produktów (`delete_category`).
+    """
+
+    __tablename__ = "store_category_order"
+
+    store_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("stores.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    category_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("product_categories.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    #: Pozycja w przejściu po sklepie; spójność permutacji pilnuje serwis (PUT
+    #: podmienia całość), bo pojedynczy wiersz nie wie nic o pozostałych.
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    store: Mapped[Store] = relationship(back_populates="category_order")
+
+
+class RetailProduct(TimestampMixin, Base):
+    """Produkt sklepowy — konkretny produkt z półki (02_DOMAIN §4.4).
+
+    Powiązanie z produktem kanonicznym jest OBOWIĄZKOWE i to jest cała istota
+    tej tabeli: „Pilos Jogurt naturalny 400 g" ma sens tylko jako wariant
+    kanonicznego „jogurtu naturalnego", bo wartości odżywcze, przeliczniki
+    i agregacja zakupów żyją przy kanonicznym (ADR-004). Retail dokłada do tego
+    to, czego kanoniczny nie wie: markę, sklep i WIELKOŚĆ OPAKOWANIA, z której
+    silnik zakupowy (B10) liczy liczbę opakowań i resztkę.
+
+    `package_unit` musi zgadzać się z `measure_kind` produktu kanonicznego
+    (g↔mass, ml↔volume, piece↔piece) — pilnuje tego serwis, bo baza nie widzi
+    obu tabel w jednym CHECK-u.
+    """
+
+    __tablename__ = "retail_products"
+    __table_args__ = (
+        # 03_DATABASE §3 wymienia ten indeks wprost: najczęstszym zapytaniem jest
+        # „warianty retail TEGO produktu kanonicznego" (karta produktu, B10).
+        Index("ix_retail_products_canonical_product_id", "canonical_product_id"),
+        Index("ix_retail_products_store_id", "store_id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    #: RESTRICT: produkt kanoniczny użyty w retail nie znika (ADR-012). Licznik
+    #: referencji dla czytelnej 409-ki rejestruje `retail_service`.
+    canonical_product_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("canonical_products.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    brand: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: SET NULL, nie RESTRICT: sklep bywa likwidowany, a wielkość opakowania
+    #: zostaje prawdziwa — wariant bez sklepu jest dozwolonym stanem (03 §3).
+    #: Fizyczne usunięcie sklepu i tak blokuje 409 z listy użyć (`delete_store`),
+    #: więc SET NULL zadziała tylko przy usunięciu z pominięciem serwisu.
+    store_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        ForeignKey("stores.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    package_amount: Mapped[Decimal] = mapped_column(Numeric(8, 2), nullable=False)
+    package_unit: Mapped[AmountUnit] = mapped_column(PACKAGE_UNIT_ENUM, nullable=False)
+    #: Sztuki w opakowaniu (jajka 10 szt.) — opcjonalne, bo większość opakowań
+    #: opisuje wyłącznie masa albo objętość.
+    pieces_per_package: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    #: Ścieżka WZGLĘDNA w katalogu uploadów (`app/core/uploads.py`); miniatura
+    #: wynika z konwencji nazwy, więc nie ma dla niej osobnej kolumny.
+    photo_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_archived: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )

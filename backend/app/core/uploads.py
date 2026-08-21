@@ -32,6 +32,10 @@ from app.core.errors import AppError, NotFoundError
 
 #: Limit obrazu z 07_SECURITY §6 (PDF-y importu mają własny limit w B15).
 MAX_IMAGE_BYTES = 10 * 1024 * 1024
+#: Prefiks URL endpointu serwującego uploady (`app/main.py::build_uploads_router`).
+#: Ścieżki w bazie są WZGLĘDNE, a URL powstaje wyłącznie tutaj — dzięki temu
+#: żaden moduł nie skleja go po swojemu i nie wystawi ścieżki z dysku.
+UPLOADS_URL_PREFIX = "/uploads"
 #: Dłuższy bok miniatury; jakość JPEG dobrana wg proporcji rozmiar/wygląd.
 THUMBNAIL_MAX_PX = 512
 JPEG_QUALITY = 85
@@ -69,6 +73,20 @@ def thumbnail_path_for(path: str) -> str:
     """Ścieżka miniatury wynika z konwencji nazwy, nie z osobnej kolumny."""
     pure = PurePosixPath(path)
     return str(pure.with_name(f"{pure.stem}_thumb{pure.suffix}"))
+
+
+def image_urls(path: str | None) -> tuple[str | None, str | None]:
+    """Ścieżka względna z DB → URL-e endpointu `/uploads/*` (oryginał, miniatura).
+
+    Brak zdjęcia daje `(None, None)`, nie pusty string: `null` w odpowiedzi API
+    znaczy „nie ma zdjęcia", a `""` byłoby URL-em prowadzącym w nikąd.
+    """
+    if not path:
+        return None, None
+    return (
+        f"{UPLOADS_URL_PREFIX}/{path}",
+        f"{UPLOADS_URL_PREFIX}/{thumbnail_path_for(path)}",
+    )
 
 
 def save_image(data: bytes, *, uploads_root: Path, subdir: str) -> SavedImage:

@@ -4,10 +4,16 @@ Katalog jest GLOBALNY (02_DOMAIN §3.1 pkt 3) — nie ma tu `ScopedQuery`, bo ni
 ma czego zawężać: każdy zalogowany użytkownik widzi ten sam słownik. Różnicują
 się uprawnienia do ZAPISU i egzekwuje je router (`CurrentUser` vs `AdminUser`):
 
-- USER: tworzy produkty (inline create → `UNVERIFIED`), edytuje pola opisowe,
-  archiwizuje i przywraca, zarządza przelicznikami jednostek domowych,
+- USER: tworzy produkty (inline create → `UNVERIFIED`), edytuje pola opisowe
+  POZA sposobem liczenia, archiwizuje i przywraca, zarządza przelicznikami
+  jednostek domowych,
 - ADMIN: dodatkowo wartości odżywcze (`PUT /nutrition`), weryfikacja
-  (`POST /verify`), usuwanie produktów (D13) i CRUD kategorii.
+  (`POST /verify`), usuwanie produktów (D13), zmiana `measure_kind`
+  i `piece_weight_g` (D15) oraz CRUD kategorii.
+
+Dwie reguły roli siedzą w SERWISIE, nie w routerze (D13 i D15): endpoint
+zostaje na `CurrentUser`, żeby odpowiedź 403 mogła podpowiedzieć wyjście —
+archiwizację albo prośbę do administratora — zamiast suchego „brak uprawnień".
 
 Każda zmiana wartości i każda weryfikacja zostawia wpis w dzienniku z payloadem
 `{"before": ..., "after": ...}` — silnik liczy na tych danych, więc muszą być
@@ -69,6 +75,10 @@ CATEGORY_IN_USE = (
 PRODUCT_DELETE_FORBIDDEN = (
     "Produkty kanoniczne usuwa wyłącznie administrator — katalog jest wspólny dla "
     "wszystkich rodzin. Możesz zarchiwizować produkt: zniknie z list wyboru."
+)
+MEASURE_KIND_FORBIDDEN = (
+    "Sposób liczenia produktu może zmienić tylko administrator — te same liczby znaczą "
+    "co innego na 100 g i na 100 ml. Poproś administratora albo utwórz nowy produkt."
 )
 UNIT_LABEL_TAKEN = "Ten produkt ma już przelicznik dla tej jednostki."
 UNIT_LABEL_RESERVED = (
@@ -452,8 +462,13 @@ class CatalogService:
     async def update_product(
         self, product_id: int, *, actor: User, changes: Mapping[str, Any]
     ) -> ProductView:
-        """Edycja pól opisowych (USER). Wartości odżywcze mają osobny endpoint."""
+        """Edycja pól opisowych (USER). Wartości odżywcze mają osobny endpoint.
+
+        Wyjątkiem są `measure_kind` i sprzężona z nim `piece_weight_g`: te
+        zmienia wyłącznie ADMIN (D15, bramka w `_assert_measure_change_allowed`).
+        """
         product = await self.get_product(product_id)
+        _assert_measure_change_allowed(actor, product, changes)
         before = self._product_snapshot(product)
 
         if "category_id" in changes:
@@ -813,6 +828,34 @@ def _search_condition(phrase: str) -> ColumnElement[bool]:
         CanonicalProduct.normalized_name.startswith(normalize_name(phrase), autoescape=True),
         _similarity(phrase) >= threshold,
     )
+
+
+def _assert_measure_change_allowed(
+    actor: User, product: CanonicalProduct, changes: Mapping[str, Any]
+) -> None:
+    """D15 (02_DECISIONS): `measure_kind` zmienia WYŁĄCZNIE ADMIN.
+
+    `measure_kind` decyduje, czy wartości produktu znaczą „na 100 g", czy
+    „na 100 ml" (ADR-004), a katalog jest GLOBALNY — przestawienie podstawy
+    przez jednego użytkownika uderza we wszystkie rodziny. `piece_weight_g`
+    jedzie z tą samą bramką, bo jest z miarą sprzężone (`_assert_piece_weight`):
+    bez tego USER przestawiłby wagę sztuki i zmienił wynik przeliczeń, nie
+    ruszając samego pola miary.
+
+    Porównujemy WARTOŚCI, nie obecność klucza: formularz produktu wysyła oba
+    pola przy każdym zapisie, więc bramka na samej obecności zablokowałaby
+    USEROWI także zmianę nazwy czy kategorii — a te wolno mu zmieniać
+    (08_TESTING §4, wymóg testu macierzy z karty B09).
+
+    Bramka siedzi w serwisie, nie w routerze (wzorzec D13): dzięki temu 403 może
+    podpowiedzieć wyjście — prośbę do administratora albo nowy produkt.
+    """
+    if actor.role is UserRole.ADMIN:
+        return
+    if "measure_kind" in changes and changes["measure_kind"] != product.measure_kind:
+        raise ForbiddenError(MEASURE_KIND_FORBIDDEN)
+    if "piece_weight_g" in changes and changes["piece_weight_g"] != product.piece_weight_g:
+        raise ForbiddenError(MEASURE_KIND_FORBIDDEN)
 
 
 def _assert_piece_weight(measure_kind: MeasureKind, piece_weight_g: Decimal | None) -> None:

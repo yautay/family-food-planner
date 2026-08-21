@@ -361,29 +361,139 @@ Zmieniane (⚠ = wspólne z B08):
 
 ## Implementation checklist
 
-- [ ] Migracja `stores` + `store_category_order` + `retail_products`
-      (+ odroczony FK z B08, jeśli dotyczy)
-- [ ] Serwisy + walidacje (kanoniczny wymagany, zgodność jednostek, permutacja profilu)
-- [ ] Routery `/stores`, `/stores/{id}/category-order`, `/retail-products` (+photo)
-- [ ] Blokada usuwania 409 + archiwizacja retail (ADR-012)
-- [ ] **D15**: bramka ADMIN na `measure_kind` (+ `piece_weight_g`)
+- [x] Migracja `stores` + `store_category_order` + `retail_products`
+      (+ odroczony FK z B08, jeśli dotyczy) — `0011_retail_and_stores`
+- [x] Serwisy + walidacje (kanoniczny wymagany, zgodność jednostek, permutacja profilu)
+- [x] Routery `/stores`, `/stores/{id}/category-order`, `/retail-products` (+photo)
+- [x] Blokada usuwania 409 + archiwizacja retail (ADR-012)
+- [x] **D15**: bramka ADMIN na `measure_kind` (+ `piece_weight_g`)
       w `update_product`, pole wyłączone w formularzu, test macierzy uprawnień
-- [ ] Testy integration + API
-- [ ] Sekcja „Sklepy" w Ustawieniach + edytor kolejności (DnD + strzałki)
-- [ ] Sekcja retail na karcie produktu + `RetailProductCreateDrawer` + `StorePicker`
-- [ ] Testy frontend + E2E
-- [ ] PROGRESS.md + aktualizacja kart B10/B11 (kontrakt drawera)
+- [x] Testy integration + API
+- [x] Sekcja „Sklepy" w Ustawieniach + edytor kolejności (DnD + strzałki)
+- [x] Sekcja retail na karcie produktu + `RetailProductCreateDrawer` + `StorePicker`
+- [x] Testy frontend + E2E
+- [x] PROGRESS.md + aktualizacja kart B10/B11 (kontrakt drawera)
 
 ## Verification checklist
 
-- [ ] `task check` zielony (unit+int+api+fe-test+typecheck+lint)
-- [ ] `alembic upgrade head` + `downgrade -1` + `upgrade head`;
+- [x] `task check` zielony (unit+int+api+fe-test+typecheck+lint)
+- [x] `alembic upgrade head` + `downgrade -1` + `upgrade head`;
       `alembic heads` = 1 głowa (także po merge'u z B08)
-- [ ] Acceptance Criteria 1–7 sprawdzone
-- [ ] Upload zdjęcia przechodzi przez infrastrukturę B05 (bez nowej ścieżki zapisu)
-- [ ] Dokumentacja i karty przyszłych batchy zaktualizowane
-- [ ] Commit `batch(09): …`, `git status` czysty w zakresie batcha
+- [x] Acceptance Criteria 1–7 sprawdzone
+- [x] Upload zdjęcia przechodzi przez infrastrukturę B05 (bez nowej ścieżki zapisu)
+- [x] Dokumentacja i karty przyszłych batchy zaktualizowane
+- [x] Commit `batch(09): …`, `git status` czysty w zakresie batcha
 
 ## Completion notes
 
-(wypełnia agent wykonujący)
+**Wykonane (2026-08-21).** Migracja `0011_retail_and_stores` (head = `0011`)
+tworzy `stores`, `store_category_order` i `retail_products` w kształcie
+03_DATABASE §3 oraz **dopina odroczony FK z B08** na
+`pantry_items.retail_product_id` (RESTRICT). Backend: `catalog/stores_service.py`
+i `catalog/retail_service.py` + dwa nowe buildery w `catalog/router.py`
+(`/stores`, `/stores/{id}/category-order`, `/retail-products` z `PUT|DELETE
+/photo`). Frontend: sekcja „Sklepy" w Ustawieniach (`SklepySection.vue`)
+z edytorem kolejności (`StoreCategoryOrderEditor.vue`), sekcja „Produkty
+sklepowe" na karcie produktu (`RetailProductsSection.vue`),
+`RetailProductCreateDrawer.vue` i `StorePicker.vue`. **D15 wdrożone w całości.**
+
+**Decyzje wykonawcze (uzasadnienia do Implementation Notes pkt 1–4):**
+
+1. **Struktura plików w module `catalog`**: `models.py` i `schemas.py`
+   ROZSZERZONE (jeden plik modeli per moduł to konwencja od B04, a rejestr
+   `app/models.py` importuje właśnie `catalog.models` — osobny plik modeli
+   wymagałby dodatkowego importu tylko po to, żeby Alembic zobaczył tabele).
+   Logika poszła do DWÓCH nowych plików serwisów, wzorem `planning/
+   templates_service.py` z B07: `service.py` katalogu miał już 860 linii, a to
+   inny obszar tego samego modułu. Routery to dwa buildery w istniejącym
+   `router.py` (jak trzy buildery w `planning/router.py`). Modułu top-level
+   `retail` nie ma — zgodnie z kartą.
+2. **`stores.is_archived`** zgodnie z rozstrzygnięciem planu: standardowy wzorzec
+   ADR-012 (409 z `used_in` + archiwizacja jako alternatywa).
+3. **Drag&drop: natywne HTML5 DnD, bez biblioteki.** Lista jest jednokolumnowa,
+   krótka (kilkanaście kategorii) i nie potrzebuje animacji ani zagnieżdżeń, więc
+   `dragstart`/`dragover`/`drop` to trzy handlery przy jednej funkcji `move()`,
+   której i tak wymagają obowiązkowe strzałki. Strzałki mają `aria-label`
+   i ≥44 px; test vitest sprawdza WŁAŚNIE je (gest DnD pokrywa ten sam `move()`).
+4. **PUT `category-order`** przyjmuje pełną listę `category_id`; `position`
+   liczy serwis z indeksów listy, więc klient nie ma jak przysłać dziur ani
+   duplikatów numerów. Duplikat id → 422, nieznana kategoria → 422
+   z `details.unknown_category_ids`, oba PRZED jakimkolwiek zapisem (test
+   `test_nieznana_kategoria_w_kolejnosci_nie_zapisuje_niczego`).
+
+**Kontrakt `RetailProductCreateDrawer` (AC 6, dla B10/B11):**
+props `{ open: boolean, canonicalProductId: number, prefillName?: string }`,
+emits `created(retailProduct: RetailProduct)` i `close()`. Poza id produktu
+komponent nie wymaga NICZEGO — `measure_kind` dociąga z `/products/{id}`
+(ten sam klucz query, którego używa karta produktu, więc zwykle trafia w cache)
+i z niego wynika zawężona jednostka opakowania. Karty B10 i B11 zaktualizowane.
+
+**Odstępstwa i decyzje techniczne poza literą karty (wszystkie świadome):**
+
+- **`package_unit` reużywa typu enumowego `amount_unit`** z migracji `0006`
+  zamiast tworzyć nowy typ `ENUM(g,ml,piece)`. Dziedzina jest identyczna, więc
+  drugi typ byłby duplikatem bez właściciela; model odwołuje się do niego przez
+  `postgresql.ENUM(..., create_type=False)` — dokładnie tak, jak CLAUDE.md §4
+  każe robić w migracjach. `EXPECTED_ENUM_TYPES` bez zmian.
+- **Bez CHECK-ów `package_amount > 0` i `pieces_per_package >= 1`** w bazie:
+  03_DATABASE §3 ich nie definiuje, a schemat jest wiążący — ta sama zasada,
+  którą B08 zastosował do `pantry_items.amount`. Pilnują ich schematy Pydantic
+  (`gt=0`, `ge=1`) i serwis.
+- **Bez wpisów w audit logu** dla sklepów i wariantów retail. 02_DOMAIN §12
+  wymienia zakres dziennika (wartości odżywcze, weryfikacja, import, operacje
+  admina na kontach, transfer) i nie ma w nim słowników użytkowych; B08 tak samo
+  nie audytuje spiżarni. Gdyby właściciel chciał inaczej — to nowa decyzja,
+  nie luka w implementacji.
+- **`_photo_urls` przeniesione do `core/uploads.image_urls`** (+ stała
+  `UPLOADS_URL_PREFIX`). Konwencja URL uploadów była zduplikowana w
+  `recipes/router.py`, a `planning/router.py` importował ją Z ROUTERA przepisów
+  (`from app.modules.recipes.router import UPLOADS_URL_PREFIX`) — czyli moduł
+  domenowy z warstwy HTTP cudzego modułu. Trzecia kopia w `catalog/router.py`
+  utrwaliłaby ten dług, więc konwencja wróciła do `core`, gdzie i tak mieszka
+  `thumbnail_path_for`. Zmiana w recipes/planning to po jednej linii importu.
+- **`GET /retail-products/{id}` NIE istnieje** — karta go nie wymienia, a lista
+  z filtrem `?canonical_product_id=` obsługuje oba znane przypadki użycia
+  (karta produktu, preview B10). Dodanie go później jest addytywne.
+- **`canonical_product_id` nie jest edytowalny** w `PATCH /retail-products/{id}`.
+  Przepięcie wariantu na inny produkt kanoniczny zmieniłoby znaczenie danych
+  historycznych (spiżarnia, w przyszłości listy) bez żadnego śladu; pomyłkę
+  naprawia się nowym wariantem i archiwizacją starego (ADR-012).
+- **Szukajka retail i sklepów to `ILIKE` z `autoescape`, nie trigram.** Wariantów
+  jednego produktu jest kilka, sklepów kilkanaście — próg podobieństwa dawałby
+  tu tylko niespodzianki, a indeksu GIN dla tych tabel 03_DATABASE §3 nie
+  przewiduje. Dla `/stores` nie ma też paginacji (jak `/categories`).
+- **`RetailProductsSection.vue` wydzielone z `ProduktFormPage.vue`** (karta
+  wymieniała tylko `SklepySection.vue`). Strona formularza ma już trzy sekcje
+  o różnych właścicielach; czwarta w tym samym pliku dałaby ~900 linii.
+- **Test B08 poprawiony, nie osłabiony**:
+  `test_pozycja_tylko_z_produktem_sklepowym_przechodzi` wstawiał
+  `retail_product_id=77` „z powietrza", co działało wyłącznie dlatego, że FK
+  nie istniało. Po dopięciu constraintu test tworzy PRAWDZIWY wariant przez
+  nową fabrykę i dodatkowo asercjonuje `retail_product_id` — dokumentuje więc
+  rekoncyliację, zamiast ją obchodzić. `task check` złapał to sam.
+- **`test_zmiana_typu_miary_czysci_wage_sztuki`** (B04) dostał aktora ADMIN:
+  po D15 `measure_kind` zmienia wyłącznie administrator, a sama asercja
+  (czyszczenie wagi sztuki) została bez zmian.
+
+**D15 — doprecyzowanie warte zapamiętania.** Bramka porównuje WARTOŚCI, nie
+obecność pola w żądaniu. `ProduktFormPage` wysyła `measure_kind`
+i `piece_weight_g` przy każdym zapisie, więc blokada na samej obecności klucza
+odebrałaby USEROWI edycję nazwy i kategorii — czego decyzja jawnie NIE chciała
+(„bramka nie ma prawa zablokować całego endpointu"). Wpisane do 02_DECISIONS.
+
+**Follow-upy (poza zakresem, do R3/B10):**
+
+1. **`PantryItemCreateRequest` nadal nie przyjmuje `retail_product_id`** —
+   teraz JUŻ MOŻE (tabela i FK istnieją), ale karta B08 przypisała to
+   rozszerzenie do B10/R3 i tak zostaje. Model i widok spiżarni są gotowe:
+   `PantryItemRead.retail_product_id` jest w odpowiedzi, a widok toleruje
+   pozycję bez produktu kanonicznego (test integracyjny to pokrywa).
+2. **`scripts/seed_demo.py` nie seeduje sklepów ani wariantów retail.** Seed
+   od B04 zawiera wyłącznie produkty kanoniczne (B05–B08 też go nie
+   rozszerzały) — do rozważenia przy R3, gdy silnik zakupowy będzie chciał
+   demonstracyjnego zestawu opakowań.
+3. **Sklep bez profilu vs sortowanie listy** — B11 musi obsłużyć trzy stany
+   (pełny profil, częściowy, brak sklepu); kontrakt opisany w karcie B11.
+
+**Pytania do właściciela: BRAK.** Nowych decyzji-bramek nie ma; D15 zamknięta
+i wdrożona.

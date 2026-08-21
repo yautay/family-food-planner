@@ -81,8 +81,24 @@ Indeksy: `canonical_products(normalized_name)` (unique, trigram GIN na
 Stan faktyczny (BATCH_04, migracje `0004` + `0005`):
 
 - Powstały `product_categories`, `canonical_products`, `product_unit_weights`,
-  `nutrients`, `product_nutrient_values`. `stores`, `store_category_order`
-  i `retail_products` dokłada BATCH_09.
+  `nutrients`, `product_nutrient_values`.
+- **BATCH_09 (migracja `0011`) dołożył `stores`, `store_category_order`
+  i `retail_products`** dokładnie w kształcie powyżej, plus `created_at`/
+  `updated_at`. Trzy szczegóły wykonawcze: `retail_products.package_unit`
+  REUŻYWA typu enumowego `amount_unit` z migracji `0006` (ta sama dziedzina
+  `g|ml|piece`, więc osobnego typu nie ma), `store_category_order` kasuje się
+  kaskadą z obu stron (profil to atrybut sklepu, a kategoria nie ma prawa
+  blokować sklepu), a indeksy to `retail_products(canonical_product_id)`
+  (wymieniony wyżej) i `retail_products(store_id)` pod filtr `?store_id=`.
+  CHECK-ów `package_amount > 0` ani `pieces_per_package >= 1` NIE MA — ten
+  dokument ich nie definiuje, a pilnują ich schematy Pydantic i serwis (ta sama
+  zasada co dla `pantry_items.amount`).
+- **Rekoncyliacja odroczonego FK z BATCH_08**: `pantry_items.retail_product_id`
+  istniało od migracji `0010` jako `BIGINT NULL` bez constraintu (tabeli
+  `retail_products` jeszcze nie było). Migracja `0011` dopina
+  `fk_pantry_items_retail_product_id_retail_products` z `ON DELETE RESTRICT`,
+  więc od tej chwili pozycja spiżarni blokuje usunięcie wariantu sklepowego
+  (409 z listą użyć — licznik referencji w `pantry/service.py`).
 - **Rdzeń wartości odżywczych jest NULLOWALNY** (`kcal_100` … `carbs_100`) —
   poprawka wobec pierwotnego szkicu. USER tworzy produkt inline, nie znając
   wartości (02_DOMAIN §4.9), a ADMIN uzupełnia je później; NOT NULL wymuszałby

@@ -22,6 +22,30 @@ vi.mock('@/api/households', () => ({
   deleteProfile,
 }))
 
+// Sekcja „Sklepy" (BATCH_09) wisi na tej samej stronie i woła własne API —
+// bez atrapy strzelałaby prawdziwym `fetch` w jsdom.
+const storesApi = vi.hoisted(() => ({
+  fetchStores: vi.fn(),
+  createStore: vi.fn(),
+  updateStore: vi.fn(),
+  deleteStore: vi.fn(),
+  fetchCategoryOrder: vi.fn(),
+  setCategoryOrder: vi.fn(),
+}))
+vi.mock('@/api/stores', () => storesApi)
+
+const catalogApi = vi.hoisted(() => ({ fetchCategories: vi.fn() }))
+vi.mock('@/api/catalog', () => catalogApi)
+
+const STORE = {
+  id: 5,
+  name: 'Lidl',
+  color: null,
+  is_archived: false,
+  created_at: '2026-08-21T10:00:00Z',
+  updated_at: '2026-08-21T10:00:00Z',
+}
+
 const HOUSEHOLD = { id: 1, name: 'Kowalscy' }
 const MEMBER = {
   id: 10,
@@ -58,6 +82,9 @@ describe('UstawieniaPage', () => {
       profiles: [PROFILE],
     })
     fetchMyProfiles.mockResolvedValue({ items: [PROFILE], total: 1 })
+    storesApi.fetchStores.mockResolvedValue({ items: [STORE], total: 1 })
+    storesApi.fetchCategoryOrder.mockResolvedValue({ items: [], total: 0 })
+    catalogApi.fetchCategories.mockResolvedValue({ items: [], total: 0 })
   })
 
   it('pokazuje rodzinę, jej członków i profile', async () => {
@@ -208,5 +235,30 @@ describe('UstawieniaPage', () => {
 
     expect(deleteProfile).toHaveBeenCalledWith(100)
     confirm.mockRestore()
+  })
+
+  it('pokazuje sekcję „Sklepy" z listą sklepów (BATCH_09)', async () => {
+    const wrapper = await mountPage()
+
+    expect(wrapper.find('[data-testid="stores-section"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="store-name-5"]').text()).toBe('Lidl')
+  })
+
+  it('edytor kolejności kategorii rozwija się przy sklepie', async () => {
+    storesApi.fetchCategoryOrder.mockResolvedValue({
+      items: [{ category_id: 1, category_name: 'Warzywa', position: 0 }],
+      total: 1,
+    })
+    catalogApi.fetchCategories.mockResolvedValue({
+      items: [{ id: 1, name: 'Warzywa', position: 1, perishability: 'fresh' }],
+      total: 1,
+    })
+    const wrapper = await mountPage()
+
+    await wrapper.get('[data-testid="store-order-5"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="category-order-editor"]').exists()).toBe(true)
+    expect(storesApi.fetchCategoryOrder).toHaveBeenCalledWith(5)
   })
 })

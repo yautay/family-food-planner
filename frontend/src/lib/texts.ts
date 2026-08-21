@@ -101,6 +101,10 @@ export const products = {
   perishabilityDurable: 'Trwały',
   nutritionTitle: 'Wartości odżywcze na 100',
   nutritionAdminOnly: 'Wartości odżywcze edytuje administrator.',
+  // D15: te same liczby znaczą co innego na 100 g i na 100 ml, a katalog jest
+  // wspólny — dlatego miarę (i wagę sztuki) przestawia wyłącznie administrator.
+  measureKindAdminOnly:
+    'Sposób liczenia zmienia administrator. Poproś go o zmianę albo utwórz nowy produkt.',
   nutritionSourceLabel: 'Źródło danych',
   kcalLabel: 'Kalorie (kcal)',
   proteinLabel: 'Białko (g)',
@@ -420,6 +424,75 @@ export const pantry = {
   confirmDelete:
     'Usunąć tę pozycję ze spiżarni? Jeśli produkt tylko się skończył, lepiej wyzeruj ilość.',
   itemsTotal: 'Pozycji:',
+} as const
+
+export const stores = {
+  sectionTitle: 'Sklepy',
+  sectionSubtitle:
+    'Sklepy są wspólne dla całej instancji. Profil sklepu to kolejność, w jakiej przechodzisz przez alejki — lista zakupów ustawi się tak samo.',
+  addStore: 'Dodaj sklep',
+  nameLabel: 'Nazwa sklepu',
+  colorLabel: 'Kolor',
+  colorNone: 'Bez koloru',
+  emptyState: 'Nie ma jeszcze żadnego sklepu. Dodaj pierwszy, np. Lidl.',
+  archived: 'Archiwalny',
+  archive: 'Archiwizuj',
+  restore: 'Przywróć z archiwum',
+  showArchived: 'Pokaż archiwalne',
+  confirmDelete: 'Usunąć ten sklep? Jeśli chcesz go tylko schować, archiwizuj go.',
+  usedInIntro: 'Używane w:',
+  nameRequired: 'Podaj nazwę sklepu.',
+  orderTitle: 'Kolejność kategorii',
+  orderSubtitle:
+    'Ustaw kategorie w kolejności przejścia po sklepie. Przeciągnij albo użyj strzałek.',
+  orderEmpty: 'Ten sklep nie ma jeszcze profilu. Dodaj pierwszą kategorię do kolejności.',
+  orderAvailable: 'Kategorie poza profilem',
+  orderAdd: 'Dodaj do kolejności',
+  orderRemove: 'Usuń z kolejności',
+  orderMoveUp: 'Przenieś wyżej',
+  orderMoveDown: 'Przenieś niżej',
+  orderSave: 'Zapisz kolejność',
+  orderSaved: 'Kolejność zapisana.',
+  orderEdit: 'Edytuj kolejność kategorii',
+  orderClose: 'Zwiń kolejność',
+} as const
+
+export const storePicker = {
+  label: 'Sklep',
+  placeholder: 'Wpisz nazwę sklepu…',
+  noResults: 'Brak trafień.',
+  createPrefix: '+ Dodaj sklep',
+  none: 'Bez sklepu',
+  change: 'Zmień',
+} as const
+
+export const retail = {
+  sectionTitle: 'Produkty sklepowe',
+  sectionSubtitle:
+    'Konkretne opakowania z półki. Silnik zakupowy liczy z nich liczbę opakowań i resztkę.',
+  addProduct: 'Dodaj produkt sklepowy',
+  emptyState: 'Ten produkt nie ma jeszcze wariantów sklepowych.',
+  saveProductFirst: 'Zapisz produkt, żeby dodać wariant sklepowy.',
+  drawerTitle: 'Nowy produkt sklepowy',
+  drawerHint: 'Podaj nazwę z opakowania i jego wielkość. Resztę uzupełnisz później.',
+  nameLabel: 'Nazwa z opakowania',
+  brandLabel: 'Marka',
+  storeLabel: 'Sklep',
+  packageLabel: 'Wielkość opakowania',
+  piecesLabel: 'Sztuk w opakowaniu',
+  piecesHint: 'Opcjonalnie — np. 10 dla jajek.',
+  photoLabel: 'Zdjęcie opakowania',
+  photoHint: 'JPG/PNG do 10 MB. Zdjęcie zapisuje się od razu po wybraniu pliku.',
+  photoRemove: 'Usuń zdjęcie',
+  noStore: 'Bez sklepu',
+  archived: 'Archiwalny',
+  archive: 'Archiwizuj',
+  restore: 'Przywróć z archiwum',
+  confirmDelete: 'Usunąć ten produkt sklepowy? Jeśli tylko zniknął z półki, archiwizuj go.',
+  usedInIntro: 'Używane w:',
+  nameRequired: 'Podaj nazwę produktu sklepowego.',
+  amountRequired: 'Podaj wielkość opakowania większą od zera.',
+  piecesInvalid: 'Sztuk w opakowaniu musi być liczbą całkowitą większą od zera.',
 } as const
 
 export const adminVerification = {

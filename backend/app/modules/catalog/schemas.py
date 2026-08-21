@@ -23,6 +23,7 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from app.core.schemas import DecimalString
 from app.modules.catalog.models import MeasureKind, Perishability, VerificationStatus
+from app.modules.catalog.units import AmountUnit
 
 #: Nazwa produktu/kategorii/jednostki: przycinana PRZED sprawdzeniem długości,
 #: więc `"   "` jest odrzucane, a nie zapisywane jako pusty string.
@@ -242,3 +243,153 @@ class ProductNutritionRequest(BaseModel):
     sugars_100: Macro100 | None = None
     glycemic_index: GlycemicIndex | None = None
     nutrition_source: NutritionSource | None = None
+
+
+# --- sklepy i profile kolejności kategorii -----------------------------------------
+
+#: Etykieta koloru sklepu z palety UI (06_UIUX §1) — nie hex, żeby motyw dał się
+#: zmienić bez migracji danych.
+StoreColor = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=40)]
+#: Marka produktu sklepowego (Pilos, Mlekovita…).
+BrandName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
+#: Wielkość opakowania — NUMERIC(8,2), zawsze dodatnia (opakowanie „0 g" nie istnieje).
+PackageAmount = Annotated[
+    Decimal, Field(gt=Decimal("0"), le=Decimal("999999"), max_digits=8, decimal_places=2)
+]
+
+
+class StoreRead(BaseModel):
+    """Sklep ze słownika globalnego."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    color: str | None
+    is_archived: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class StoreListResponse(BaseModel):
+    """Lista sklepów (kształt `{items, total}` także bez paginacji — 04_API §1)."""
+
+    items: list[StoreRead]
+    total: int
+
+
+class StoreCreateRequest(BaseModel):
+    """Nowy sklep — tworzy go także USER, także inline z `StorePicker` (02 §3.1 pkt 3)."""
+
+    name: NonEmptyName
+    color: StoreColor | None = None
+
+
+class StoreUpdateRequest(BaseModel):
+    """Częściowa edycja sklepu; pole pominięte zostaje bez zmian."""
+
+    name: NonEmptyName | None = None
+    color: StoreColor | None = None
+    is_archived: bool | None = None
+
+
+class StoreCategoryOrderEntry(BaseModel):
+    """Jedna kategoria w profilu sklepu — z nazwą, żeby UI nie dociągał słownika."""
+
+    category_id: int
+    category_name: str
+    position: int
+
+
+class StoreCategoryOrderResponse(BaseModel):
+    """Profil sklepu: kategorie w kolejności przejścia po sklepie.
+
+    Zawiera WYŁĄCZNIE kategorie należące do profilu. Kategorie spoza listy są
+    poza profilem (karta B09, nota 4) — silnik listy zakupowej (B11) umieści je
+    na końcu, a edytor pobiera pełny słownik z `/categories`.
+    """
+
+    items: list[StoreCategoryOrderEntry]
+    total: int
+
+
+class StoreCategoryOrderRequest(BaseModel):
+    """PEŁNA podmiana kolejności: lista `category_id` w docelowej kolejności.
+
+    Pozycje (`position`) liczy serwis z indeksów listy — klient nie ma prawa
+    przysłać dziur ani duplikatów numerów, bo to jedna spójna permutacja.
+    Pusta lista jest dozwolona i znaczy „ten sklep nie ma profilu".
+    """
+
+    category_ids: list[int] = Field(default_factory=list, max_length=200)
+
+
+# --- produkty sklepowe (retail) -----------------------------------------------------
+
+
+class RetailProductRead(BaseModel):
+    """Wariant sklepowy produktu kanonicznego (02_DOMAIN §4.4).
+
+    `package_amount` jest stringiem dziesiętnym (ADR-008), a URL-e zdjęcia
+    prowadzą do endpointu `/uploads/*` z sesją (07_SECURITY §6) — nigdy do
+    ścieżki na dysku.
+    """
+
+    id: int
+    canonical_product_id: int
+    canonical_product_name: str
+    name: str
+    brand: str | None
+    store_id: int | None
+    store_name: str | None
+    package_amount: DecimalString
+    package_unit: AmountUnit
+    pieces_per_package: int | None
+    photo_url: str | None
+    photo_thumb_url: str | None
+    is_archived: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class RetailProductListResponse(BaseModel):
+    """Lista wariantów sklepowych z paginacją (04_API §1)."""
+
+    items: list[RetailProductRead]
+    total: int
+
+
+class RetailProductCreateRequest(BaseModel):
+    """Nowy produkt sklepowy.
+
+    `canonical_product_id` jest WYMAGANY (02_DOMAIN §4.4): retail bez produktu
+    kanonicznego nie istnieje, bo nie miałby wartości odżywczych ani miejsca
+    w agregacji zakupów. Zgodność `package_unit` z `measure_kind` produktu
+    sprawdza serwis — tutaj nie znamy jeszcze produktu.
+    """
+
+    canonical_product_id: int = Field(ge=1)
+    name: NonEmptyName
+    brand: BrandName | None = None
+    store_id: int | None = Field(default=None, ge=1)
+    package_amount: PackageAmount
+    package_unit: AmountUnit
+    pieces_per_package: int | None = Field(default=None, ge=1, le=10000)
+
+
+class RetailProductUpdateRequest(BaseModel):
+    """Częściowa edycja wariantu sklepowego.
+
+    `canonical_product_id` NIE jest edytowalny: przepięcie wariantu na inny
+    produkt kanoniczny zmieniałoby znaczenie danych historycznych (spiżarnia,
+    listy zakupowe) bez śladu. Pomyłkę naprawia się nowym wariantem
+    i archiwizacją starego (ADR-012).
+    """
+
+    name: NonEmptyName | None = None
+    brand: BrandName | None = None
+    store_id: int | None = Field(default=None, ge=1)
+    package_amount: PackageAmount | None = None
+    package_unit: AmountUnit | None = None
+    pieces_per_package: int | None = Field(default=None, ge=1, le=10000)
+    is_archived: bool | None = None

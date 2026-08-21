@@ -3,14 +3,19 @@
  * Formularz produktu (`/produkty/nowy`, `/produkty/:id/edytuj`) — widok 8
  * z 06_UIUX §4.
  *
- * Trzy sekcje o różnych właścicielach:
+ * Cztery sekcje o różnych właścicielach:
  *
  * 1. **Opis** (nazwa, kategoria, sposób liczenia, waga sztuki, trwałość) —
- *    edytuje każdy zalogowany, bo katalog jest wspólny (02_DOMAIN §3.1 pkt 3).
+ *    edytuje każdy zalogowany, bo katalog jest wspólny (02_DOMAIN §3.1 pkt 3),
+ *    Z WYJĄTKIEM sposobu liczenia i wagi sztuki: te zmienia wyłącznie ADMIN
+ *    (D15). Pola są dla USERA wyłączone z podpowiedzią — inaczej wypełniałby
+ *    formularz i dostawał 403 na końcu, co jest gorsze od pola zablokowanego.
  * 2. **Wartości odżywcze** — wyłącznie ADMIN (08_TESTING §4). USER widzi je
  *    jako tekst; blokada w UI to wygoda, prawdą jest 403 z backendu.
  * 3. **Przeliczniki jednostek domowych** — każdy; bez nich nie da się zapisać
  *    ilości typu „2 łyżki" (ADR-005).
+ * 4. **Produkty sklepowe** (BATCH_09) — warianty z półki; każdy zalogowany
+ *    (02_DOMAIN §3.1 pkt 4). Sekcja żyje w osobnym komponencie.
  *
  * Usuwanie jest ścieżką administratora i tylko dla produktu nieużywanego (D13);
  * przy 409 pokazujemy listę „Używane w:" i proponujemy archiwizację —
@@ -36,6 +41,7 @@ import {
 } from '@/api/catalog'
 import { ApiError } from '@/api/client'
 import { queryKeys } from '@/api/queryKeys'
+import RetailProductsSection from '@/components/domain/RetailProductsSection.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -308,6 +314,16 @@ function confirmRemove(): void {
 }
 
 const basisUnit = computed(() => (productValues.measure_kind === 'volume' ? 'ml' : 'g'))
+
+/**
+ * D15: sposób liczenia (i sprzężona waga sztuki) zmienia WYŁĄCZNIE ADMIN.
+ *
+ * Blokada dotyczy tylko EDYCJI istniejącego produktu — `create_product` nie
+ * jest ograniczony, bo USER musi wybrać miarę, zakładając produkt (także inline
+ * z pickera). Świadomie przyjęty koszt decyzji: pomyłkę we własnym świeżym
+ * wpisie poprawia administrator albo nowy produkt.
+ */
+const measureLocked = computed(() => isEdit.value && !auth.isAdmin)
 </script>
 
 <template>
@@ -402,13 +418,21 @@ const basisUnit = computed(() => (productValues.measure_kind === 'volume' ? 'ml'
             <select
               id="product-measure"
               v-model="measureKind"
-              class="border-border bg-card min-h-11 rounded-lg border px-3 text-sm"
+              class="border-border bg-card min-h-11 rounded-lg border px-3 text-sm disabled:opacity-60"
+              :disabled="measureLocked"
               data-testid="product-measure"
             >
               <option value="mass">{{ texts.measureMass }}</option>
               <option value="volume">{{ texts.measureVolume }}</option>
               <option value="piece">{{ texts.measurePiece }}</option>
             </select>
+            <p
+              v-if="measureLocked"
+              class="text-muted-foreground text-xs"
+              data-testid="product-measure-locked"
+            >
+              {{ texts.measureKindAdminOnly }}
+            </p>
           </div>
 
           <div v-if="measureKind === 'piece'" class="grid gap-2">
@@ -420,6 +444,7 @@ const basisUnit = computed(() => (productValues.measure_kind === 'volume' ? 'ml'
               v-model="pieceWeight"
               inputmode="decimal"
               class="min-h-11 tabular-nums"
+              :disabled="measureLocked"
               :aria-invalid="Boolean(productErrors.piece_weight_g)"
               data-testid="product-piece-weight"
             />
@@ -772,5 +797,8 @@ const basisUnit = computed(() => (productValues.measure_kind === 'volume' ? 'ml'
         </form>
       </CardContent>
     </Card>
+
+    <!-- Produkty sklepowe (BATCH_09) — wymagają istniejącego id produktu. -->
+    <RetailProductsSection v-if="detail" :product-id="detail.id" />
   </section>
 </template>

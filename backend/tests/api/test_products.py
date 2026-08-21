@@ -131,6 +131,134 @@ async def test_uzytkownik_nie_usuwa_produktu_ale_dostaje_podpowiedz(
     assert "zarchiwizować" in response.json()["error"]["message"]
 
 
+async def test_d15_uzytkownik_nie_zmienia_sposobu_liczenia(
+    db_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """D15: `measure_kind` zmienia WYŁĄCZNIE ADMIN — także twórcy produktu.
+
+    Produkt zakłada tu sam USER (inline create), bo właśnie ten przypadek
+    właściciel rozstrzygnął świadomie: autor świeżego wpisu też nie poprawi
+    sobie miary, zostaje mu prośba do administratora albo nowy produkt.
+    """
+    user = await create_user(db_session)
+    category = await create_category(db_session)
+    await login(db_client, user.email)
+    headers = csrf_headers(db_client)
+    created = await db_client.post(
+        PRODUCTS,
+        json={"name": "Mleko 2%", "category_id": category.id, "measure_kind": "volume"},
+        headers=headers,
+    )
+    assert created.status_code == 201
+    product_id = created.json()["id"]
+
+    response = await db_client.patch(
+        f"{PRODUCTS}/{product_id}", json={"measure_kind": "mass"}, headers=headers
+    )
+
+    assert response.status_code == 403
+    message = response.json()["error"]["message"]
+    assert "administrator" in message
+    # Komunikat ma pokazywać wyjście, nie tylko odmawiać (wzorzec D13).
+    assert "nowy produkt" in message
+    # Nic się nie zapisało: miara została ta sama.
+    detail = await db_client.get(f"{PRODUCTS}/{product_id}")
+    assert detail.json()["measure_kind"] == "volume"
+
+
+async def test_d15_uzytkownik_nie_zmienia_wagi_sztuki(
+    db_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """D15: waga sztuki jedzie z tą samą bramką, bo jest sprzężona z miarą.
+
+    Bez tego USER przestawiłby `piece_weight_g` i zmienił wynik wszystkich
+    przeliczeń szt. → g, nie ruszając samego pola miary.
+    """
+    user = await create_user(db_session)
+    category = await create_category(db_session)
+    product = await create_product(
+        db_session,
+        category=category,
+        name="Jajko",
+        measure_kind=MeasureKind.PIECE,
+        piece_weight_g=Decimal("60.00"),
+    )
+    await login(db_client, user.email)
+
+    response = await db_client.patch(
+        f"{PRODUCTS}/{product.id}",
+        json={"piece_weight_g": "70.00"},
+        headers=csrf_headers(db_client),
+    )
+
+    assert response.status_code == 403
+
+
+async def test_d15_uzytkownik_edytuje_pozostale_pola_opisowe(
+    db_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """Bramka D15 nie ma prawa zablokować całego endpointu (wymóg karty B09).
+
+    Formularz produktu wysyła `measure_kind` i `piece_weight_g` przy KAŻDYM
+    zapisie, więc żądanie z niezmienioną miarą musi przechodzić — inaczej USER
+    nie zmieniłby nawet nazwy.
+    """
+    user = await create_user(db_session)
+    category = await create_category(db_session)
+    inna = await create_category(db_session, name="Nabiał", position=2)
+    product = await create_product(db_session, category=category, name="Cebula")
+    await login(db_client, user.email)
+
+    response = await db_client.patch(
+        f"{PRODUCTS}/{product.id}",
+        json={
+            "name": "Cebula czerwona",
+            "category_id": inna.id,
+            "perishability_override": "durable",
+            # Pola pod bramką jadą z żądaniem, ale BEZ zmiany wartości.
+            "measure_kind": "mass",
+            "piece_weight_g": None,
+        },
+        headers=csrf_headers(db_client),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert (body["name"], body["category_id"]) == ("Cebula czerwona", inna.id)
+    assert body["perishability_override"] == "durable"
+
+
+async def test_d15_admin_zmienia_sposob_liczenia(
+    db_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """Druga strona macierzy: ADMIN przestawia miarę i zbija weryfikację."""
+    admin = await create_admin(db_session)
+    category = await create_category(db_session)
+    product = await create_product(
+        db_session,
+        category=category,
+        name="Mleko 2%",
+        measure_kind=MeasureKind.VOLUME,
+        kcal_100=Decimal("50.00"),
+        nutrition_source="producent:etykieta",
+        verification_status=VerificationStatus.VERIFIED,
+    )
+    await login(db_client, admin.email)
+
+    response = await db_client.patch(
+        f"{PRODUCTS}/{product.id}",
+        json={"measure_kind": "mass"},
+        headers=csrf_headers(db_client),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["measure_kind"] == "mass"
+    # Część pierwsza D15 (z B05) obowiązuje dalej: zmiana osi unieważnia weryfikację.
+    assert body["verification_status"] == "unverified"
+    assert body["verified_at"] is None
+
+
 async def test_mutacja_bez_csrf_daje_403(db_client: AsyncClient, db_session: AsyncSession) -> None:
     user = await create_user(db_session)
     category = await create_category(db_session)

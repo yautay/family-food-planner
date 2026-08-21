@@ -80,6 +80,9 @@ EXPECTED_TABLES = {
     "week_templates",
     "week_cycles",
     "pantry_items",
+    "stores",
+    "store_category_order",
+    "retail_products",
 }
 
 
@@ -92,7 +95,7 @@ def test_upgrade_downgrade_upgrade_na_czystej_bazie(
 
     command.upgrade(alembic_config, "head")
     after_upgrade = _current_revision(test_database_url)
-    assert after_upgrade == "0010"
+    assert after_upgrade == "0011"
 
     command.downgrade(alembic_config, "base")
     assert _current_revision(test_database_url) is None

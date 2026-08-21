@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
- * Ustawienia użytkownika (`/ustawienia`): „Moja rodzina", „Cele żywieniowe"
- * i „Progi statusów" (D9).
+ * Ustawienia użytkownika (`/ustawienia`): „Moja rodzina", „Cele żywieniowe",
+ * „Sklepy" (BATCH_09) i „Progi statusów" (D9).
  *
  * Stan serwera trzyma TanStack Query (ADR-007): komponent nie kopiuje rodziny,
  * profili ani celów do własnych ref-ów. Do Pinia należy wyłącznie sesja.
@@ -30,6 +30,7 @@ import {
   updateProfile,
 } from '@/api/households'
 import { queryKeys } from '@/api/queryKeys'
+import SklepySection from '@/components/domain/SklepySection.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -589,6 +590,9 @@ const saveThresholds = useMutation({
         </template>
       </CardContent>
     </Card>
+
+    <!-- Sklepy i profile kolejności kategorii (BATCH_09) — sekcja własnego komponentu. -->
+    <SklepySection />
 
     <!-- Progi statusów żywieniowych (D9: domyślnie 90–110% celu). -->
     <Card class="rounded-xl">

@@ -1692,6 +1692,598 @@
         }
       }
     },
+    "/api/v1/stores": {
+      "get": {
+        "tags": [
+          "catalog"
+        ],
+        "summary": "Lista sklepów",
+        "operationId": "list_stores_api_v1_stores_get",
+        "parameters": [
+          {
+            "name": "include_archived",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Archived"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoreListResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "catalog"
+        ],
+        "summary": "Dodanie sklepu (także inline z pickera)",
+        "operationId": "create_store_api_v1_stores_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StoreCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoreRead"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/stores/{store_id}": {
+      "patch": {
+        "tags": [
+          "catalog"
+        ],
+        "summary": "Edycja sklepu",
+        "operationId": "update_store_api_v1_stores__store_id__patch",
+        "parameters": [
+          {
+            "name": "store_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Store Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StoreUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoreRead"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "catalog"
+        ],
+        "summary": "Usunięcie sklepu (tylko nieużywanego — 409 z listą użyć)",
+        "operationId": "delete_store_api_v1_stores__store_id__delete",
+        "parameters": [
+          {
+            "name": "store_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Store Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/stores/{store_id}/category-order": {
+      "get": {
+        "tags": [
+          "catalog"
+        ],
+        "summary": "Kolejność kategorii w tym sklepie",
+        "operationId": "get_category_order_api_v1_stores__store_id__category_order_get",
+        "parameters": [
+          {
+            "name": "store_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Store Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoreCategoryOrderResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "catalog"
+        ],
+        "summary": "Pełna podmiana kolejności kategorii (lista `category_id` w kolejności)",
+        "operationId": "set_category_order_api_v1_stores__store_id__category_order_put",
+        "parameters": [
+          {
+            "name": "store_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Store Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StoreCategoryOrderRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoreCategoryOrderResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/retail-products": {
+      "get": {
+        "tags": [
+          "catalog"
+        ],
+        "summary": "Lista produktów sklepowych",
+        "operationId": "list_retail_products_api_v1_retail_products_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "canonical_product_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Canonical Product Id"
+            }
+          },
+          {
+            "name": "store_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Store Id"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "name": "include_archived",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Archived"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetailProductListResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "catalog"
+        ],
+        "summary": "Dodanie produktu sklepowego (wymaga produktu kanonicznego)",
+        "operationId": "create_retail_product_api_v1_retail_products_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetailProductCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetailProductRead"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/retail-products/{retail_id}": {
+      "patch": {
+        "tags": [
+          "catalog"
+        ],
+        "summary": "Edycja produktu sklepowego (także archiwizacja przez `is_archived`)",
+        "operationId": "update_retail_product_api_v1_retail_products__retail_id__patch",
+        "parameters": [
+          {
+            "name": "retail_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Retail Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetailProductUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetailProductRead"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "catalog"
+        ],
+        "summary": "Usunięcie produktu sklepowego (tylko nieużywanego — 409 z listą użyć)",
+        "operationId": "delete_retail_product_api_v1_retail_products__retail_id__delete",
+        "parameters": [
+          {
+            "name": "retail_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Retail Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/retail-products/{retail_id}/photo": {
+      "put": {
+        "tags": [
+          "catalog"
+        ],
+        "summary": "Zdjęcie opakowania (multipart; sniffing, re-encode, miniatura)",
+        "operationId": "upload_photo_api_v1_retail_products__retail_id__photo_put",
+        "parameters": [
+          {
+            "name": "retail_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Retail Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_photo_api_v1_retail_products__retail_id__photo_put"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetailProductRead"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "catalog"
+        ],
+        "summary": "Usunięcie zdjęcia produktu sklepowego",
+        "operationId": "delete_photo_api_v1_retail_products__retail_id__photo_delete",
+        "parameters": [
+          {
+            "name": "retail_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Retail Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetailProductRead"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/recipes": {
       "get": {
         "tags": [
@@ -4134,6 +4726,21 @@
           "file"
         ],
         "title": "Body_upload_photo_api_v1_recipes__recipe_id__photo_post"
+      },
+      "Body_upload_photo_api_v1_retail_products__retail_id__photo_put": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "description": "Plik obrazu, maks. 10 MB"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_photo_api_v1_retail_products__retail_id__photo_put"
       },
       "CategoryCreateRequest": {
         "properties": {
@@ -7941,6 +8548,330 @@
         "title": "RecipeSummary",
         "description": "Przepis na liście (widok 2): karta z kcal/porcję, oceną i tagami."
       },
+      "RetailProductCreateRequest": {
+        "properties": {
+          "canonical_product_id": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Canonical Product Id"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "brand": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Brand"
+          },
+          "store_id": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Store Id"
+          },
+          "package_amount": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 999999.0,
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,6}|(?=[\\d.]{1,9}0*$)\\d{0,6}\\.\\d{0,2}0*$)"
+              }
+            ],
+            "title": "Package Amount"
+          },
+          "package_unit": {
+            "$ref": "#/components/schemas/AmountUnit"
+          },
+          "pieces_per_package": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 10000.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pieces Per Package"
+          }
+        },
+        "type": "object",
+        "required": [
+          "canonical_product_id",
+          "name",
+          "package_amount",
+          "package_unit"
+        ],
+        "title": "RetailProductCreateRequest",
+        "description": "Nowy produkt sklepowy.\n\n`canonical_product_id` jest WYMAGANY (02_DOMAIN §4.4): retail bez produktu\nkanonicznego nie istnieje, bo nie miałby wartości odżywczych ani miejsca\nw agregacji zakupów. Zgodność `package_unit` z `measure_kind` produktu\nsprawdza serwis — tutaj nie znamy jeszcze produktu."
+      },
+      "RetailProductListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RetailProductRead"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "RetailProductListResponse",
+        "description": "Lista wariantów sklepowych z paginacją (04_API §1)."
+      },
+      "RetailProductRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "canonical_product_id": {
+            "type": "integer",
+            "title": "Canonical Product Id"
+          },
+          "canonical_product_name": {
+            "type": "string",
+            "title": "Canonical Product Name"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "brand": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Brand"
+          },
+          "store_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Store Id"
+          },
+          "store_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Store Name"
+          },
+          "package_amount": {
+            "type": "string",
+            "title": "Package Amount"
+          },
+          "package_unit": {
+            "$ref": "#/components/schemas/AmountUnit"
+          },
+          "pieces_per_package": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pieces Per Package"
+          },
+          "photo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Photo Url"
+          },
+          "photo_thumb_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Photo Thumb Url"
+          },
+          "is_archived": {
+            "type": "boolean",
+            "title": "Is Archived"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "canonical_product_id",
+          "canonical_product_name",
+          "name",
+          "brand",
+          "store_id",
+          "store_name",
+          "package_amount",
+          "package_unit",
+          "pieces_per_package",
+          "photo_url",
+          "photo_thumb_url",
+          "is_archived",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "RetailProductRead",
+        "description": "Wariant sklepowy produktu kanonicznego (02_DOMAIN §4.4).\n\n`package_amount` jest stringiem dziesiętnym (ADR-008), a URL-e zdjęcia\nprowadzą do endpointu `/uploads/*` z sesją (07_SECURITY §6) — nigdy do\nścieżki na dysku."
+      },
+      "RetailProductUpdateRequest": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "brand": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Brand"
+          },
+          "store_id": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Store Id"
+          },
+          "package_amount": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 999999.0,
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,6}|(?=[\\d.]{1,9}0*$)\\d{0,6}\\.\\d{0,2}0*$)"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Package Amount"
+          },
+          "package_unit": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AmountUnit"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pieces_per_package": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 10000.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pieces Per Package"
+          },
+          "is_archived": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Archived"
+          }
+        },
+        "type": "object",
+        "title": "RetailProductUpdateRequest",
+        "description": "Częściowa edycja wariantu sklepowego.\n\n`canonical_product_id` NIE jest edytowalny: przepięcie wariantu na inny\nprodukt kanoniczny zmieniałoby znaczenie danych historycznych (spiżarnia,\nlisty zakupowe) bez śladu. Pomyłkę naprawia się nowym wariantem\ni archiwizacją starego (ADR-012)."
+      },
       "Scope": {
         "type": "string",
         "enum": [
@@ -7949,6 +8880,210 @@
         ],
         "title": "Scope",
         "description": "Zakres widoczności encji współdzielnej (ADR-006)."
+      },
+      "StoreCategoryOrderEntry": {
+        "properties": {
+          "category_id": {
+            "type": "integer",
+            "title": "Category Id"
+          },
+          "category_name": {
+            "type": "string",
+            "title": "Category Name"
+          },
+          "position": {
+            "type": "integer",
+            "title": "Position"
+          }
+        },
+        "type": "object",
+        "required": [
+          "category_id",
+          "category_name",
+          "position"
+        ],
+        "title": "StoreCategoryOrderEntry",
+        "description": "Jedna kategoria w profilu sklepu — z nazwą, żeby UI nie dociągał słownika."
+      },
+      "StoreCategoryOrderRequest": {
+        "properties": {
+          "category_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "maxItems": 200,
+            "title": "Category Ids"
+          }
+        },
+        "type": "object",
+        "title": "StoreCategoryOrderRequest",
+        "description": "PEŁNA podmiana kolejności: lista `category_id` w docelowej kolejności.\n\nPozycje (`position`) liczy serwis z indeksów listy — klient nie ma prawa\nprzysłać dziur ani duplikatów numerów, bo to jedna spójna permutacja.\nPusta lista jest dozwolona i znaczy „ten sklep nie ma profilu\"."
+      },
+      "StoreCategoryOrderResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/StoreCategoryOrderEntry"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "StoreCategoryOrderResponse",
+        "description": "Profil sklepu: kategorie w kolejności przejścia po sklepie.\n\nZawiera WYŁĄCZNIE kategorie należące do profilu. Kategorie spoza listy są\npoza profilem (karta B09, nota 4) — silnik listy zakupowej (B11) umieści je\nna końcu, a edytor pobiera pełny słownik z `/categories`."
+      },
+      "StoreCreateRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "color": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 40,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "StoreCreateRequest",
+        "description": "Nowy sklep — tworzy go także USER, także inline z `StorePicker` (02 §3.1 pkt 3)."
+      },
+      "StoreListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/StoreRead"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "StoreListResponse",
+        "description": "Lista sklepów (kształt `{items, total}` także bez paginacji — 04_API §1)."
+      },
+      "StoreRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "color": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color"
+          },
+          "is_archived": {
+            "type": "boolean",
+            "title": "Is Archived"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "color",
+          "is_archived",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "StoreRead",
+        "description": "Sklep ze słownika globalnego."
+      },
+      "StoreUpdateRequest": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "color": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 40,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color"
+          },
+          "is_archived": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Archived"
+          }
+        },
+        "type": "object",
+        "title": "StoreUpdateRequest",
+        "description": "Częściowa edycja sklepu; pole pominięte zostaje bez zmian."
       },
       "TagCreateRequest": {
         "properties": {

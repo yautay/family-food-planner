@@ -25,7 +25,8 @@ from app.core.deletion import USED_IN_LIMIT, UsedInRef
 from app.core.errors import AppError
 from app.core.scope import HouseholdScopedQuery
 from app.modules.accounts.models import User
-from app.modules.catalog.models import CanonicalProduct, ProductCategory
+from app.modules.catalog.models import CanonicalProduct, ProductCategory, RetailProduct
+from app.modules.catalog.retail_service import register_retail_reference_finder
 from app.modules.catalog.service import register_product_reference_finder
 from app.modules.catalog.units import AmountUnit, base_unit
 from app.modules.pantry.models import PantryItem
@@ -353,6 +354,32 @@ async def _pantry_using_product(session: AsyncSession, product_id: int) -> Seque
     return [UsedInRef(type="pantry_item", id=int(row[0]), name=str(row[1])) for row in rows]
 
 
+async def _pantry_using_retail_product(
+    session: AsyncSession, retail_product_id: int
+) -> Sequence[UsedInRef]:
+    """Licznik referencji dla wariantów sklepowych (dołożony w BATCH_09).
+
+    `pantry_items.retail_product_id` dostał constraint FK RESTRICT dopiero
+    w migracji B09 (kolumna istnieje od `0010`), więc od tej chwili pozycja
+    spiżarni blokuje usunięcie wariantu sklepowego — a użytkownik ma zobaczyć
+    KTÓRE pozycje, nie samo „nie można" (06_UIUX §3.3).
+
+    Nazwą jest nazwa wariantu: pozycja spiżarni własnej nazwy nie ma, a nazwa
+    produktu kanonicznego bywa `NULL` dla pozycji czysto retailowej.
+    """
+    rows = (
+        await session.execute(
+            select(PantryItem.id, RetailProduct.name)
+            .join(RetailProduct, PantryItem.retail_product_id == RetailProduct.id)
+            .where(PantryItem.retail_product_id == retail_product_id)
+            .order_by(PantryItem.id)
+            .limit(USED_IN_LIMIT)
+        )
+    ).all()
+    return [UsedInRef(type="pantry_item", id=int(row[0]), name=str(row[1])) for row in rows]
+
+
 # Rejestracja przy imporcie modułu — jak w recipes (B05): każdy proces budujący
 # aplikację ma licznik wpięty automatycznie.
 register_product_reference_finder(_pantry_using_product)
+register_retail_reference_finder(_pantry_using_retail_product)

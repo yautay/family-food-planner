@@ -39,6 +39,19 @@ export interface ProductsFilters {
   include_archived?: boolean
 }
 
+export interface RetailFiltersKey {
+  limit: number
+  offset: number
+  canonical_product_id?: number
+  store_id?: number
+  q?: string
+  include_archived?: boolean
+}
+
+export interface StoresFiltersKey {
+  include_archived?: boolean
+}
+
 export interface PantryFiltersKey {
   limit: number
   offset: number
@@ -84,6 +97,16 @@ export const queryKeys = {
   },
   categories: {
     all: ['categories'] as const,
+  },
+  stores: {
+    all: ['stores'] as const,
+    list: (filters: StoresFiltersKey) => ['stores', 'list', filters] as const,
+    /** Profil sklepu: kolejność kategorii jest własnością TEGO sklepu (B09). */
+    categoryOrder: (id: number) => ['stores', 'category-order', id] as const,
+  },
+  retailProducts: {
+    all: ['retail-products'] as const,
+    list: (filters: RetailFiltersKey) => ['retail-products', 'list', filters] as const,
   },
   pantry: {
     all: ['pantry'] as const,

@@ -66,9 +66,37 @@ Co już istnieje:
   `test_stan_domowy_admina_to_JEGO_dom_a_nie_wszystkie_rodziny`). Ta sama
   granica obowiązuje każdy kolejny kontrakt typu „stan mojego domu". Odejmowanie pozostaje jawne (02_DOMAIN §8): B08 nie ma i nie
   będzie mieć żadnego automatycznego odjęcia.
-- Retail + sklepy (B09): warianty opakowań per produkt kanoniczny,
-  `product_categories.perishability`, `RetailProductCreateDrawer`
-  (kontrakt props/emit w Completion notes B09).
+- Retail + sklepy — **DOSTARCZONE przez B09** (migracja `0011`), cztery rzeczy
+  wiążące dla tego batcha:
+  1. **Warianty czytasz przez `RetailService`** (`app/modules/catalog/
+     retail_service.py`): `list_retail_products(limit, offset,
+     canonical_product_id=…, store_id=…, query=…, include_archived=False)`
+     zwraca `tuple[list[RetailProductView], int]`, a `RetailProductView` to
+     frozen dataclass `(retail, product, store)` z encjami DOCZYTANYMI jawnie.
+     Silnik potrzebuje z `retail`: `package_amount: Decimal`,
+     `package_unit: AmountUnit`, `pieces_per_package: int | None`.
+     **Warianty archiwalne domyślnie NIE wchodzą** — i tak ma być: silnik nie
+     proponuje opakowań, których nie ma już na półce (ADR-012).
+  2. **`package_unit` jest ZAWSZE na osi produktu kanonicznego** (g dla masy,
+     ml dla objętości, szt. dla sztuk) — pilnuje tego serwis przy zapisie
+     (`base_unit(product.measure_kind)`), więc `ceil(potrzeba/wielkość)` liczy
+     się bez konwersji. To niezmiennik do wykorzystania, nie założenie.
+  3. **Blokada usuwania wariantu**: `retail_service.register_retail_reference_finder`
+     to rejestr taki jak dla produktów kanonicznych — moduł `shopping` z FK do
+     `retail_products` (pozycje list, B11) MUSI zarejestrować swój licznik,
+     inaczej 409 wyjdzie bez listy „Używane w:". Spiżarnia (B08) ma już swój.
+  4. **`RetailProductCreateDrawer.vue`** (kontrakt sprawdzony testami
+     `RetailProductCreateDrawer.spec.ts`): props
+     `{ open: boolean, canonicalProductId: number, prefillName?: string }`,
+     emits `created(retailProduct: RetailProduct)` i `close()`. Poza id
+     produktu NIE wymaga niczego — sposób liczenia dociąga sam z
+     `/products/{id}` i z niego wynika jednostka opakowania. Po `created`
+     preview robi `/resolve` z przypisaniem wariantu.
+- Sklepy: `StoresService.category_order(store_id)` oddaje profil sklepu
+  (`CategoryOrderEntry`: `category_id`, `category_name`, `position`) —
+  konsumentem sortowania jest B11, ale `shopping_lists.store_id` powstaje już
+  w tym batchu (patrz Database).
+- `product_categories.perishability` bez zmian (B04).
 - Wzorce frontendu: TanStack Query, Pinia (stan szkicu generacji — 05 §1).
 
 ### Gotowość agregatów planu — ustalenia review R2 (2026-08-21)

@@ -60,6 +60,25 @@ Guard: brak sesji → `/login` (poza `/l/:token`). Layout: `AppShell`
     (↑/↓/Enter/Escape) i `data-testid` (`picker-input`, `picker-option-{id}`,
     `picker-create`, `picker-selected`) są częścią kontraktu — konsumenci
     (B05/B06/B08/B09) opierają na nich E2E.
+  - `StorePicker` (BATCH_09, `components/domain/StorePicker.vue`) — ten sam
+    wzorzec dla sklepów, z prefiksem testid `store-picker-`. Dwie świadome
+    różnice wobec `ProductPicker`: lista sklepów przychodzi w CAŁOŚCI jednym
+    zapytaniem i filtruje się po stronie klienta (słownik ma kilka pozycji,
+    więc debounce byłby opóźnieniem bez powodu), a wśród opcji jest jawna
+    pozycja „Bez sklepu" (`store-picker-none`) — wariant retail bez sklepu to
+    dozwolony stan (03_DATABASE §3). Props `modelValue: Store | null`,
+    `label?`, `disabled?`; emits `update:modelValue` i `selected(store)`.
+  - `RetailProductCreateDrawer` (BATCH_09) — KONTRAKT dla B10/B11: props
+    `{ open: boolean, canonicalProductId: number, prefillName?: string }`,
+    emits `created(retailProduct)` i `close()`. Poza id produktu nie wymaga
+    niczego: sposób liczenia dociąga z `/products/{id}`, a z niego wynika
+    ZAWĘŻONA jednostka opakowania (g / ml / szt.).
+  - `StoreCategoryOrderEditor` (BATCH_09) — kolejność kategorii w sklepie:
+    natywne HTML5 DnD **plus obowiązkowe strzałki** góra/dół (06_UIUX §2).
+    Komponent trzyma szkic i oddaje wynik zdarzeniem `save(categoryIds)` —
+    zapis (PUT całej kolejności) należy do rodzica. Biblioteki DnD świadomie
+    NIE MA: lista jest jednokolumnowa i krótka, więc trzy handlery zdarzeń
+    kosztują mniej niż zależność do utrzymania.
   - `NutritionBar` / `NutritionRing` — wskaźniki wartość/cel/status.
   - `MacroSummary`, `MealCard`, `RecipeCard`, `ShoppingItemRow`
     (duży checkbox ≥44px), `LeftoverBadge` („Zostanie: 150 g").
