@@ -68,9 +68,34 @@ Pliki wspólne z BATCH_08 (kolizje!):
 - `frontend/src/router.ts` (B09 nie dodaje nowej strony top-level,
   ale rozszerza `/produkty/:id/edytuj` i `/ustawienia`),
 - `backend/tests/factories.py`.
-Uwaga: B08 tworzy `pantry_items.retail_product_id` — jeśli B08 zmergował
-się pierwszy BEZ constraintu FK (patrz karta B08, nota 1), ten batch
-w migracji dodaje constraint `FK RESTRICT` na tę kolumnę.
+**STAN FAKTYCZNY (B08 zmergowany pierwszy, 2026-08-21):** migracja `0010`
+utworzyła `pantry_items` z kolumną `retail_product_id BIGINT NULL` **BEZ
+constraintu FK** — `retail_products` jeszcze nie istniało. **Ten batch MUSI
+dopiąć constraint** w swojej migracji, po `create_table("retail_products")`:
+
+```python
+op.create_foreign_key(
+    op.f("fk_pantry_items_retail_product_id_retail_products"),
+    "pantry_items", "retail_products", ["retail_product_id"], ["id"],
+    ondelete="RESTRICT",
+)
+```
+
+…z symetrycznym `op.drop_constraint(...)` w `downgrade()`. Do tego:
+`RetailProduct` rejestruje własny licznik referencji przez
+`register_product_reference_finder`, a spiżarnia ma już swój
+(`pantry/service.py::_pantry_using_product`, `type="pantry_item"`) — B09 dokłada
+analogiczny dla `retail_products` używanych w spiżarni, jeśli chce, żeby 409
+przy usuwaniu produktu sklepowego pokazywał pozycje spiżarni. Numer migracji
+B09 = pierwszy wolny (`0011`, jeśli nic się nie zmieniło), `down_revision`
+z `task db-heads`. Po zmianie zaktualizuj też asercję numeru głowy
+w `tests/integration/test_migrations.py`.
+
+**API spiżarni nie przyjmuje jeszcze `retail_product_id`** (B08 świadomie
+wymaga `product_id` — nie dało się zwalidować odwołania do nieistniejącej
+tabeli). Rozszerzenie `PantryItemCreateRequest` o produkt sklepowy jest poza
+zakresem B09 wg karty B08 (§Out of Scope: „drobne rozszerzenie formularza
+wykona B10 albo R3 wg stanu merge'ów").
 
 ## Stages
 
@@ -317,8 +342,10 @@ Zmieniane (⚠ = wspólne z B08):
    biblioteka) — uzasadnić; strzałki są obowiązkowe niezależnie od DnD.
 4. PUT `category-order`: przyjąć pełną listę `category_id`; kategorie
    spoza listy = poza profilem (silnik/lista w B11 umieści je na końcu).
-5. Kolejność merge'ów z B08: patrz reguła w Context; po merge'u
-   OBOWIĄZKOWO `alembic heads` i `task check`.
+5. Kolejność merge'ów z B08: **B08 poszedł pierwszy** (migracja `0010`,
+   commit `batch(08)`), więc rekoncyliację wykonuje TEN batch — patrz Context:
+   FK na `pantry_items.retail_product_id`, `alembic heads` = jedna głowa,
+   regeneracja `task fe-types` i `task check` po merge'u.
 
 ## Cross-Batch Impact
 

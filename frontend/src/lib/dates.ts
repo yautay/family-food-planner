@@ -41,3 +41,14 @@ export function startOfWeek(date: string): string {
 export function weekDayLabel(date: string): string {
   return WEEKDAYS[toUtc(date).getUTCDay()] ?? ''
 }
+
+/** Różnica w pełnych dniach kalendarzowych (`to - from`); ujemna = `to` w przeszłości. */
+export function daysBetween(from: string, to: string): number {
+  return Math.round((toUtc(to).getTime() - toUtc(from).getTime()) / MS_PER_DAY)
+}
+
+/** Data w zapisie polskim (`2026-08-21` → `21.08.2026`). */
+export function formatDate(date: string): string {
+  const [year, month, day] = date.split('-')
+  return year && month && day ? `${day}.${month}.${year}` : date
+}

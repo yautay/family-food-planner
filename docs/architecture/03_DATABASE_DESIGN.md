@@ -105,7 +105,7 @@ Stan faktyczny (BATCH_04, migracje `0004` + `0005`):
   wchodzą (D14); „Przetwory" i „puszki-słoiki" scalono w jedną kategorię, bo
   różniła je wyłącznie nazwa, a nie `perishability`.
 
-## 4. Wzorzec scope (wspólny dla recipes/planning/pantry/shopping)
+## 4. Wzorzec scope (wspólny dla recipes/planning/shopping)
 
 Kolumny: `owner_user_id FK→users RESTRICT`, `household_id FK→households
 NULL`, `scope ENUM(private,household)`. Zapytania „widoczne dla mnie":
@@ -136,6 +136,9 @@ Stan faktyczny (BATCH_03, `backend/app/core/scope.py`):
   produkcyjnej tabeli ze scope (`recipes`, BATCH_05); BATCH_03 dostarczył sam
   mechanizm i macierz testów na encji testowej `scoped_notes` (tworzonej
   wyłącznie w bazie testowej, nigdy migracją).
+- **Spiżarnia stoi obok tego wzorca, nie w nim** (BATCH_08): jest zawsze domowa,
+  więc kolumny `scope` nie ma, a widoczność liczy `HouseholdScopedQuery` —
+  szczegóły i uzasadnienie w §7.
 
 ## 5. Schemat — recipes
 
@@ -260,6 +263,34 @@ pantry_items (id, household_id FK NULL, owner_user_id FK,  -- scope: zawsze hous
        expiry_date DATE NULL, location TEXT NULL, note TEXT DEFAULT '',
        CHECK (product_id IS NOT NULL) OR (retail_product_id IS NOT NULL))
 ```
+
+Stan faktyczny (BATCH_08, migracja `0010`, `backend/app/modules/pantry/models.py`):
+
+- Tabela **nie ma kolumny `scope`** ani CHECK-a `scope_requires_household`:
+  spiżarnia jest zawsze domowa (02_DOMAIN §3.1 pkt 1), a użytkownik bez rodziny
+  trzyma ją na sobie (`household_id IS NULL`). Wzorzec §4 się tu nie stosuje —
+  kolumny właścicielskie daje `HouseholdScopedMixin`, a widoczność
+  `HouseholdScopedQuery` (oba w `app/core/scope.py`, obok `ScopedQuery`):
+
+  ```sql
+  WHERE household_id = :user_household_id
+     OR (household_id IS NULL AND owner_user_id = :uid)
+  ```
+
+  Samo `owner_user_id = :uid` NIE wystarcza świadomie: po odejściu z rodziny
+  wpis zostaje przy rodzinie, bo to jeden stan domu, a nie prywatna notatka.
+- `owner_user_id` i `household_id` → RESTRICT (jak we wzorcu §4);
+  `product_id` → `canonical_products` **RESTRICT** (ADR-012, licznik referencji
+  rejestruje `pantry/service.py`).
+- **`retail_product_id` istnieje jako `BIGINT NULL` BEZ constraintu FK** —
+  tabela `retail_products` powstaje dopiero w BATCH_09. Constraint dopina batch
+  mergowany jako drugi (B09 albo R3); do tego czasu CHECK „produkt kanoniczny
+  ALBO sklepowy" działa, ale integralności odwołania retail pilnuje wyłącznie
+  serwis (API nie przyjmuje jeszcze tego pola).
+- Nieujemność `amount` egzekwują schemat Pydantic i serwis — CHECK-a w bazie
+  świadomie nie ma, bo nie definiuje go ten dokument.
+- Indeksy: `owner_user_id`, `household_id`, `product_id`, `retail_product_id`,
+  `expiry_date` (domyślny porządek widoku 6).
 
 ## 8. Schemat — shopping
 

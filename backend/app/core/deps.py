@@ -23,6 +23,7 @@ from app.modules.audit.service import AuditService
 from app.modules.catalog.service import CatalogService
 from app.modules.households.service import HouseholdsService
 from app.modules.nutrition.service import GoalsService
+from app.modules.pantry.service import PantryService
 from app.modules.planning.service import PlanningService
 from app.modules.planning.templates_service import TemplatesService
 from app.modules.recipes.service import RecipesService
@@ -61,6 +62,13 @@ def get_goals_service(
 ) -> GoalsService:
     """Serwis celów żywieniowych (historia po `valid_from`)."""
     return GoalsService(session)
+
+
+def get_pantry_service(
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> PantryService:
+    """Serwis spiżarni: stan domowy produktów (BATCH_08)."""
+    return PantryService(session)
 
 
 def get_planning_service(

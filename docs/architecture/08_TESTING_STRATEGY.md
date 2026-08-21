@@ -104,6 +104,13 @@ wynikiem, nie jednorazowe zielone.
 | nutrition produktu (edycja) | 401 | 403 | 403 | 403 | 200 |
 | publiczna lista (token) | 200 | 200 | 200 | 200 | 200 |
 
+**Wyjątek: encje „zawsze household" (spiżarnia — `pantry_items`).** Nie mają
+kolumny `scope`, więc wiersz „zmiana scope / delete" stosuje się do nich tylko
+połową: zmiany scope'u nie ma, a usunięcie jest zwykłą operacją członka rodziny
+(**200/204 zamiast 403** — decyzja właściciela D17). Obcy USER nadal dostaje
+404. Testy: `tests/api/pantry/test_pantry_api.py::test_czlonek_rodziny_usuwa_cudza_pozycje`
+i `tests/integration/pantry/test_pantry_service.py::test_kazdy_czlonek_rodziny_usuwa_cudza_pozycje`.
+
 Macierz jest udowodniona raz, na poziomie mechanizmu: BATCH_03 dostarczył
 `tests/integration/test_scope_matrix.py` na encji testowej `ScopedNote`
 (konsumuje ten sam `ScopedQuery`, co encje produkcyjne, ale nie istnieje

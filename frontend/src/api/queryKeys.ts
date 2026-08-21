@@ -39,6 +39,15 @@ export interface ProductsFilters {
   include_archived?: boolean
 }
 
+export interface PantryFiltersKey {
+  limit: number
+  offset: number
+  q?: string
+  category_id?: number
+  sort?: 'expiry' | 'name'
+  expires_within_days?: number
+}
+
 export const queryKeys = {
   planDays: {
     all: ['plan', 'days'] as const,
@@ -75,6 +84,10 @@ export const queryKeys = {
   },
   categories: {
     all: ['categories'] as const,
+  },
+  pantry: {
+    all: ['pantry'] as const,
+    list: (filters: PantryFiltersKey) => ['pantry', 'list', filters] as const,
   },
   adminUsers: {
     all: ['admin', 'users'] as const,

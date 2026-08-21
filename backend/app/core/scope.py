@@ -19,8 +19,10 @@ konsument (recipes B05, plany B06/B07, szablony, listy zakupowe B11) używa
 `ScopedQuery`. Ręczny filtr scope w serwisie = błąd review.
 
 Spiżarnia (B08) ma wariant „zawsze household, fallback na użytkownika bez
-rodziny" — celowo NIE jest tu implementowana; dołoży ją batch, który jej
-potrzebuje, na bazie `Scope` i `ScopedMixin`.
+rodziny" — `HouseholdScopedMixin` + `HouseholdScopedQuery` na dole pliku.
+Encja bez kolumny `scope` (03_DATABASE §7) nie mieści się we wzorcu wyżej, ale
+mieszka w TYM SAMYM module, bo reguła „żadnych filtrów widoczności w serwisie"
+obowiązuje jednakowo.
 
 Typ enumowy `entity_scope` powstaje w migracji PIERWSZEJ produkcyjnej tabeli
 ze scope (`recipes`, BATCH_05) — BATCH_03 tworzy tylko sam mechanizm.
@@ -142,6 +144,13 @@ class ScopedMixin:
 class ScopedQuery[ScopedT: ScopedMixin]:
     """Widoczność i uprawnienia jednej encji współdzielnej.
 
+    UWAGA (ustalenie `/code-review` B08): `HouseholdScopedQuery` na dole pliku
+    jest BLIŹNIAKIEM tej klasy — `select_visible` i `get_or_404` mają tam
+    identyczne ciała. Poprawka którejkolwiek z nich MUSI trafić w oba miejsca,
+    dopóki R3 nie wyciągnie wspólnej bazy (wspólny przodek wymaga rozluźnienia
+    `ScopedT: ScopedMixin`, bo encja „zawsze household" nie ma kolumny `scope`).
+    `assert_can_manage` bliźniak ma świadomie NIE mieć — patrz jego docstring.
+
     Serwis trzyma instancję jako atrybut klasy/modułu i woła jednolinijkowo::
 
         _RECIPES = ScopedQuery(Recipe, not_found_message="Nie znaleziono przepisu.")
@@ -227,3 +236,111 @@ class ScopedQuery[ScopedT: ScopedMixin]:
             "household_id": user.household_id,
             "scope": scope,
         }
+
+
+# --- wariant „zawsze household" (spiżarnia, B08) -------------------------------------
+
+
+class HouseholdScopedMixin:
+    """Kolumny encji, która NIE MA wyboru scope — jest zawsze domowa (02_DOMAIN §3.1 pkt 1).
+
+    Spiżarnia jest jednym stanem na rodzinę, więc kolumny `scope` nie ma
+    (03_DATABASE §7): widoczność wynika wprost z `household_id`. Użytkownik bez
+    rodziny ma spiżarnię osobistą — wiersz z `household_id IS NULL` wisi wtedy
+    na `owner_user_id`. Dlatego NIE da się tu użyć `ScopedMixin`: jego CHECK
+    (`scope <> 'household' OR household_id IS NOT NULL`) zabraniałby dokładnie
+    tego przypadku.
+    """
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    #: Kto dodał pozycję — RESTRICT jak we wzorcu scope (konto z danymi nie znika).
+    owner_user_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    #: `NULL` = użytkownik bez rodziny (spiżarnia osobista), nie „brak danych".
+    household_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        ForeignKey("households.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
+
+
+class HouseholdScopedQuery[HouseholdScopedT: HouseholdScopedMixin]:
+    """Widoczność encji „zawsze household" — bliźniak `ScopedQuery` bez kolumny scope.
+
+    Warunek widoczności (karta B08, 03_DATABASE §7)::
+
+        household_id = :user_household_id
+        OR (household_id IS NULL AND owner_user_id = :uid)
+
+    Dwie różnice wobec `ScopedQuery` są celowe:
+
+    1. Samo `owner_user_id = :uid` NIE wystarcza do widoczności. Gdyby
+       wystarczało, osoba, która odeszła z rodziny, dalej widziałaby jej
+       spiżarnię — a to jeden stan domowy, nie zbiór prywatnych pozycji.
+    2. **Nie ma tu `assert_can_manage`** — encja „zawsze household" nie ma
+       właściciela w sensie uprawnień. Kto dodał pozycję, jest informacją
+       (`owner_user_id` trafia do odpowiedzi), a nie przywilejem: usuwa ją
+       każdy członek rodziny, tak samo jak ją edytuje. Decyzja właściciela
+       **D17 z 2026-08-21**, wyjątek dopisany do 02_DOMAIN §3.1 pkt 2.
+
+    UWAGA (ustalenie `/code-review` B08): `select_visible` i `get_or_404` są tu
+    KOPIĄ tych z `ScopedQuery` — zmiana w jednym miejscu musi trafić w drugie,
+    dopóki R3 nie wyciągnie wspólnej bazy.
+    """
+
+    def __init__(self, model: type[HouseholdScopedT], *, not_found_message: str) -> None:
+        self._model = model
+        self._not_found_message = not_found_message
+
+    # --- odczyt ---------------------------------------------------------------
+
+    def household_condition(self, user: User) -> ColumnElement[bool]:
+        """Warunek „to jest stan MOJEGO domu" — BEZ wyjątku dla ADMIN-a.
+
+        To nie jest widoczność, tylko przynależność. Silnik zakupowy (B10) pyta
+        „co mamy w domu", a nie „co wolno mi zobaczyć": gdyby ADMIN dostał tu
+        `true()`, jego lista zakupów odjęłaby spiżarnie wszystkich rodzin
+        w instancji. Granica jest ta sama, co dla `/households/my` w 04_API §3
+        pkt 2a — zasób zaadresowany MOJĄ rodziną pokazuje ADMIN-owi jego rodzinę.
+        """
+        personal = and_(self._model.household_id.is_(None), self._model.owner_user_id == user.id)
+        if user.household_id is None:
+            return personal
+        return or_(self._model.household_id == user.household_id, personal)
+
+    def visible_condition(self, user: User) -> ColumnElement[bool]:
+        """Warunek „widoczne dla mnie"; ADMIN widzi wszystko (D16, 04_API §3 pkt 2)."""
+        if user.role is UserRole.ADMIN:
+            return true()
+        return self.household_condition(user)
+
+    def select_visible(self, user: User) -> Select[tuple[HouseholdScopedT]]:
+        """`SELECT` ograniczony do encji widocznych dla użytkownika."""
+        return select(self._model).where(self.visible_condition(user))
+
+    def select_own_household(self, user: User) -> Select[tuple[HouseholdScopedT]]:
+        """`SELECT` ograniczony do stanu WŁASNEGO domu (patrz `household_condition`)."""
+        return select(self._model).where(self.household_condition(user))
+
+    async def get_or_404(
+        self, session: AsyncSession, entity_id: int, user: User
+    ) -> HouseholdScopedT:
+        """Encja po id — cudza albo nieistniejąca kończy się identycznym 404."""
+        entity = (
+            await session.execute(self.select_visible(user).where(self._model.id == entity_id))
+        ).scalar_one_or_none()
+        if entity is None:
+            raise NotFoundError(self._not_found_message)
+        return entity
+
+    # --- mutacje --------------------------------------------------------------
+
+    @staticmethod
+    def ownership_for_create(user: User) -> dict[str, Any]:
+        """Kolumny właścicielskie nowej encji: rodzina użytkownika albo on sam."""
+        return {"owner_user_id": user.id, "household_id": user.household_id}

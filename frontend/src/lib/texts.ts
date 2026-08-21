@@ -386,6 +386,42 @@ export const productPicker = {
   change: 'Zmień',
 } as const
 
+export const pantry = {
+  title: 'Spiżarnia',
+  subtitle: 'Stan domowy: co i ile faktycznie macie w domu.',
+  addItem: 'Dodaj produkt',
+  addFirstItem: 'Dodaj pierwszy produkt',
+  emptyState: 'Twoja spiżarnia jest pusta.',
+  emptySearch: 'Nic takiego nie ma w spiżarni.',
+  searchPlaceholder: 'Szukaj po nazwie produktu',
+  allCategories: 'Wszystkie kategorie',
+  categoryLabel: 'Kategoria',
+  sortLabel: 'Sortowanie',
+  sortByExpiry: 'Po dacie ważności',
+  sortByName: 'Po nazwie',
+  viewGrid: 'Kafelki',
+  viewList: 'Lista',
+  viewLabel: 'Widok',
+  expiringOnly: 'Tylko kończące się',
+  amountLabel: 'Ilość',
+  expiryLabel: 'Data ważności',
+  locationLabel: 'Lokalizacja',
+  locationHint: 'Np. szafka, lodówka, zamrażarka.',
+  noteLabel: 'Notatka',
+  noExpiry: 'Bez daty ważności',
+  expired: 'Po terminie',
+  expiresSoon: 'Kończy się',
+  expiresOn: 'Ważne do',
+  zeroAmount: 'Wyzeruj',
+  zeroed: 'Skończyło się',
+  productLabel: 'Produkt',
+  productRequired: 'Wybierz produkt.',
+  amountRequired: 'Podaj ilość (0 znaczy „skończyło się").',
+  confirmDelete:
+    'Usunąć tę pozycję ze spiżarni? Jeśli produkt tylko się skończył, lepiej wyzeruj ilość.',
+  itemsTotal: 'Pozycji:',
+} as const
+
 export const adminVerification = {
   title: 'Weryfikacja produktów',
   subtitle:

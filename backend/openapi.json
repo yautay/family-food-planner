@@ -3637,6 +3637,247 @@
         }
       }
     },
+    "/api/v1/pantry": {
+      "get": {
+        "tags": [
+          "pantry"
+        ],
+        "summary": "Stan spiżarni rodziny",
+        "operationId": "list_items_api_v1_pantry_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "name": "category_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Category Id"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/PantrySort",
+              "default": "expiry"
+            }
+          },
+          {
+            "name": "expires_within_days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "maximum": 365,
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Expires Within Days"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PantryListResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "pantry"
+        ],
+        "summary": "Dodanie pozycji do spiżarni",
+        "operationId": "create_item_api_v1_pantry_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PantryItemCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PantryItemRead"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/pantry/{item_id}": {
+      "patch": {
+        "tags": [
+          "pantry"
+        ],
+        "summary": "Zmiana ilości/ważności/lokalizacji/notatki (amount=0 = wyzerowanie)",
+        "operationId": "update_item_api_v1_pantry__item_id__patch",
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PantryItemUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PantryItemRead"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "pantry"
+        ],
+        "summary": "Usunięcie pozycji spiżarni (każdy członek rodziny — D17)",
+        "operationId": "delete_item_api_v1_pantry__item_id__delete",
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/audit": {
       "get": {
         "tags": [
@@ -5899,6 +6140,321 @@
         ],
         "title": "NutritionThresholdsPayload",
         "description": "Progi statusów żywieniowych w PROCENTACH celu (D9: domyślnie 90 i 110).\n\nWalidacja `0 < low < high` jest tu, a nie w silniku: silnik dostaje progi\njuż poprawne, a użytkownik ma zobaczyć czytelny komunikat przy formularzu."
+      },
+      "PantryItemCreateRequest": {
+        "properties": {
+          "product_id": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Product Id"
+          },
+          "amount": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 9999999.999,
+                "minimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,7}|(?=[\\d.]{1,11}0*$)\\d{0,7}\\.\\d{0,3}0*$)"
+              }
+            ],
+            "title": "Amount"
+          },
+          "amount_unit": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AmountUnit"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "expiry_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expiry Date"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location"
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 500,
+            "title": "Note",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "product_id",
+          "amount"
+        ],
+        "title": "PantryItemCreateRequest",
+        "description": "Nowa pozycja spiżarni.\n\n`amount_unit` wolno pominąć — wtedy serwis bierze oś produktu (`g`/`ml`/\n`piece` wg `measure_kind`). Podana jawnie MUSI się z nią zgadzać, inaczej\n422: produkt mierzony w masie nie ma stanu „3 sztuki\".\n\nProduktu sklepowego jeszcze się nie wybiera (kolumna czeka na BATCH_09,\nkarta B08 §Out of Scope), więc `product_id` jest tu wymagany."
+      },
+      "PantryItemRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "product_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Id"
+          },
+          "product_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Name"
+          },
+          "category_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Id"
+          },
+          "category_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Name"
+          },
+          "measure_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MeasureKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "retail_product_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retail Product Id"
+          },
+          "amount": {
+            "type": "string",
+            "title": "Amount"
+          },
+          "amount_unit": {
+            "$ref": "#/components/schemas/AmountUnit"
+          },
+          "expiry_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expiry Date"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location"
+          },
+          "note": {
+            "type": "string",
+            "title": "Note"
+          },
+          "owner_user_id": {
+            "type": "integer",
+            "title": "Owner User Id"
+          },
+          "household_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Household Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "product_id",
+          "product_name",
+          "category_id",
+          "category_name",
+          "measure_kind",
+          "retail_product_id",
+          "amount",
+          "amount_unit",
+          "expiry_date",
+          "location",
+          "note",
+          "owner_user_id",
+          "household_id",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "PantryItemRead",
+        "description": "Pozycja w odczycie — z danymi produktu, których potrzebuje widok 6.\n\nŚwiadomie BEZ `from_attributes`: `product_name`, `category_name`\ni `measure_kind` nie są kolumnami `PantryItem`, więc `model_validate(item)`\nnie miałoby z czego ich wziąć. Schemat składa router z widoku serwisu."
+      },
+      "PantryItemUpdateRequest": {
+        "properties": {
+          "amount": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 9999999.999,
+                "minimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,7}|(?=[\\d.]{1,11}0*$)\\d{0,7}\\.\\d{0,3}0*$)"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount"
+          },
+          "expiry_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expiry Date"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "title": "PantryItemUpdateRequest",
+        "description": "Częściowa edycja pozycji: ilość, data ważności, lokalizacja, notatka.\n\nPole POMINIĘTE zostaje bez zmian; `{\"amount\": \"0\"}` to wyzerowanie — wiersz\nzostaje w spiżarni (02_DOMAIN §8). Jednostki się nie zmienia: oś ilości\nnależy do produktu, nie do pozycji."
+      },
+      "PantryListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PantryItemRead"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "PantryListResponse"
+      },
+      "PantrySort": {
+        "type": "string",
+        "enum": [
+          "expiry",
+          "name"
+        ],
+        "title": "PantrySort",
+        "description": "Porządek listy: domyślnie po dacie ważności (widok 6, 06_UIUX §4)."
       },
       "Perishability": {
         "type": "string",

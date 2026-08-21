@@ -820,6 +820,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/pantry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Stan spiżarni rodziny */
+        get: operations["list_items_api_v1_pantry_get"];
+        put?: never;
+        /** Dodanie pozycji do spiżarni */
+        post: operations["create_item_api_v1_pantry_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pantry/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Usunięcie pozycji spiżarni (każdy członek rodziny — D17) */
+        delete: operations["delete_item_api_v1_pantry__item_id__delete"];
+        options?: never;
+        head?: never;
+        /** Zmiana ilości/ważności/lokalizacji/notatki (amount=0 = wyzerowanie) */
+        patch: operations["update_item_api_v1_pantry__item_id__patch"];
+        trace?: never;
+    };
     "/api/v1/audit": {
         parameters: {
             query?: never;
@@ -1710,6 +1746,110 @@ export interface components {
             /** High */
             high: number;
         };
+        /**
+         * PantryItemCreateRequest
+         * @description Nowa pozycja spiżarni.
+         *
+         *     `amount_unit` wolno pominąć — wtedy serwis bierze oś produktu (`g`/`ml`/
+         *     `piece` wg `measure_kind`). Podana jawnie MUSI się z nią zgadzać, inaczej
+         *     422: produkt mierzony w masie nie ma stanu „3 sztuki".
+         *
+         *     Produktu sklepowego jeszcze się nie wybiera (kolumna czeka na BATCH_09,
+         *     karta B08 §Out of Scope), więc `product_id` jest tu wymagany.
+         */
+        PantryItemCreateRequest: {
+            /** Product Id */
+            product_id: number;
+            /** Amount */
+            amount: number | string;
+            amount_unit?: components["schemas"]["AmountUnit"] | null;
+            /** Expiry Date */
+            expiry_date?: string | null;
+            /** Location */
+            location?: string | null;
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+        };
+        /**
+         * PantryItemRead
+         * @description Pozycja w odczycie — z danymi produktu, których potrzebuje widok 6.
+         *
+         *     Świadomie BEZ `from_attributes`: `product_name`, `category_name`
+         *     i `measure_kind` nie są kolumnami `PantryItem`, więc `model_validate(item)`
+         *     nie miałoby z czego ich wziąć. Schemat składa router z widoku serwisu.
+         */
+        PantryItemRead: {
+            /** Id */
+            id: number;
+            /** Product Id */
+            product_id: number | null;
+            /** Product Name */
+            product_name: string | null;
+            /** Category Id */
+            category_id: number | null;
+            /** Category Name */
+            category_name: string | null;
+            measure_kind: components["schemas"]["MeasureKind"] | null;
+            /** Retail Product Id */
+            retail_product_id: number | null;
+            /** Amount */
+            amount: string;
+            amount_unit: components["schemas"]["AmountUnit"];
+            /** Expiry Date */
+            expiry_date: string | null;
+            /** Location */
+            location: string | null;
+            /** Note */
+            note: string;
+            /** Owner User Id */
+            owner_user_id: number;
+            /** Household Id */
+            household_id: number | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * PantryItemUpdateRequest
+         * @description Częściowa edycja pozycji: ilość, data ważności, lokalizacja, notatka.
+         *
+         *     Pole POMINIĘTE zostaje bez zmian; `{"amount": "0"}` to wyzerowanie — wiersz
+         *     zostaje w spiżarni (02_DOMAIN §8). Jednostki się nie zmienia: oś ilości
+         *     należy do produktu, nie do pozycji.
+         */
+        PantryItemUpdateRequest: {
+            /** Amount */
+            amount?: number | string | null;
+            /** Expiry Date */
+            expiry_date?: string | null;
+            /** Location */
+            location?: string | null;
+            /** Note */
+            note?: string | null;
+        };
+        /** PantryListResponse */
+        PantryListResponse: {
+            /** Items */
+            items: components["schemas"]["PantryItemRead"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * PantrySort
+         * @description Porządek listy: domyślnie po dacie ważności (widok 6, 06_UIUX §4).
+         * @enum {string}
+         */
+        PantrySort: "expiry" | "name";
         /**
          * Perishability
          * @description Trwałość — steruje podziałem na tury zakupowe (02_DOMAIN §9.2, B10).
@@ -5163,6 +5303,139 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InstantiateResponse"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_items_api_v1_pantry_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+                q?: string | null;
+                category_id?: number | null;
+                sort?: components["schemas"]["PantrySort"];
+                expires_within_days?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PantryListResponse"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_item_api_v1_pantry_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PantryItemCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PantryItemRead"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_item_api_v1_pantry__item_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_item_api_v1_pantry__item_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PantryItemUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PantryItemRead"];
                 };
             };
             /** @description Błąd */

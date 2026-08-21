@@ -21,8 +21,19 @@ Co już istnieje (stan po B10):
   `label` (render bez słowników); finalize tworzy listy per tura.
 - Placeholder route `/zakupy/listy/:id` (B10, Implementation Notes pkt 5)
   — ten batch go ZASTĘPUJE.
-- Profile sklepów `store_category_order` (B09); `PantryService` (B08) —
-  metoda dodawania/zwiększania pozycji (Completion notes B08).
+- Profile sklepów `store_category_order` (B09).
+- Spiżarnia (B08): akcja „przyjmij zakupy do spiżarni" woła
+  `PantryService.create_item(actor=..., payload=PantryItemCreateRequest(...))`
+  — B08 NIE dostarczył osobnej metody „dodaj albo zwiększ". Świadomie: reguła
+  scalania (czy 500 g mąki z zakupów dolewa się do istniejącego wiersza, czy
+  zakłada nowy z własną datą ważności) jest decyzją domenową PRZYJĘCIA
+  ZAKUPÓW, nie spiżarni — pozycje różnią się datą ważności i lokalizacją,
+  więc ślepe sumowanie zgubiłoby jedno i drugie. Ten batch albo woła
+  `create_item` per odhaczona pozycja (rekomendacja: nowy wiersz = nowa
+  partia), albo dokłada do `PantryService` metodę `receive_purchase(...)`
+  z jawnie opisaną regułą scalania i własnymi testami. Uwaga na jednostki:
+  `create_item` przyjmuje ilość na osi produktu (g/ml/szt.) i sam ustala
+  `amount_unit` z `measure_kind`; ilość ujemna jest niemożliwa (422).
 - `LeftoverBadge`, `ShoppingItemRow` (jeśli powstał w B10 — sprawdzić),
   rate-limiter slowapi skonfigurowany dla `/auth/login` (B02).
 

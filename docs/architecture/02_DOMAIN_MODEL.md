@@ -59,6 +59,12 @@ Reguły:
 2. Odczyt HOUSEHOLD: każdy członek. Edycja HOUSEHOLD: każdy członek
    (rodzina sobie ufa; audit log rejestruje kto zmienił). Zmiana scope'u
    i usunięcie: właściciel lub ADMIN.
+   **Wyjątek — spiżarnia (D17, 2026-08-21): pozycję `PantryItem` usuwa KAŻDY
+   członek rodziny.** Encja „zawsze household" (§3.1 pkt 1) nie ma scope'u do
+   zmiany, a „kto dodał" jest przy niej informacją, nie przywilejem: skoro
+   każdy członek może pozycję wyzerować (`amount = 0`), blokowanie mu
+   usunięcia wiersza byłoby pozorną ochroną. Granica bez zmian: pozycja
+   z cudzej rodziny to 404, nie 403.
 3. Produkty kanoniczne, kategorie, jednostki, sklepy — **globalne**
    (wspólny słownik instancji), edycja wartości odżywczych tylko ADMIN;
    dodanie nowego produktu (inline create) może wykonać USER — produkt

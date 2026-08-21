@@ -86,7 +86,7 @@ export const routes: RouteRecordRaw[] = [
       {
         path: 'spizarnia',
         name: 'spizarnia',
-        component: PlaceholderPage,
+        component: () => import('@/pages/spizarnia/SpizarniaPage.vue'),
         meta: { title: 'Spiżarnia' },
       },
       { path: 'zakupy', name: 'zakupy', component: PlaceholderPage, meta: { title: 'Zakupy' } },

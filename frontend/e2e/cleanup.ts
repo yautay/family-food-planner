@@ -23,7 +23,8 @@ import type { APIRequestContext } from '@playwright/test'
  * Uwaga na kolejność: `week_cycles` blokuje usunięcie szablonu tygodnia (409
  * `used_in`), a pozycje planu blokują usunięcie przepisu i produktu (FK
  * RESTRICT, ADR-012). Dlatego `cleanupE2eData` idzie od najbardziej zależnych
- * encji do najmniej: cykle → szablony → posiłki planu → przepisy → produkty.
+ * encji do najmniej: cykle → szablony → posiłki planu → przepisy → spiżarnia →
+ * produkty (pozycja spiżarni też trzyma produkt FK RESTRICT — B08).
  */
 const API = '/api/v1'
 const CSRF_COOKIE = 'csrf_token'
@@ -162,6 +163,37 @@ async function deleteTemplatesAndCycles(
 }
 
 /**
+ * Kasuje pozycje spiżarni wskazujące produkty o nazwie z danym prefiksem.
+ *
+ * MUSI iść przed `clearProducts`: `pantry_items.product_id` ma FK RESTRICT
+ * (ADR-012), więc pozostawiona pozycja blokuje usunięcie produktu 409-ką
+ * i cały ślad po specu zostaje w bazie.
+ */
+export async function clearPantry(request: APIRequestContext, prefix: string): Promise<void> {
+  const headers = await csrfHeaders(request)
+  await deletePantryItems(request, headers, byPrefix(prefix))
+}
+
+async function deletePantryItems(
+  request: APIRequestContext,
+  headers: Record<string, string>,
+  matches: (name: string) => boolean,
+): Promise<void> {
+  const response = await request.get(`${API}/pantry?limit=${PAGE}&offset=0`)
+  if (!response.ok()) {
+    console.warn(`[e2e cleanup] GET /pantry → ${response.status()}`)
+    return
+  }
+  // Pozycja spiżarni nie ma własnej nazwy — identyfikuje ją nazwa produktu.
+  const body = (await response.json()) as { items?: { id: number; product_name: string | null }[] }
+  for (const row of body.items ?? []) {
+    if (row.product_name !== null && matches(row.product_name)) {
+      await tryDelete(request, `${API}/pantry/${row.id}`, headers)
+    }
+  }
+}
+
+/**
  * Kasuje przepisy o nazwie z danym prefiksem.
  *
  * To jest sedno naprawy inline create: dopóki w bazie leży „Zupa E2E 123",
@@ -225,6 +257,7 @@ export async function cleanupE2eData(
   await clearTemplatesAndCycles(request, namePrefix)
   await clearPlanDays(request, dates)
   await clearRecipes(request, namePrefix)
+  await clearPantry(request, namePrefix)
   await clearProducts(request, namePrefix)
 }
 
@@ -300,5 +333,6 @@ export async function purgeE2eLeftovers(
   }
 
   await deleteRecipes(request, headers, anyE2e)
+  await deletePantryItems(request, headers, anyE2e)
   await deleteProducts(request, headers, anyE2e)
 }

@@ -17,7 +17,7 @@ commit wykonany). Kolumna „Blokery" = zależności + decyzje z 02_DECISIONS.
 | 06 GOALS_AND_DAY_PLAN | [x] | — | `d6bacd7` batch(06) |
 | 07 WEEK_TEMPLATES_AND_CYCLES | [x] | — | `batch(07)` na master (hash wpisać po push) |
 | R2 REVIEW_PLANNING_CORE | [x] | — | `batch(R2)` na master (hash wpisać po push) |
-| 08 PANTRY | [ ] | 04, R2 ✔ (PASS) | |
+| 08 PANTRY | [x] | — | `batch(08)` na master (hash wpisać po push) |
 | 09 RETAIL_PRODUCTS_AND_STORES | [ ] | 04, R2 ✔ (PASS) | |
 | 10 SHOPPING_ENGINE | [ ] | 06, 08, 09 | |
 | 11 SHOPPING_LISTS_AND_SHARING | [ ] | 10 | |
@@ -40,6 +40,68 @@ zmiany dotykające przyszłych batchy trzeba wpisać do ich kart
 (00_MASTER_PLAN §8); dziennik to indeks, nie schowek.
 
 ---
+
+**2026-08-21 — BATCH_08 (PANTRY): spiżarnia jako stan domowy, bez żadnego
+automatycznego odejmowania.** Weszły: migracja `0010_pantry_items` (head = `0010`),
+moduł `app/modules/pantry/` z endpointami `/api/v1/pantry` (GET/POST/PATCH/DELETE),
+widok `/spizarnia` (kafelki/lista, filtr kategorii, szukajka, sortowanie po dacie
+ważności, plakietka przeterminowania) i E2E `pantry.spec.ts` z inline create
+produktu. Pięć rzeczy, o których muszą wiedzieć następne batche:
+
+1. **Nowy wariant scope w `app/core/scope.py`: `HouseholdScopedMixin` +
+   `HouseholdScopedQuery`.** Encja „zawsze household" NIE ma kolumny `scope`
+   (03_DATABASE §7), więc `ScopedMixin` się do niej nie stosuje — jego CHECK
+   zabraniałby wiersza „household bez rodziny", a to jest wymagany przypadek
+   użytkownika bez rodziny. Warunek widoczności to
+   `household_id = :hh OR (household_id IS NULL AND owner_user_id = :uid)` —
+   **bez samodzielnego `owner_user_id = :uid`**, żeby po odejściu z rodziny wpis
+   został przy rodzinie. Kolejna encja tego typu używa tego mixinu, a nie pisze
+   własnego filtru. ADMIN dostaje `true()` jak w `ScopedQuery` (D16) i macierz
+   uprawnień to asercjonuje.
+2. **`pantry_items.retail_product_id` istnieje BEZ constraintu FK** — B08
+   zmergował się pierwszy, `retail_products` jeszcze nie ma. **Rekoncyliację
+   wykonuje B09** (albo R3, jeśli B09 zmieni kolejność): gotowy
+   `op.create_foreign_key(... ondelete="RESTRICT")` czeka w karcie B09 §Context.
+   Do tego czasu API spiżarni wymaga `product_id` i nie przyjmuje produktu
+   sklepowego — świadomie, bo nie da się zwalidować odwołania do nieistniejącej
+   tabeli.
+3. **Kontrakt dla B10/B11**: `PantryService.get_household_state(user) ->
+   list[PantryStateItem]` (`item_id`, `product_id`, `retail_product_id`,
+   `amount`, `amount_unit`, `expiry_date`). Ilości leżą na osi PRZECHOWYWANIA
+   (`base_unit`: sztuki zostają sztukami), pozycje z `amount = 0` NIE wchodzą do
+   wyniku, a wynik to lista POZYCJI, nie agregat per produkt (jeden produkt =
+   wiele partii z różnymi datami). **Wyjątek D16 tu NIE obowiązuje**: stan domowy
+   jedzie po `select_own_household`, więc ADMIN generujący zakupy odejmie swoją
+   spiżarnię, a nie wszystkich rodzin — granica jak dla `/households/my`
+   (04_API §3 pkt 2a). Karty B10 i B11 są już zaktualizowane; B11 dostał
+   wyjaśnienie, dlaczego nie ma metody „dodaj albo zwiększ".
+4. **`e2e/cleanup.ts` sprząta spiżarnię PRZED produktami.** `pantry_items.product_id`
+   ma FK RESTRICT, więc zostawiona pozycja blokuje `DELETE /products/{id}`
+   409-ką i zatruwa kolejne przebiegi — ten sam dług, który R2 zamykał dla
+   przepisów. Nowy spec dotykający spiżarni nie musi nic dokładać: `clearPantry`
+   jest już wpięte w `cleanupE2eData` i `purgeE2eLeftovers`.
+
+5. **Pułapka: `expire_on_commit=False` + mapa tożsamości gubi skalę NUMERIC.**
+   Serwis, który po commicie zwraca ilości z kolumny NUMERIC, NIE MOŻE polegać
+   na kolejnym `select()` — SQLAlchemy odda tę samą instancję z pamięci
+   (z `Decimal("0")` z żądania) zamiast wiersza z bazy (`Decimal("0.000")`),
+   i odpowiedź API wyjdzie ze złą skalą. Trzeba `await session.refresh(item)`
+   albo `.execution_options(populate_existing=True)` na odczycie po zapisie
+   (pantry używa tego drugiego — jedno zapytanie zamiast dwóch). Złapał to
+   `task check` w B08 trzema czerwonymi testami API; B10/B11 zwracają ilości
+   tak samo, więc dotyczy ich wprost.
+
+**D17 ZAMKNIĘTE przez właściciela w trakcie batcha: pozycję spiżarni usuwa
+KAŻDY CZŁONEK RODZINY.** Rekomendacja agenta („zostawić autora wpisu, bo tak
+mówi 02_DOMAIN §3.1 pkt 2") została odrzucona na rzecz spójności domenowej:
+spiżarnia to jeden stan domowy, więc „kto dodał" jest informacją, a nie
+przywilejem — skoro członek rodziny może pozycję wyzerować, blokowanie mu
+usunięcia wiersza było pozorną ochroną. Stan wdrożony: `delete_item` bez bramki
+właścicielskiej, a `HouseholdScopedQuery` **nie ma `assert_can_manage` w ogóle**
+(encja „zawsze household" nie ma reguły właścicielskiej, bo nie ma też scope'u
+do zmiany). Cudza rodzina nadal 404. Wyjątek dopisany do **02_DOMAIN §3.1 pkt 2**
+i **08_TESTING §4** — kolejna encja „zawsze household" dziedziczy tę regułę.
+`task check` zielony, E2E dwa przebiegi z identycznym wynikiem (11/11).
 
 **2026-08-21 — D15 ZAMKNIĘTE przez właściciela: `measure_kind` zmienia
 WYŁĄCZNIE ADMIN.** Część pierwsza (zmiana unieważnia weryfikację) działa od B05;

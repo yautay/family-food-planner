@@ -12,7 +12,7 @@ from functools import lru_cache
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.scope import Scope, ScopedQuery
+from app.core.scope import HouseholdScopedQuery, Scope, ScopedQuery
 from app.core.security import generate_token, hash_password, session_expires_at, utcnow
 from app.modules.accounts.models import Session, User, UserRole
 from app.modules.catalog.models import (
@@ -27,6 +27,7 @@ from app.modules.catalog.naming import normalize_name
 from app.modules.catalog.units import AmountUnit, normalize_unit_label
 from app.modules.households.models import Household, MemberProfile
 from app.modules.nutrition.models import UserNutritionGoal
+from app.modules.pantry.models import PantryItem
 from app.modules.planning.models import (
     DayTemplate,
     PlanDay,
@@ -405,6 +406,40 @@ async def create_item_split(
     await session.commit()
     await session.refresh(row)
     return row
+
+
+async def create_pantry_item(
+    session: AsyncSession,
+    *,
+    owner: User,
+    product: CanonicalProduct | None = None,
+    retail_product_id: int | None = None,
+    amount: Decimal = Decimal("500.000"),
+    amount_unit: AmountUnit = AmountUnit.GRAM,
+    expiry_date: date | None = None,
+    location: str | None = None,
+    note: str = "",
+) -> PantryItem:
+    """Pozycja spiżarni z ilością JUŻ na osi produktu (fabryka omija serwis).
+
+    Kolumny właścicielskie bierze z `HouseholdScopedQuery.ownership_for_create`,
+    czyli dokładnie tak, jak robi to serwis: rodzina autora albo — gdy jej nie ma
+    — sam autor.
+    """
+    item = PantryItem(
+        product_id=product.id if product is not None else None,
+        retail_product_id=retail_product_id,
+        amount=amount,
+        amount_unit=amount_unit,
+        expiry_date=expiry_date,
+        location=location,
+        note=note,
+        **HouseholdScopedQuery.ownership_for_create(owner),
+    )
+    session.add(item)
+    await session.commit()
+    await session.refresh(item)
+    return item
 
 
 async def assign_to_household(

@@ -39,8 +39,33 @@ Co już istnieje:
   Wejście do planu: `PlanningService.list_days(user, date_from=, date_to=)`
   (max 366 dni na żądanie), zwraca `DayView` z posiłkami i pozycjami.
 - `modules/nutrition/engine.py` jako wzorzec czystego silnika (ADR-008).
-- Spiżarnia: `PantryService.get_household_state()` (B08 — sprawdzić
-  faktyczną sygnaturę w kodzie i Completion notes B08).
+- Spiżarnia: **kontrakt DOSTARCZONY przez B08** —
+  `PantryService.get_household_state(user: User) -> list[PantryStateItem]`
+  (`app/modules/pantry/service.py`). `PantryStateItem` to frozen dataclass:
+  `item_id`, `product_id: int | None`, `retail_product_id: int | None`,
+  `amount: Decimal`, `amount_unit: AmountUnit`, `expiry_date: date | None`.
+  Trzy rzeczy wiążące dla silnika:
+  1. Ilości są już na osi PRZECHOWYWANIA produktu (`base_unit`: masa → g,
+     objętość → ml, sztuki → szt.) — ta sama oś co `plan_meal_items.amount`,
+     więc odejmowanie nie wymaga konwersji, ale sztuk NIE MOŻNA odjąć od
+     gramów bez `to_grams` (produkt bez `piece_weight_g` = brak przeliczenia,
+     nie zgadywanie).
+  2. **Zwracane są WYŁĄCZNIE pozycje z `amount > 0`** — wiersz wyzerowany
+     znaczy „nie mamy tego w domu" i celowo nie wchodzi do stanu.
+  3. Wynik jest listą POZYCJI, nie agregatem per produkt: jeden produkt może
+     mieć kilka wierszy (różne daty ważności, różne lokalizacje). Agregacja
+     per produkt należy do silnika — i musi być deterministyczna; kolejność
+     z serwisu jest ustalona (`product_id`, `retail_product_id`, `expiry_date`,
+     `id`), więc wolno na niej polegać (ADR-008).
+  Metoda zwraca stan RODZINY użytkownika (albo jego osobisty, gdy nie ma
+  rodziny) — silnik nie filtruje niczego sam. **Uwaga na ADMIN-a**: wyjątek D16
+  („ADMIN widzi wszystko") obowiązuje LISTĘ `/pantry`, ale NIE ten kontrakt —
+  `get_household_state` jedzie po `HouseholdScopedQuery.select_own_household`,
+  więc administrator generujący zakupy odejmie swoją spiżarnię, a nie spiżarnie
+  wszystkich rodzin w instancji (test
+  `test_stan_domowy_admina_to_JEGO_dom_a_nie_wszystkie_rodziny`). Ta sama
+  granica obowiązuje każdy kolejny kontrakt typu „stan mojego domu". Odejmowanie pozostaje jawne (02_DOMAIN §8): B08 nie ma i nie
+  będzie mieć żadnego automatycznego odjęcia.
 - Retail + sklepy (B09): warianty opakowań per produkt kanoniczny,
   `product_categories.perishability`, `RetailProductCreateDrawer`
   (kontrakt props/emit w Completion notes B09).
