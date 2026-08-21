@@ -227,6 +227,37 @@ def to_grams(amount: NormalizedAmount, product: ProductMeasure) -> Decimal:
     )
 
 
+def to_base_amount(amount: NormalizedAmount, product: ProductMeasure) -> Decimal:
+    """Ilość na osi PRZECHOWYWANIA produktu (`base_unit`) — wejście zakupów (B10).
+
+    Kontrast z `to_basis_amount` jest celowy i wynika z dwóch osi opisanych
+    w nagłówku modułu: tam celem jest oś WARTOŚCI („na 100"), więc produkt
+    mierzony w sztukach dostaje gramy; tutaj celem jest oś, na której leżą
+    ilości i opakowania, więc ten sam produkt dostaje SZTUKI (opakowanie jajek
+    ma 10 szt., nie 600 g — 03_DATABASE §3).
+
+    Dlatego to jedyne miejsce w module, które DZIELI przez `piece_weight_g`:
+    ilość zapisana w gramach (bo `normalize_amount` tak sprowadza jednostki
+    domowe produktu w sztukach) wraca tu na sztuki. Wyniku nie kwantyzujemy —
+    zaokrąglenie należy do liczenia opakowań (ADR-008).
+    """
+    target = base_unit(product.measure_kind)
+    if amount.unit is target:
+        return amount.amount
+    if target is AmountUnit.PIECE and amount.unit is AmountUnit.GRAM:
+        if product.piece_weight_g is None or product.piece_weight_g <= 0:
+            raise UnitConversionError(
+                "Produkt nie ma podanej wagi sztuki, więc nie da się przeliczyć gramów na sztuki."
+            )
+        return amount.amount / product.piece_weight_g
+    if target is AmountUnit.GRAM and amount.unit is AmountUnit.PIECE:
+        return to_grams(amount, product)
+    raise UnitConversionError(
+        "Nie da się przeliczyć tej ilości na jednostkę produktu — sprawdź sposób "
+        "liczenia produktu i jednostkę zapisanej ilości."
+    )
+
+
 def to_basis_amount(amount: NormalizedAmount, product: ProductMeasure) -> Decimal:
     """Ilość w jednostce, w której podane są wartości odżywcze produktu.
 

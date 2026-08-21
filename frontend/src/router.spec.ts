@@ -103,6 +103,9 @@ describe('mapa tras', () => {
       'produkt-edycja',
       'spizarnia',
       'zakupy',
+      // Trasa-zaślepka listy zakupowej (B10): podstrona sekcji „Zakupy", bez
+      // własnej pozycji w nawigacji — pełny widok dostarcza B11.
+      'zakupy-lista',
       'statystyki',
       'ustawienia',
       'admin-users',

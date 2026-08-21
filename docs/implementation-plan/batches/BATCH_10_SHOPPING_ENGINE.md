@@ -409,28 +409,142 @@ Zmieniane: `backend/app/main.py`, `backend/tests/factories.py`,
 
 ## Implementation checklist
 
-- [ ] Migracja 4 tabel (03 §8) — up/down/up, jedna głowa
-- [ ] Typy wejścia/wyjścia silnika (dataclassy, Decimal) + pipeline:
+- [x] Migracja 4 tabel (03 §8) — up/down/up, jedna głowa (`0012`)
+- [x] Typy wejścia/wyjścia silnika (dataclassy, Decimal) + pipeline:
       agregacja → spiżarnia → overrides → tury → opakowania → preview
-- [ ] Testy jednostkowe 08 §2.4–2.7 (nazwane) + hypothesis + determinizm
+- [x] Testy jednostkowe 08 §2.4–2.7 (nazwane) + hypothesis + determinizm
       + snapshot na seedzie demo
-- [ ] `ShoppingService` + round-configs CRUD + seed presetu
-- [ ] `/generate`, `/resolve`, `/finalize` + testy int/api + anty-IDOR
-- [ ] UI: konfiguracja tur + formularz (checkbox spiżarni odznaczony!)
-- [ ] UI: preview (tury, resztki, odjęcia, toggle, inline create retail, niejasności)
-- [ ] Placeholder `/zakupy/listy/:id` + E2E generacja→preview→finalizacja
-- [ ] PROGRESS.md + aktualizacja karty B11
+- [x] `ShoppingService` + round-configs CRUD + seed presetu
+- [x] `/generate`, `/resolve`, `/finalize` + testy int/api + anty-IDOR
+- [x] UI: konfiguracja tur + formularz (checkbox spiżarni odznaczony!)
+- [x] UI: preview (tury, resztki, odjęcia, toggle, inline create retail, niejasności)
+- [x] Placeholder `/zakupy/listy/:id` + E2E generacja→preview→finalizacja
+- [x] PROGRESS.md + aktualizacja karty B11
 
 ## Verification checklist
 
-- [ ] `task check` zielony (unit+int+api+fe-test+typecheck+lint)
-- [ ] `alembic upgrade head` + `downgrade -1` + `upgrade head`; jedna głowa
-- [ ] Czystość silnika: `session|datetime.now|os.` nieobecne w engine.py
-- [ ] Determinizm i snapshot zielone dwa razy z rzędu
-- [ ] Acceptance Criteria 1–8 sprawdzone; odpowiedzi API bez `public_token`
-- [ ] Dokumentacja + karty przyszłych batchy zaktualizowane
-- [ ] Commit `batch(10): …`, `git status` czysty w zakresie batcha
+- [x] `task check` zielony (exit 0): migrations-check 3, unit 290, int 219,
+      api 309, fe-test 263, typecheck, lint, format-check, fe-build
+- [x] `alembic upgrade head` + `downgrade -1` + `upgrade head`; jedna głowa
+- [x] Czystość silnika: `session|datetime.now|os.` nieobecne w engine.py
+- [x] Determinizm i snapshot zielone dwa razy z rzędu (+ E2E 14/14 dwa przebiegi)
+- [x] Acceptance Criteria 1–8 sprawdzone; odpowiedzi API bez `public_token`
+- [x] Dokumentacja + karty przyszłych batchy (B11, B12, B13) zaktualizowane
+- [x] Commit `batch(10): …`, `git status` czysty w zakresie batcha
 
 ## Completion notes
 
-(wypełnia agent wykonujący)
+**Wykonane (2026-08-21).** Migracja `0012` (cztery tabele + dwa typy enumowe,
+head = `0012`), czysty silnik `modules/shopping/engine.py`, `ShoppingService`
+z pełnym `/shopping/*`, strona `/zakupy` (tury + formularz + podgląd),
+rozszerzony seed demo i E2E `shopping-generate.spec.ts`. Zakres cięcia z
+Implementation Notes pkt 7 NIE był potrzebny — batch wszedł w całości.
+
+### Decyzje wykonawcze (nie wymagały właściciela, ale trzeba je znać)
+
+1. **`params` to PEŁNE, wersjonowane wejście silnika** (`{"v": 1, …}`), a nie
+   zapis wyniku. `generate` je zapisuje, `GET` i `resolve` liczą z niego podgląd
+   tym samym silnikiem. Dowód mocny w teście integracyjnym: po zapisie
+   generacji test USUWA pozycje planu, a podgląd nadal wychodzi identyczny.
+   Niezgodna wersja `params` daje 409 z instrukcją („wygeneruj ponownie”),
+   nigdy 500 — to realny scenariusz, bo generacje zostają w historii (D10).
+2. **Okna tur liczą się kursorami, a ostatnie okno sięga `date_to`.** Preset
+   z 02_DOMAIN §9.2 wychodzi z tego wprost, a zakres szerszy niż suma okien nie
+   gubi dni. Gdyby okna kończyły się przed końcem zakresu, pozycje wypadłyby
+   z listy po cichu — a to gorsze niż tura kupująca o dwa dni więcej.
+   Dopisane do 02_DOMAIN §9.2 jako stan faktyczny.
+3. **`shopping_weekday` nie bierze udziału w podziale** — służy do policzenia
+   sugerowanego dnia zakupów, cofając się od początku okna do najbliższego
+   takiego dnia tygodnia (niedziela PRZED tygodniem planu, nie po nim).
+4. **`already_have` jest decyzją o PRODUKCIE, nie o pozycji.** Produkt świeży
+   występuje w dwóch turach i oznacza się w obu naraz — tak czyta się „mam to
+   w domu". Konsekwencja widoczna w E2E (dwa elementy z tym samym testid).
+5. **Czwarty rodzaj niejasności ponad trzy z karty**:
+   `pantry_amount_not_convertible` (OSTRZEŻENIE). Pozycja spiżarni
+   w jednostce niezgodnej z obecnym `measure_kind` produktu NIE jest odejmowana
+   (kupimy z zapasem — kierunek bezpieczny), ale milczenie o tym byłoby
+   rozjazdem między „mam w domu" a listą. Blokery to
+   `plan_item_without_amount` i `product_without_category`; `missing_retail`
+   jest ostrzeżeniem, zgodnie z 02_DOMAIN §9.3.
+6. **Bloker można ŚWIADOMIE ODŁOŻYĆ** (`dismissed_issues` w `params`) — bez tego
+   użytkownik z niepoprawną pozycją planu nie mógłby w ogóle zrobić zakupów,
+   a poprawka danych bywa poza jego zasięgiem w tej chwili. Odłożony bloker nie
+   wstrzymuje finalizacji, a jego produkt po prostu nie wchodzi na listę.
+7. **Seed demo dopisuje encje ze scope do PIERWSZEGO konta ADMIN.** Wariant
+   „osobne konto demo" odrzucony: wymagałby hasła z env i kolejnej zmiennej
+   konfiguracji (07_SECURITY §2), a instancja i tak startuje od
+   `task create-admin`. Bez ADMIN-a seed robi część globalną i mówi, czego nie
+   dołożył. Plan demo stoi na STAŁEJ dacie `2026-08-24` — poza okienkiem E2E
+   (lata 2030+), bo `purgeE2eLeftovers` czyści tamto okno w całości.
+8. **Pozycje pokryte w całości spiżarnią nie wchodzą na finalną listę**
+   (nie ma czego kupić), ale pozycje `already_have` — owszem, z flagą. Kolumna
+   `already_have` istnieje właśnie po to, żeby pokazać decyzję człowieka.
+
+### Odstępstwa od karty
+
+- **`already_have` per produkt, nie per pozycja preview** — karta mówi „lista
+  `already_have` z wejścia", co pasuje do klucza produktowego; wybrano go
+  świadomie (patrz decyzja 4).
+- **Trasa `/zakupy/listy/:id` to `PlaceholderPage`, nie „surowa lista pozycji"**
+  (karta, Implementation Notes pkt 5). Powód: pokazanie pozycji wymagałoby
+  `GET /shopping/lists/{id}`, a ten endpoint jest jawnie w Out of Scope tego
+  batcha. Zamiast tego finalizacja pokazuje podsumowanie utworzonych list
+  (nazwa, tura, liczba pozycji) z linkiem do trasy-zaślepki — nawigacja po
+  finalizacji działa, a dane pochodzą z odpowiedzi `finalize`.
+- **`RetailService` dostał DWA nowe wejścia zbiorcze** (`options_for_products`
+  i `variants_by_ids`), a nie jedno: pierwsze odpowiada na „jakie opakowania
+  proponować" (bez archiwalnych), drugie na „do jakiego produktu należy ten
+  wariant ze spiżarni" (z archiwalnymi — archiwalny wariant nadal opisuje
+  zawartość szafki).
+- **`scripts/` stało się pakietem** (`scripts/__init__.py`). Wymuszone przez
+  snapshot: importuje stałe seedu (`scripts.seed_demo`), a bez `__init__.py`
+  mypy widzi ten sam plik pod dwiema nazwami modułu i przerywa sprawdzanie.
+  Alternatywą było zduplikowanie danych demo w teście — odrzucone, bo snapshot
+  ma pilnować SEEDU, nie swojej kopii.
+- **Poprawka w cudzym specu E2E** (`recipe-inline-create.spec.ts`): wybór karty
+  produktu do usunięcia szedł przez `first()` na nieprzefiltrowanej jeszcze
+  liście (szukajka jest debounce'owana). Po rozszerzeniu seedu pierwszym
+  produktem alfabetycznie bywa „Banan", który jest użyty w przepisie demo, więc
+  DELETE zwracał 409 i spec padał na cudzych danych. Naprawa WZMACNIA asercję
+  (karta wybierana po nazwie, `toHaveCount(1)`), nie osłabia jej.
+
+### Ustalenia `/code-review` (SKILL-REVIEW) — oba naprawione przed commitem
+
+1. **Auto-wybór wariantu zamrażał się jako decyzja użytkownika.** `retailChoices`
+   w podglądzie powstawało z pozycji, a pozycja niesie `retail_product_id` także
+   wtedy, gdy wariant dobrał automat. Pierwsze dowolne `/resolve` (np. toggle
+   „mam w domu" przy innej pozycji) odsyłało więc wszystkie auto-wybory jako
+   jawne, a od tej chwili dodanie mniejszego opakowania w katalogu nie zmieniało
+   już podglądu. Naprawa: `PreviewResult` i `GenerationRead` echują JAWNE
+   `retail_choices`, frontend buduje na nich; asercje w testach int i api.
+2. **`seed_plan` rzucało `KeyError`** przy brakującym przepisie demo, zamiast
+   `SeedError` z komunikatem po polsku (seed ma nie przewracać się stacktrace'em).
+
+### Follow-upy (poza zakresem, do rozważenia w B11 / R3)
+
+1. **`alembic check` raportuje dryf NIEZWIĄZANY z tym batchem**: model
+   `pantry_items.retail_product_id` nie ma zadeklarowanego `ForeignKey`, choć
+   migracja `0011` constraint dopięła (B08 pisał kolumnę przed istnieniem
+   `retail_products`). `task check` tego nie łapie (`migrations-check` bada
+   tylko liczbę głów). Naprawa to jedna linia w `pantry/models.py` — świadomie
+   NIE zrobiona, bo poza zakresem (master prompt pkt 3).
+2. **Listy zakupowej nie da się usunąć** (endpoint dowozi B11). Dopóki go nie
+   ma, spec E2E zakupów musi pracować na produktach seedu — szczegóły i plan
+   naprawy (`clearShoppingLists` w `e2e/cleanup.ts`) wpisane do karty B11
+   §Context pkt 5.
+3. **Seed demo nadal nie zakłada rodziny 2+3** z 08_TESTING §5 — nie była
+   potrzebna do snapshotu podglądu. Reszta zakresu §5 jest już zasiana.
+4. **Brak wpisów audytu dla generacji/finalizacji.** Karta ich nie wymagała,
+   a `AuditAction` nie ma dla nich akcji; jeśli R3 uzna, że utworzenie list
+   powinno być w dzienniku, to jedna nowa akcja + wywołanie w `finalize`.
+5. **`pieces_per_package` z `retail_products` nie jest używane przez silnik** —
+   liczba opakowań wynika z `package_amount`, a sztuki w opakowaniu są dziś
+   informacją opisową. Gdyby miały wpływać na dobór („kup 2 x 10 jajek"),
+   to zmiana kontraktu `RetailInput` i osobna decyzja.
+
+### Pytania do właściciela
+
+Brak — żadna decyzja z tego batcha nie wymagała rozstrzygnięcia właścicielskiego
+(02_DECISIONS bez nowych wpisów OPEN). Decyzję o właścicielu danych demo
+(pkt 7 wyżej) karta jawnie delegowała do batcha; jeśli właściciel woli osobne
+konto demo, zmiana dotyczy wyłącznie `scripts/seed_demo.py`.

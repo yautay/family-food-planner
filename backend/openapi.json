@@ -4470,6 +4470,377 @@
         }
       }
     },
+    "/api/v1/shopping/round-configs": {
+      "get": {
+        "tags": [
+          "shopping"
+        ],
+        "summary": "Konfiguracja tur zakupowych (pierwsze użycie zasiewa preset)",
+        "description": "Zwraca tury zakupowe użytkownika. Gdy nie ma ani jednej, zasiewa edytowalny preset z 02_DOMAIN §9.2 (Niedziela i Środa). Dzień tygodnia zakupów w konwencji `date.weekday()`: **0 = poniedziałek**, 6 = niedziela. `null` = tura bez ustalonego dnia.",
+        "operationId": "list_round_configs_api_v1_shopping_round_configs_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoundConfigListResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "shopping"
+        ],
+        "summary": "Nowa tura zakupowa",
+        "description": "Dzień tygodnia zakupów w konwencji `date.weekday()`: **0 = poniedziałek**, 6 = niedziela. `null` = tura bez ustalonego dnia.",
+        "operationId": "create_round_config_api_v1_shopping_round_configs_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoundConfigCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoundConfigRead"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/shopping/round-configs/{config_id}": {
+      "patch": {
+        "tags": [
+          "shopping"
+        ],
+        "summary": "Edycja tury zakupowej",
+        "description": "Dzień tygodnia zakupów w konwencji `date.weekday()`: **0 = poniedziałek**, 6 = niedziela. `null` = tura bez ustalonego dnia.",
+        "operationId": "update_round_config_api_v1_shopping_round_configs__config_id__patch",
+        "parameters": [
+          {
+            "name": "config_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Config Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoundConfigUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoundConfigRead"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "shopping"
+        ],
+        "summary": "Usunięcie tury zakupowej",
+        "operationId": "delete_round_config_api_v1_shopping_round_configs__config_id__delete",
+        "parameters": [
+          {
+            "name": "config_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Config Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/shopping/generate": {
+      "post": {
+        "tags": [
+          "shopping"
+        ],
+        "summary": "Generacja zakupów → podgląd (zapisuje wyłącznie szkic generacji)",
+        "description": "Liczy podgląd zakupów dla zakresu dat i zapisuje szkic generacji (`status=preview`) razem z pełnym wejściem silnika. Listy zakupowe powstają dopiero w `finalize`. **`use_pantry` domyślnie `false`** — stan domowy odejmujemy wyłącznie na jawne życzenie (02_DOMAIN §8).",
+        "operationId": "generate_api_v1_shopping_generate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerationRead"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/shopping/generations/{generation_id}": {
+      "get": {
+        "tags": [
+          "shopping"
+        ],
+        "summary": "Odtworzenie podglądu generacji (deterministyczne)",
+        "operationId": "get_generation_api_v1_shopping_generations__generation_id__get",
+        "parameters": [
+          {
+            "name": "generation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Generation Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerationRead"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "shopping"
+        ],
+        "summary": "Odrzucenie szkicu generacji (miękko — historia zostaje)",
+        "operationId": "discard_api_v1_shopping_generations__generation_id__delete",
+        "parameters": [
+          {
+            "name": "generation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Generation Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/shopping/generations/{generation_id}/resolve": {
+      "post": {
+        "tags": [
+          "shopping"
+        ],
+        "summary": "Decyzje w podglądzie: mam w domu, wybór wariantu, odłożenie niejasności",
+        "description": "Pole pominięte zostaje bez zmian; pole podane ZASTĘPUJE cały zbiór. Każde wywołanie odświeża też katalog produktów sklepowych, więc wariant utworzony inline jest od razu dostępny do wyboru.",
+        "operationId": "resolve_api_v1_shopping_generations__generation_id__resolve_post",
+        "parameters": [
+          {
+            "name": "generation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Generation Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerationRead"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/shopping/generations/{generation_id}/finalize": {
+      "post": {
+        "tags": [
+          "shopping"
+        ],
+        "summary": "Utworzenie list zakupowych z podglądu (po jednej na turę)",
+        "description": "Nierozstrzygnięty bloker kończy się 409 z listą powodów w `details.issues`. Listy wygasają po 7 dniach (D10/ADR-010).",
+        "operationId": "finalize_api_v1_shopping_generations__generation_id__finalize_post",
+        "parameters": [
+          {
+            "name": "generation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Generation Id"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FinalizeResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/audit": {
       "get": {
         "tags": [
@@ -5427,6 +5798,28 @@
         "title": "ErrorResponse",
         "description": "Koperta błędu zwracana przez wszystkie endpointy."
       },
+      "FinalizeResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ShoppingListRead"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "FinalizeResponse",
+        "description": "Wynik finalizacji: listy per tura, w kolejności tur."
+      },
       "FitToTargetResponse": {
         "properties": {
           "item_id": {
@@ -5459,6 +5852,153 @@
         ],
         "title": "FitToTargetResponse",
         "description": "Propozycja „dopasuj porcję do celu\" — sama propozycja, bez zapisu.\n\nZastosowanie jest osobną, jawną akcją użytkownika (`PATCH` pozycji) —\nnic nie zmienia się samo (02_DOMAIN §6)."
+      },
+      "GenerateRequest": {
+        "properties": {
+          "date_from": {
+            "type": "string",
+            "format": "date",
+            "title": "Date From"
+          },
+          "date_to": {
+            "type": "string",
+            "format": "date",
+            "title": "Date To"
+          },
+          "use_pantry": {
+            "type": "boolean",
+            "title": "Use Pantry",
+            "default": false
+          },
+          "round_config_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Round Config Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "date_from",
+          "date_to"
+        ],
+        "title": "GenerateRequest",
+        "description": "Wejście generacji: zakres dat, decyzja o spiżarni, opcjonalny wybór tur."
+      },
+      "GenerationRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "date_from": {
+            "type": "string",
+            "format": "date",
+            "title": "Date From"
+          },
+          "date_to": {
+            "type": "string",
+            "format": "date",
+            "title": "Date To"
+          },
+          "use_pantry": {
+            "type": "boolean",
+            "title": "Use Pantry"
+          },
+          "status": {
+            "$ref": "#/components/schemas/GenerationStatus"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/Scope"
+          },
+          "owner_user_id": {
+            "type": "integer",
+            "title": "Owner User Id"
+          },
+          "household_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Household Id"
+          },
+          "rounds": {
+            "items": {
+              "$ref": "#/components/schemas/PreviewRoundRead"
+            },
+            "type": "array",
+            "title": "Rounds"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/PreviewIssueRead"
+            },
+            "type": "array",
+            "title": "Issues"
+          },
+          "retail_choices": {
+            "items": {
+              "$ref": "#/components/schemas/RetailChoiceInput"
+            },
+            "type": "array",
+            "title": "Retail Choices"
+          },
+          "has_blockers": {
+            "type": "boolean",
+            "title": "Has Blockers"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "date_from",
+          "date_to",
+          "use_pantry",
+          "status",
+          "scope",
+          "owner_user_id",
+          "household_id",
+          "rounds",
+          "issues",
+          "retail_choices",
+          "has_blockers",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "GenerationRead",
+        "description": "Generacja razem z policzonym preview — odpowiedź `generate`/`GET`/`resolve`.\n\nŚwiadomie BEZ `from_attributes`: `rounds` i `issues` nie są kolumnami\n`shopping_generations` (preview liczy silnik), więc schemat składa router."
+      },
+      "GenerationStatus": {
+        "type": "string",
+        "enum": [
+          "preview",
+          "final",
+          "discarded"
+        ],
+        "title": "GenerationStatus",
+        "description": "Cykl życia generacji: preview → final albo discarded (04_API §2).\n\n`DISCARDED` jest stanem, a nie usunięciem wiersza: historia generacji to\nwartość (D10), a `params` bywa wejściem statystyk (B13)."
       },
       "GoalListResponse": {
         "properties": {
@@ -6011,6 +6551,26 @@
         ],
         "title": "InstantiateWeekRequest",
         "description": "Instancjacja szablonu tygodnia — `week_start` MUSI być poniedziałkiem."
+      },
+      "IssueKind": {
+        "type": "string",
+        "enum": [
+          "missing_retail",
+          "product_without_category",
+          "plan_item_without_amount",
+          "pantry_amount_not_convertible"
+        ],
+        "title": "IssueKind",
+        "description": "Rodzaje niejasności preview (karta B10 §Backend pkt 8).\n\n`PANTRY_AMOUNT_NOT_CONVERTIBLE` to rozszerzenie względem trzech rodzajów\nz karty: pozycja spiżarni w jednostce niezgodnej z obecnym sposobem\nliczenia produktu NIE zostaje odjęta (kupimy z zapasem), ale użytkownik\nmusi się o tym dowiedzieć — cicha rozbieżność między „mam w domu\"\na listą byłaby gorsza od ostrzeżenia."
+      },
+      "IssueSeverity": {
+        "type": "string",
+        "enum": [
+          "blocker",
+          "warning"
+        ],
+        "title": "IssueSeverity",
+        "description": "Waga niejasności: bloker wstrzymuje finalizację, ostrzeżenie tylko informuje."
       },
       "ItemCreateRequest": {
         "properties": {
@@ -7371,6 +7931,323 @@
         "title": "PlanServingSplitRead",
         "description": "Rozkład w odczycie — z imieniem profilu, żeby UI nie dociągał go osobno."
       },
+      "PreviewIssueRead": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/IssueKind"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/IssueSeverity"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "dismissed": {
+            "type": "boolean",
+            "title": "Dismissed"
+          },
+          "product_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Id"
+          },
+          "plan_item_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plan Item Id"
+          },
+          "pantry_item_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pantry Item Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "kind",
+          "severity",
+          "message",
+          "dismissed",
+          "product_id",
+          "plan_item_id",
+          "pantry_item_id"
+        ],
+        "title": "PreviewIssueRead",
+        "description": "Niejasność: `blocker` wstrzymuje finalizację, `warning` tylko informuje."
+      },
+      "PreviewLineRead": {
+        "properties": {
+          "round_key": {
+            "type": "string",
+            "title": "Round Key"
+          },
+          "product_id": {
+            "type": "integer",
+            "title": "Product Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "amount_unit": {
+            "$ref": "#/components/schemas/AmountUnit"
+          },
+          "needed_amount": {
+            "type": "string",
+            "title": "Needed Amount"
+          },
+          "raw_amount": {
+            "type": "string",
+            "title": "Raw Amount"
+          },
+          "category_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Id"
+          },
+          "category_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Name"
+          },
+          "perishability": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Perishability"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "days": {
+            "items": {
+              "type": "string",
+              "format": "date"
+            },
+            "type": "array",
+            "title": "Days"
+          },
+          "from_pantry_amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Pantry Amount"
+          },
+          "already_have": {
+            "type": "boolean",
+            "title": "Already Have"
+          },
+          "retail_product_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retail Product Id"
+          },
+          "retail_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retail Label"
+          },
+          "package_amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Package Amount"
+          },
+          "packages_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Packages Count"
+          },
+          "leftover_amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Leftover Amount"
+          },
+          "retail_options": {
+            "items": {
+              "$ref": "#/components/schemas/RetailOptionRead"
+            },
+            "type": "array",
+            "title": "Retail Options"
+          }
+        },
+        "type": "object",
+        "required": [
+          "round_key",
+          "product_id",
+          "label",
+          "amount_unit",
+          "needed_amount",
+          "raw_amount",
+          "category_id",
+          "category_name",
+          "perishability",
+          "days",
+          "from_pantry_amount",
+          "already_have",
+          "retail_product_id",
+          "retail_label",
+          "package_amount",
+          "packages_count",
+          "leftover_amount",
+          "retail_options"
+        ],
+        "title": "PreviewLineRead",
+        "description": "Pozycja preview: produkt w konkretnej turze, z opakowaniami i resztką."
+      },
+      "PreviewRoundRead": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/RoundMode"
+          },
+          "shopping_weekday": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shopping Weekday"
+          },
+          "shopping_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shopping Date"
+          },
+          "date_from": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date From"
+          },
+          "date_to": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date To"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PreviewLineRead"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "name",
+          "mode",
+          "shopping_weekday",
+          "shopping_date",
+          "date_from",
+          "date_to",
+          "items"
+        ],
+        "title": "PreviewRoundRead",
+        "description": "Tura w preview razem z oknem, które pokryła, i sugerowanym dniem zakupów."
+      },
       "ProductCreateRequest": {
         "properties": {
           "name": {
@@ -8548,6 +9425,128 @@
         "title": "RecipeSummary",
         "description": "Przepis na liście (widok 2): karta z kcal/porcję, oceną i tagami."
       },
+      "ResolveRequest": {
+        "properties": {
+          "already_have": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Already Have"
+          },
+          "retail_choices": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/RetailChoiceInput"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retail Choices"
+          },
+          "dismissed_issues": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dismissed Issues"
+          }
+        },
+        "type": "object",
+        "title": "ResolveRequest",
+        "description": "Decyzje użytkownika w preview.\n\nPole POMINIĘTE zostaje bez zmian, pole PODANE zastępuje cały zbiór —\nfrontend wysyła pełny stan zaznaczeń, bo różnica nie umiałaby wyrazić\nodznaczenia."
+      },
+      "RetailChoiceInput": {
+        "properties": {
+          "product_id": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Product Id"
+          },
+          "retail_product_id": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Retail Product Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "product_id",
+          "retail_product_id"
+        ],
+        "title": "RetailChoiceInput",
+        "description": "Wybór wariantu sklepowego dla produktu (także po inline create)."
+      },
+      "RetailOptionRead": {
+        "properties": {
+          "retail_product_id": {
+            "type": "integer",
+            "title": "Retail Product Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "package_amount": {
+            "type": "string",
+            "title": "Package Amount"
+          },
+          "package_unit": {
+            "$ref": "#/components/schemas/AmountUnit"
+          },
+          "store_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Store Id"
+          },
+          "store_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Store Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "retail_product_id",
+          "label",
+          "package_amount",
+          "package_unit",
+          "store_id",
+          "store_name"
+        ],
+        "title": "RetailOptionRead",
+        "description": "Wariant sklepowy do wyboru w pozycji preview."
+      },
       "RetailProductCreateRequest": {
         "properties": {
           "canonical_product_id": {
@@ -8872,6 +9871,286 @@
         "title": "RetailProductUpdateRequest",
         "description": "Częściowa edycja wariantu sklepowego.\n\n`canonical_product_id` NIE jest edytowalny: przepięcie wariantu na inny\nprodukt kanoniczny zmieniałoby znaczenie danych historycznych (spiżarnia,\nlisty zakupowe) bez śladu. Pomyłkę naprawia się nowym wariantem\ni archiwizacją starego (ADR-012)."
       },
+      "RoundConfigCreateRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/RoundMode"
+          },
+          "covers_days": {
+            "type": "integer",
+            "maximum": 366.0,
+            "minimum": 1.0,
+            "title": "Covers Days"
+          },
+          "fresh_days": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 366.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fresh Days"
+          },
+          "shopping_weekday": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 6.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shopping Weekday"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 100.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "mode",
+          "covers_days"
+        ],
+        "title": "RoundConfigCreateRequest",
+        "description": "Nowa tura. `fresh_days` ma znaczenie wyłącznie w trybie z oknem świeżych."
+      },
+      "RoundConfigListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RoundConfigRead"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "RoundConfigListResponse",
+        "description": "Lista tur. Bez paginacji — tur jest kilka, nie tysiące."
+      },
+      "RoundConfigRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "shopping_weekday": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shopping Weekday"
+          },
+          "covers_days": {
+            "type": "integer",
+            "title": "Covers Days"
+          },
+          "fresh_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fresh Days"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/RoundMode"
+          },
+          "position": {
+            "type": "integer",
+            "title": "Position"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/Scope"
+          },
+          "owner_user_id": {
+            "type": "integer",
+            "title": "Owner User Id"
+          },
+          "household_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Household Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "shopping_weekday",
+          "covers_days",
+          "fresh_days",
+          "mode",
+          "position",
+          "scope",
+          "owner_user_id",
+          "household_id",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "RoundConfigRead",
+        "description": "Tura zakupowa w odczycie."
+      },
+      "RoundConfigUpdateRequest": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 60,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RoundMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "covers_days": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 366.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Covers Days"
+          },
+          "fresh_days": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 366.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fresh Days"
+          },
+          "shopping_weekday": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 6.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shopping Weekday"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 100.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
+          "clear_shopping_weekday": {
+            "type": "boolean",
+            "title": "Clear Shopping Weekday",
+            "default": false
+          },
+          "clear_fresh_days": {
+            "type": "boolean",
+            "title": "Clear Fresh Days",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "RoundConfigUpdateRequest",
+        "description": "Częściowa edycja tury; pole pominięte zostaje bez zmian."
+      },
+      "RoundMode": {
+        "type": "string",
+        "enum": [
+          "all",
+          "durable_plus_fresh_window",
+          "fresh_only"
+        ],
+        "title": "RoundMode",
+        "description": "Co tura kupuje (02_DOMAIN §9.2).\n\nEnum mieszka w silniku, a nie w `models.py`, bo należy do LOGIKI podziału\nna tury — model bazy tylko go odwzorowuje w typie PG (tak samo jak\n`AmountUnit` mieszka w `catalog/units.py`)."
+      },
       "Scope": {
         "type": "string",
         "enum": [
@@ -8880,6 +10159,195 @@
         ],
         "title": "Scope",
         "description": "Zakres widoczności encji współdzielnej (ADR-006)."
+      },
+      "ShoppingListItemRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "category_id": {
+            "type": "integer",
+            "title": "Category Id"
+          },
+          "product_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Id"
+          },
+          "retail_product_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retail Product Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "needed_amount": {
+            "type": "string",
+            "title": "Needed Amount"
+          },
+          "amount_unit": {
+            "$ref": "#/components/schemas/AmountUnit"
+          },
+          "packages_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Packages Count"
+          },
+          "package_size": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Package Size"
+          },
+          "leftover_amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Leftover Amount"
+          },
+          "already_have": {
+            "type": "boolean",
+            "title": "Already Have"
+          },
+          "from_pantry_amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Pantry Amount"
+          },
+          "checked": {
+            "type": "boolean",
+            "title": "Checked"
+          },
+          "position": {
+            "type": "integer",
+            "title": "Position"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "category_id",
+          "product_id",
+          "retail_product_id",
+          "label",
+          "needed_amount",
+          "amount_unit",
+          "packages_count",
+          "package_size",
+          "leftover_amount",
+          "already_have",
+          "from_pantry_amount",
+          "checked",
+          "position"
+        ],
+        "title": "ShoppingListItemRead",
+        "description": "Pozycja utworzonej listy zakupowej (pełny widok listy dostarcza BATCH_11)."
+      },
+      "ShoppingListRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "generation_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generation Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "round_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Round Name"
+          },
+          "store_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Store Id"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ShoppingListItemRead"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "generation_id",
+          "name",
+          "round_name",
+          "store_id",
+          "expires_at",
+          "items"
+        ],
+        "title": "ShoppingListRead",
+        "description": "Lista zakupowa utworzona przez finalizację.\n\n`public_token` świadomie NIE JEST tu wystawiany: kolumna istnieje od tej\nmigracji, ale udostępnianie należy do BATCH_11 (karta B10 §Security)."
       },
       "StoreCategoryOrderEntry": {
         "properties": {

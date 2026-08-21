@@ -29,6 +29,7 @@ from app.modules.pantry.service import PantryService
 from app.modules.planning.service import PlanningService
 from app.modules.planning.templates_service import TemplatesService
 from app.modules.recipes.service import RecipesService
+from app.modules.shopping.service import ShoppingService
 
 
 def get_accounts_service(
@@ -99,6 +100,13 @@ def get_templates_service(
 ) -> TemplatesService:
     """Serwis szablonów dnia/tygodnia i cykli tygodni (BATCH_07)."""
     return TemplatesService(session)
+
+
+def get_shopping_service(
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> ShoppingService:
+    """Serwis zakupów: tury, generacje, finalizacja list (BATCH_10)."""
+    return ShoppingService(session)
 
 
 def get_audit_service(

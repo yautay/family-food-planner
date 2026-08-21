@@ -19,7 +19,7 @@ commit wykonany). Kolumna „Blokery" = zależności + decyzje z 02_DECISIONS.
 | R2 REVIEW_PLANNING_CORE | [x] | — | `batch(R2)` na master (hash wpisać po push) |
 | 08 PANTRY | [x] | — | `batch(08)` na master (hash wpisać po push) |
 | 09 RETAIL_PRODUCTS_AND_STORES | [x] | — | `batch(09)` na master (hash wpisać po push) |
-| 10 SHOPPING_ENGINE | [ ] | 06, 08, 09 | |
+| 10 SHOPPING_ENGINE | [x] | — | `batch(10)` na master (hash wpisać po push) |
 | 11 SHOPPING_LISTS_AND_SHARING | [ ] | 10 | |
 | R3 REVIEW_SHOPPING | [ ] | 08–11 | |
 | 12 PWA_AND_OFFLINE | [ ] | 11, R3 | |
@@ -40,6 +40,81 @@ zmiany dotykające przyszłych batchy trzeba wpisać do ich kart
 (00_MASTER_PLAN §8); dziennik to indeks, nie schowek.
 
 ---
+
+**2026-08-21 — BATCH_10 (SHOPPING_ENGINE): zakupy liczą się z planu.** Weszły:
+migracja `0012` (`shopping_round_configs`, `shopping_generations`,
+`shopping_lists`, `shopping_list_items` + typy `shopping_round_mode`
+i `shopping_generation_status`, head = `0012`), CZYSTY silnik
+`app/modules/shopping/engine.py` (pipeline 02_DOMAIN §9.1 na `Decimal`),
+`ShoppingService` z `/shopping/round-configs`, `/generate`, `/generations/{id}`
+(GET + miękki DELETE), `/resolve`, `/finalize`, strona `/zakupy` (tury +
+formularz + podgląd z resztkami i panelem spiżarni), rozszerzony seed demo
+(sklep, 10 opakowań, 5 przepisów, tydzień planu) i E2E `shopping-generate`.
+Siedem rzeczy, o których muszą wiedzieć następne batche:
+
+1. **`shopping_generations.params` to PEŁNE, WERSJONOWANE wejście silnika**
+   (`{"v": 1, …}`), nie zapis wyniku. `generate` je zapisuje, a `GET` i
+   `resolve` liczą podgląd PONOWNIE z tego zapisu — dlatego podgląd jest
+   deterministyczny i nie zależy od tego, czy plan zmienił się w międzyczasie
+   (test integracyjny usuwa pozycje planu i dostaje identyczny podgląd).
+   Czytać przez `engine.load_input`, nigdy ręcznie po kluczach JSONB; niezgodna
+   wersja daje 409 z instrukcją, nie 500. Karta B13 zaktualizowana.
+2. **Oś zakupów to `base_unit`, nie `basis_unit`.** Nowa funkcja
+   `catalog/units.py::to_base_amount` jest JEDYNYM miejscem, które dzieli przez
+   `piece_weight_g` (gramy → sztuki). Opakowanie jajek ma 10 szt., nie 600 g —
+   bez tej konwersji pozycje w sztukach i w gramach sumowałyby się bzdurnie.
+3. **Trzy nowe publiczne wejścia serwisów** (moduł→moduł wyłącznie tak):
+   `PlanningService.demand_rows` (pozycje planu z zakresu, TA SAMA reguła
+   rozstrzygania dnia co `list_days` — inaczej zakupy policzyłyby się podwójnie),
+   `RecipesService.ingredient_amounts` (ilości składników, bez scope — jak
+   `portion_values`), `RetailService.options_for_products` + `variants_by_ids`.
+4. **Moduł `shopping` rejestruje TRZY liczniki referencji**: produkt kanoniczny,
+   wariant sklepowy i SKLEP. Ten trzeci jest nieoczywisty i konieczny:
+   `shopping_lists.store_id` ma `SET NULL`, więc baza sama nie obroni tej
+   referencji i lista po cichu straciłaby profil sortowania (ostrzeżenie z B09
+   pkt 2 — domknięte).
+5. **Niejasności mają cztery rodzaje, dwa są blokerami.** Blokery:
+   `plan_item_without_amount`, `product_without_category`. Ostrzeżenia:
+   `missing_retail` (02_DOMAIN §9.3), `pantry_amount_not_convertible` (rodzaj
+   dołożony ponad kartę — nieprzeliczalny stan domowy NIE jest odejmowany, więc
+   użytkownik musi o tym wiedzieć). Bloker da się ŚWIADOMIE ODŁOŻYĆ
+   (`dismissed_issues` w `params`) i wtedy finalizacja przechodzi bez tej
+   pozycji — inaczej jedna zła pozycja planu blokowałaby zakupy na zawsze.
+6. **Seed demo dopisuje encje ze scope do PIERWSZEGO konta ADMIN** i stawia
+   tydzień planu na STAŁEJ dacie `2026-08-24` — POZA okienkiem E2E (lata 2030+),
+   bo `purgeE2eLeftovers` czyści tamto okno w całości. `scripts/` jest od teraz
+   PAKIETEM: snapshot silnika importuje stałe seedu, żeby dane testu i dane
+   komendy nie istniały w repo dwa razy.
+7. **E2E zakupów pracuje na produktach SEEDU, nie własnych** — pozycja finalnej
+   listy trzyma produkt i wariant FK RESTRICT, a listy nie da się (do B11)
+   usunąć, więc własny produkt zostałby w bazie na zawsze i zatruwał szukajkę
+   trigramową. Przy okazji naprawiony (WZMOCNIONY, nie osłabiony) spec
+   `recipe-inline-create`: wybierał kartę produktu przez `first()` na
+   nieprzefiltrowanej jeszcze liście i po rozszerzeniu seedu trafiał w „Banan",
+   którego skasować nie wolno.
+
+`task check` ZIELONY W CAŁOŚCI (exit 0): migrations-check (3),
+**test-unit (290)**, **test-int (219)**, **test-api (309)**, fe-test (263 w 28
+plikach), typecheck (mypy 155 plików + vue-tsc), lint, format-check, fe-build.
+Cykl migracji `upgrade head → downgrade -1 → upgrade head` przeszedł na realnej
+bazie; E2E **trzy przebiegi** z identycznym wynikiem (14/14). Snapshot podglądu
+(`tests/unit/shopping/snapshots/demo_week_preview.json`) regeneruje się przez
+`FFP_UPDATE_SNAPSHOTS=1` — zmiana tego pliku w diffie zawsze wymaga decyzji.
+
+**`/code-review` (SKILL-REVIEW) na diffie: dwa ustalenia, oba NAPRAWIONE
+w tym samym commicie.** (a) `retailChoices` w podglądzie powstawało z pozycji,
+więc warianty dobrane AUTOMATEM wyjeżdżały do `/resolve` jako jawne decyzje —
+pierwsza dowolna zmiana zamrażała je wszystkie i późniejsze dodanie mniejszego
+opakowania nic już nie zmieniało. Naprawa: `PreviewResult`/`GenerationRead`
+echują JAWNE `retail_choices`, a frontend buduje na nich, nie na pozycjach
+(nowe asercje w testach int i api). (b) `seed_plan` indeksowało słownik przepisów
+bez sprawdzenia — brakujący przepis demo dawał `KeyError` zamiast `SeedError`
+z komunikatem po polsku.
+
+**Follow-up dla R3 (poza zakresem B10)**: `alembic check` raportuje dryf modelu
+`pantry_items.retail_product_id` (brak `ForeignKey` w modelu, constraint jest
+w migracji `0011`). `task check` tego nie łapie, bo `migrations-check` bada tylko
+liczbę głów. Naprawa to jedna linia w `pantry/models.py`.
 
 **2026-08-21 — BATCH_09 (RETAIL_PRODUCTS_AND_STORES): produkty sklepowe, sklepy
 i profile kolejności kategorii; D15 domknięta.** Weszły: migracja `0011`

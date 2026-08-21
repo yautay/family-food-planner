@@ -222,6 +222,69 @@ class RetailService:
             int(total),
         )
 
+    async def options_for_products(
+        self, product_ids: Sequence[int], *, include_archived: bool = False
+    ) -> dict[int, list[RetailProduct]]:
+        """Warianty sklepowe wskazanych produktów — wejście silnika zakupowego (B10).
+
+        Publiczne wejście obok `list_retail_products`, bo tamto pyta o JEDEN
+        produkt kanoniczny (karta produktu), a silnik potrzebuje kilkudziesięciu
+        naraz i nie może generować N+1 (CLAUDE.md §4: moduł→moduł przez serwis).
+
+        `include_archived=True` służy WYŁĄCZNIE sprowadzeniu pozycji spiżarni do
+        produktu kanonicznego: wariant zarchiwizowany nadal opisuje to, co leży
+        w domu, ale silnik go nie proponuje jako opakowania do kupienia
+        (ADR-012, karta B10 §Context pkt 1).
+
+        Kolejność jest ustalona (wielkość opakowania, potem id) — wynik silnika
+        nie może zależeć od planu zapytania (ADR-008).
+        """
+        unique_ids = sorted(set(product_ids))
+        if not unique_ids:
+            return {}
+
+        statement = select(RetailProduct).where(RetailProduct.canonical_product_id.in_(unique_ids))
+        if not include_archived:
+            statement = statement.where(RetailProduct.is_archived.is_(False))
+        rows = (
+            (
+                await self._session.execute(
+                    statement.order_by(
+                        RetailProduct.canonical_product_id,
+                        RetailProduct.package_amount,
+                        RetailProduct.id,
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        grouped: dict[int, list[RetailProduct]] = {product_id: [] for product_id in unique_ids}
+        for row in rows:
+            grouped[row.canonical_product_id].append(row)
+        return grouped
+
+    async def variants_by_ids(self, retail_ids: Sequence[int]) -> dict[int, RetailProduct]:
+        """Warianty po identyfikatorach — także archiwalne (zbiorczy odczyt dla B10).
+
+        Silnik zakupowy potrzebuje tego, żeby sprowadzić pozycję SPIŻARNI opisaną
+        wariantem sklepowym do produktu kanonicznego: taka pozycja opisuje realną
+        zawartość szafki, nawet gdy wariant zdjęto już z półki.
+        """
+        unique_ids = sorted(set(retail_ids))
+        if not unique_ids:
+            return {}
+        rows = (
+            (
+                await self._session.execute(
+                    select(RetailProduct).where(RetailProduct.id.in_(unique_ids))
+                )
+            )
+            .scalars()
+            .all()
+        )
+        return {row.id: row for row in rows}
+
     # --- zapis ---------------------------------------------------------------------
 
     async def create_retail_product(

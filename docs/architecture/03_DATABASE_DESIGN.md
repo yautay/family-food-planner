@@ -335,6 +335,27 @@ shopping_list_items (id, list_id FK CASCADE, category_id FK RESTRICT,
 po pełnym tokenie. `shopping_generations.params` przechowuje pełne wejście
 generacji (odtwarzalność preview i test regresyjny silnika).
 
+Stan faktyczny (BATCH_10, migracja `0012`):
+
+- Trzy pierwsze tabele mają kolumny wzorca scope (§4) razem z CHECK-iem
+  `scope_requires_household`; `shopping_list_items` scope'u NIE ma — dziedziczy
+  go po liście (04_API §3 pkt 2c).
+- Nowe typy enumowe: `shopping_round_mode` (`all`, `durable_plus_fresh_window`,
+  `fresh_only`) i `shopping_generation_status` (`preview`, `final`,
+  `discarded`). `entity_scope` i `amount_unit` są REUŻYTE z migracji `0006`
+  (`create_type=False`), więc downgrade `0012` ich nie kasuje.
+- CHECK-i domenowe dołożone ponad schemat wyżej: `date_from <= date_to`
+  (generacje), `covers_days > 0`, `fresh_days > 0`, `shopping_weekday`
+  w zakresie 0–6 (tury), `needed_amount >= 0` i `packages_count > 0` (pozycje).
+- `public_token` i `token_revoked` istnieją, ale **żaden endpoint tego batcha
+  ich nie czyta ani nie wystawia** — konsumuje je BATCH_11 (pilnuje tego test
+  `tests/api/shopping/test_shopping_api.py`).
+- `params` ma wersję kształtu (`{"v": 1, …}`): niezgodna wersja daje 409
+  z instrukcją „wygeneruj zakupy ponownie", nigdy 500 (`ShoppingParamsError`).
+- Liczniki referencji dla 409 `used_in` rejestruje `shopping/service.py`:
+  produkt kanoniczny, wariant sklepowy ORAZ sklep (`shopping_lists.store_id`
+  ma SET NULL, więc bez licznika lista po cichu straciłaby profil sortowania).
+
 ## 9. Schemat — importer
 
 ```sql

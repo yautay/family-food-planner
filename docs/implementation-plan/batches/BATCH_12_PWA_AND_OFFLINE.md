@@ -32,7 +32,11 @@ Batch zastaje (po B11 + R3):
   publiczny `PATCH /public/lists/{token}` (rate limit, 410 po expiry);
   kolumny `checked`, `checked_at` w `shopping_list_items` już istnieją.
 - `shopping_list_items.label` — tekst pozycji renderowalny offline
-  (03_DATABASE §8, celowo zdenormalizowany).
+  (03_DATABASE §8, celowo zdenormalizowany). **Stan faktyczny po B10**:
+  `label` to nazwa WYBRANEGO WARIANTU SKLEPOWEGO („Mąka pszenna 1 kg"), a gdy
+  wariantu nie ma — nazwa produktu kanonicznego („Cebula"). Semantyki tej
+  kolumny nie wolno zmieniać: offline nie ma dostępu do katalogu, więc pozycja
+  musi umieć pokazać się sama.
 
 Wymagane lektury: **ADR-009** (całość — kontrakt tego batcha),
 05_FRONTEND §6 (PWA i offline), §1 (Pinia = kolejka offline), 06_UIUX §5

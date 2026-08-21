@@ -964,6 +964,129 @@ export interface paths {
         patch: operations["update_item_api_v1_pantry__item_id__patch"];
         trace?: never;
     };
+    "/api/v1/shopping/round-configs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Konfiguracja tur zakupowych (pierwsze użycie zasiewa preset)
+         * @description Zwraca tury zakupowe użytkownika. Gdy nie ma ani jednej, zasiewa edytowalny preset z 02_DOMAIN §9.2 (Niedziela i Środa). Dzień tygodnia zakupów w konwencji `date.weekday()`: **0 = poniedziałek**, 6 = niedziela. `null` = tura bez ustalonego dnia.
+         */
+        get: operations["list_round_configs_api_v1_shopping_round_configs_get"];
+        put?: never;
+        /**
+         * Nowa tura zakupowa
+         * @description Dzień tygodnia zakupów w konwencji `date.weekday()`: **0 = poniedziałek**, 6 = niedziela. `null` = tura bez ustalonego dnia.
+         */
+        post: operations["create_round_config_api_v1_shopping_round_configs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/shopping/round-configs/{config_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Usunięcie tury zakupowej */
+        delete: operations["delete_round_config_api_v1_shopping_round_configs__config_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Edycja tury zakupowej
+         * @description Dzień tygodnia zakupów w konwencji `date.weekday()`: **0 = poniedziałek**, 6 = niedziela. `null` = tura bez ustalonego dnia.
+         */
+        patch: operations["update_round_config_api_v1_shopping_round_configs__config_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/shopping/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Generacja zakupów → podgląd (zapisuje wyłącznie szkic generacji)
+         * @description Liczy podgląd zakupów dla zakresu dat i zapisuje szkic generacji (`status=preview`) razem z pełnym wejściem silnika. Listy zakupowe powstają dopiero w `finalize`. **`use_pantry` domyślnie `false`** — stan domowy odejmujemy wyłącznie na jawne życzenie (02_DOMAIN §8).
+         */
+        post: operations["generate_api_v1_shopping_generate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/shopping/generations/{generation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Odtworzenie podglądu generacji (deterministyczne) */
+        get: operations["get_generation_api_v1_shopping_generations__generation_id__get"];
+        put?: never;
+        post?: never;
+        /** Odrzucenie szkicu generacji (miękko — historia zostaje) */
+        delete: operations["discard_api_v1_shopping_generations__generation_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/shopping/generations/{generation_id}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Decyzje w podglądzie: mam w domu, wybór wariantu, odłożenie niejasności
+         * @description Pole pominięte zostaje bez zmian; pole podane ZASTĘPUJE cały zbiór. Każde wywołanie odświeża też katalog produktów sklepowych, więc wariant utworzony inline jest od razu dostępny do wyboru.
+         */
+        post: operations["resolve_api_v1_shopping_generations__generation_id__resolve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/shopping/generations/{generation_id}/finalize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Utworzenie list zakupowych z podglądu (po jednej na turę)
+         * @description Nierozstrzygnięty bloker kończy się 409 z listą powodów w `details.issues`. Listy wygasają po 7 dniach (D10/ADR-010).
+         */
+        post: operations["finalize_api_v1_shopping_generations__generation_id__finalize_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/audit": {
         parameters: {
             query?: never;
@@ -1352,6 +1475,16 @@ export interface components {
             error: components["schemas"]["ErrorBody"];
         };
         /**
+         * FinalizeResponse
+         * @description Wynik finalizacji: listy per tura, w kolejności tur.
+         */
+        FinalizeResponse: {
+            /** Items */
+            items: components["schemas"]["ShoppingListRead"][];
+            /** Total */
+            total: number;
+        };
+        /**
          * FitToTargetResponse
          * @description Propozycja „dopasuj porcję do celu" — sama propozycja, bez zapisu.
          *
@@ -1369,6 +1502,85 @@ export interface components {
             proposed_servings: string;
             resulting_nutrition: components["schemas"]["NutritionRead"];
         };
+        /**
+         * GenerateRequest
+         * @description Wejście generacji: zakres dat, decyzja o spiżarni, opcjonalny wybór tur.
+         */
+        GenerateRequest: {
+            /**
+             * Date From
+             * Format: date
+             */
+            date_from: string;
+            /**
+             * Date To
+             * Format: date
+             */
+            date_to: string;
+            /**
+             * Use Pantry
+             * @default false
+             */
+            use_pantry: boolean;
+            /** Round Config Ids */
+            round_config_ids?: number[] | null;
+        };
+        /**
+         * GenerationRead
+         * @description Generacja razem z policzonym preview — odpowiedź `generate`/`GET`/`resolve`.
+         *
+         *     Świadomie BEZ `from_attributes`: `rounds` i `issues` nie są kolumnami
+         *     `shopping_generations` (preview liczy silnik), więc schemat składa router.
+         */
+        GenerationRead: {
+            /** Id */
+            id: number;
+            /**
+             * Date From
+             * Format: date
+             */
+            date_from: string;
+            /**
+             * Date To
+             * Format: date
+             */
+            date_to: string;
+            /** Use Pantry */
+            use_pantry: boolean;
+            status: components["schemas"]["GenerationStatus"];
+            scope: components["schemas"]["Scope"];
+            /** Owner User Id */
+            owner_user_id: number;
+            /** Household Id */
+            household_id: number | null;
+            /** Rounds */
+            rounds: components["schemas"]["PreviewRoundRead"][];
+            /** Issues */
+            issues: components["schemas"]["PreviewIssueRead"][];
+            /** Retail Choices */
+            retail_choices: components["schemas"]["RetailChoiceInput"][];
+            /** Has Blockers */
+            has_blockers: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * GenerationStatus
+         * @description Cykl życia generacji: preview → final albo discarded (04_API §2).
+         *
+         *     `DISCARDED` jest stanem, a nie usunięciem wiersza: historia generacji to
+         *     wartość (D10), a `params` bywa wejściem statystyk (B13).
+         * @enum {string}
+         */
+        GenerationStatus: "preview" | "final" | "discarded";
         /**
          * GoalListResponse
          * @description Historia celów (najnowszy `valid_from` pierwszy) + cel obowiązujący dziś.
@@ -1611,6 +1823,24 @@ export interface components {
              */
             week_start: string;
         };
+        /**
+         * IssueKind
+         * @description Rodzaje niejasności preview (karta B10 §Backend pkt 8).
+         *
+         *     `PANTRY_AMOUNT_NOT_CONVERTIBLE` to rozszerzenie względem trzech rodzajów
+         *     z karty: pozycja spiżarni w jednostce niezgodnej z obecnym sposobem
+         *     liczenia produktu NIE zostaje odjęta (kupimy z zapasem), ale użytkownik
+         *     musi się o tym dowiedzieć — cicha rozbieżność między „mam w domu"
+         *     a listą byłaby gorsza od ostrzeżenia.
+         * @enum {string}
+         */
+        IssueKind: "missing_retail" | "product_without_category" | "plan_item_without_amount" | "pantry_amount_not_convertible";
+        /**
+         * IssueSeverity
+         * @description Waga niejasności: bloker wstrzymuje finalizację, ostrzeżenie tylko informuje.
+         * @enum {string}
+         */
+        IssueSeverity: "blocker" | "warning";
         /**
          * ItemCreateRequest
          * @description Nowa pozycja posiłku: przepis z mnożnikiem ALBO produkt luzem z ilością.
@@ -2061,6 +2291,87 @@ export interface components {
             multiplier: string;
         };
         /**
+         * PreviewIssueRead
+         * @description Niejasność: `blocker` wstrzymuje finalizację, `warning` tylko informuje.
+         */
+        PreviewIssueRead: {
+            /** Key */
+            key: string;
+            kind: components["schemas"]["IssueKind"];
+            severity: components["schemas"]["IssueSeverity"];
+            /** Message */
+            message: string;
+            /** Dismissed */
+            dismissed: boolean;
+            /** Product Id */
+            product_id: number | null;
+            /** Plan Item Id */
+            plan_item_id: number | null;
+            /** Pantry Item Id */
+            pantry_item_id: number | null;
+        };
+        /**
+         * PreviewLineRead
+         * @description Pozycja preview: produkt w konkretnej turze, z opakowaniami i resztką.
+         */
+        PreviewLineRead: {
+            /** Round Key */
+            round_key: string;
+            /** Product Id */
+            product_id: number;
+            /** Label */
+            label: string;
+            amount_unit: components["schemas"]["AmountUnit"];
+            /** Needed Amount */
+            needed_amount: string;
+            /** Raw Amount */
+            raw_amount: string;
+            /** Category Id */
+            category_id: number | null;
+            /** Category Name */
+            category_name: string | null;
+            perishability: components["schemas"]["Perishability"] | null;
+            /** Days */
+            days: string[];
+            /** From Pantry Amount */
+            from_pantry_amount: string | null;
+            /** Already Have */
+            already_have: boolean;
+            /** Retail Product Id */
+            retail_product_id: number | null;
+            /** Retail Label */
+            retail_label: string | null;
+            /** Package Amount */
+            package_amount: string | null;
+            /** Packages Count */
+            packages_count: number | null;
+            /** Leftover Amount */
+            leftover_amount: string | null;
+            /** Retail Options */
+            retail_options: components["schemas"]["RetailOptionRead"][];
+        };
+        /**
+         * PreviewRoundRead
+         * @description Tura w preview razem z oknem, które pokryła, i sugerowanym dniem zakupów.
+         */
+        PreviewRoundRead: {
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            mode: components["schemas"]["RoundMode"];
+            /** Shopping Weekday */
+            shopping_weekday: number | null;
+            /** Shopping Date */
+            shopping_date: string | null;
+            /** Date From */
+            date_from: string | null;
+            /** Date To */
+            date_to: string | null;
+            /** Items */
+            items: components["schemas"]["PreviewLineRead"][];
+        };
+        /**
          * ProductCreateRequest
          * @description Nowy produkt. Wartości odżywcze NIE wchodzą tędy — mają własny endpoint.
          *
@@ -2435,6 +2746,49 @@ export interface components {
             updated_at: string;
         };
         /**
+         * ResolveRequest
+         * @description Decyzje użytkownika w preview.
+         *
+         *     Pole POMINIĘTE zostaje bez zmian, pole PODANE zastępuje cały zbiór —
+         *     frontend wysyła pełny stan zaznaczeń, bo różnica nie umiałaby wyrazić
+         *     odznaczenia.
+         */
+        ResolveRequest: {
+            /** Already Have */
+            already_have?: number[] | null;
+            /** Retail Choices */
+            retail_choices?: components["schemas"]["RetailChoiceInput"][] | null;
+            /** Dismissed Issues */
+            dismissed_issues?: string[] | null;
+        };
+        /**
+         * RetailChoiceInput
+         * @description Wybór wariantu sklepowego dla produktu (także po inline create).
+         */
+        RetailChoiceInput: {
+            /** Product Id */
+            product_id: number;
+            /** Retail Product Id */
+            retail_product_id: number;
+        };
+        /**
+         * RetailOptionRead
+         * @description Wariant sklepowy do wyboru w pozycji preview.
+         */
+        RetailOptionRead: {
+            /** Retail Product Id */
+            retail_product_id: number;
+            /** Label */
+            label: string;
+            /** Package Amount */
+            package_amount: string;
+            package_unit: components["schemas"]["AmountUnit"];
+            /** Store Id */
+            store_id: number | null;
+            /** Store Name */
+            store_name: string | null;
+        };
+        /**
          * RetailProductCreateRequest
          * @description Nowy produkt sklepowy.
          *
@@ -2538,11 +2892,168 @@ export interface components {
             is_archived?: boolean | null;
         };
         /**
+         * RoundConfigCreateRequest
+         * @description Nowa tura. `fresh_days` ma znaczenie wyłącznie w trybie z oknem świeżych.
+         */
+        RoundConfigCreateRequest: {
+            /** Name */
+            name: string;
+            mode: components["schemas"]["RoundMode"];
+            /** Covers Days */
+            covers_days: number;
+            /** Fresh Days */
+            fresh_days?: number | null;
+            /** Shopping Weekday */
+            shopping_weekday?: number | null;
+            /** Position */
+            position?: number | null;
+        };
+        /**
+         * RoundConfigListResponse
+         * @description Lista tur. Bez paginacji — tur jest kilka, nie tysiące.
+         */
+        RoundConfigListResponse: {
+            /** Items */
+            items: components["schemas"]["RoundConfigRead"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * RoundConfigRead
+         * @description Tura zakupowa w odczycie.
+         */
+        RoundConfigRead: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Shopping Weekday */
+            shopping_weekday: number | null;
+            /** Covers Days */
+            covers_days: number;
+            /** Fresh Days */
+            fresh_days: number | null;
+            mode: components["schemas"]["RoundMode"];
+            /** Position */
+            position: number;
+            scope: components["schemas"]["Scope"];
+            /** Owner User Id */
+            owner_user_id: number;
+            /** Household Id */
+            household_id: number | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * RoundConfigUpdateRequest
+         * @description Częściowa edycja tury; pole pominięte zostaje bez zmian.
+         */
+        RoundConfigUpdateRequest: {
+            /** Name */
+            name?: string | null;
+            mode?: components["schemas"]["RoundMode"] | null;
+            /** Covers Days */
+            covers_days?: number | null;
+            /** Fresh Days */
+            fresh_days?: number | null;
+            /** Shopping Weekday */
+            shopping_weekday?: number | null;
+            /** Position */
+            position?: number | null;
+            /**
+             * Clear Shopping Weekday
+             * @default false
+             */
+            clear_shopping_weekday: boolean;
+            /**
+             * Clear Fresh Days
+             * @default false
+             */
+            clear_fresh_days: boolean;
+        };
+        /**
+         * RoundMode
+         * @description Co tura kupuje (02_DOMAIN §9.2).
+         *
+         *     Enum mieszka w silniku, a nie w `models.py`, bo należy do LOGIKI podziału
+         *     na tury — model bazy tylko go odwzorowuje w typie PG (tak samo jak
+         *     `AmountUnit` mieszka w `catalog/units.py`).
+         * @enum {string}
+         */
+        RoundMode: "all" | "durable_plus_fresh_window" | "fresh_only";
+        /**
          * Scope
          * @description Zakres widoczności encji współdzielnej (ADR-006).
          * @enum {string}
          */
         Scope: "private" | "household";
+        /**
+         * ShoppingListItemRead
+         * @description Pozycja utworzonej listy zakupowej (pełny widok listy dostarcza BATCH_11).
+         */
+        ShoppingListItemRead: {
+            /** Id */
+            id: number;
+            /** Category Id */
+            category_id: number;
+            /** Product Id */
+            product_id: number | null;
+            /** Retail Product Id */
+            retail_product_id: number | null;
+            /** Label */
+            label: string;
+            /** Needed Amount */
+            needed_amount: string;
+            amount_unit: components["schemas"]["AmountUnit"];
+            /** Packages Count */
+            packages_count: number | null;
+            /** Package Size */
+            package_size: string | null;
+            /** Leftover Amount */
+            leftover_amount: string | null;
+            /** Already Have */
+            already_have: boolean;
+            /** From Pantry Amount */
+            from_pantry_amount: string | null;
+            /** Checked */
+            checked: boolean;
+            /** Position */
+            position: number;
+        };
+        /**
+         * ShoppingListRead
+         * @description Lista zakupowa utworzona przez finalizację.
+         *
+         *     `public_token` świadomie NIE JEST tu wystawiany: kolumna istnieje od tej
+         *     migracji, ale udostępnianie należy do BATCH_11 (karta B10 §Security).
+         */
+        ShoppingListRead: {
+            /** Id */
+            id: number;
+            /** Generation Id */
+            generation_id: number | null;
+            /** Name */
+            name: string;
+            /** Round Name */
+            round_name: string | null;
+            /** Store Id */
+            store_id: number | null;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Items */
+            items: components["schemas"]["ShoppingListItemRead"][];
+        };
         /**
          * StoreCategoryOrderEntry
          * @description Jedna kategoria w profilu sklepu — z nazwą, żeby UI nie dociągał słownika.
@@ -6142,6 +6653,291 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PantryItemRead"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_round_configs_api_v1_shopping_round_configs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoundConfigListResponse"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_round_config_api_v1_shopping_round_configs_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RoundConfigCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoundConfigRead"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_round_config_api_v1_shopping_round_configs__config_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                config_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_round_config_api_v1_shopping_round_configs__config_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                config_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RoundConfigUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoundConfigRead"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    generate_api_v1_shopping_generate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GenerateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenerationRead"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_generation_api_v1_shopping_generations__generation_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                generation_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenerationRead"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    discard_api_v1_shopping_generations__generation_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                generation_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    resolve_api_v1_shopping_generations__generation_id__resolve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                generation_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResolveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenerationRead"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    finalize_api_v1_shopping_generations__generation_id__finalize_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                generation_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FinalizeResponse"];
                 };
             };
             /** @description Błąd */

@@ -3,9 +3,9 @@ name: ffp-domain-calc
 description: Reguły logiki obliczeniowej Family Food Planner — Decimal end-to-end, normalizacja jednostek, wzory nutrition (kcal/makro/IG→ŁG), determinizm silnika zakupowego, zaokrąglenia, property-based testy. Ładuj przy każdym batchu liczącym ilości lub wartości.
 ---
 
-<!-- verified: 2026-08-21 (REVIEW R2 — uzgodnione z kodem po B05–B07:
-     units.py + nutrition_adapter.py + nutrition/{engine,types}.py;
-     silnik ZAKUPOWY dalej nie istnieje — dokłada go B10)
+<!-- verified: 2026-08-21 (BATCH_10 — uzgodnione z kodem po B05–B10:
+     units.py + nutrition_adapter.py + nutrition/{engine,types}.py
+     + shopping/engine.py; OBA silniki istnieją)
      stack: Python 3.13 · Decimal (stdlib) · hypothesis 6.165 (jest w
             `[dependency-groups] dev` od B05) · pytest-cov
      źródła nadrzędne: ADR-004, ADR-005, ADR-008, 02_DOMAIN §6 i §9, 08_TESTING §2
@@ -72,12 +72,23 @@ węglow. przyswajalne   = max(carbs − fiber, 0)
   jedyny snapshot = `pdf_kcal`/`pdf_macros` importu (walidacja, >10%
   rozjazdu ⇒ issue).
 
-## Silnik zakupowy (02_DOMAIN §9)
+## Silnik zakupowy (02_DOMAIN §9) — ISTNIEJE od B10
 
+- `shopping/engine.py`: `generate_preview(EngineInput) -> PreviewResult`, plus
+  `dump_input`/`load_input` (serializacja wejścia do
+  `shopping_generations.params`, wersja `{"v": 1}`) i `quantize_amount`/
+  `quantize_package` na krawędzi wyjścia. Zmiany kontraktu `EngineInput`
+  i `PreviewResult` — wyłącznie addytywne (konsumenci: B11, B12, B13).
+- **Oś ilości to `base_unit`**, nie `basis_unit`: sprowadza ją
+  `units.to_base_amount` (jedyne miejsce dzielące przez `piece_weight_g`).
 - Pipeline: plan → porcje → składniki → normalizacja → agregacja per
   produkt → [spiżarnia TYLKO gdy `use_pantry=True` — decyzja użytkownika,
   nigdy domyślnie] → „mam już w domu" → tury (perishability: override
-  produktu ?? kategoria) → opakowania → preview z niejasnościami.
+  produktu ?? kategoria, rozstrzyga SERWIS) → opakowania → preview
+  z niejasnościami.
+- Tury liczą się kursorami po zakresie dat (`covers_days`/`fresh_days`),
+  a ostatnie okno każdego rodzaju sięga do `date_to` — żadne zapotrzebowanie
+  nie ginie (02_DOMAIN §9.2, stan faktyczny).
 - Opakowania: `packages = ceil(need / package_size)`; resztka = kupione −
   potrzeba, zawsze zwracana. Wybór wariantu opakowania: najmniejsza
   resztka, remis → mniejsze opakowanie.
@@ -95,5 +106,7 @@ węglow. przyswajalne   = max(carbs − fiber, 0)
 - Nazwane przypadki brzegowe: mnożnik 0, base_servings=1, produkt bez IG,
   plan krótszy niż okno tury, potrzeba < najmniejsze opakowanie,
   dokładna wielokrotność opakowania (resztka 0).
-- Snapshot testy silnika zakupowego na seedzie demo — zmiana snapshotu
-  wymaga uzasadnienia w Completion notes.
+- Snapshot testy silnika zakupowego na seedzie demo
+  (`tests/unit/shopping/snapshots/demo_week_preview.json`, regeneracja przez
+  `FFP_UPDATE_SNAPSHOTS=1`) — zmiana snapshotu wymaga uzasadnienia
+  w Completion notes.

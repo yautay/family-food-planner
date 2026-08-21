@@ -135,22 +135,32 @@ Fabryki (proste funkcje asynchroniczne) per moduł w `tests/factories.py`;
 `task db-seed-demo` — deterministyczny, idempotentny seed demo do ręcznego
 klikania i E2E.
 
-**Stan faktyczny seedu (review R2, 2026-08-21): WYŁĄCZNIE katalog** —
-~15 produktów kanonicznych z mieszaną kompletnością wartości i przelicznikami
-jednostek domowych (`backend/scripts/seed_demo.py`, od B04). Rodziny 2+3,
-5 przepisów, tygodnia planu i listy zakupowej **nie ma** — B05 i B07 ich nie
-dołożyły, choć docstring seedu tak zakładał. Konsekwencje, o których muszą
-wiedzieć kolejne batche:
+**Stan faktyczny seedu (BATCH_10, 2026-08-21)** — `backend/scripts/seed_demo.py`
+zasiewa:
 
-- E2E buduje sobie dane samo (przez UI i API), a nie dostaje ich z seedu;
-  jedyny wyjątek to pozycje planu z produktem, które celowo sięgają po
-  produkt z seedu, żeby dzień miał realne kalorie.
-- Snapshoty silnika zakupowego „na seedzie demo" (§2.4–2.7) wymagają
-  najpierw rozszerzenia seedu — należy to do zakresu B10.
-- Rozszerzenie seedu o encje ze scope wymaga właściciela, a seed nie zna
-  żadnego konta (konta powstają przez `task create-admin`). To decyzja do
-  podjęcia w batchu, który seed rozszerza: dopisywać do pierwszego ADMIN-a
-  czy zakładać osobne konto demo (hasło wtedy z env, nigdy z repo).
+- 15 produktów kanonicznych z mieszaną kompletnością wartości i przelicznikami
+  jednostek domowych (od B04),
+- jeden sklep („Biedronka") i 10 produktów sklepowych z opakowaniami, w tym dwa
+  warianty tego samego produktu, żeby było widać wybór „najmniejsza resztka,
+  remis → mniejsze opakowanie" (§2.6),
+- 5 przepisów i TYDZIEŃ PLANU (od `DEMO_WEEK_START = 2026-08-24`) — materiał, na
+  którym liczony jest snapshot podglądu zakupów.
+
+Cztery rzeczy, o których muszą wiedzieć kolejne batche:
+
+- **Encje ze scope (przepisy, plan) trafiają do PIERWSZEGO konta ADMIN**
+  (decyzja B10). Seed nie tworzy konta — bez ADMIN-a robi część globalną
+  i mówi, czego nie dołożył. Osobne konto demo odrzucono: wymagałoby hasła
+  z env i kolejnej zmiennej konfiguracji (07_SECURITY §2).
+- **Plan demo leży POZA okienkiem E2E** (lata 2030+, §3.1): `purgeE2eLeftovers`
+  czyści tamto okno w całości i zabrałby plan demo.
+- E2E buduje sobie dane samo (przez UI i API); wyjątkiem są pozycje planu
+  z produktem, które celowo sięgają po produkty seedu. Spec zakupów robi tak
+  z konieczności: pozycja finalnej listy trzyma produkt FK RESTRICT, a listy
+  zakupowej nie da się (do B11) usunąć, więc własny produkt zostałby w bazie
+  na zawsze.
+- Rodziny 2+3 seed nadal NIE zakłada (nie była potrzebna do snapshotu) — to
+  jedyny nieodrobiony punkt pierwotnego zakresu §5.
 
 ## 6. Definicja zieloności
 

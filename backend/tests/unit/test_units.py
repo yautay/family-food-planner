@@ -26,6 +26,7 @@ from app.modules.catalog.units import (
     find_unit_weight,
     normalize_amount,
     normalize_unit_label,
+    to_base_amount,
     to_basis_amount,
     to_grams,
 )
@@ -297,3 +298,56 @@ def test_wyszukiwanie_przelicznika_ignoruje_zapis_etykiety() -> None:
 def test_normalizacja_nazwy_produktu_zbija_spacje_i_wielkosc_liter(raw: str, expected: str) -> None:
     """Duplikaty z audytu PDF (01_PDF_AUDIT §5.3) muszą dawać ten sam klucz."""
     assert normalize_name(raw) == expected
+
+
+# --- oś PRZECHOWYWANIA ilości (`to_base_amount`, wejście zakupów B10) -----------------
+
+
+def test_os_przechowywania_zwraca_ilosc_bez_zmian_gdy_jednostka_sie_zgadza() -> None:
+    """Gramy dla produktu w masie i mililitry dla objętości nie wymagają konwersji."""
+    assert to_base_amount(
+        NormalizedAmount(Decimal("250"), AmountUnit.GRAM), MASS_PRODUCT
+    ) == Decimal("250")
+    assert to_base_amount(
+        NormalizedAmount(Decimal("500"), AmountUnit.MILLILITER), VOLUME_PRODUCT
+    ) == Decimal("500")
+
+
+def test_gramy_wracaja_na_sztuki_dla_produktu_mierzonego_w_sztukach() -> None:
+    """Jednostka domowa produktu PIECE daje gramy — zakupy potrzebują sztuk.
+
+    To odwrotność `to_basis_amount`: opakowanie jajek liczy się w sztukach,
+    więc 210 g cebuli po 105 g/szt. to dokładnie 2 sztuki.
+    """
+    amount = NormalizedAmount(Decimal("210.00"), AmountUnit.GRAM)
+
+    assert to_base_amount(amount, PIECE_PRODUCT) == Decimal("2")
+
+
+def test_sztuki_wracaja_na_gramy_dla_produktu_mierzonego_w_masie() -> None:
+    """Ilość w sztukach przy produkcie masowym idzie przez `to_grams`, nie przez domysł."""
+    eggs = ProductMeasure(measure_kind=MeasureKind.MASS, piece_weight_g=Decimal("60.00"))
+
+    with pytest.raises(UnitConversionError):
+        # Produkt masowy nie ma wagi sztuki w praktyce (CHECK w bazie), więc
+        # przeliczenie jest niemożliwe — tu waga jest podana sztucznie.
+        to_base_amount(NormalizedAmount(Decimal("2"), AmountUnit.PIECE), MASS_PRODUCT)
+    assert to_base_amount(NormalizedAmount(Decimal("2"), AmountUnit.PIECE), eggs) == Decimal(
+        "120.00"
+    )
+
+
+def test_os_przechowywania_odrzuca_nieprzeliczalne_pary() -> None:
+    """Mililitry dla produktu masowego i gramy dla objętości = wyjątek, nie przybliżenie."""
+    with pytest.raises(UnitConversionError):
+        to_base_amount(NormalizedAmount(Decimal("100"), AmountUnit.MILLILITER), MASS_PRODUCT)
+    with pytest.raises(UnitConversionError):
+        to_base_amount(NormalizedAmount(Decimal("100"), AmountUnit.GRAM), VOLUME_PRODUCT)
+
+
+def test_sztuki_bez_wagi_sztuki_nie_daja_sie_policzyc_z_gramow() -> None:
+    """Produkt w sztukach bez `piece_weight_g` nie zgaduje, ile to sztuk."""
+    unknown = ProductMeasure(measure_kind=MeasureKind.PIECE)
+
+    with pytest.raises(UnitConversionError):
+        to_base_amount(NormalizedAmount(Decimal("300"), AmountUnit.GRAM), unknown)

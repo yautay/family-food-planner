@@ -83,11 +83,17 @@ test('przepis z inline create produktu i przeliczaniem porcji', async ({ page })
   await expect(page.getByTestId(`recipe-card-${recipeId}`)).toHaveCount(0)
 
   // Produkt utworzony inline: do kosza przez formularz produktu (ADMIN).
+  //
+  // Kartę wybieramy PO NAZWIE, nie „pierwszą z listy": szukajka jest
+  // debounce'owana, więc `first()` klikał kartę z listy jeszcze nieprzefiltrowanej
+  // (posortowanej alfabetycznie), a od rozszerzenia seedu demo w B10 pierwszym
+  // produktem bywa „Banan", którego skasować nie wolno — jest użyty w przepisie
+  // demo, więc DELETE kończy się 409 i test padał na cudzych danych.
   await page.goto('/produkty')
   await page.getByTestId('products-search').fill(productName)
-  const card = page.locator('[data-testid^="product-edit-"]').first()
-  await expect(card).toBeVisible()
-  await card.click()
+  const card = page.locator('[data-testid^="product-card-"]', { hasText: productName })
+  await expect(card).toHaveCount(1)
+  await card.locator('[data-testid^="product-edit-"]').click()
   await expect(page.getByTestId('produkt-form-page')).toBeVisible()
   await page.getByTestId('product-delete').click()
   await expect(page).toHaveURL(/\/produkty$/)

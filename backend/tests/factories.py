@@ -42,6 +42,8 @@ from app.modules.planning.models import (
     WeekTemplate,
 )
 from app.modules.recipes.models import Recipe, RecipeIngredient, RecipeRating, Tag, recipe_tags
+from app.modules.shopping.engine import RoundMode
+from app.modules.shopping.models import ShoppingRoundConfig
 
 #: Hasło używane przez fabryki. Nie jest sekretem — istnieje wyłącznie w testach.
 TEST_PASSWORD = "haslo-testowe-2026"
@@ -643,3 +645,31 @@ def template_product_item(
         "position": position,
         "servings_split": [],
     }
+
+
+async def create_round_config(
+    session: AsyncSession,
+    *,
+    owner: User,
+    name: str = "Niedziela",
+    mode: RoundMode = RoundMode.DURABLE_PLUS_FRESH_WINDOW,
+    covers_days: int = 7,
+    fresh_days: int | None = 4,
+    shopping_weekday: int | None = 6,
+    position: int = 0,
+    scope: Scope = Scope.PRIVATE,
+) -> ShoppingRoundConfig:
+    """Tura zakupowa utworzona tak, jak zrobiłby to serwis (`ownership_for_create`)."""
+    config = ShoppingRoundConfig(
+        name=name,
+        mode=mode,
+        covers_days=covers_days,
+        fresh_days=fresh_days if mode is RoundMode.DURABLE_PLUS_FRESH_WINDOW else None,
+        shopping_weekday=shopping_weekday,
+        position=position,
+        **ScopedQuery.ownership_for_create(owner, scope),
+    )
+    session.add(config)
+    await session.commit()
+    await session.refresh(config)
+    return config

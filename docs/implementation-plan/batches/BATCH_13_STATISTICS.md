@@ -18,6 +18,13 @@ z planów, bez żadnego cache w DB.
 
 Batch zastaje (po B06 + R3):
 
+- **`shopping_generations.params` (B10) ma STABILNY, wersjonowany kształt** —
+  jeśli statystyki będą z niego czytać, to przez `shopping.engine.load_input`,
+  nigdy przez ręczne wyciąganie kluczy z JSONB. Wersja `{"v": 1}`; niezgodna
+  wersja rzuca `ShoppingParamsError` (409 z instrukcją), a nie 500. Kolumna
+  trzyma WEJŚCIE generacji (plan, produkty, spiżarnia, warianty, decyzje) —
+  nie wynik, więc „ile faktycznie kupiono" jest w `shopping_list_items`.
+
 - `backend/app/modules/nutrition/` — czysty silnik (Decimal, zero I/O,
   ADR-008): wartości pozycji/posiłku/dnia, ŁG, flagi completeness.
 - `backend/app/modules/planning/` — `plan_days/plan_meals/plan_meal_items`

@@ -143,6 +143,27 @@ Dołożone w BATCH_05 (też fundament):
 - Enumy `entity_scope` i `amount_unit` istnieją od migracji `0006` — kolejne
   tabele ze scope/ilością używają `postgresql.ENUM(..., create_type=False)`.
 
+Dołożone w BATCH_10 (też fundament):
+
+- `app/modules/shopping/engine.py` — DRUGI czysty silnik (ADR-008): pipeline
+  zakupowy na `Decimal`, wejście `EngineInput` (dataclassy), wyjście
+  `PreviewResult`. Zawiera też `dump_input`/`load_input` (serializacja wejścia do
+  `shopping_generations.params`, wersja `{"v": 1}`) oraz `quantize_amount`/
+  `quantize_package` — JEDYNE zaokrąglenia ilości w module. `RoundMode` mieszka
+  w silniku, model bazy tylko go odwzorowuje.
+- `app/modules/catalog/units.py += to_base_amount` — ilość na osi
+  PRZECHOWYWANIA produktu (`base_unit`); jedyne miejsce, które dzieli przez
+  `piece_weight_g`. Zakupy liczą się na tej osi, wartości odżywcze na
+  `basis_unit` — nie mieszać.
+- Nowe publiczne wejścia serwisów (moduł→moduł tylko tak, §4):
+  `PlanningService.demand_rows`, `RecipesService.ingredient_amounts`,
+  `RetailService.options_for_products` i `variants_by_ids`.
+- `app/modules/shopping/service.py` rejestruje TRZY liczniki referencji
+  (produkt, wariant sklepowy, sklep) — `shopping_lists.store_id` ma SET NULL,
+  więc bez licznika lista po cichu straciłaby profil sortowania.
+- `scripts/` jest PAKIETEM: snapshot silnika importuje stałe seedu demo
+  (`scripts.seed_demo`), żeby dane testu i dane komendy nie istniały dwa razy.
+
 Testy: `tests/{unit,integration,api}/` (pakiet — z `__init__.py`), markery
 `unit`/`integration`/`api` (wymagane — bez markera test nie wejdzie do
 żadnego targetu), docstring po polsku opisujący scenariusz. Fixture'y

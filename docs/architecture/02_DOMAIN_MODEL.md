@@ -242,6 +242,26 @@ PLAN(zakres dat, osoby) → porcje → przepisy → składniki → normalizacja(
 - Preset domyślny (z wymagań, NIE hardcode): Tura 1 (niedziela): trwałe na
   cały zakres + świeże na pierwsze 4 dni; Tura 2 (środa): świeże na resztę.
 
+Stan faktyczny (BATCH_10, `modules/shopping/engine.py`) — jak z tej konfiguracji
+powstaje podział:
+
+- Tury konsumują zakres dat PO KOLEI (wg `position`), dwoma niezależnymi
+  kursorami: trwałych i świeżych. `covers_days` przesuwa kursor trwałych,
+  `fresh_days` (albo `covers_days`, gdy nie podano) kursor świeżych. Preset
+  wychodzi z tego wprost: niedziela bierze trwałe na 7 dni i świeże na 4, środa
+  domyka świeże na dni 5–7.
+- **Ostatnie niepuste okno każdego rodzaju sięga do `date_to`.** Zakres szerszy
+  niż suma okien nie może gubić dni: cicha utrata pozycji z listy jest gorsza
+  niż tura kupująca o dwa dni więcej.
+- Gdy ŻADNA tura nie kupuje danego rodzaju (np. wszystkie są `fresh_only`,
+  a plan ma produkty trwałe), rodzaj przypada pierwszej turze — zapotrzebowanie
+  musi mieć gdzie trafić.
+- `shopping_weekday` (0 = poniedziałek, jak `date.weekday()`) NIE bierze udziału
+  w podziale: służy do policzenia sugerowanego DNIA ZAKUPÓW, cofając się od
+  początku okna tury do najbliższego takiego dnia tygodnia (nigdy w przód).
+- Tura z pustym oknem zostaje w podglądzie jako pusta sekcja — „w środę nie ma
+  po co jechać" jest informacją, nie błędem.
+
 ### 9.3 Opakowania i resztki
 
 Dla pozycji z wybranym produktem retail: liczba opakowań =
@@ -249,6 +269,21 @@ Dla pozycji z wybranym produktem retail: liczba opakowań =
 **resztka zawsze wyeksponowana** („Zostanie: 150 g"). Brak retail = pozycja
 w gramach (dozwolone); preview podpowiada dodanie produktu retail.
 Bez automatycznych zamienników składników (out of scope).
+
+Stan faktyczny (BATCH_10):
+
+- Zapotrzebowanie i opakowania liczą się na osi PRZECHOWYWANIA produktu
+  (`base_unit`: masa → g, objętość → ml, sztuki → szt.), więc opakowanie jajek
+  ma 10 szt., a nie 600 g. Sprowadzeniem ilości na tę oś zajmuje się
+  `catalog/units.py::to_base_amount` — jedyne miejsce, które dzieli przez
+  `piece_weight_g`.
+- Wybór wariantu bez decyzji użytkownika: najmniejsza resztka, remis →
+  mniejsze opakowanie, drugi remis → mniejsze id (determinizm, ADR-008).
+  Warianty ARCHIWALNE nie są proponowane.
+- Pozycja oznaczona „mam już w domu" zostaje widoczna, ale opakowań się dla niej
+  nie liczy i nie zgłasza braku wariantu — nic nie kupujemy.
+- Pozycja w całości pokryta spiżarnią zostaje w PODGLĄDZIE (żeby było widać, co
+  odjęto), ale nie wchodzi na finalną listę — nie ma czego kupić.
 
 ### 9.4 ShoppingList
 

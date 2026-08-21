@@ -9,8 +9,11 @@ Bez Nuxta, bez i18n (UI wyłącznie PL).
 - **TanStack Query** = cały stan serwera (fetch, cache, invalidation,
   optimistic updates). Klucze zapytań centralnie w `src/api/queryKeys.ts`.
 - **Pinia** = wyłącznie stan UI/klienta: sesja użytkownika (`authStore`),
-  stan szkicu generacji zakupów, kolejka offline checkboxów, preferencje
-  widoku. Store NIE trzyma kopii danych serwera.
+  stan szkicu generacji zakupów (`shoppingDraft` — zakres dat, odpowiedź na
+  pytanie o spiżarnię, otwarte sekcje; od B10), kolejka offline checkboxów,
+  preferencje widoku (`pantryView`). Store NIE trzyma kopii danych serwera —
+  podgląd zakupów liczy silnik na serwerze, więc jest stanem serwera i mieszka
+  w TanStack Query.
 - Mutacje przez composables `useXxxMutation` z jawnym `invalidateQueries`.
 
 ## 2. Warstwa API
@@ -32,6 +35,8 @@ odpowiedzi API nie piszemy.
 /spizarnia            SpizarniaPage       (widok 6)
 /zakupy               ZakupyPage — konfig tur + generacja + preview
 /zakupy/listy/:id     ListaZakupowPage    (widok 5; wariant print)
+                      — od B10 istnieje jako TRASA-ZAŚLEPKA (PlaceholderPage);
+                        finalizacja zakupów już tu linkuje, komponent dowozi B11
 /statystyki           StatystykiPage      (widok 7)
 /ustawienia           UstawieniaPage      (cele, profile rodziny, sklepy, konto)
 /admin/*              AdminPage (użytkownicy, rodziny, weryfikacja produktów,

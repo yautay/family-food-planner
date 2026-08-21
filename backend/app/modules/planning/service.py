@@ -41,6 +41,7 @@ from app.modules.catalog.models import CanonicalProduct, ProductUnitWeight
 from app.modules.catalog.nutrition_adapter import measure_for, nutrition_for
 from app.modules.catalog.service import register_product_reference_finder
 from app.modules.catalog.units import (
+    AmountUnit,
     NormalizedAmount,
     ProductMeasure,
     UnitConversionError,
@@ -182,6 +183,26 @@ class DayView:
 
 
 @dataclass(frozen=True)
+class PlanDemandRow:
+    """Pozycja planu w postaci potrzebnej silnikowi zakupowemu (karta B10 §Context).
+
+    Ilości są dokładnie takie, jak w bazie: znormalizowane przy zapisie na osi
+    PRZECHOWYWANIA produktu (`amount_unit` ∈ g|ml|szt.). Przeliczeniem na
+    potrzeby agregacji zajmuje się silnik przez `catalog/units.py` — tutaj nie
+    ma żadnej arytmetyki, żeby nie było drugiego miejsca z regułami jednostek.
+    """
+
+    item_id: int
+    day: date
+    meal_name: str
+    servings: Decimal
+    recipe_id: int | None
+    product_id: int | None
+    amount: Decimal | None
+    amount_unit: AmountUnit | None
+
+
+@dataclass(frozen=True)
 class FitProposal:
     """Propozycja mnożnika porcji — nic nie zapisuje (02_DOMAIN §6)."""
 
@@ -223,14 +244,100 @@ class PlanningService:
         if (date_to - date_from).days + 1 > MAX_RANGE_DAYS:
             raise PlanValidationError(RANGE_TOO_LONG)
 
+        resolved = await self._resolved_days(user, date_from=date_from, date_to=date_to)
+        return await self._build_days(list(resolved.values()), user, dates=sorted(resolved))
+
+    async def demand_rows(
+        self, user: User, *, date_from: date, date_to: date
+    ) -> list[PlanDemandRow]:
+        """Pozycje planu z zakresu — PUBLICZNE wejście silnika zakupowego (B10).
+
+        Po co osobna metoda, a nie `list_days`: silnik nie potrzebuje wartości
+        odżywczych ani rozkładu rodzinnego, a potrzebuje ilości — i nie wolno mu
+        czytać `plan_meal_items` samemu (CLAUDE.md §4: moduł→moduł przez serwis).
+
+        Dwie rzeczy są tu wiążące (ustalenia review R2):
+
+        1. **Rozstrzyganie dnia jest TO SAMO co w `list_days`** (własny dzień
+           przed widocznym rodzinnym). Zapytanie prosto do `plan_days` po
+           zakresie dat policzyłoby zakupy podwójnie, bo ta sama data może mieć
+           dwa widoczne wiersze.
+        2. **Rozkład rodzinny NIE wchodzi do wyniku**: suma multiplierów jest
+           równa `servings`, więc doliczanie go skalowałoby ilości dwa razy
+           (02_DOMAIN §13.3).
+
+        Liczba zapytań jest stała (dni → posiłki → pozycje), niezależnie od
+        rozmiaru zakresu.
+        """
+        if date_from > date_to:
+            raise PlanValidationError(RANGE_REVERSED)
+        if (date_to - date_from).days + 1 > MAX_RANGE_DAYS:
+            raise PlanValidationError(RANGE_TOO_LONG)
+
+        resolved = await self._resolved_days(user, date_from=date_from, date_to=date_to)
+        if not resolved:
+            return []
+
+        days_by_id = {entity.id: entity for entity in resolved.values()}
+        meals: dict[int, PlanMeal] = {}
+        for meal in (
+            (
+                await self._session.execute(
+                    select(PlanMeal)
+                    .where(PlanMeal.plan_day_id.in_(list(days_by_id)))
+                    .order_by(PlanMeal.plan_day_id, PlanMeal.position, PlanMeal.id)
+                )
+            )
+            .scalars()
+            .all()
+        ):
+            meals[meal.id] = meal
+        if not meals:
+            return []
+
+        items = (
+            (
+                await self._session.execute(
+                    select(PlanMealItem)
+                    .where(PlanMealItem.plan_meal_id.in_(list(meals)))
+                    .order_by(PlanMealItem.plan_meal_id, PlanMealItem.position, PlanMealItem.id)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        rows = [
+            PlanDemandRow(
+                item_id=item.id,
+                day=days_by_id[meals[item.plan_meal_id].plan_day_id].day,
+                meal_name=meals[item.plan_meal_id].name,
+                recipe_id=item.recipe_id,
+                product_id=item.product_id,
+                amount=item.amount,
+                amount_unit=item.amount_unit,
+                servings=item.servings,
+            )
+            for item in items
+        ]
+        # Kolejność wyniku jest częścią kontraktu: silnik zakupowy musi być
+        # deterministyczny, a plan zapytania PG nie jest gwarancją (ADR-008).
+        rows.sort(key=lambda row: (row.day, row.item_id))
+        return rows
+
+    async def _resolved_days(
+        self, user: User, *, date_from: date, date_to: date
+    ) -> dict[date, PlanDay]:
+        """Po JEDNYM dniu na datę: własny użytkownika przed widocznym rodzinnym.
+
+        Ta sama data może mieć DWA widoczne wiersze `plan_days` (własny i cudzy
+        rodzinny), więc `setdefault` po sortowaniu „własny pierwszy" jest tym,
+        co czyni `list_days`, `demand_rows` i `_resolve_day` jedną regułą.
+        """
         rows = (
             (
                 await self._session.execute(
                     _DAYS.select_visible(user)
                     .where(PlanDay.day >= date_from, PlanDay.day <= date_to)
-                    # Ta sama data może mieć DWA widoczne dni (własny i rodzinny
-                    # innego członka). Sortowanie „własny pierwszy" sprawia, że
-                    # lista pokazuje ten sam dzień, co `_resolve_day` w szczególe.
                     .order_by(PlanDay.day, (PlanDay.owner_user_id == user.id).desc(), PlanDay.id)
                 )
             )
@@ -240,7 +347,7 @@ class PlanningService:
         resolved: dict[date, PlanDay] = {}
         for entity in rows:
             resolved.setdefault(entity.day, entity)
-        return await self._build_days(list(resolved.values()), user, dates=sorted(resolved))
+        return resolved
 
     async def get_day(self, user: User, day: date) -> DayView:
         """Dzień dla daty — własny przed rodzinnym; brak dnia to pusty plan, nie 404."""

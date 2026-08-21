@@ -16,6 +16,19 @@ testami; błędy w kcal/agregacji podważają sens aplikacji.
 - Wyniki żywieniowe nigdy nie są cache'owane w encjach (niezmiennik
   02_DOMAIN §13.2) — jedyny snapshot to metadane importu PDF (walidacja).
 
+## Stan faktyczny
+- `nutrition/engine.py` istnieje od BATCH_05, `shopping/engine.py` od BATCH_10.
+  Oba importują wyłącznie `decimal`, `collections.abc`, własne typy i enumy
+  domenowe — zero sesji, zero zegara.
+- Krawędź zaokrągleń: nutrition — `round_for_output`; shopping —
+  `quantize_amount`/`quantize_package` (skala kolumn NUMERIC) plus `ceil` liczby
+  opakowań, bo opakowań nie kupuje się po pół. Kroki pośrednie zostają w pełnej
+  precyzji `Decimal`, więc `1/3` porcji nie zamienia się w błąd na gramach.
+- Wejście silnika zakupowego jest SERIALIZOWALNE (`dump_input`/`load_input` →
+  `shopping_generations.params`, wersjonowane `{"v": 1}`): ten sam podgląd
+  odtwarza się z bazy bez ponownego pytania planu, co czyni determinizm
+  testowalnym także na poziomie API.
+
 ## Konsekwencje
 + Testy jednostkowe silników bez DB (szybkie, property-based z hypothesis).
 + „Zmiana mnożnika zmienia wszystko spójnie" wynika z konstrukcji.

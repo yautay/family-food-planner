@@ -44,6 +44,7 @@ from app.modules.catalog.models import CanonicalProduct, ProductUnitWeight
 from app.modules.catalog.nutrition_adapter import measure_for, nutrition_for
 from app.modules.catalog.service import register_product_reference_finder
 from app.modules.catalog.units import (
+    AmountUnit,
     NormalizedAmount,
     ProductMeasure,
     UnitConversionError,
@@ -170,6 +171,30 @@ class RecipePortion:
     base_servings: int
     photo_path: str | None
     portion: NutritionValues
+
+
+@dataclass(frozen=True)
+class RecipeIngredientAmount:
+    """Ilość jednego składnika przepisu — bez wartości odżywczych (karta B10)."""
+
+    product_id: int
+    amount: Decimal
+    amount_unit: AmountUnit
+
+
+@dataclass(frozen=True)
+class RecipeAmounts:
+    """Przepis w postaci „co i ile kupić" — wejście silnika zakupowego (B10).
+
+    Osobno od `RecipePortion`, bo to inne pytanie: tam chodzi o wartości JEDNEJ
+    porcji, tu o ILOŚCI składników całego przepisu. Silnik zakupowy dzieli je
+    przez `base_servings` i mnoży przez mnożnik pozycji planu.
+    """
+
+    recipe_id: int
+    name: str
+    base_servings: int
+    ingredients: tuple[RecipeIngredientAmount, ...]
 
 
 @dataclass(frozen=True)
@@ -380,6 +405,57 @@ class RecipesService:
 
         if photo_path:
             await run_in_threadpool(delete_image, photo_path, uploads_root=self._uploads_root)
+
+    async def ingredient_amounts(self, recipe_ids: Sequence[int]) -> dict[int, RecipeAmounts]:
+        """Ilości składników wskazanych przepisów — wejście silnika zakupowego (B10).
+
+        Publiczne wejście modułu recipes obok `portion_values` (CLAUDE.md §4:
+        moduł→moduł wyłącznie przez service). Stała liczba zapytań niezależnie
+        od liczby przepisów — tydzień planu nie może generować N+1.
+
+        **Bez filtra scope, świadomie** — z tego samego powodu, co
+        `portion_values`: pozycja planu może wskazywać przepis, którego czytający
+        sam by nie znalazł na liście (prywatny przepis właściciela dnia
+        rodzinnego). Dzień jest udostępniony celowo, więc jego zakupy muszą się
+        policzyć; widoczność planu pilnuje `ScopedQuery` po stronie planning.
+        """
+        unique_ids = sorted(set(recipe_ids))
+        if not unique_ids:
+            return {}
+
+        recipes = (
+            (await self._session.execute(select(Recipe).where(Recipe.id.in_(unique_ids))))
+            .scalars()
+            .all()
+        )
+        grouped: dict[int, list[RecipeIngredientAmount]] = {rid: [] for rid in unique_ids}
+        for ingredient in (
+            (
+                await self._session.execute(
+                    select(RecipeIngredient)
+                    .where(RecipeIngredient.recipe_id.in_(unique_ids))
+                    .order_by(RecipeIngredient.position, RecipeIngredient.id)
+                )
+            )
+            .scalars()
+            .all()
+        ):
+            grouped[ingredient.recipe_id].append(
+                RecipeIngredientAmount(
+                    product_id=ingredient.product_id,
+                    amount=ingredient.amount,
+                    amount_unit=ingredient.amount_unit,
+                )
+            )
+        return {
+            recipe.id: RecipeAmounts(
+                recipe_id=recipe.id,
+                name=recipe.name,
+                base_servings=recipe.base_servings,
+                ingredients=tuple(grouped[recipe.id]),
+            )
+            for recipe in recipes
+        }
 
     async def portion_values(self, recipe_ids: Sequence[int]) -> dict[int, RecipePortion]:
         """Wartości jednej porcji bazowej dla wskazanych przepisów — wejście dla planu.

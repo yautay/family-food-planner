@@ -63,9 +63,12 @@ U      /templates/days /templates/weeks    — CRUD + POST {id}/instantiate
 U      /cycles                             — CRUD + POST {id}/apply (rotacja A→B→C)
 U      /pantry                             — CRUD pozycji, filtr ważności
 
-U      /shopping/round-configs             — konfiguracja tur (preset seed)
+U      /shopping/round-configs             — konfiguracja tur (preset seed);
+                                             PATCH|DELETE /{id}
 U      /shopping/generate                  — POST → preview (nic nie zapisuje
                                              poza shopping_generations:preview)
+U      /shopping/generations/{id}          — GET odtwarza preview z params;
+                                             DELETE = miękkie odrzucenie
 U      /shopping/generations/{id}/resolve  — decyzje niejasności
 U      /shopping/generations/{id}/finalize — tworzy listy per tura
 U      /shopping/lists (+items PATCH check/already-have)
@@ -121,6 +124,23 @@ z podpowiedzią archiwizacji. Mutacje `/categories`: ADMIN; odczyt: każdy.
    także na AKCJACH (`instantiate`, `apply`), nie tylko na odczycie. Instancjacja
    i apply tworzą dni WYŁĄCZNIE jako własność wykonującego użytkownika (owner
    z sesji) — nie da się instancjować „na cudzy plan" (BATCH_07).
+2c-ter. **Zakupy: podgląd nie jest zasobem, tylko WYNIKIEM** (BATCH_10).
+   `POST /shopping/generate` zapisuje wyłącznie `shopping_generations`
+   (`status=preview`, pełne wejście silnika w `params`) i zwraca policzony
+   podgląd; `GET /shopping/generations/{id}` liczy go PONOWNIE z `params`, więc
+   jest deterministyczny i nie zależy od tego, czy plan zmienił się w
+   międzyczasie. `POST …/resolve` zmienia w `params` wyłącznie decyzje
+   użytkownika (`already_have`, wybór wariantu, odłożone niejasności) i odświeża
+   katalog wariantów sklepowych — pole pominięte zostaje bez zmian, pole podane
+   ZASTĘPUJE cały zbiór. `POST …/finalize` tworzy listy per tura i przestawia
+   status na `final`; nierozstrzygnięty bloker daje 409 z powodami w
+   `details.issues`. `DELETE …/{id}` jest MIĘKKIE (status `discarded`, D10);
+   generacji `final` nie da się ani odrzucić, ani zmienić (409).
+   `use_pantry` domyślnie `false` — stan domowy odejmujemy wyłącznie na jawne
+   życzenie (02_DOMAIN §8). Konwencja `shopping_weekday`: **0 = poniedziałek**,
+   6 = niedziela (jak `date.weekday()`), `null` = tura bez ustalonego dnia.
+   `GET /shopping/round-configs` przy PUSTEJ konfiguracji zasiewa edytowalny
+   preset z 02_DOMAIN §9.2 (seed danych, nie hardcode).
 2d. Data bez zapisanego planu to 200 z pustym dniem (`id: null`), nie 404:
    otwarcie kalendarza na wolnej dacie jest normalną sytuacją, a nie błędem.
    Ten sam wyjątek NIE dotyczy pojedynczych encji (przepis, produkt) — tam

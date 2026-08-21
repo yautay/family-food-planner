@@ -16,6 +16,7 @@ from app.modules.nutrition import models as nutrition_models
 from app.modules.pantry import models as pantry_models
 from app.modules.planning import models as planning_models
 from app.modules.recipes import models as recipes_models
+from app.modules.shopping import models as shopping_models
 
 __all__ = [
     "Base",
@@ -27,4 +28,5 @@ __all__ = [
     "pantry_models",
     "planning_models",
     "recipes_models",
+    "shopping_models",
 ]

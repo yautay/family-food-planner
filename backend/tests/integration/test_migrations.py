@@ -83,6 +83,10 @@ EXPECTED_TABLES = {
     "stores",
     "store_category_order",
     "retail_products",
+    "shopping_round_configs",
+    "shopping_generations",
+    "shopping_lists",
+    "shopping_list_items",
 }
 
 
@@ -95,7 +99,7 @@ def test_upgrade_downgrade_upgrade_na_czystej_bazie(
 
     command.upgrade(alembic_config, "head")
     after_upgrade = _current_revision(test_database_url)
-    assert after_upgrade == "0011"
+    assert after_upgrade == "0012"
 
     command.downgrade(alembic_config, "base")
     assert _current_revision(test_database_url) is None
@@ -129,6 +133,8 @@ EXPECTED_ENUM_TYPES = (
     "entity_scope",
     "recipe_source",
     "amount_unit",
+    "shopping_round_mode",
+    "shopping_generation_status",
 )
 
 

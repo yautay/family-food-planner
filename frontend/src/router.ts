@@ -89,7 +89,21 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/pages/spizarnia/SpizarniaPage.vue'),
         meta: { title: 'Spiżarnia' },
       },
-      { path: 'zakupy', name: 'zakupy', component: PlaceholderPage, meta: { title: 'Zakupy' } },
+      {
+        path: 'zakupy',
+        name: 'zakupy',
+        component: () => import('@/pages/zakupy/ZakupyPage.vue'),
+        meta: { title: 'Zakupy' },
+      },
+      // Trasa-zaślepka strony listy zakupowej: finalizacja linkuje tutaj, a pełny
+      // widok (checkboxy, sortowanie per sklep, druk, udostępnianie) dostarcza
+      // BATCH_11 — podmieni WYŁĄCZNIE `component`, bez nowego wpisu nawigacji.
+      {
+        path: 'zakupy/listy/:id',
+        name: 'zakupy-lista',
+        component: PlaceholderPage,
+        meta: { title: 'Lista zakupowa' },
+      },
       {
         path: 'statystyki',
         name: 'statystyki',

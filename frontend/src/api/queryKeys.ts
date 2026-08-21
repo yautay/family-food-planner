@@ -112,6 +112,12 @@ export const queryKeys = {
     all: ['pantry'] as const,
     list: (filters: PantryFiltersKey) => ['pantry', 'list', filters] as const,
   },
+  shopping: {
+    all: ['shopping'] as const,
+    roundConfigs: ['shopping', 'round-configs'] as const,
+    /** Podgląd generacji to stan serwera: liczy go silnik z `params` (B10). */
+    generation: (id: number) => ['shopping', 'generations', id] as const,
+  },
   adminUsers: {
     all: ['admin', 'users'] as const,
     list: (filters: AdminUsersFilters) => ['admin', 'users', 'list', filters] as const,

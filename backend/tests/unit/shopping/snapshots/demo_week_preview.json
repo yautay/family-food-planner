@@ -1,0 +1,451 @@
+{
+  "date_from": "2026-08-24",
+  "date_to": "2026-08-30",
+  "use_pantry": false,
+  "rounds": [
+    {
+      "key": "cfg-1",
+      "name": "Niedziela",
+      "mode": "durable_plus_fresh_window",
+      "shopping_date": "2026-08-23",
+      "date_from": "2026-08-24",
+      "date_to": "2026-08-30",
+      "items": [
+        {
+          "product_id": 1,
+          "label": "Cebula",
+          "amount_unit": "g",
+          "needed_amount": "315.000",
+          "category_name": "Warzywa",
+          "perishability": "fresh",
+          "days": [
+            "2026-08-24",
+            "2026-08-25",
+            "2026-08-27"
+          ],
+          "retail_product_id": null,
+          "packages_count": null,
+          "package_amount": null,
+          "leftover_amount": null,
+          "already_have": false,
+          "from_pantry_amount": null
+        },
+        {
+          "product_id": 2,
+          "label": "Marchew 1 kg",
+          "amount_unit": "g",
+          "needed_amount": "240.000",
+          "category_name": "Warzywa",
+          "perishability": "fresh",
+          "days": [
+            "2026-08-25"
+          ],
+          "retail_product_id": 10,
+          "packages_count": 1,
+          "package_amount": "1000.00",
+          "leftover_amount": "760.000",
+          "already_have": false,
+          "from_pantry_amount": null
+        },
+        {
+          "product_id": 3,
+          "label": "Pomidor",
+          "amount_unit": "g",
+          "needed_amount": "500.000",
+          "category_name": "Warzywa",
+          "perishability": "fresh",
+          "days": [
+            "2026-08-25",
+            "2026-08-27"
+          ],
+          "retail_product_id": null,
+          "packages_count": null,
+          "package_amount": null,
+          "leftover_amount": null,
+          "already_have": false,
+          "from_pantry_amount": null
+        },
+        {
+          "product_id": 4,
+          "label": "Banan",
+          "amount_unit": "piece",
+          "needed_amount": "3.000",
+          "category_name": "Owoce",
+          "perishability": "fresh",
+          "days": [
+            "2026-08-24",
+            "2026-08-26"
+          ],
+          "retail_product_id": null,
+          "packages_count": null,
+          "package_amount": null,
+          "leftover_amount": null,
+          "already_have": false,
+          "from_pantry_amount": null
+        },
+        {
+          "product_id": 6,
+          "label": "Pieczarki",
+          "amount_unit": "g",
+          "needed_amount": "200.000",
+          "category_name": "Grzyby",
+          "perishability": "fresh",
+          "days": [
+            "2026-08-25"
+          ],
+          "retail_product_id": null,
+          "packages_count": null,
+          "package_amount": null,
+          "leftover_amount": null,
+          "already_have": false,
+          "from_pantry_amount": null
+        },
+        {
+          "product_id": 7,
+          "label": "Jajka 10 szt.",
+          "amount_unit": "piece",
+          "needed_amount": "7.000",
+          "category_name": "Nabiał i jaja",
+          "perishability": "fresh",
+          "days": [
+            "2026-08-25",
+            "2026-08-26",
+            "2026-08-27"
+          ],
+          "retail_product_id": 6,
+          "packages_count": 1,
+          "package_amount": "10.00",
+          "leftover_amount": "3.000",
+          "already_have": false,
+          "from_pantry_amount": null
+        },
+        {
+          "product_id": 9,
+          "label": "Mleko 2% 1 l",
+          "amount_unit": "ml",
+          "needed_amount": "1250.000",
+          "category_name": "Nabiał i jaja",
+          "perishability": "fresh",
+          "days": [
+            "2026-08-24",
+            "2026-08-26"
+          ],
+          "retail_product_id": 5,
+          "packages_count": 2,
+          "package_amount": "1000.00",
+          "leftover_amount": "750.000",
+          "already_have": false,
+          "from_pantry_amount": null
+        },
+        {
+          "product_id": 8,
+          "label": "Skyr naturalny 150 g",
+          "amount_unit": "g",
+          "needed_amount": "150.000",
+          "category_name": "Nabiał i jaja",
+          "perishability": "fresh",
+          "days": [
+            "2026-08-24"
+          ],
+          "retail_product_id": 7,
+          "packages_count": 1,
+          "package_amount": "150.00",
+          "leftover_amount": "0.000",
+          "already_have": false,
+          "from_pantry_amount": null
+        },
+        {
+          "product_id": 10,
+          "label": "Pierś z kurczaka 700 g",
+          "amount_unit": "g",
+          "needed_amount": "600.000",
+          "category_name": "Mięso i produkty mięsne",
+          "perishability": "fresh",
+          "days": [
+            "2026-08-24",
+            "2026-08-27"
+          ],
+          "retail_product_id": 9,
+          "packages_count": 1,
+          "package_amount": "700.00",
+          "leftover_amount": "100.000",
+          "already_have": false,
+          "from_pantry_amount": null
+        },
+        {
+          "product_id": 11,
+          "label": "Chleb żytni razowy 500 g",
+          "amount_unit": "g",
+          "needed_amount": "280.000",
+          "category_name": "Pieczywo",
+          "perishability": "fresh",
+          "days": [
+            "2026-08-25",
+            "2026-08-27"
+          ],
+          "retail_product_id": 8,
+          "packages_count": 1,
+          "package_amount": "500.00",
+          "leftover_amount": "220.000",
+          "already_have": false,
+          "from_pantry_amount": null
+        },
+        {
+          "product_id": 13,
+          "label": "Mąka pszenna 1 kg",
+          "amount_unit": "g",
+          "needed_amount": "390.000",
+          "category_name": "Makarony, ryż i kasze",
+          "perishability": "durable",
+          "days": [
+            "2026-08-26",
+            "2026-08-29"
+          ],
+          "retail_product_id": 1,
+          "packages_count": 1,
+          "package_amount": "1000.00",
+          "leftover_amount": "610.000",
+          "already_have": false,
+          "from_pantry_amount": null
+        },
+        {
+          "product_id": 12,
+          "label": "Ryż brązowy 400 g",
+          "amount_unit": "g",
+          "needed_amount": "630.000",
+          "category_name": "Makarony, ryż i kasze",
+          "perishability": "durable",
+          "days": [
+            "2026-08-24",
+            "2026-08-27",
+            "2026-08-30"
+          ],
+          "retail_product_id": 4,
+          "packages_count": 2,
+          "package_amount": "400.00",
+          "leftover_amount": "170.000",
+          "already_have": false,
+          "from_pantry_amount": null
+        },
+        {
+          "product_id": 15,
+          "label": "Orzechy włoskie",
+          "amount_unit": "g",
+          "needed_amount": "100.000",
+          "category_name": "Orzechy i nasiona",
+          "perishability": "durable",
+          "days": [
+            "2026-08-24",
+            "2026-08-26",
+            "2026-08-28"
+          ],
+          "retail_product_id": null,
+          "packages_count": null,
+          "package_amount": null,
+          "leftover_amount": null,
+          "already_have": false,
+          "from_pantry_amount": null
+        }
+      ]
+    },
+    {
+      "key": "cfg-2",
+      "name": "Środa",
+      "mode": "fresh_only",
+      "shopping_date": "2026-08-26",
+      "date_from": "2026-08-28",
+      "date_to": "2026-08-30",
+      "items": [
+        {
+          "product_id": 1,
+          "label": "Cebula",
+          "amount_unit": "g",
+          "needed_amount": "210.000",
+          "category_name": "Warzywa",
+          "perishability": "fresh",
+          "days": [
+            "2026-08-28",
+            "2026-08-30"
+          ],
+          "retail_product_id": null,
+          "packages_count": null,
+          "package_amount": null,
+          "leftover_amount": null,
+          "already_have": false,
+          "from_pantry_amount": null
+        },
+        {
+          "product_id": 2,
+          "label": "Marchew 1 kg",
+          "amount_unit": "g",
+          "needed_amount": "120.000",
+          "category_name": "Warzywa",
+          "perishability": "fresh",
+          "days": [
+            "2026-08-28"
+          ],
+          "retail_product_id": 10,
+          "packages_count": 1,
+          "package_amount": "1000.00",
+          "leftover_amount": "880.000",
+          "already_have": false,
+          "from_pantry_amount": null
+        },
+        {
+          "product_id": 3,
+          "label": "Pomidor",
+          "amount_unit": "g",
+          "needed_amount": "225.000",
+          "category_name": "Warzywa",
+          "perishability": "fresh",
+          "days": [
+            "2026-08-30"
+          ],
+          "retail_product_id": null,
+          "packages_count": null,
+          "package_amount": null,
+          "leftover_amount": null,
+          "already_have": false,
+          "from_pantry_amount": null
+        },
+        {
+          "product_id": 4,
+          "label": "Banan",
+          "amount_unit": "piece",
+          "needed_amount": "2.000",
+          "category_name": "Owoce",
+          "perishability": "fresh",
+          "days": [
+            "2026-08-28"
+          ],
+          "retail_product_id": null,
+          "packages_count": null,
+          "package_amount": null,
+          "leftover_amount": null,
+          "already_have": false,
+          "from_pantry_amount": null
+        },
+        {
+          "product_id": 6,
+          "label": "Pieczarki",
+          "amount_unit": "g",
+          "needed_amount": "100.000",
+          "category_name": "Grzyby",
+          "perishability": "fresh",
+          "days": [
+            "2026-08-28"
+          ],
+          "retail_product_id": null,
+          "packages_count": null,
+          "package_amount": null,
+          "leftover_amount": null,
+          "already_have": false,
+          "from_pantry_amount": null
+        },
+        {
+          "product_id": 7,
+          "label": "Jajka 10 szt.",
+          "amount_unit": "piece",
+          "needed_amount": "4.500",
+          "category_name": "Nabiał i jaja",
+          "perishability": "fresh",
+          "days": [
+            "2026-08-29",
+            "2026-08-30"
+          ],
+          "retail_product_id": 6,
+          "packages_count": 1,
+          "package_amount": "10.00",
+          "leftover_amount": "5.500",
+          "already_have": false,
+          "from_pantry_amount": null
+        },
+        {
+          "product_id": 9,
+          "label": "Mleko 2% 1 l",
+          "amount_unit": "ml",
+          "needed_amount": "750.000",
+          "category_name": "Nabiał i jaja",
+          "perishability": "fresh",
+          "days": [
+            "2026-08-28",
+            "2026-08-29"
+          ],
+          "retail_product_id": 5,
+          "packages_count": 1,
+          "package_amount": "1000.00",
+          "leftover_amount": "250.000",
+          "already_have": false,
+          "from_pantry_amount": null
+        },
+        {
+          "product_id": 10,
+          "label": "Pierś z kurczaka 700 g",
+          "amount_unit": "g",
+          "needed_amount": "450.000",
+          "category_name": "Mięso i produkty mięsne",
+          "perishability": "fresh",
+          "days": [
+            "2026-08-30"
+          ],
+          "retail_product_id": 9,
+          "packages_count": 1,
+          "package_amount": "700.00",
+          "leftover_amount": "250.000",
+          "already_have": false,
+          "from_pantry_amount": null
+        },
+        {
+          "product_id": 11,
+          "label": "Chleb żytni razowy 500 g",
+          "amount_unit": "g",
+          "needed_amount": "280.000",
+          "category_name": "Pieczywo",
+          "perishability": "fresh",
+          "days": [
+            "2026-08-29",
+            "2026-08-30"
+          ],
+          "retail_product_id": 8,
+          "packages_count": 1,
+          "package_amount": "500.00",
+          "leftover_amount": "220.000",
+          "already_have": false,
+          "from_pantry_amount": null
+        }
+      ]
+    }
+  ],
+  "issues": [
+    {
+      "key": "missing_retail:product:1",
+      "kind": "missing_retail",
+      "severity": "warning",
+      "message": "„Cebula” nie ma produktu sklepowego, więc pozycja pójdzie na listę w jednostce podstawowej, bez liczby opakowań. Dodaj produkt sklepowy, jeśli chcesz widzieć opakowania i resztki."
+    },
+    {
+      "key": "missing_retail:product:15",
+      "kind": "missing_retail",
+      "severity": "warning",
+      "message": "„Orzechy włoskie” nie ma produktu sklepowego, więc pozycja pójdzie na listę w jednostce podstawowej, bez liczby opakowań. Dodaj produkt sklepowy, jeśli chcesz widzieć opakowania i resztki."
+    },
+    {
+      "key": "missing_retail:product:3",
+      "kind": "missing_retail",
+      "severity": "warning",
+      "message": "„Pomidor” nie ma produktu sklepowego, więc pozycja pójdzie na listę w jednostce podstawowej, bez liczby opakowań. Dodaj produkt sklepowy, jeśli chcesz widzieć opakowania i resztki."
+    },
+    {
+      "key": "missing_retail:product:4",
+      "kind": "missing_retail",
+      "severity": "warning",
+      "message": "„Banan” nie ma produktu sklepowego, więc pozycja pójdzie na listę w jednostce podstawowej, bez liczby opakowań. Dodaj produkt sklepowy, jeśli chcesz widzieć opakowania i resztki."
+    },
+    {
+      "key": "missing_retail:product:6",
+      "kind": "missing_retail",
+      "severity": "warning",
+      "message": "„Pieczarki” nie ma produktu sklepowego, więc pozycja pójdzie na listę w jednostce podstawowej, bez liczby opakowań. Dodaj produkt sklepowy, jeśli chcesz widzieć opakowania i resztki."
+    }
+  ]
+}

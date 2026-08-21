@@ -45,8 +45,50 @@ Co już istnieje (stan po B10):
   z jawnie opisaną regułą scalania i własnymi testami. Uwaga na jednostki:
   `create_item` przyjmuje ilość na osi produktu (g/ml/szt.) i sam ustala
   `amount_unit` z `measure_kind`; ilość ujemna jest niemożliwa (422).
-- `LeftoverBadge`, `ShoppingItemRow` (jeśli powstał w B10 — sprawdzić),
-  rate-limiter slowapi skonfigurowany dla `/auth/login` (B02).
+- `LeftoverBadge` — **ISTNIEJE** (`frontend/src/components/domain/LeftoverBadge.vue`,
+  props `{ leftover: string | null, unit }`; resztka 0 ma osobny, pozytywny
+  komunikat „Bez resztki"). `ShoppingItemRow` NIE powstał — B10 renderuje
+  pozycje podglądu inline w `ZakupyPreview.vue`, więc wiersz listy zakupowej
+  projektuje ten batch od zera.
+- rate-limiter slowapi skonfigurowany dla `/auth/login` (B02).
+
+### Stan faktyczny po B10 — sześć rzeczy wiążących dla tego batcha
+
+1. **Kształt odpowiedzi `finalize`** (`FinalizeResponse`): `{items: [...],
+   total}`, gdzie każdy element to `ShoppingListRead` = `{id, generation_id,
+   name, round_name, store_id, expires_at, items: [ShoppingListItemRead]}`.
+   `ShoppingListItemRead` = `{id, category_id, product_id, retail_product_id,
+   label, needed_amount, amount_unit, packages_count, package_size,
+   leftover_amount, already_have, from_pantry_amount, checked, position}`.
+   **`public_token` NIE JEST wystawiany w żadnej odpowiedzi B10** i pilnuje tego
+   test — ten batch jest pierwszym, który go generuje i zwraca.
+   `name` ma format `Zakupy 07.01-13.01.2030`, `round_name` to nazwa tury
+   (tekst, nie FK — lista historyczna nie zmienia treści po edycji konfiguracji
+   tur), `expires_at` = moment finalizacji + 7 dni (`LIST_TTL_DAYS`).
+2. **Liczniki referencji są już zarejestrowane** przez `shopping/service.py`:
+   produkt kanoniczny, wariant sklepowy i SKLEP (`_lists_using_store` —
+   `shopping_lists.store_id` ma SET NULL, więc bez licznika lista po cichu
+   traciłaby profil sortowania). Ten batch ich NIE dokłada; jeśli dołoży nowe
+   ścieżki referencji (np. lista ręczna), rozszerza istniejące funkcje.
+3. **`shopping_lists.store_id` nikt jeszcze nie ustawia.** Finalize zostawia
+   `NULL`, bo tura nie ma sklepu. Przypisanie sklepu do listy (i sortowanie po
+   profilu) należy do tego batcha — razem z decyzją, czy sklep wybiera się przy
+   finalizacji, czy na stronie listy (rekomendacja: na stronie listy, bo to
+   decyzja „gdzie dziś jadę", a nie właściwość generacji).
+4. **Pozycje pokryte w całości spiżarnią NIE trafiają na listę** (nie ma czego
+   kupić), ale pozycje oznaczone `already_have` — owszem, z ustawioną flagą.
+   Widok listy musi je pokazać inaczej (wyszarzone/odhaczone), a nie ukryć.
+5. **Listy nie da się (jeszcze) USUNĄĆ** — B10 nie dał na to endpointu, a
+   `DELETE /shopping/generations/{id}` jest miękki (status `discarded`) i nie
+   kasuje list. **Konsekwencja dla E2E**: spec zakupów B10 pracuje na produktach
+   SEEDU, bo własny produkt zablokowałby się na FK RESTRICT z pozycji listy na
+   zawsze. Gdy ten batch dołoży `DELETE /shopping/lists/{id}`, warto dopisać
+   `clearShoppingLists` do `e2e/cleanup.ts` PRZED `clearProducts` i wtedy specy
+   zakupowe mogą wrócić do własnych danych.
+6. **Trasa-zaślepka** `/zakupy/listy/:id` (nazwa trasy `zakupy-lista`) istnieje
+   i jest już linkowana z podsumowania finalizacji na `/zakupy`
+   (`data-testid="created-list-link-<id>"`). Ten batch podmienia WYŁĄCZNIE
+   `component` w `src/router.ts` — nowego wpisu nawigacji nie dokłada.
 
 Wymagane lektury przed startem:
 - `docs/architecture/02_DOMAIN_MODEL.md` §9.4–9.5 (lista, publiczny link),
