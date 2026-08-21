@@ -369,5 +369,8 @@ audytu i wyniki uruchomień: PROGRESS.md, wpis „2026-08-21 — REVIEW R2".
    **ODPOWIEDŹ WŁAŚCICIELA (2026-08-21): TAK.** Decyzja zamknięta w tej samej
    sesji: 02_DECISIONS → „Zatwierdzone", kod bez zmian, doprecyzowane granice
    wyjątku w 04_API §3 pkt 2/2a i 07_SECURITY §4. B08 nie ma już tej bramki.
-2. **D15 — czy zmianę `measure_kind` zastrzec dla ADMIN-a?** Reszta
-   rekomendacji jest już wdrożona i potwierdzona.
+2. ~~**D15 — czy zmianę `measure_kind` zastrzec dla ADMIN-a?**~~
+   **ODPOWIEDŹ WŁAŚCICIELA (2026-08-21): TAK, tylko ADMIN.** Decyzja zamknięta
+   w 02_DECISIONS; wdrożenie bramki przypisane do B09 (§Backend „Wdrożenie
+   decyzji D15"), bo R2 nie implementuje feature'ów. Wariant złagodzony
+   odrzucony świadomie.

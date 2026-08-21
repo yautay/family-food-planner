@@ -41,6 +41,23 @@ zmiany dotykające przyszłych batchy trzeba wpisać do ich kart
 
 ---
 
+**2026-08-21 — D15 ZAMKNIĘTE przez właściciela: `measure_kind` zmienia
+WYŁĄCZNIE ADMIN.** Część pierwsza (zmiana unieważnia weryfikację) działa od B05;
+część druga — bramka uprawnień — **czeka na wdrożenie w B09**, bo to następny
+batch dotykający modułu `catalog` i formularza produktu. Instrukcja wykonawcza
+jest w karcie B09 (§Backend „Wdrożenie decyzji D15") i w Implementation
+checklist: bramka w serwisie (nie w routerze — 403 ma podpowiadać wyjście, jak
+przy D13), obejmuje `measure_kind` ORAZ sprzężone `piece_weight_g`, pole
+wyłączone w `ProduktFormPage` dla nie-ADMIN-a, test macierzy uprawnień
+sprawdzający też, że PATCH pozostałych pól opisowych nadal działa dla USERA.
+`create_product` bez zmian — USER wybiera miarę, zakładając produkt.
+**Właściciel świadomie przyjął koszt**: USER nie poprawi sam miary we własnym,
+świeżo utworzonym inline produkcie. Wariant złagodzony („USER może, dopóki
+produkt nie ma wartości") został ODRZUCONY — nie wprowadzać go z powrotem jako
+ulepszenia; ewentualna zmiana wymaga nowej decyzji właściciela.
+**Rejestr 02_DECISIONS nie ma już żadnej decyzji blokującej batche** —
+otwarte zostają D6/D7 (bramki B18) i cztery pozycje bez konsumenta.
+
 **2026-08-21 — D16 ZAMKNIĘTE przez właściciela: TAK, ADMIN widzi wszystkie
 encje ze scope na ścieżkach użytkownika.** Zero zmian w kodzie — decyzja
 utrzymuje stan faktyczny (`ScopedQuery.visible_condition` → `true()` dla

@@ -130,6 +130,44 @@ Walidacje serwisowe (422, komunikaty PL):
 - `pieces_per_package ≥ 1` gdy podane (opakowania wielosztukowe, np. jajka 10 szt.);
 - `position` w profilu sklepu: spójna permutacja bez duplikatów (PUT waliduje całość).
 
+### Wdrożenie decyzji D15 — `measure_kind` wyłącznie dla ADMIN-a
+
+Decyzja właściciela z 2026-08-21 (02_DECISIONS, D15). Ten batch ją wdraża, bo
+jest następnym, który dotyka modułu `catalog` i formularza produktu.
+
+- **Serwis, nie router**: bramka w `catalog/service.py::update_product`, wzorzec
+  z D13 (`delete_product`) — router zostaje na `CurrentUser`, żeby komunikat 403
+  mógł podpowiedzieć wyjście, a nie tylko odmówić. Treść po polsku, w duchu
+  D13: „Sposób liczenia produktu może zmienić tylko administrator — te same
+  liczby znaczą co innego na 100 g i na 100 ml. Poproś administratora albo
+  utwórz nowy produkt."
+- Zakres bramki: **KAŻDA** zmiana `measure_kind` przez USERA, także na produkcie
+  bez wartości odżywczych i nigdy nie weryfikowanym. Wariant złagodzony
+  („USER może, dopóki produkt nie ma wartości") był rozważany i **właściciel
+  go ODRZUCIŁ** — nie wprowadzaj go z powrotem jako „ulepszenia".
+- **Świadomie przyjęty koszt**: USER, który pomyli miarę przy inline create
+  (`ProductCreateDrawer`), nie poprawi własnego świeżego wpisu sam. Ścieżki
+  wyjścia: prośba do ADMIN-a albo nowy produkt (stary do archiwum). Jeśli
+  okaże się to uwierać w praktyce, właściwą reakcją jest nowa decyzja
+  właściciela, nie cicha zmiana bramki.
+- **Reszta D15 zostaje bez zmian**: zbicie `verification_status` do UNVERIFIED
+  + czyszczenie `verified_at` + audyt `product.update` przy zmianie
+  `measure_kind` na produkcie z wartościami (wdrożone w B05) — teraz po prostu
+  wywołać to może wyłącznie ADMIN. `create_product` NIE jest ograniczany:
+  USER wybiera miarę przy zakładaniu produktu.
+- **`piece_weight_g` jedzie z bramką**, bo jest sprzężone z `measure_kind`
+  (`_assert_piece_weight`): bez tego USER przestawiłby wagę sztuki i zmienił
+  wynik przeliczeń, nie ruszając samego pola miary.
+- **Frontend**: pole miary (i waga sztuki) w `ProduktFormPage.vue` wyłączone
+  dla nie-ADMIN-a — dokładnie tak, jak już są wyłączone wartości odżywcze.
+  Bez tego USER wypełnia formularz i dostaje 403 na końcu, co jest gorsze
+  od pola zablokowanego z podpowiedzią.
+- **Test macierzy uprawnień (obowiązkowy, 08_TESTING §4)**: USER 403 na
+  `PATCH /products/{id}` z `measure_kind` (także jako twórca produktu),
+  ADMIN 200; USER 200 na PATCH pozostałych pól opisowych (`name`,
+  `category_id`, `perishability_override`) — bramka nie ma prawa zablokować
+  całego endpointu.
+
 Usuwanie (ADR-012):
 - retail product użyty gdziekolwiek (docelowo: `pantry_items`,
   `shopping_list_items`) → 409 z listą użyć; alternatywa `is_archived`
@@ -301,6 +339,8 @@ Zmieniane (⚠ = wspólne z B08):
 - [ ] Serwisy + walidacje (kanoniczny wymagany, zgodność jednostek, permutacja profilu)
 - [ ] Routery `/stores`, `/stores/{id}/category-order`, `/retail-products` (+photo)
 - [ ] Blokada usuwania 409 + archiwizacja retail (ADR-012)
+- [ ] **D15**: bramka ADMIN na `measure_kind` (+ `piece_weight_g`)
+      w `update_product`, pole wyłączone w formularzu, test macierzy uprawnień
 - [ ] Testy integration + API
 - [ ] Sekcja „Sklepy" w Ustawieniach + edytor kolejności (DnD + strzałki)
 - [ ] Sekcja retail na karcie produktu + `RetailProductCreateDrawer` + `StorePicker`
