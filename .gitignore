@@ -33,3 +33,6 @@ playwright-report/
 .vscode/
 Thumbs.db
 .DS_Store
+
+# Stan sesji E2E (ciasteczka po logowaniu) — nigdy w repo
+frontend/e2e/.auth/

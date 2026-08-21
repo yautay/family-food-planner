@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test'
 
+import { EMPTY_STATE } from './auth-state.js'
+
 /**
  * Smoke E2E (08_TESTING §3): logowanie → plan dnia → dodanie posiłku i pozycji
  * → przeliczenie wartości po zmianie mnożnika → wylogowanie.
@@ -23,50 +25,56 @@ test.beforeAll(() => {
   }
 })
 
-test('strona /login renderuje aktywny formularz logowania', async ({ page }) => {
-  await page.goto('/login')
+test.describe('uwierzytelnianie (bez współdzielonej sesji)', () => {
+  // Te cztery testy sprawdzają SAMO logowanie, więc nie mogą startować
+  // z sesją z `auth.setup.ts` — zerujemy `storageState` dla całej grupy.
+  test.use({ storageState: EMPTY_STATE })
 
-  await expect(page.getByTestId('login-card')).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Zaloguj się' })).toBeVisible()
-  await expect(page.getByTestId('login-submit')).toBeEnabled()
-})
+  test('strona /login renderuje aktywny formularz logowania', async ({ page }) => {
+    await page.goto('/login')
 
-test('nieznana sesja odsyła z sekcji chronionej na /login', async ({ page }) => {
-  await page.goto('/plan-dnia')
+    await expect(page.getByTestId('login-card')).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Zaloguj się' })).toBeVisible()
+    await expect(page.getByTestId('login-submit')).toBeEnabled()
+  })
 
-  await expect(page).toHaveURL(/\/login/)
-})
+  test('nieznana sesja odsyła z sekcji chronionej na /login', async ({ page }) => {
+    await page.goto('/plan-dnia')
 
-test('błędne hasło pokazuje neutralny komunikat', async ({ page }) => {
-  await page.goto('/login')
+    await expect(page).toHaveURL(/\/login/)
+  })
 
-  await page.getByTestId('login-email').fill(email)
-  await page.getByTestId('login-password').fill('na-pewno-zle-haslo-2026')
-  await page.getByTestId('login-submit').click()
+  test('błędne hasło pokazuje neutralny komunikat', async ({ page }) => {
+    await page.goto('/login')
 
-  await expect(page.getByTestId('login-error')).toHaveText('Nieprawidłowy email lub hasło.')
-  await expect(page).toHaveURL(/\/login/)
-})
+    await page.getByTestId('login-email').fill(email)
+    await page.getByTestId('login-password').fill('na-pewno-zle-haslo-2026')
+    await page.getByTestId('login-submit').click()
 
-test('logowanie → plan dnia → wylogowanie', async ({ page }) => {
-  await page.goto('/login')
+    await expect(page.getByTestId('login-error')).toHaveText('Nieprawidłowy email lub hasło.')
+    await expect(page).toHaveURL(/\/login/)
+  })
 
-  await page.getByTestId('login-email').fill(email)
-  await page.getByTestId('login-password').fill(password)
-  await page.getByTestId('login-submit').click()
+  test('logowanie → plan dnia → wylogowanie', async ({ page }) => {
+    await page.goto('/login')
 
-  await expect(page).toHaveURL(/\/plan-dnia/)
-  await expect(page.getByTestId('plan-dnia-page')).toBeVisible()
-  await expect(page.getByTestId('nav-sidebar')).toBeVisible()
+    await page.getByTestId('login-email').fill(email)
+    await page.getByTestId('login-password').fill(password)
+    await page.getByTestId('login-submit').click()
 
-  await page.getByTestId('logout-button').click()
+    await expect(page).toHaveURL(/\/plan-dnia/)
+    await expect(page.getByTestId('plan-dnia-page')).toBeVisible()
+    await expect(page.getByTestId('nav-sidebar')).toBeVisible()
 
-  await expect(page).toHaveURL(/\/login/)
-  await expect(page.getByTestId('login-card')).toBeVisible()
+    await page.getByTestId('logout-button').click()
 
-  // Sesja jest unieważniona po stronie serwera — powrót „wstecz" nie wskrzesza jej.
-  await page.goto('/plan-dnia')
-  await expect(page).toHaveURL(/\/login/)
+    await expect(page).toHaveURL(/\/login/)
+    await expect(page.getByTestId('login-card')).toBeVisible()
+
+    // Sesja jest unieważniona po stronie serwera — powrót „wstecz" nie wskrzesza jej.
+    await page.goto('/plan-dnia')
+    await expect(page).toHaveURL(/\/login/)
+  })
 })
 
 test('plan dnia: posiłek → pozycja z przepisu → zmiana mnożnika przelicza wszystko', async ({
@@ -79,11 +87,8 @@ test('plan dnia: posiłek → pozycja z przepisu → zmiana mnożnika przelicza 
 
   page.on('dialog', (dialog) => dialog.accept())
 
-  await page.goto('/login')
-  await page.getByTestId('login-email').fill(email)
-  await page.getByTestId('login-password').fill(password)
-  await page.getByTestId('login-submit').click()
-  await expect(page).toHaveURL(/\/plan-dnia/)
+  // Sesja pochodzi z `auth.setup.ts` (storageState) — bez tego suita
+  // przekraczała limit 5 logowań/min na `/auth/login`.
 
   await page.goto(`/plan-dnia/${day}`)
   await expect(page.getByTestId('plan-dnia-page')).toBeVisible()
@@ -104,6 +109,10 @@ test('plan dnia: posiłek → pozycja z przepisu → zmiana mnożnika przelicza 
   await page.getByTestId('recipe-picker-input').fill(recipeName)
   await expect(page.getByTestId('recipe-picker-create')).toBeVisible()
   await page.getByTestId('recipe-picker-create').click()
+  // `recipe-picker-create` tylko OTWIERA drawer — przepis powstaje po zapisie
+  // formularza. Bez tego kroku picker nigdy nie dostaje zaznaczenia.
+  await expect(page.getByTestId('recipe-create-drawer')).toBeVisible()
+  await page.getByTestId('recipe-create-submit').click()
   await expect(page.getByTestId('recipe-picker-selected')).toContainText(recipeName)
   await page.getByTestId('item-submit').click()
 

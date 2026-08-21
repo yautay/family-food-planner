@@ -137,14 +137,46 @@ więc wzorzec do `EXPLAIN` musi iść parametrem (`CAST(:pattern AS jsonb)`).
     zależności. Lekarstwo: `task dev-detached` (`up --build -d`), nie samo
     `up -d`. **Reguła: nowa zależność w `pyproject.toml` = przebudowa obrazu,
     inaczej stack dev kłamie o stanie kodu.**
-13. **E2E URUCHOMIONE pierwszy raz w projekcie (dług U15)**: 4 passed,
-    5 failed — wszystkie pięć na logowaniu, bo `E2E_ADMIN_PASSWORD` w `.env`
-    nie zgadza się z hashem konta admina (konto istnieje, jest aktywne
-    i niezablokowane; `verify_password` = False). Czerwone są WSZYSTKIE specy
-    wymagające sesji, także `smoke`/`households`/`produkty`/
-    `recipe-inline-create` z wcześniejszych batchy — **to jedna przyczyna
-    środowiskowa, nie regresja B07**. Domknięcie U15 wymaga zsynchronizowania
-    hasła konta E2E (operacja właściciela).
+13. **E2E URUCHOMIONE pierwszy raz w projekcie — U15 ZOSTAJE OTWARTY.**
+    Suita nigdy wcześniej nie przeszła przez logowanie, więc jedno uruchomienie
+    odsłoniło warstwę problemów. NAPRAWIONE w tej sesji:
+    - **kolizja z rate limitem**: `/auth/login` ma 5/min/IP (07_SECURITY §2),
+      a suita logowała się OSIEM razy na sześciu workerach — po piątym leciało
+      429 i specy padały LOSOWO na `toHaveURL(/plan-dnia/)`. Wygląda jak flake,
+      jest zderzeniem testów z realnym zabezpieczeniem. Rozwiązanie: projekt
+      `setup` (`e2e/auth.setup.ts`) loguje się RAZ i zapisuje `storageState`;
+      specy testujące samo logowanie zerują stan u siebie. 8 logowań → 3.
+    - **zły przepływ inline create przepisu** w `smoke.spec.ts` (B06)
+      i `week-template-cycle.spec.ts` (B07): `recipe-picker-create` tylko
+      OTWIERA drawer, a specy oczekiwały od razu zaznaczenia. Brakowało
+      `recipe-create-submit`. Spec B06 nigdy nie był uruchomiony, więc błąd
+      przeszedł do B07 przez skopiowanie wzorca.
+    - **asercja słupka `BarChart`**: `<rect height=0>` ma zerowy bounding box,
+      więc `toBeVisible()` na dniu bez posiłków zawodzi. Liczy się `data-height`.
+
+    **ZOSTAJE do R2 — trzy sprawy, żadna w kodzie aplikacji:**
+    a) **martwe przyciski `Button as="router-link"`** (9 wystąpień, 6 plików,
+       B04/B05) — renderują sam TEKST, nie link: brak nawigacji i regres
+       dostępności. Dowód: snapshot ARIA Playwrighta pokazuje
+       `text: "Dodaj produkt"` tam, gdzie menu ma `link "Produkty"`. Blokuje
+       `produkty.spec.ts` i `recipe-inline-create.spec.ts`. Poprawka to
+       `:as="RouterLink"` (referencja komponentu, nie string) + test asercjujący
+       `<a>`. **Zaparkowane decyzją właściciela.** B07 jest wolny od tego błędu
+       — `PlanTygodniaPage` używa `<RouterLink>` wprost.
+    b) **brak izolacji danych testowych**: specy używają STAŁYCH dat
+       (`2031-03-05`, `2032-03-01`) i nie sprzątają po sobie, więc kolejny
+       przebieg pada na cudzych danych — `plan-empty` nie jest już pusty,
+       a szukajka trigramowa znajduje przepisy „Zupa E2E <stamp>" z poprzednich
+       przebiegów i ukrywa opcję „+ Dodaj". Potrzebny teardown albo reset bazy
+       E2E, nie kolejne łatki w asercjach.
+    c) **wspólne konto + równoległość**: `households.spec.ts` przepisuje admina
+       do nowej rodziny, gdy inne specy tworzą jako on encje ze scope; te
+       dostają `household_id` tej rodziny (`ScopedQuery` zapisuje go także dla
+       PRIVATE), więc sprzątające DELETE rodziny kończy się 409. Kod zachowuje
+       się POPRAWNIE (jest druga linia obrony na `IntegrityError`) — to problem
+       projektu testów. Uwaga na przyszłość: w tej ścieżce `used_in` jest puste,
+       więc użytkownik nie wie, co blokuje usunięcie; moje trzy nowe tabele
+       z `household_id RESTRICT` powiększają zbiór takich blokad.
 
 **2026-08-17 — BATCH_06 (GOALS_AND_DAY_PLAN)**: plan dnia liczy się naprawdę.
 Migracja `0008` (`user_nutrition_goals` + `plan_days`/`plan_meals`/

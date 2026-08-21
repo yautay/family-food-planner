@@ -21,8 +21,6 @@ import { expect, test } from '@playwright/test'
  * Daty są w odległej przyszłości i unikalne per przebieg, żeby test nie mieszał
  * się z ręcznym klikaniem po „dziś" ani z innymi przebiegami.
  */
-const email = process.env.E2E_ADMIN_EMAIL ?? ''
-const password = process.env.E2E_ADMIN_PASSWORD ?? ''
 
 /** Poniedziałki dwóch kolejnych tygodni roku 2032 (2032-03-01 to poniedziałek). */
 const WEEK_START = '2032-03-01'
@@ -46,15 +44,6 @@ async function selectByText(select: Locator, fragment: string): Promise<void> {
   await select.selectOption(value)
 }
 
-test.beforeAll(() => {
-  if (!email || !password) {
-    throw new Error(
-      'Brak E2E_ADMIN_EMAIL / E2E_ADMIN_PASSWORD w .env. Utwórz konto komendą ' +
-        '`task create-admin` i wpisz te same dane do .env (patrz .env.example).',
-    )
-  }
-})
-
 test('tydzień przez szablon i cykl: dzień → szablon → daty → tydzień → cykl → przeniesienie', async ({
   page,
 }) => {
@@ -67,11 +56,8 @@ test('tydzień przez szablon i cykl: dzień → szablon → daty → tydzień �
   page.on('dialog', (dialog) => dialog.accept())
 
   // --- login ------------------------------------------------------------------------
-  await page.goto('/login')
-  await page.getByTestId('login-email').fill(email)
-  await page.getByTestId('login-password').fill(password)
-  await page.getByTestId('login-submit').click()
-  await expect(page).toHaveURL(/\/plan-dnia/)
+  // Sesja pochodzi z `auth.setup.ts` (storageState) — patrz
+  // `playwright.config.ts`. Logowanie per spec przekraczało limit 5/min.
 
   // --- dzień źródłowy: posiłek + pozycja z przepisu (inline create) ------------------
   await page.goto(`/plan-dnia/${WEEK_START}`)
@@ -85,6 +71,10 @@ test('tydzień przez szablon i cykl: dzień → szablon → daty → tydzień �
   await page.getByTestId('recipe-picker-input').fill(recipeName)
   await expect(page.getByTestId('recipe-picker-create')).toBeVisible()
   await page.getByTestId('recipe-picker-create').click()
+  // `recipe-picker-create` tylko OTWIERA drawer — przepis powstaje po zapisie
+  // formularza. Bez tego kroku picker nigdy nie dostaje zaznaczenia.
+  await expect(page.getByTestId('recipe-create-drawer')).toBeVisible()
+  await page.getByTestId('recipe-create-submit').click()
   await expect(page.getByTestId('recipe-picker-selected')).toContainText(recipeName)
   await page.getByTestId('item-submit').click()
   await expect(page.locator('[data-testid^="plan-item-servings-"]').first()).toBeVisible()
@@ -149,8 +139,13 @@ test('tydzień przez szablon i cykl: dzień → szablon → daty → tydzień �
   await expect(page.getByTestId(`week-day-${NEXT_WEEK_START}`)).toContainText('Obiad E2E')
 
   // BarChart jest niezerowy: przynajmniej jeden słupek ma wysokość > 0.
+  //
+  // NIE asercjonujemy `toBeVisible()` na słupku: `<rect>` o `height=0` (dzień
+  // bez posiłków) ma zerowy bounding box, więc Playwright uznaje go za
+  // niewidoczny — a pierwszy słupek w DOM to poniedziałek, który wcale nie musi
+  // być dniem z danymi. Liczy się to, co wykres RAPORTUJE, czyli `data-height`.
   const bars = page.locator('[data-testid^="week-bar-chart-bar-"]')
-  await expect(bars.first()).toBeVisible()
+  await expect(bars.first()).toBeAttached()
   const heights = await bars.evaluateAll((nodes) =>
     nodes.map((node) => Number(node.getAttribute('data-height') ?? '0')),
   )

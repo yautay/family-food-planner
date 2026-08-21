@@ -6,3 +6,5 @@ playwright-report
 test-results
 # Plik generowany z OpenAPI (task fe-types).
 src/api/generated.ts
+# Stan sesji E2E (ciasteczka z auth.setup.ts) — nigdy nie formatujemy ani nie commitujemy.
+e2e/.auth

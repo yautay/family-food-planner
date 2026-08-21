@@ -9,17 +9,6 @@ import { expect, test } from '@playwright/test'
  * Konto z `.env` (E2E_ADMIN_*) — w repozytorium nie ma działającego hasła.
  * Test sprząta po sobie: usuwa przepis i utworzony produkt.
  */
-const email = process.env.E2E_ADMIN_EMAIL ?? ''
-const password = process.env.E2E_ADMIN_PASSWORD ?? ''
-
-test.beforeAll(() => {
-  if (!email || !password) {
-    throw new Error(
-      'Brak E2E_ADMIN_EMAIL / E2E_ADMIN_PASSWORD w .env. Utwórz konto komendą ' +
-        '`task create-admin` i wpisz te same dane do .env (patrz .env.example).',
-    )
-  }
-})
 
 test('przepis z inline create produktu i przeliczaniem porcji', async ({ page }) => {
   // Nazwy unikalne per przebieg: normalized_name produktu jest globalnym unikatem.
@@ -29,11 +18,8 @@ test('przepis z inline create produktu i przeliczaniem porcji', async ({ page })
 
   page.on('dialog', (dialog) => dialog.accept())
 
-  await page.goto('/login')
-  await page.getByTestId('login-email').fill(email)
-  await page.getByTestId('login-password').fill(password)
-  await page.getByTestId('login-submit').click()
-  await expect(page).toHaveURL(/\/plan-dnia/)
+  // Sesja pochodzi z `auth.setup.ts` (storageState) — patrz
+  // `playwright.config.ts`. Logowanie per spec przekraczało limit 5/min.
 
   // --- nowy przepis -------------------------------------------------------------
   await page.goto('/przepisy')

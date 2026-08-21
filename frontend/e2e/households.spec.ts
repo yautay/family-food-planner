@@ -12,17 +12,9 @@ import { expect, test } from '@playwright/test'
  * Test sprząta po sobie (profil → odpięcie konta → rodzina), więc kolejne
  * uruchomienia nie zostawiają śmieci w bazie dev.
  */
-const email = process.env.E2E_ADMIN_EMAIL ?? ''
-const password = process.env.E2E_ADMIN_PASSWORD ?? ''
 
-test.beforeAll(() => {
-  if (!email || !password) {
-    throw new Error(
-      'Brak E2E_ADMIN_EMAIL / E2E_ADMIN_PASSWORD w .env. Utwórz konto komendą ' +
-        '`task create-admin` i wpisz te same dane do .env (patrz .env.example).',
-    )
-  }
-})
+/** Konto z sesji `auth.setup.ts` — spec przypisuje je do rodziny, więc zna jego email. */
+const email = process.env.E2E_ADMIN_EMAIL ?? ''
 
 test('admin tworzy rodzinę, przypisuje konto, użytkownik dodaje profil', async ({ page }) => {
   // Nazwa unikalna per przebieg — test ma być powtarzalny bez czyszczenia bazy.
@@ -31,11 +23,8 @@ test('admin tworzy rodzinę, przypisuje konto, użytkownik dodaje profil', async
 
   page.on('dialog', (dialog) => dialog.accept())
 
-  await page.goto('/login')
-  await page.getByTestId('login-email').fill(email)
-  await page.getByTestId('login-password').fill(password)
-  await page.getByTestId('login-submit').click()
-  await expect(page).toHaveURL(/\/plan-dnia/)
+  // Sesja pochodzi z `auth.setup.ts` (storageState) — patrz
+  // `playwright.config.ts`. Logowanie per spec przekraczało limit 5/min.
 
   // --- ADMIN: tworzy rodzinę ------------------------------------------------
   await page.goto('/admin/rodziny')

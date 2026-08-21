@@ -1,5 +1,7 @@
 import { defineConfig, devices } from '@playwright/test'
 
+import { AUTH_STATE_FILE } from './e2e/auth-state.js'
+
 /**
  * E2E (08_TESTING §3) — utrzymywane małe i stabilne.
  *
@@ -10,6 +12,11 @@ import { defineConfig, devices } from '@playwright/test'
  * Domyślnie Playwright sam podnosi vite dev server. Gdy stack stoi już na
  * compose (`task dev`), wskaż go przez E2E_BASE_URL i pomiń start serwera:
  *   E2E_BASE_URL=http://127.0.0.1:5173 E2E_REUSE_SERVER=1 task test-e2e
+ *
+ * Sesja: projekt `setup` (`e2e/auth.setup.ts`) loguje się JEDEN RAZ i zapisuje
+ * ciasteczka; projekt `chromium` startuje z tym stanem. Bez tego suita zderzała
+ * się z limitem `/auth/login` (5/min/IP) i specy padały losowo na 429.
+ * Testy samego logowania zerują `storageState` u siebie (`smoke.spec.ts`).
  */
 const baseURL = process.env.E2E_BASE_URL ?? 'http://127.0.0.1:5173'
 const reuseServer = process.env.E2E_REUSE_SERVER === '1'
@@ -27,9 +34,13 @@ export default defineConfig({
     testIdAttribute: 'data-testid',
   },
   projects: [
+    // Loguje się RAZ i zapisuje ciasteczka — `/auth/login` ma limit 5/min/IP
+    // (07_SECURITY §2), a suita logowała się osiem razy i dostawała 429.
+    { name: 'setup', testMatch: /auth\.setup\.ts/ },
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: { ...devices['Desktop Chrome'], storageState: AUTH_STATE_FILE },
+      dependencies: ['setup'],
     },
   ],
   webServer: reuseServer
