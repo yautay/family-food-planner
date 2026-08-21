@@ -41,6 +41,20 @@ zmiany dotykające przyszłych batchy trzeba wpisać do ich kart
 
 ---
 
+**2026-08-21 — D16 ZAMKNIĘTE przez właściciela: TAK, ADMIN widzi wszystkie
+encje ze scope na ścieżkach użytkownika.** Zero zmian w kodzie — decyzja
+utrzymuje stan faktyczny (`ScopedQuery.visible_condition` → `true()` dla
+ADMIN-a) i to, co już asercjonuje test `test_d16_admin_widzi_cudze_przepisy_*`.
+Domknięcie polegało na doprecyzowaniu dokumentów, które mówiły co innego:
+**04_API §3 pkt 2/2a** i **07_SECURITY §4** opisują teraz wyjątek razem z jego
+granicami — dotyczy ODCZYTU encji ze `ScopedMixin`, NIE rozciąga się na mutacje
+reguł właścicielskich (`assert_can_manage`), na zasoby adresowane własną rodziną
+(`/households/my`, profile członków — tam ADMIN widzi swoją rodzinę i jest na to
+osobny test, więc to granica, nie niespójność) ani na odpowiedzi publiczne.
+**Dla kolejnych batchy**: nowa encja ze `ScopedMixin` dziedziczy to zachowanie
+automatycznie i MA je zaasercjonować w swojej macierzy uprawnień. Blokada
+wejścia do B08 zdjęta — zostaje otwarte tylko D15 (nic nie blokuje).
+
 **2026-08-21 — REVIEW R2 (REVIEW_PLANNING_CORE) — WERDYKT: PASS**
 
 **B08 i B09 mogą startować (także równolegle).** Rdzeń planowania jest zdrowy:

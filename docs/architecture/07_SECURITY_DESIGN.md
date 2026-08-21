@@ -53,8 +53,24 @@ publiczne linki i błędami aplikacyjnymi (IDOR/XSS/CSRF/upload).
 ## 4. Autoryzacja
 
 - Role ADMIN/USER na dependency (`require_admin`).
-- Scope PRIVATE/HOUSEHOLD w serwisach przez `ScopedQuery` — każde zapytanie
+- Scope PRIVATE/HOUSEHOLD w serwisach przez `ScopedQuery` — zapytanie USERA
   o encję cudzą kończy się 404 (nie 403 — nie potwierdzamy istnienia).
+- **ADMIN jest wyjątkiem w ODCZYCIE encji ze scope** (`visible_condition` →
+  `true()`): decyzja właściciela **D16, zatwierdzona 2026-08-21**, zgodna
+  z macierzą 08_TESTING §4. Uzasadnienie: administrator tej instalacji i tak
+  ma dostęp do bazy i do `/admin/*`, więc udawanie, że nie widzi, dawałoby
+  pozorne bezpieczeństwo, a utrudniałoby wsparcie użytkowników. Granice tego
+  wyjątku:
+  - **nie rozciąga się na MUTACJE reguł właścicielskich** — zmiana scope
+    i usunięcie encji przechodzą przez `ScopedQuery.assert_can_manage`;
+  - **nie rozciąga się na zasoby adresowane „moją rodziną"** —
+    `/households/my` i profile członków pokazują ADMIN-owi WŁASNĄ rodzinę,
+    do cudzych ma `/admin/households/*` (04_API §3 pkt 2a);
+  - **nie rozciąga się na dane osobowe w odpowiedziach publicznych**
+    (§5) ani na hasła i tokeny (nigdy w logach — §8).
+  Konsekwencja dla batchy: każda nowa encja ze `ScopedMixin` dziedziczy to
+  zachowanie automatycznie i MA je zaasercjonować w macierzy uprawnień
+  (wzorzec: `tests/api/recipes/test_recipes_api.py::test_d16_admin_widzi_cudze_przepisy_na_sciezkach_uzytkownika`).
 - Testy anty-IDOR obowiązkowe w każdym batchu z nowym zasobem: user B nie
   odczyta/nie zmieni zasobu usera A (macierz w 08_TESTING §4).
 

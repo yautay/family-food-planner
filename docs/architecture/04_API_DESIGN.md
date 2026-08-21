@@ -92,12 +92,22 @@ z podpowiedzią archiwizacji. Mutacje `/categories`: ADMIN; odczyt: każdy.
 
 1. Wszystko poza `/health`, `/auth/login`, `/public/*` wymaga sesji.
 2. Scope egzekwowany w serwisach (`ScopedQuery`), nie w routerach —
-   router nie wie, czym jest household. ADMIN nie jest wyjątkiem na ścieżkach
-   użytkownika: `/households/my` pokazuje mu WŁASNĄ rodzinę, a do cudzych
-   danych ma `/admin/*` (07_SECURITY §4).
+   router nie wie, czym jest household. **ADMIN widzi WSZYSTKIE encje ze scope
+   także na ścieżkach użytkownika** (`ScopedQuery.visible_condition` zwraca mu
+   `true()`) — decyzja właściciela **D16, zatwierdzona 2026-08-21**, zgodna
+   z macierzą 08_TESTING §4, w której ADMIN ma 200 w każdym wierszu. Widoczność
+   to jednak NIE to samo co prawo do zmiany: modyfikacja scope i usunięcie idą
+   przez `assert_can_manage`, więc reguły właścicielskie zostają w mocy.
 2a. Zasoby należące do rodziny bez kolumn scope (`member_profiles`) filtruje
    się porównaniem `household_id`; cudze i nieistniejące dają identyczne 404.
    `ScopedQuery` obowiązuje encje z kolumnami wzorca 03_DATABASE §4.
+   **Tu ADMIN NIE jest wyjątkiem — i to nie jest niespójność z D16.** `/households/my`
+   znaczy dosłownie „moja rodzina", więc pokazanie w niej cudzego profilu nie
+   miałoby sensu; do cudzych rodzin ADMIN ma `/admin/households/*`. Granica jest
+   więc taka: encja ze `ScopedMixin` (widoczność z własności i scope) → ADMIN
+   widzi wszystko; zasób zaadresowany przez MOJĄ rodzinę → ADMIN widzi swoją.
+   Test pilnujący tej granicy:
+   `tests/api/test_households_my.py::test_admin_nie_dostaje_wyjatku_na_sciezce_uzytkownika`.
 2b. Stan „użytkownik bez rodziny" jest legalny: `/households/my` zwraca 200
    z `household: null`, a nie 404. Operacje wymagające rodziny (utworzenie
    profilu, nadanie `scope=household`) kończą się 409 z instrukcją.

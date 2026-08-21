@@ -365,10 +365,9 @@ audytu i wyniki uruchomień: PROGRESS.md, wpis „2026-08-21 — REVIEW R2".
 
 ### Pytania do właściciela
 
-1. **D16 — czy ADMIN widzi cudze encje ze scope na ścieżkach użytkownika?**
-   Prośba o rozstrzygnięcie PRZED zleceniem B08. Stan faktyczny (ADMIN widzi
-   wszystko) jest zaasercjonowany testem, więc odwrócenie decyzji to zmiana
-   `core/scope.py:160` + ten test; z każdą nową encją ze scope rośnie liczba
-   testów do przejrzenia.
+1. ~~**D16 — czy ADMIN widzi cudze encje ze scope na ścieżkach użytkownika?**~~
+   **ODPOWIEDŹ WŁAŚCICIELA (2026-08-21): TAK.** Decyzja zamknięta w tej samej
+   sesji: 02_DECISIONS → „Zatwierdzone", kod bez zmian, doprecyzowane granice
+   wyjątku w 04_API §3 pkt 2/2a i 07_SECURITY §4. B08 nie ma już tej bramki.
 2. **D15 — czy zmianę `measure_kind` zastrzec dla ADMIN-a?** Reszta
    rekomendacji jest już wdrożona i potwierdzona.
