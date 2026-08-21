@@ -18,7 +18,7 @@ const email = process.env.E2E_ADMIN_EMAIL ?? ''
 
 test('admin tworzy rodzinę, przypisuje konto, użytkownik dodaje profil', async ({ page }) => {
   // Nazwa unikalna per przebieg — test ma być powtarzalny bez czyszczenia bazy.
-  const householdName = `E2E Rodzina ${Date.now()}`
+  const householdName = `E2E rodzina ${Date.now()}`
   const profileName = 'Zosia E2E'
 
   page.on('dialog', (dialog) => dialog.accept())

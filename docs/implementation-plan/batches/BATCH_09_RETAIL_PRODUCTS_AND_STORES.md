@@ -65,7 +65,7 @@ Pliki wspólne z BATCH_08 (kolizje!):
 - `backend/app/main.py`, `backend/migrations/versions/` (łańcuch
   `down_revision` — po merge'u `alembic heads` = JEDNA głowa),
 - `frontend/src/api/queryKeys.ts`, `frontend/src/api/generated.ts`,
-- `frontend/src/router/index.ts` (B09 nie dodaje nowej strony top-level,
+- `frontend/src/router.ts` (B09 nie dodaje nowej strony top-level,
   ale rozszerza `/produkty/:id/edytuj` i `/ustawienia`),
 - `backend/tests/factories.py`.
 Uwaga: B08 tworzy `pantry_items.retail_product_id` — jeśli B08 zmergował
@@ -244,18 +244,28 @@ Nowe:
   `retail_schemas/service/router` + `stores_service/router` (wg konwencji
   modułu catalog z B04 — decyzja implementującego, patrz Implementation Notes)
 - `backend/migrations/versions/<pierwszy_wolny>_retail_and_stores.py`
-- `backend/tests/integration/test_retail_products.py`, `test_stores.py`
-- `backend/tests/api/test_retail_api.py`, `test_stores_api.py`
+- `backend/tests/integration/catalog/{__init__.py,test_retail_products.py,test_stores.py}`
+- `backend/tests/api/catalog/{__init__.py,test_retail_api.py,test_stores_api.py}`
 - `frontend/src/components/domain/{RetailProductCreateDrawer.vue,StorePicker.vue,StoreCategoryOrderEditor.vue}`
-- `frontend/src/pages/ustawienia/SklepySection.vue` (lub zakładka)
-- `frontend/src/composables/{useStores.ts,useRetailProducts.ts}`
+- `frontend/src/components/domain/SklepySection.vue` (sekcja wstawiana w Ustawieniach)
+- `frontend/src/api/retail.ts` (+ `stores.ts`, jeśli wygodniej rozdzielić)
 - `frontend/e2e/retail-stores.spec.ts`
 
 Zmieniane (⚠ = wspólne z B08):
-- ⚠ `backend/app/main.py`, ⚠ `backend/tests/factories.py`
+- ⚠ `backend/app/main.py`, ⚠ `backend/app/models.py`, ⚠ `backend/tests/factories.py`,
+  ⚠ `backend/tests/conftest.py` (`DB_TABLES`),
+  ⚠ `backend/tests/integration/test_migrations.py` (`EXPECTED_TABLES`)
 - ⚠ `frontend/src/api/queryKeys.ts`, ⚠ `frontend/src/api/generated.ts` (regen)
-- `frontend/src/pages/produkty/ProduktEdytujPage.vue` (sekcja retail)
-- `frontend/src/pages/ustawienia/UstawieniaPage.vue` (nowa sekcja)
+- `frontend/src/pages/produkty/ProduktFormPage.vue` (sekcja retail)
+- `frontend/src/pages/UstawieniaPage.vue` (nowa sekcja)
+
+> **Korekta ścieżek — review R2 (2026-08-21).** Stan FAKTYCZNY repo: formularz
+> produktu to JEDEN plik `ProduktFormPage.vue` (obsługuje tworzenie i edycję,
+> nie ma `ProduktEdytujPage.vue`), Ustawienia to `src/pages/UstawieniaPage.vue`
+> (nie ma katalogu `pages/ustawienia/`), a katalogu `src/composables/` nie ma
+> i nie trzeba go tworzyć — wzorcem od B04 jest `src/api/<moduł>.ts` +
+> `useQuery`/`useMutation` w komponencie (ADR-007). Testy backendu: katalog per
+> moduł z `__init__.py` (wzorzec B05–B07).
 
 ## Implementation Notes
 

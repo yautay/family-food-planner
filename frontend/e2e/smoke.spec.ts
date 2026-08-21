@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 
 import { EMPTY_STATE } from './auth-state.js'
+import { cleanupE2eData } from './cleanup.js'
 
 /**
  * Smoke E2E (08_TESTING §3): logowanie → plan dnia → dodanie posiłku i pozycji
@@ -77,67 +78,86 @@ test.describe('uwierzytelnianie (bez współdzielonej sesji)', () => {
   })
 })
 
-test('plan dnia: posiłek → pozycja z przepisu → zmiana mnożnika przelicza wszystko', async ({
-  page,
-}) => {
-  const stamp = Date.now()
-  const recipeName = `Owsianka E2E ${stamp}`
-  // Data w przyszłości, żeby przebieg nie mieszał się z ręcznym klikaniem po „dziś".
-  const day = '2031-03-05'
+/**
+ * Prefiks i data planu są STAŁE, a sprzątanie jest po obu stronach testu:
+ * `beforeAll` leczy stan po przebiegu przerwanym w połowie, `afterAll` wykonuje
+ * się także po nieudanym teście. Bez tego drugi przebieg padał na `plan-empty`
+ * (posiłek z poprzedniego) i na ukrytej opcji „+ Dodaj" (szukajka trigramowa
+ * znajdowała starą „Owsiankę E2E") — ustalenie R2, dług U15.
+ */
+const PREFIX = 'E2E smoke'
+const DAY = '2031-03-05'
 
-  page.on('dialog', (dialog) => dialog.accept())
+test.describe('plan dnia (własne dane, sprzątane po obu stronach)', () => {
+  test.beforeAll(async ({ request }) => {
+    await cleanupE2eData(request, { namePrefix: PREFIX, dates: [DAY] })
+  })
 
-  // Sesja pochodzi z `auth.setup.ts` (storageState) — bez tego suita
-  // przekraczała limit 5 logowań/min na `/auth/login`.
+  test.afterAll(async ({ request }) => {
+    await cleanupE2eData(request, { namePrefix: PREFIX, dates: [DAY] })
+  })
 
-  await page.goto(`/plan-dnia/${day}`)
-  await expect(page.getByTestId('plan-dnia-page')).toBeVisible()
-  await expect(page.getByTestId('plan-empty')).toBeVisible()
+  test('plan dnia: posiłek → pozycja z przepisu → zmiana mnożnika przelicza wszystko', async ({
+    page,
+  }) => {
+    const stamp = Date.now()
+    const recipeName = `${PREFIX} Owsianka ${stamp}`
+    const day = DAY
 
-  // --- posiłek o własnej nazwie (dzień powstaje implicite) -------------------------
-  await page.getByTestId('plan-add-meal').click()
-  await page.getByTestId('meal-name-input').fill('II śniadanie')
-  await page.getByTestId('meal-target-input').fill('300')
-  await page.getByTestId('meal-submit').click()
+    page.on('dialog', (dialog) => dialog.accept())
 
-  const mealCard = page.locator('[data-testid^="meal-card-"]').first()
-  await expect(mealCard).toBeVisible()
-  await expect(mealCard).toContainText('II śniadanie')
+    // Sesja pochodzi z `auth.setup.ts` (storageState) — bez tego suita
+    // przekraczała limit 5 logowań/min na `/auth/login`.
 
-  // --- pozycja z przepisu (inline create w RecipePickerze) ---------------------------
-  await page.locator('[data-testid^="meal-add-item-"]').first().click()
-  await page.getByTestId('recipe-picker-input').fill(recipeName)
-  await expect(page.getByTestId('recipe-picker-create')).toBeVisible()
-  await page.getByTestId('recipe-picker-create').click()
-  // `recipe-picker-create` tylko OTWIERA drawer — przepis powstaje po zapisie
-  // formularza. Bez tego kroku picker nigdy nie dostaje zaznaczenia.
-  await expect(page.getByTestId('recipe-create-drawer')).toBeVisible()
-  await page.getByTestId('recipe-create-submit').click()
-  await expect(page.getByTestId('recipe-picker-selected')).toContainText(recipeName)
-  await page.getByTestId('item-submit').click()
+    await page.goto(`/plan-dnia/${day}`)
+    await expect(page.getByTestId('plan-dnia-page')).toBeVisible()
+    await expect(page.getByTestId('plan-empty')).toBeVisible()
 
-  const item = page.locator('[data-testid^="plan-item-servings-"]').first()
-  await expect(item).toHaveText('1')
+    // --- posiłek o własnej nazwie (dzień powstaje implicite) -------------------------
+    await page.getByTestId('plan-add-meal').click()
+    await page.getByTestId('meal-name-input').fill('II śniadanie')
+    await page.getByTestId('meal-target-input').fill('300')
+    await page.getByTestId('meal-submit').click()
 
-  // --- zmiana mnożnika przelicza pozycję, posiłek i dzień w jednym kroku -------------
-  await page.locator('[data-testid^="plan-item-plus-"]').first().click()
-  await expect(item).toHaveText('1,5')
+    const mealCard = page.locator('[data-testid^="meal-card-"]').first()
+    await expect(mealCard).toBeVisible()
+    await expect(mealCard).toContainText('II śniadanie')
 
-  // Donut i kafelki są zasilane tą samą odpowiedzią, więc muszą być widoczne
-  // razem z przeliczonym dniem (spójność 02_DOMAIN §13.3).
-  await expect(page.getByTestId('plan-donut')).toBeVisible()
-  await expect(page.getByTestId('plan-tile-kcal')).toBeVisible()
+    // --- pozycja z przepisu (inline create w RecipePickerze) ---------------------------
+    await page.locator('[data-testid^="meal-add-item-"]').first().click()
+    await page.getByTestId('recipe-picker-input').fill(recipeName)
+    await expect(page.getByTestId('recipe-picker-create')).toBeVisible()
+    await page.getByTestId('recipe-picker-create').click()
+    // `recipe-picker-create` tylko OTWIERA drawer — przepis powstaje po zapisie
+    // formularza. Bez tego kroku picker nigdy nie dostaje zaznaczenia.
+    await expect(page.getByTestId('recipe-create-drawer')).toBeVisible()
+    await page.getByTestId('recipe-create-submit').click()
+    await expect(page.getByTestId('recipe-picker-selected')).toContainText(recipeName)
+    await page.getByTestId('item-submit').click()
 
-  // --- sprzątanie: usuwamy posiłek (kaskada zabiera pozycję) i przepis ---------------
-  await page.locator('[data-testid^="meal-menu-"]').first().click()
-  await page.locator('[data-testid^="meal-remove-"]').first().click()
-  await expect(page.getByTestId('plan-empty')).toBeVisible()
+    const item = page.locator('[data-testid^="plan-item-servings-"]').first()
+    await expect(item).toHaveText('1')
 
-  await page.goto('/przepisy')
-  await page.getByTestId('recipes-search').fill(recipeName)
-  const card = page.locator('[data-testid^="recipe-card-"]').first()
-  await expect(card).toBeVisible()
-  await card.click()
-  await page.getByTestId('recipe-delete').click()
-  await expect(page).toHaveURL(/\/przepisy$/)
+    // --- zmiana mnożnika przelicza pozycję, posiłek i dzień w jednym kroku -------------
+    await page.locator('[data-testid^="plan-item-plus-"]').first().click()
+    await expect(item).toHaveText('1,5')
+
+    // Donut i kafelki są zasilane tą samą odpowiedzią, więc muszą być widoczne
+    // razem z przeliczonym dniem (spójność 02_DOMAIN §13.3).
+    await expect(page.getByTestId('plan-donut')).toBeVisible()
+    await expect(page.getByTestId('plan-tile-kcal')).toBeVisible()
+
+    // --- sprzątanie: usuwamy posiłek (kaskada zabiera pozycję) i przepis ---------------
+    await page.locator('[data-testid^="meal-menu-"]').first().click()
+    await page.locator('[data-testid^="meal-remove-"]').first().click()
+    await expect(page.getByTestId('plan-empty')).toBeVisible()
+
+    await page.goto('/przepisy')
+    await page.getByTestId('recipes-search').fill(recipeName)
+    const card = page.locator('[data-testid^="recipe-card-"]').first()
+    await expect(card).toBeVisible()
+    await card.click()
+    await page.getByTestId('recipe-delete').click()
+    await expect(page).toHaveURL(/\/przepisy$/)
+  })
 })

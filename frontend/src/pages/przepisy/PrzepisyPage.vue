@@ -77,13 +77,10 @@ function openRecipe(id: number): void {
           :placeholder="texts.searchPlaceholder"
           data-testid="recipes-search"
         />
-        <Button
-          as="router-link"
-          :to="{ name: 'przepis-nowy' }"
-          class="min-h-11"
-          data-testid="recipes-add"
-        >
-          {{ texts.addRecipe }}
+        <Button as-child class="min-h-11">
+          <RouterLink :to="{ name: 'przepis-nowy' }" data-testid="recipes-add">
+            {{ texts.addRecipe }}
+          </RouterLink>
         </Button>
       </div>
 
@@ -122,8 +119,10 @@ function openRecipe(id: number): void {
       <p class="text-muted-foreground text-sm">
         {{ isFiltering ? texts.emptySearch : texts.emptyState }}
       </p>
-      <Button as="router-link" :to="{ name: 'przepis-nowy' }" class="min-h-11">
-        {{ texts.addRecipe }}
+      <Button as-child class="min-h-11">
+        <RouterLink :to="{ name: 'przepis-nowy' }" data-testid="recipes-empty-add">
+          {{ texts.addRecipe }}
+        </RouterLink>
       </Button>
     </div>
 

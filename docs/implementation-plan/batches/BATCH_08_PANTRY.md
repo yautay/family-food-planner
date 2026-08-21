@@ -210,20 +210,37 @@ diffie przed commitem (krok 11).
 
 ## Expected files/modules
 
+> **Korekta ścieżek — review R2 (2026-08-21).** Ta lista powstała przed B04,
+> więc kilka ścieżek nie istnieje w repo. Stan FAKTYCZNY: router to
+> `frontend/src/router.ts` (nie `router/index.ts`), shell to
+> `frontend/src/layouts/AppShell.vue` (nie `components/AppShell.vue`),
+> a katalogu `frontend/src/composables/` **nie ma i nie trzeba go tworzyć** —
+> od B04 wzorcem jest `src/api/<moduł>.ts` (funkcje HTTP) + `useQuery`
+> /`useMutation` wołane wprost w komponencie, z kluczami z
+> `src/api/queryKeys.ts` (ADR-007, 05_FRONTEND §1). Testy backendu też mają
+> nową strukturę: katalog per moduł, czyli
+> `backend/tests/{integration,api}/pantry/test_*.py` z `__init__.py`
+> (wzorzec z B05–B07). Nawigacja: `/spizarnia` ma już wpis w
+> `src/lib/navigation.ts` i trasę z `PlaceholderPage` — batch PODMIENIA
+> `component` istniejącej trasy, nie dokłada nowej pozycji (CLAUDE.md §5).
+
 Nowe:
 - `backend/app/modules/pantry/{__init__.py,models.py,schemas.py,service.py,router.py}`
 - `backend/migrations/versions/<pierwszy_wolny>_pantry_items.py`
-- `backend/tests/integration/test_pantry_service.py`
-- `backend/tests/api/test_pantry_api.py`
+- `backend/tests/integration/pantry/{__init__.py,test_pantry_service.py}`
+- `backend/tests/api/pantry/{__init__.py,test_pantry_api.py}`
 - `frontend/src/pages/spizarnia/SpizarniaPage.vue`
 - `frontend/src/components/domain/{PantryItemRow.vue,PantryItemCard.vue,ExpiryBadge.vue}`
-- `frontend/src/composables/usePantry.ts`
+- `frontend/src/api/pantry.ts`
 - `frontend/e2e/pantry.spec.ts`
 
 Zmieniane (⚠ = wspólne z B09):
-- ⚠ `backend/app/main.py` (router), ⚠ `backend/tests/factories.py`
+- ⚠ `backend/app/main.py` (router), ⚠ `backend/app/models.py` (rejestr modeli),
+  ⚠ `backend/tests/conftest.py` (`DB_TABLES`),
+  ⚠ `backend/tests/integration/test_migrations.py` (`EXPECTED_TABLES`),
+  ⚠ `backend/tests/factories.py`
 - ⚠ `frontend/src/api/queryKeys.ts`, ⚠ `frontend/src/api/generated.ts` (regen)
-- ⚠ `frontend/src/router/index.ts`, ⚠ `frontend/src/components/AppShell.vue`
+- ⚠ `frontend/src/router.ts` (podmiana `component` trasy `/spizarnia`)
 
 ## Implementation Notes
 

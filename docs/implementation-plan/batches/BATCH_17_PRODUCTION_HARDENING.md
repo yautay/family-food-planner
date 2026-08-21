@@ -62,6 +62,18 @@ Konkrety z B01 do wykorzystania/uzupełnienia:
      `autoescape=True` — B04 naprawił dokładnie to w katalogu produktów.
      Skutek: szukanie „50%" zwraca wszystko od „50". Niski priorytet, ale
      ta sama pułapka wraca w każdej nowej wyszukiwarce.
+- **Do przeglądu z R2** (review rdzenia planowania, 2026-08-21):
+  4. **Zimny start pierwszego żądania.** `GET /plan/days` na tygodniu
+     ze 112 pozycjami trwa 100–180 ms na rozgrzanym procesie, ale PIERWSZE
+     żądanie po starcie procesu ~1,5 s (budowanie modeli Pydantica i planów
+     zapytań PG). To koszt startu, nie zapytania, ale użytkownik zobaczy go
+     po każdym restarcie kontenera — kandydat na rozgrzewkę w healthchecku
+     albo świadome przyjęcie i opisanie w 09_DEPLOYMENT.
+  5. **`task secrets-scan` jest już używalny jako bramka** — od R2 istnieje
+     `.gitleaks.toml` (pełne reguły domyślne + allowlist dwóch literałów
+     haseł testowych po wzorcu, nie po ścieżce) i komenda kończy się exit 0
+     na czystym repo. Do decyzji tutaj: czy wciągnąć ją do `task check`
+     (koszt: ~18 s i wymaga Dockera) albo do osobnego targetu CI.
 
 Wymagane lektury przed startem:
 

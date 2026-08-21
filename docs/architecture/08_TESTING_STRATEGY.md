@@ -60,6 +60,39 @@ Core flows (rozbudowywane w batchach, które je dostarczają):
 Konwencje: selektory `data-testid`, bez sleepów (expect z timeoutem),
 seed przez API, nie przez UI.
 
+### 3.1 Izolacja danych (stan faktyczny po review R2, 2026-08-21)
+
+Suita jedzie na bazie DEWELOPERSKIEJ i na JEDNYM koncie (07_SECURITY §2 — w
+repozytorium nie ma i nie może być działającego hasła), a katalog produktów
+jest globalny. Specy nie są więc od siebie niezależne i pięć reguł jest
+WIĄŻĄCE dla każdego nowego specu:
+
+1. **Jedno logowanie na przebieg.** Projekt `setup` (`e2e/auth.setup.ts`)
+   loguje się raz i zapisuje `storageState`; pozostałe projekty z niego
+   startują. `/auth/login` ma limit 5/min/IP, więc logowanie per spec kończyło
+   się losowymi 429. Spec testujący SAMO logowanie zeruje `storageState`
+   u siebie (`EMPTY_STATE` z `e2e/auth-state.ts`).
+2. **Przebieg jednowątkowy** (`fullyParallel: false`, `workers: 1`).
+   Szukajki produktów i przepisów są trigramowe, a inline create wymaga ZERA
+   wyników — encja utworzona równolegle przez inny spec pod podobną nazwą
+   ukrywa opcję „+ Dodaj" i test pada bez winy aplikacji.
+3. **Własny prefiks nazw + sprzątanie po obu stronach.** Każdy spec podpisuje
+   swoje encje wspólnym prefiksem (`E2E <obszar>`) i wywołuje
+   `cleanupE2eData` z `e2e/cleanup.ts` w `beforeAll` (leczy stan po przebiegu
+   przerwanym w połowie) ORAZ w `afterAll` (wykonuje się także po nieudanym
+   teście). Kolejność usuwania wymuszają blokady: cykle → szablony → posiłki
+   planu → przepisy → produkty.
+4. **Daty planu z okna zarezerwowanego dla E2E (lata 2030+).** „Dziś" zostaje
+   dla ręcznego klikania. Dzięki tej konwencji `setup` czyści całe okno
+   (`purgeE2eLeftovers`, rok po roku — `GET /plan/days` przyjmuje max 366 dni).
+5. **Spec, który przestawia konto do innej rodziny, biegnie OSOBNO.**
+   `households.spec.ts` ma własny projekt Playwrighta zależny od `chromium`,
+   bo encje ze scope zapisują `household_id` także dla `private` (ADR-006)
+   i sprzątające `DELETE /admin/households/{id}` trafiałoby na FK RESTRICT.
+
+Kryterium sprawności tej izolacji to DWA kolejne przebiegi z tym samym
+wynikiem, nie jednorazowe zielone.
+
 ## 4. Macierz uprawnień (testowana w API testach każdego zasobu)
 
 | Operacja | anonim | USER (obcy) | USER (członek rodziny) | właściciel | ADMIN |
@@ -80,9 +113,26 @@ API swojego zasobu (kody HTTP, nie wywołania serwisu).
 
 ## 5. Dane testowe
 
-Fabryki (factory-boy lub proste funkcje) per moduł w `tests/factories.py`;
-`task db-seed-demo` — deterministyczny seed demo (rodzina 2+3, ~15 produktów,
-5 przepisów, tydzień planu, lista) do ręcznego klikania i E2E; odwracalny.
+Fabryki (proste funkcje asynchroniczne) per moduł w `tests/factories.py`;
+`task db-seed-demo` — deterministyczny, idempotentny seed demo do ręcznego
+klikania i E2E.
+
+**Stan faktyczny seedu (review R2, 2026-08-21): WYŁĄCZNIE katalog** —
+~15 produktów kanonicznych z mieszaną kompletnością wartości i przelicznikami
+jednostek domowych (`backend/scripts/seed_demo.py`, od B04). Rodziny 2+3,
+5 przepisów, tygodnia planu i listy zakupowej **nie ma** — B05 i B07 ich nie
+dołożyły, choć docstring seedu tak zakładał. Konsekwencje, o których muszą
+wiedzieć kolejne batche:
+
+- E2E buduje sobie dane samo (przez UI i API), a nie dostaje ich z seedu;
+  jedyny wyjątek to pozycje planu z produktem, które celowo sięgają po
+  produkt z seedu, żeby dzień miał realne kalorie.
+- Snapshoty silnika zakupowego „na seedzie demo" (§2.4–2.7) wymagają
+  najpierw rozszerzenia seedu — należy to do zakresu B10.
+- Rozszerzenie seedu o encje ze scope wymaga właściciela, a seed nie zna
+  żadnego konta (konta powstają przez `task create-admin`). To decyzja do
+  podjęcia w batchu, który seed rozszerza: dopisywać do pierwszego ADMIN-a
+  czy zakładać osobne konto demo (hasło wtedy z env, nigdy z repo).
 
 ## 6. Definicja zieloności
 

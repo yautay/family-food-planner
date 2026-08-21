@@ -45,6 +45,14 @@ Batch zastaje (po R3):
   szablonu padnie 422 (`_assert_references_alive`) albo zostawi cykl
   wskazujący w pustkę. Zmiana kształtu payloadu = `v: 2` + konwersja przy
   odczycie (nie ma jej jeszcze).
+  **Doprecyzowanie review R2 (2026-08-21):** cykl z JEDNYM martwym
+  `template_ids` jest niesprawny CAŁY, nie tylko w tygodniu, w którym ten
+  szablon wypada — `TemplatesService.apply_cycle` sprawdza istnienie
+  i widoczność wszystkich id z listy przed instancjacją i zwraca 422
+  `CYCLE_TEMPLATES_UNKNOWN`. Import, który przepisze `template_ids` bez
+  remapowania, zamieni więc cykl w encję nieużywalną, a nie „częściowo
+  działającą". Walidację referencji rób w imporcie, nie licz na to, że
+  instancjacja pominie brakujący tydzień.
 - `audit_entries` (03_DATABASE §10) + serwis audytu z B03; storage uploadów
   `/data/uploads` (03_DATABASE §11) ze zdjęciami przepisów/produktów.
 - Strony `UstawieniaPage` i `AdminPage` (05_FRONTEND §3).

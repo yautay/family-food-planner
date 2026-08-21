@@ -86,29 +86,34 @@ tasks:
       - task: format-check
       - task: fe-build
 
+  # Targety pytest przepuszczają argumenty za `--` (CLI_ARGS), żeby dało się
+  # zawężyć przebieg bez wołania gołego pytesta (który nie widziałby `.env`):
+  #   task test-int -- -k wydajnosc -s
+  # Bramka `task check` woła je BEZ argumentów, więc pełny zakres jest zawsze
+  # ten sam — argumenty są narzędziem diagnostycznym, nie sposobem na zieleń.
   test-unit:
-    desc: Testy jednostkowe backendu (bez bazy, sekundy)
+    desc: 'Testy jednostkowe backendu (bez bazy, sekundy). Zawężenie: -- -k fraza'
     dir: backend
     cmds:
-      - uv run pytest -m unit
+      - uv run pytest -m unit {{.CLI_ARGS}}
 
   test-int:
     desc: Testy integracyjne backendu (wymagają db-test — `task dev-db`)
     dir: backend
     cmds:
-      - uv run pytest -m integration
+      - uv run pytest -m integration {{.CLI_ARGS}}
 
   test-api:
     desc: Testy kontraktu HTTP (httpx AsyncClient)
     dir: backend
     cmds:
-      - uv run pytest -m api
+      - uv run pytest -m api {{.CLI_ARGS}}
 
   test-be:
     desc: Wszystkie testy backendu naraz
     dir: backend
     cmds:
-      - uv run pytest
+      - uv run pytest {{.CLI_ARGS}}
 
   fe-test:
     desc: Testy frontendu (vitest)

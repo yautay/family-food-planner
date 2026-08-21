@@ -126,14 +126,13 @@ function formatDate(value: string): string {
             </div>
 
             <div class="flex flex-wrap gap-2">
-              <Button
-                as="router-link"
-                :to="{ name: 'produkt-edycja', params: { id: product.id } }"
-                variant="outline"
-                class="min-h-11"
-                :data-testid="`verification-open-${product.id}`"
-              >
-                {{ texts.openProduct }}
+              <Button as-child variant="outline" class="min-h-11">
+                <RouterLink
+                  :to="{ name: 'produkt-edycja', params: { id: product.id } }"
+                  :data-testid="`verification-open-${product.id}`"
+                >
+                  {{ texts.openProduct }}
+                </RouterLink>
               </Button>
               <!-- Backend wymaga do weryfikacji rdzenia makro ORAZ źródła danych
                    (422 bez któregokolwiek) — przycisk odzwierciedla oba warunki,

@@ -132,6 +132,38 @@ Review batch sam jest procesem przeglądowym — SKILL-REVIEW/SKILL-SECREV uruch
       (last-write-wins per pozycja przygotowany pod ADR-009/B12)
 - [ ] Odhaczenie z publicznego linku i z aplikacji widzą ten sam stan
 
+### Ustalenia odziedziczone z R2 (2026-08-21)
+
+- [ ] **U16 — puste `details.used_in` przy 409 usuwania rodziny.**
+      `households/service.py::delete_household` liczy referencje tylko dla
+      `users` i `member_profiles`; encje ze scope (dziś `recipes`, `plan_days`,
+      `day_templates`, `week_templates`, `week_cycles`, po B08–B11 także
+      spiżarnia, generacje i listy) blokują usunięcie przez FK RESTRICT
+      i lądują w drugiej linii obrony (`IntegrityError` → 409 z `used_in: []`).
+      Zachowanie jest POPRAWNE (409, nie 500), ale ADMIN nie dowiaduje się,
+      co blokuje. R2 świadomie tego nie naprawiał: właściwym rozwiązaniem jest
+      REJESTR finderów po stronie `households/service.py` (wzorzec
+      `register_product_reference_finder` / `register_recipe_reference_finder`),
+      a zakładanie go, gdy za chwilę dochodzą kolejne cztery tabele ze scope,
+      znaczyłoby robić to dwa razy. Ten batch zastaje pełny zbiór konsumentów —
+      albo zakłada rejestr, albo świadomie przyjmuje ograniczenie z pisemnym
+      uzasadnieniem i domyka U16.
+- [ ] **U17 — nie da się usunąć dnia planu.** `04_API §2` opisuje
+      `/plan/days/{date}` jako CRUD, a router ma tylko GET i PUT. Wiersz
+      `plan_days` powstaje implicite przy pierwszym posiłku, trzyma
+      `household_id` z FK RESTRICT i nie znika po usunięciu wszystkich
+      posiłków — UI pokazuje wtedy „brak planu", ale blokada rodziny zostaje
+      (to najczęstsza przyczyna U16 z pustym `used_in`). Do rozstrzygnięcia
+      razem z U16: albo `DELETE /plan/days/{date}` (usuwa dzień bez posiłków),
+      albo automatyczne sprzątanie pustego dnia przy usunięciu ostatniego
+      posiłku, albo świadoma decyzja „dni zostają" z policzeniem ich w `used_in`.
+- [ ] **U15 zamknięty w R2** (E2E 10/10 w dwóch kolejnych przebiegach,
+      `task secrets-scan` czysty) — sprawdzić, czy nadal jest, i czy nowe specy
+      B08–B11 trzymają się konwencji: własny prefiks nazw + `beforeAll`
+      /`afterAll` z `cleanupE2eData` + daty z okna 2030+ (`frontend/e2e/cleanup.ts`).
+      Suita jest ŚWIADOMIE jednowątkowa (`workers: 1`) — spec zakładający
+      równoległość to błąd review.
+
 ### Plan B12–B16 — przegląd
 
 - [ ] B12 (offline): czy `label` na pozycjach wystarcza do renderu offline;

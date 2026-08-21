@@ -46,6 +46,55 @@ Co już istnieje:
   (kontrakt props/emit w Completion notes B09).
 - Wzorce frontendu: TanStack Query, Pinia (stan szkicu generacji — 05 §1).
 
+### Gotowość agregatów planu — ustalenia review R2 (2026-08-21)
+
+R2 sprawdził wprost, czy „z planu da się wyciągnąć zakres dat → pozycje →
+ilości znormalizowane per produkt". Odpowiedź: **prawie — brakuje JEDNEGO
+publicznego wejścia, które ten batch ma dołożyć.** Pięć rzeczy wiążących:
+
+1. **Nie ma gotowego agregatu zapotrzebowania.** `RecipesService` udostępnia
+   `portion_values(recipe_ids)` (WYŁĄCZNIE wartości odżywcze porcji) — nie
+   udostępnia ilości składników. Silnik zakupowy NIE MOŻE czytać
+   `recipe_ingredients` ani `plan_meal_items` sam (CLAUDE.md §4: moduł→moduł
+   przez service). Dołóż publiczne wejście po stronie właścicieli danych:
+   `RecipesService.ingredient_amounts(recipe_ids)` (ilości znormalizowane per
+   przepis) i `PlanningService.demand_rows(user, date_from, date_to)`
+   (pozycje planu z zakresu). Wzorzec „stała liczba zapytań, zbiorczy odczyt"
+   jest w `portion_values` i `PlanningService._build_days` — R2 zmierzył go:
+   10 zapytań na tydzień niezależnie od liczby pozycji.
+2. **JEDEN dzień na datę, nie wszystkie widoczne.** `PlanningService`
+   rozstrzyga datę regułą „najpierw WŁASNY dzień, potem widoczny rodzinny"
+   (`_resolve_day`, `list_days` robi `setdefault` po dacie). Ta sama data może
+   mieć DWA widoczne wiersze `plan_days`. Zapytanie prosto do `plan_days`
+   po zakresie dat **policzy zakupy podwójnie** — agregacja musi przejść przez
+   `list_days`/`demand_rows`, nie przez własny `select`.
+3. **Oś jednostek to `base_unit`, nie `basis_unit`.** Ilości zapisane
+   w `plan_meal_items.amount` i `recipe_ingredients.amount` leżą na osi
+   PRZECHOWYWANIA (masa → g, objętość → ml, **sztuki → szt.**), a nie na osi
+   wartości „na 100" (`basis_unit`, gdzie sztuki → g). Do zakupów potrzebna
+   jest oś `base_unit` — konwersje bierz z `catalog/units.py`, nie pisz drugich.
+4. **Pozycja może nieść jednostkę niezgodną z produktem.** Gdy ADMIN zmieni
+   `measure_kind` produktu PO zapisaniu pozycji (D15 zbija wtedy weryfikację do
+   UNVERIFIED, ale ilości nie przelicza), stara ilość może być nieprzeliczalna
+   na nową oś. `planning/service.py::_product_values` obsługuje to jako
+   `complete=False` + komunikat, NIE jako 500 — silnik zakupowy musi zrobić to
+   samo i wrzucić pozycję do `issues`, nigdy nie „ratować" domysłem
+   (02_DOMAIN §13.1).
+5. **Wkład pozycji z przepisu to `ilość_składnika x servings / base_servings`**
+   — dzielenie `Decimal` bywa nieskończone (np. /3), więc NIE kwantyzuj kroków
+   pośrednich; zaokrąglenie należy do liczenia opakowań (ADR-008).
+
+**Seed demo nie wystarczy na snapshoty tego batcha.** `scripts/seed_demo.py`
+ma dziś WYŁĄCZNIE produkty i przeliczniki (15 pozycji) — rodziny 2+3,
+5 przepisów, tygodnia planu i listy z 08_TESTING §5 nie dołożył ani B05, ani
+B07, choć docstring seedu je obiecuje. Snapshot preview „na seedzie demo"
+(§Tests, §Acceptance) wymaga więc najpierw rozszerzenia seedu — to część
+zakresu TEGO batcha (jest w Expected files). Uwaga na decyzję: seed nie zna
+żadnego konta (konta powstają przez `task create-admin`), a encje ze scope
+potrzebują właściciela — trzeba świadomie wybrać, czy seed dopisuje dane do
+pierwszego ADMIN-a, czy zakłada osobne konto demo (wtedy hasło z env, NIGDY
+z repo — 07_SECURITY §2).
+
 Wymagane lektury przed startem:
 - `02_DOMAIN_MODEL.md` §9.1–9.3 (pipeline, tury, opakowania/resztki —
   WIĄŻĄCE) + §8 (spiżarnia: jawne pytanie)
@@ -266,7 +315,10 @@ Nowe:
 - `backend/tests/integration/test_shopping_service.py`, `backend/tests/api/test_shopping_api.py`
 - `frontend/src/pages/zakupy/{ZakupyPage.vue,ZakupyPreview.vue,RoundConfigSection.vue}`
 - `frontend/src/components/domain/LeftoverBadge.vue` (jeśli nie istnieje)
-- `frontend/src/stores/shoppingDraftStore.ts`, `frontend/src/composables/useShopping.ts`
+- `frontend/src/stores/shoppingDraftStore.ts` (WYŁĄCZNIE stan UI szkicu:
+  zaznaczenia, otwarte sekcje, wybrane opcje generacji — wynik preview to stan
+  serwera i mieszka w TanStack Query, ADR-007), `frontend/src/api/shopping.ts`
+  (korekta R2: katalogu `src/composables/` w repo nie ma i nie trzeba go tworzyć)
 - `frontend/e2e/shopping-generate.spec.ts`
 
 Zmieniane: `backend/app/main.py`, `backend/tests/factories.py`,

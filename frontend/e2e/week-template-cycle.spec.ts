@@ -1,6 +1,8 @@
 import type { Locator } from '@playwright/test'
 import { expect, test } from '@playwright/test'
 
+import { cleanupE2eData } from './cleanup.js'
+
 /**
  * Core flow 2 (08_TESTING §3.2): tydzień przez szablon i cykl.
  *
@@ -30,6 +32,43 @@ const WEDNESDAY = '2032-03-03'
 const THURSDAY = '2032-03-04'
 
 /**
+ * Wspólny prefiks nazw + pełny zakres dat, których spec dotyka.
+ *
+ * Ten spec zostawiał najwięcej śmieci (przepis, szablon dnia, szablon
+ * tygodnia, cykl i dwa tygodnie planu) i NIC nie sprzątał, więc drugi przebieg
+ * padał na `expect(targetDay).toContainText('Brak posiłków')` — czwartek miał
+ * już posiłek z poprzedniego uruchomienia. Sprzątanie po obu stronach testu
+ * (`beforeAll` leczy stan po przerwanym przebiegu) jest właściwą naprawą,
+ * nie osłabienie asercji (ustalenie R2, dług U15).
+ */
+const PREFIX = 'E2E tydzien'
+
+/**
+ * Produkt z seedu demo (`task db-seed-demo`, 08_TESTING §5) — 353 kcal/100 g.
+ *
+ * Po co: przepis z inline create ma tylko nazwę i porcję bazową, więc dzień
+ * zbudowany wyłącznie z niego ma ZERO kcal, a wtedy `BarChart` renderuje
+ * komunikat „brak danych" zamiast słupków i asercja „przynajmniej jeden słupek
+ * > 0" jest niespełnialna z definicji (ustalenie R2 — poprawka z B07 zmieniła
+ * sposób pomiaru słupka, ale nie to, że dane były zerowe). Dopisanie pozycji
+ * z produktem, który MA wartości, daje tygodniowi realne kalorie i zamienia tę
+ * asercję w prawdziwy test: „cykl skopiował plan RAZEM z jego wartościami".
+ */
+const SEED_PRODUCT = 'Ryż brązowy'
+const TOUCHED_DATES = Array.from(
+  { length: 14 },
+  (_, offset) => `2032-03-${String(offset + 1).padStart(2, '0')}`,
+)
+
+test.beforeAll(async ({ request }) => {
+  await cleanupE2eData(request, { namePrefix: PREFIX, dates: TOUCHED_DATES })
+})
+
+test.afterAll(async ({ request }) => {
+  await cleanupE2eData(request, { namePrefix: PREFIX, dates: TOUCHED_DATES })
+})
+
+/**
  * Wybiera opcję `<select>` po FRAGMENCIE tekstu.
  *
  * `selectOption` przyjmuje wyłącznie dokładny `label` albo `value`, a etykiety
@@ -48,10 +87,10 @@ test('tydzień przez szablon i cykl: dzień → szablon → daty → tydzień �
   page,
 }) => {
   const stamp = Date.now()
-  const recipeName = `Zupa E2E ${stamp}`
-  const dayTemplateName = `Szablon dnia ${stamp}`
-  const weekTemplateName = `Szablon tygodnia ${stamp}`
-  const cycleName = `Cykl ${stamp}`
+  const recipeName = `${PREFIX} Zupa ${stamp}`
+  const dayTemplateName = `${PREFIX} Szablon dnia ${stamp}`
+  const weekTemplateName = `${PREFIX} Szablon tygodnia ${stamp}`
+  const cycleName = `${PREFIX} Cykl ${stamp}`
 
   page.on('dialog', (dialog) => dialog.accept())
 
@@ -78,6 +117,16 @@ test('tydzień przez szablon i cykl: dzień → szablon → daty → tydzień �
   await expect(page.getByTestId('recipe-picker-selected')).toContainText(recipeName)
   await page.getByTestId('item-submit').click()
   await expect(page.locator('[data-testid^="plan-item-servings-"]').first()).toBeVisible()
+
+  // --- druga pozycja: produkt luzem z seedu (dzień musi mieć realne kcal) ------------
+  await page.locator('[data-testid^="meal-add-item-"]').first().click()
+  await page.getByTestId('item-mode-product').click()
+  await page.getByTestId('picker-input').fill(SEED_PRODUCT)
+  await page.locator('[data-testid^="picker-option-"]').first().click()
+  await expect(page.getByTestId('picker-selected')).toContainText(SEED_PRODUCT)
+  await page.getByTestId('item-amount').fill('100')
+  await page.getByTestId('item-submit').click()
+  await expect(page.getByTestId('plan-tile-kcal')).toContainText('353')
 
   // --- widok tygodnia widzi ten dzień -----------------------------------------------
   await page.goto(`/tydzien/${WEEK_START}`)

@@ -48,7 +48,7 @@ Start od zera: `cp .env.example .env` → `task install` → `task dev`.
 | `task dev-db` | same bazy (gdy testy uruchamiasz z hosta) |
 | `task down` / `task logs` | zatrzymanie / logi |
 | `task check` | **BRAMKA DoD**: migrations-check + unit + int + api + fe-test + typecheck + lint + format-check + fe-build |
-| `task test-unit` / `test-int` / `test-api` / `test-be` | pytest wg markerów |
+| `task test-unit` / `test-int` / `test-api` / `test-be` | pytest wg markerów; zawężenie przez `--`, np. `task test-int -- -k wydajnosc -s` |
 | `task fe-test` | vitest |
 | `task test-e2e` (+ `task e2e-install`) | Playwright, chromium |
 | `task typecheck` / `lint` / `format` / `format-check` | mypy+vue-tsc / ruff+eslint / ruff format+prettier |
@@ -167,10 +167,20 @@ domenowe w `src/components/domain/`. Teksty po polsku, wielokrotnego użytku
 w `src/lib/texts.ts`. Mobile-first, cele dotykowe ≥44 px, `aria-label` dla
 elementów bez tekstu, selektory E2E przez `data-testid`.
 
+**Przycisk, który nawiguje, to LINK**: `<Button as-child>` z zagnieżdżonym
+`<RouterLink :to="…">` (`to` i `data-testid` na linku). `as="router-link"`
+NIE działa — reka-ui `Primitive` woła `h(props.as, …)`, a string jest dla
+`h()` nazwą tagu, więc powstaje nieznany element bez `href`, bez nawigacji
+i bez roli dla czytnika ekranu. Pilnuje tego test
+`src/components/ui/button/Button.spec.ts` (ustalenie review R2).
+
 Sesja: `src/stores/auth.ts` (jedyny stan sesji w Pinia), guard w
 `src/router.ts`, pozycje menu w `src/lib/navigation.ts` (jeden wpis =
 sidebar + bottom-nav). Batch domenowy podmienia `component` istniejącej
 trasy z `PlaceholderPage`, nie dokłada nowego wpisu nawigacji.
+E2E: nowy spec podpisuje encje własnym prefiksem `E2E <obszar>`, sprząta
+`cleanupE2eData` w `beforeAll` i `afterAll`, daty planu bierze z lat 2030+,
+a suita jest jednowątkowa (08_TESTING §3.1) — nie zakładaj równoległości.
 Nowa zależność npm wymaga odświeżenia `node_modules` w kontenerze:
 `docker compose --env-file .env -f docker/compose.dev.yml exec frontend
 npm ci` + restart serwisu.

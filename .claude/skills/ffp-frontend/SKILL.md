@@ -3,7 +3,7 @@ name: ffp-frontend
 description: Kontrakt frontendu Family Food Planner — Vue 3 script setup + TS strict, TanStack Query vs Pinia, shadcn-vue, tokens Tailwind, wzorce UX (create-in-context, mobile-first, PL-only). Ładuj przed pracą nad plikami w frontend/src/**.
 ---
 
-<!-- verified: 2026-08-16 (REVIEW R1 — uzgodnione z kodem po B01–B04)
+<!-- verified: 2026-08-21 (REVIEW R2 — uzgodnione z kodem po B05–B07)
      stack: Vue 3.5 · TypeScript 5.9 strict · Vite 8 · Tailwind 4.3 · shadcn-vue
             (reka-ui) · Pinia 4 · vue-router 5 · TanStack Query 5 · vitest 4
             · Playwright 1.62 · vite-plugin-pwa 1.3 · @lucide/vue · zod 3
@@ -11,7 +11,7 @@ description: Kontrakt frontendu Family Food Planner — Vue 3 script setup + TS 
 
 # FFP — kontrakt frontendu
 
-## Co już stoi (BATCH_01–04)
+## Co już stoi (BATCH_01–07)
 
 `src/main.ts` (Pinia + VueQueryPlugin + router) · `src/router.ts` z guardem ·
 `src/layouts/AppShell.vue` (sidebar + bottom-nav) · `src/lib/navigation.ts`
@@ -31,6 +31,21 @@ select produktu w kolejnym batchu = błąd review):
 `update:valid`). Strony: `pages/produkty/*`, `pages/UstawieniaPage.vue`,
 `pages/admin/*`. Batch domenowy PODMIENIA `component` istniejącej trasy
 z `PlaceholderPage`, nie dokłada nowego wpisu nawigacji.
+
+**Dołożone w B05–B07 (też do reużycia, nie do przepisania):**
+`components/domain/RecipePicker.vue` (powtarza kontrakt `ProductPickera`
+z prefiksem testid `recipe-picker-`; uwaga: `recipe-picker-create` tylko
+OTWIERA drawer, wybór następuje po `recipe-create-submit`) ·
+`MealCard.vue`, `RecipeCard.vue`, `ServingsSplitDrawer.vue` ·
+`components/domain/planning/*` (pięć dialogów + wspólny `PlanningDialog`) ·
+`components/charts/{NutritionBar,DonutChart,BarChart}.vue` (własne SVG,
+ADR-013 — `BarChart` jest STACKOWANY, gdy `segments` ma >1 element, i wciąga
+`target` do skali; B13 go reużywa) · strony `pages/przepisy/*`,
+`pages/plan-dnia/PlanDniaPage.vue`, `pages/tydzien/PlanTygodniaPage.vue` ·
+`src/api/{recipes,goals,planning,templates}.ts` ·
+`src/lib/{dates,nutrition}.ts` + `decimal.ts` z `sumDecimals`/`decimalsEqual`.
+Katalogu `src/composables/` NIE MA i nie trzeba go tworzyć — wzorcem jest
+`src/api/<moduł>.ts` + `useQuery`/`useMutation` wołane w komponencie.
 
 ## Podstawy
 
@@ -58,6 +73,13 @@ z `PlaceholderPage`, nie dokłada nowego wpisu nawigacji.
 - shadcn-vue w `components/ui/` — modyfikacje przez tokens, nie fork logiki.
   Domenowe w `components/domain/`, wykresy własne SVG w `components/charts/`
   (ADR-013 — ŻADNEJ biblioteki wykresów).
+- **Przycisk nawigujący = LINK.** `<Button as-child>` + zagnieżdżony
+  `<RouterLink :to="…" :data-testid="…">`. `as="router-link"` renderuje
+  NIEZNANY TAG, nie link: reka-ui `Primitive` woła `h(props.as, …)`, a string
+  jest dla `h()` nazwą elementu, nie komponentem — efekt to goły tekst bez
+  `href`, bez nawigacji i bez roli `link` dla czytnika ekranu. Ustalenie R2:
+  tak było w 9 miejscach z B04/B05, wyłapało to dopiero E2E. Strażnik:
+  `src/components/ui/button/Button.spec.ts` (test na `<a href>` + skan źródeł).
 - Kolory WYŁĄCZNIE przez klasy semantyczne z tokens zdefiniowanych
   w `src/assets/tailwind.css` (`bg-background`, `text-muted-foreground`,
   `bg-primary`, `border-border`…). Wartość hex w komponencie = błąd review.
@@ -98,5 +120,12 @@ z `PlaceholderPage`, nie dokłada nowego wpisu nawigacji.
   (`src/**/*.spec.ts` — inne lokalizacje nie są zbierane).
 - E2E w `frontend/e2e/`, selektory `data-testid`; `task test-e2e`
   (jednorazowo `task e2e-install`). E2E NIE wchodzi do `task check`.
+- **Izolacja danych E2E (08_TESTING §3.1, ustalenie R2)**: suita jedzie na
+  bazie dev i jednym koncie, więc jest JEDNOWĄTKOWA (`workers: 1`) i loguje
+  się RAZ (projekt `setup` + `storageState`). Nowy spec: własny prefiks nazw
+  `E2E <obszar>`, `cleanupE2eData` w `beforeAll` I `afterAll` (afterAll biegnie
+  też po failu), daty planu z lat 2030+. Nie łataj asercji, gdy przebieg pada
+  na danych poprzedniego — sprzątaj. Kryterium: DWA kolejne przebiegi z tym
+  samym wynikiem.
 - `task check` obejmuje: fe-test, typecheck (vue-tsc), lint (eslint),
   format-check (prettier) i `vite build` — wszystkie muszą być zielone (DoD).

@@ -1,6 +1,7 @@
 import { expect, test as setup } from '@playwright/test'
 
 import { AUTH_STATE_FILE } from './auth-state.js'
+import { purgeE2eLeftovers } from './cleanup.js'
 
 /**
  * Logowanie RAZ na cały przebieg E2E — projekt `setup` z `playwright.config.ts`.
@@ -23,7 +24,7 @@ import { AUTH_STATE_FILE } from './auth-state.js'
 const email = process.env.E2E_ADMIN_EMAIL ?? ''
 const password = process.env.E2E_ADMIN_PASSWORD ?? ''
 
-setup('logowanie raz na przebieg (zapis storageState)', async ({ page }) => {
+setup('logowanie raz na przebieg (zapis storageState)', async ({ page, baseURL }) => {
   if (!email || !password) {
     throw new Error(
       'Brak E2E_ADMIN_EMAIL / E2E_ADMIN_PASSWORD w .env. Utwórz konto komendą ' +
@@ -42,4 +43,13 @@ setup('logowanie raz na przebieg (zapis storageState)', async ({ page }) => {
   await expect(page.getByTestId('plan-dnia-page')).toBeVisible()
 
   await page.context().storageState({ path: AUTH_STATE_FILE })
+
+  // Ten projekt jest zależnością wszystkich pozostałych, więc jest JEDYNYM
+  // miejscem, w którym można bezpiecznie skasować wszystkie dane podpisane
+  // „E2E" — żaden spec jeszcze nie działa. Bez tego przebieg dziedziczy śmieci
+  // z poprzednich konwencji nazw i pada na ukrytej opcji „+ Dodaj"
+  // (szukajka trigramowa znajduje stary przepis) — ustalenie R2, dług U15.
+  // `baseURL` jedzie jako argument, bo purge kasuje szeroko i ma bramkę na
+  // localhost — patrz `purgeE2eLeftovers`.
+  await purgeE2eLeftovers(page.request, baseURL)
 })

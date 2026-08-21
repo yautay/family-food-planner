@@ -111,14 +111,10 @@ const TABS = [
 
     <template v-else-if="detail">
       <header class="grid gap-3">
-        <Button
-          as="router-link"
-          :to="{ name: 'przepisy' }"
-          variant="ghost"
-          class="min-h-11 justify-self-start"
-          data-testid="recipe-back"
-        >
-          {{ texts.backToList }}
+        <Button as-child variant="ghost" class="min-h-11 justify-self-start">
+          <RouterLink :to="{ name: 'przepisy' }" data-testid="recipe-back">
+            {{ texts.backToList }}
+          </RouterLink>
         </Button>
 
         <div v-if="detail.photo_url" class="overflow-hidden rounded-xl">
@@ -158,14 +154,13 @@ const TABS = [
           </div>
 
           <div class="flex gap-2">
-            <Button
-              as="router-link"
-              :to="{ name: 'przepis-edycja', params: { id: detail.id } }"
-              variant="outline"
-              class="min-h-11"
-              data-testid="recipe-edit"
-            >
-              {{ common.edit }}
+            <Button as-child variant="outline" class="min-h-11">
+              <RouterLink
+                :to="{ name: 'przepis-edycja', params: { id: detail.id } }"
+                data-testid="recipe-edit"
+              >
+                {{ common.edit }}
+              </RouterLink>
             </Button>
             <Button
               v-if="canManage"

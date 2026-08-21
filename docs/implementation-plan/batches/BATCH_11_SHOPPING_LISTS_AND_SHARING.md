@@ -228,20 +228,22 @@ Nowe:
   rozszerzenie `router.py`/`service.py` — wg konwencji z B10)
 - `backend/app/core/logging_filters.py` (maskowanie `/public/lists/***`,
   jeśli nie istnieje)
-- `backend/tests/api/test_shopping_lists_api.py`
-- `backend/tests/api/test_public_lists_api.py` (komplet §2.9)
-- `backend/tests/integration/test_accept_to_pantry.py`
+- `backend/tests/api/shopping/{__init__.py,test_shopping_lists_api.py}`
+- `backend/tests/api/shopping/test_public_lists_api.py` (komplet §2.9)
+- `backend/tests/integration/shopping/{__init__.py,test_accept_to_pantry.py}`
 - `frontend/src/pages/zakupy/ListaZakupowPage.vue` (zastępuje placeholder)
 - `frontend/src/pages/public/PublicznaListaPage.vue`
 - `frontend/src/components/domain/{ShoppingItemRow.vue,ShareListDialog.vue}`
-- `frontend/src/composables/{useShoppingLists.ts,usePublicList.ts}`
+- `frontend/src/api/{shoppingLists.ts,publicList.ts}` (korekta R2: katalogu
+  `src/composables/` w repo nie ma — wzorcem jest `src/api/<moduł>.ts`
+  + `useQuery`/`useMutation` w komponencie, ADR-007)
 - `frontend/src/styles/print.css` (lub `@media print` w komponencie)
 - `frontend/e2e/shopping-list-sharing.spec.ts`
 - zależność npm: `qrcode` (+ typy)
 
 Zmieniane: `backend/app/main.py` (public router + rate limiter),
 konfiguracja slowapi, serwis stores z B09 (rozszerzenie blokady usuwania),
-`frontend/src/router/index.ts` (`/l/:token` poza guardem i shellem),
+`frontend/src/router.ts` (`/l/:token` poza guardem i shellem; korekta R2 — router to jeden plik, nie katalog),
 `frontend/src/api/{queryKeys.ts,generated.ts}`, `backend/tests/factories.py`.
 
 ## Implementation Notes

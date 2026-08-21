@@ -23,7 +23,17 @@ const reuseServer = process.env.E2E_REUSE_SERVER === '1'
 
 export default defineConfig({
   testDir: './e2e',
-  fullyParallel: true,
+  // Specy NIE są od siebie niezależne i nie da się tego obejść asercjami:
+  // dzielą JEDNĄ bazę deweloperską i JEDNO konto (07_SECURITY §2 — w repo nie
+  // ma drugiego hasła), a katalog produktów jest globalny. Do tego szukajki
+  // produktów i przepisów są TRIGRAMOWE, więc encja utworzona równolegle przez
+  // inny spec pod podobną nazwą wystarcza, żeby opcja „+ Dodaj" zniknęła
+  // (`canCreate` w pickerach wymaga ZERA wyników) i inline create stał się
+  // nieosiągalny. Równoległość kupowała tu kilkadziesiąt sekund za cenę
+  // losowych czerwonych przebiegów — 08_TESTING §3 stawia na stabilność
+  // (ustalenie R2, dług U15).
+  fullyParallel: false,
+  workers: 1,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? 'list' : [['list'], ['html', { open: 'never' }]],
@@ -40,7 +50,23 @@ export default defineConfig({
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'], storageState: AUTH_STATE_FILE },
+      // `households.spec.ts` przenosi konto E2E do NOWEJ rodziny i na koniec ją
+      // usuwa. Encje ze scope zapisują `household_id` także dla `private`
+      // (ADR-006), więc gdy inne specy tworzą wtedy przepisy, dni planu czy
+      // szablony, dostają `household_id` tej rodziny i sprzątające
+      // `DELETE /admin/households/{id}` kończy się 409 (FK RESTRICT).
+      // Kod zachowuje się POPRAWNIE — to projekt testów był wadliwy, więc
+      // rozwiązaniem jest kolejność, nie osłabianie asercji (ustalenie R2).
+      testIgnore: /households\.spec\.ts/,
       dependencies: ['setup'],
+    },
+    {
+      // Osobny projekt = uruchomienie PO zakończeniu `chromium`, więc żaden inny
+      // spec nie tworzy encji w czasie, gdy konto należy do rodziny tego specu.
+      name: 'households',
+      testMatch: /households\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'], storageState: AUTH_STATE_FILE },
+      dependencies: ['chromium'],
     },
   ],
   webServer: reuseServer

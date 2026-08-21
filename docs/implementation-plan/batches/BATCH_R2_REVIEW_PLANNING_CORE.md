@@ -123,76 +123,76 @@ Review batch sam jest procesem przeglądowym — SKILL-REVIEW/SKILL-SECREV uruch
 
 ### Silnik nutrition — czystość i poprawność (ADR-008)
 
-- [ ] `modules/nutrition` engine: ZERO I/O, ZERO importów ORM/sesji,
+- [x] `modules/nutrition` engine: ZERO I/O, ZERO importów ORM/sesji,
       ZERO `datetime.now()`/losowości (grep po imports + `now(`)
-- [ ] `Decimal` end-to-end: wejście adaptera → silnik → serializacja;
+- [x] `Decimal` end-to-end: wejście adaptera → silnik → serializacja;
       żadnego `float()` w torze obliczeń (grep); JSON zwraca stringi
       dziesiętne (04_API §1)
-- [ ] Zaokrąglenia WYŁĄCZNIE na krawędzi (prezentacja/serializacja:
+- [x] Zaokrąglenia WYŁĄCZNIE na krawędzi (prezentacja/serializacja:
       kcal do 1, makra 0,1 g, ŁG 0,1) — kroki pośrednie bez kwantyzacji
-- [ ] Wzory 02_DOMAIN §6: /100 g → składnik → przepis → porcja → mnożnik →
+- [x] Wzory 02_DOMAIN §6: /100 g → składnik → przepis → porcja → mnożnik →
       posiłek → dzień; ŁG = IG × (węgle − błonnik, min 0) / 100
-- [ ] Flagi completeness: brak IG/makro ⇒ suma z dostępnych + `complete:
+- [x] Flagi completeness: brak IG/makro ⇒ suma z dostępnych + `complete:
       false` + `missing` z nazwą produktu i braku
-- [ ] Property-based testy (hypothesis) ISTNIEJĄ i coś sprawdzają
+- [x] Property-based testy (hypothesis) ISTNIEJĄ i coś sprawdzają
       (przeczytać strategie i asserty): suma pozycji = wartość dnia,
       skalowanie liniowe mnożnika, nieujemność
 
 ### Niezmienniki 02_DOMAIN §13 — każdy przypięty testem
 
-- [ ] §13.1 zapis ilości bez przeliczenia na g/ml niemożliwy (test odmowy)
-- [ ] §13.2 zero cache'owania wartości w encjach (grep kolumn kcal/macro
+- [x] §13.1 zapis ilości bez przeliczenia na g/ml niemożliwy (test odmowy)
+- [x] §13.2 zero cache'owania wartości w encjach (grep kolumn kcal/macro
       poza canonical_products; wyjątek: staging importu)
-- [ ] §13.3 zmiana mnożnika zmienia spójnie kcal/makra/ŁG (test przez API)
-- [ ] §13.4 przepis użyty w planie/szablonie nie do usunięcia (409 + used_in)
+- [x] §13.3 zmiana mnożnika zmienia spójnie kcal/makra/ŁG (test przez API)
+- [x] §13.4 przepis użyty w planie/szablonie nie do usunięcia (409 + used_in)
 
 ### JSONB szablonów i blokada usuwania
 
-- [ ] Usunięcie przepisu zliczanego w `day_templates`/`week_templates`
+- [x] Usunięcie przepisu zliczanego w `day_templates`/`week_templates`
       payload → 409; zapytanie po JSONB path używa indeksu GIN
       (`EXPLAIN` — potwierdzić, nie zakładać)
-- [ ] Instancjacja szablonu = kopia bez live-sync; szablon z zarchiwizowanym
+- [x] Instancjacja szablonu = kopia bez live-sync; szablon z zarchiwizowanym
       przepisem ma zdefiniowane, przetestowane zachowanie
 
 ### Wydajność widoku tygodnia
 
-- [ ] `GET /plan/days?from=&to=` (7 dni × posiłki × pozycje × nutrition):
+- [x] `GET /plan/days?from=&to=` (7 dni × posiłki × pozycje × nutrition):
       zmierzyć liczbę zapytań SQL (echo/licznik) — brak N+1
       (selectinload/joinedload tam, gdzie trzeba)
-- [ ] Budżet: **<500 ms** na seedzie demo (`task db-seed-demo`) — pomiar
+- [x] Budżet: **<500 ms** na seedzie demo (`task db-seed-demo`) — pomiar
       zapisany w raporcie (narzędzie + wynik); przekroczenie = ustalenie
 
 ### Model porcji rodzinnych i UX (06_UIUX §2)
 
-- [ ] Prosty przypadek NIE skomplikowany: „7 porcji" = jedno pole servings,
+- [x] Prosty przypadek NIE skomplikowany: „7 porcji" = jedno pole servings,
       bez wymuszania rozkładu; rozkład rodzinny opcjonalny (3×1.0+2×0.8+2×1.3)
-- [ ] Suma rozkładu = servings pozycji pilnowana serwisem (test)
-- [ ] UX check widoków planu: ile kliknięć od intencji do efektu (dodanie
+- [x] Suma rozkładu = servings pozycji pilnowana serwisem (test)
+- [x] UX check widoków planu: ile kliknięć od intencji do efektu (dodanie
       posiłku, kopiuj dzień, zastosuj szablon); „dopasuj porcję do celu"
       jest jawną akcją, nie automatem
-- [ ] Frontend: brak kopii planu w Pinia; mutacje inwalidują query
+- [x] Frontend: brak kopii planu w Pinia; mutacje inwalidują query
       (przejrzeć `useXxxMutation`)
 
 ### Ustalenia zaparkowane z B07 (patrz Context)
 
-- [ ] Martwe `Button as="router-link"` — naprawione (9 wystąpień) + test
+- [x] Martwe `Button as="router-link"` — naprawione (9 wystąpień) + test
       asercjujący `<a>` z `href`; potwierdzić, że `produkty.spec.ts`
       i `recipe-inline-create.spec.ts` przechodzą
-- [ ] Izolacja danych E2E — teardown albo reset bazy; potwierdzić, że DWA
+- [x] Izolacja danych E2E — teardown albo reset bazy; potwierdzić, że DWA
       kolejne przebiegi suity dają ten sam wynik (to jest właściwy test tej
       naprawy, nie jednorazowe zielone)
-- [ ] `households.spec.ts` nie koliduje z równoległymi specami na wspólnym
+- [x] `households.spec.ts` nie koliduje z równoległymi specami na wspólnym
       koncie; ocenić puste `used_in` przy 409 usuwania rodziny
-- [ ] Werdykt dla U15: E2E zielone i powtarzalne, albo dług przechodzi do R3
+- [x] Werdykt dla U15: E2E zielone i powtarzalne, albo dług przechodzi do R3
       z jawnym uzasadnieniem
 
 ### Przygotowanie pod zakupy (B10)
 
-- [ ] Czy z planu da się wyciągnąć: zakres dat → pozycje → ilości
+- [x] Czy z planu da się wyciągnąć: zakres dat → pozycje → ilości
       znormalizowane per produkt (z mnożnikami) — bez dodatkowej logiki
       w B10? Jeśli brakuje agregatu/serwisu — ustalenie do karty B10
       (NIE implementować tu)
-- [ ] Produkty luzem w planie (PlanMealItem z product_id) niosą ilość
+- [x] Produkty luzem w planie (PlanMealItem z product_id) niosą ilość
       w g/ml — agregowalne tak samo jak składniki przepisów
 
 ## Security
@@ -262,28 +262,113 @@ Review batch sam jest procesem przeglądowym — SKILL-REVIEW/SKILL-SECREV uruch
 
 ## Implementation checklist
 
-- [ ] PROGRESS (warunki R1!) + Completion notes B05–B07 przeczytane
-- [ ] `task check` zielony na wejściu
-- [ ] Audyt silnika: czystość, Decimal, zaokrąglenia, property-based
-- [ ] Niezmienniki §13.1–13.4 zweryfikowane testami
-- [ ] JSONB szablonów: blokada usuwania + GIN (EXPLAIN wykonany)
-- [ ] Pomiar wydajności tygodnia na seedzie demo (wynik zapisany)
-- [ ] UX check porcji rodzinnych i widoków planu (06_UIUX §2)
-- [ ] Gotowość agregatów pod B10 oceniona
-- [ ] `/security-review` + macierz uprawnień + audyt zależności
-- [ ] Trzy ustalenia zaparkowane z B07 (Context) rozstrzygnięte
-- [ ] D15/D16 rozstrzygnięte albo eskalowane w werdykcie
-- [ ] Karty B08–B11 przejrzane i zaktualizowane
-- [ ] Werdykt + wpis dziennika w PROGRESS.md
+- [x] PROGRESS (warunki R1!) + Completion notes B05–B07 przeczytane
+- [x] `task check` zielony na wejściu
+- [x] Audyt silnika: czystość, Decimal, zaokrąglenia, property-based
+- [x] Niezmienniki §13.1–13.4 zweryfikowane testami
+- [x] JSONB szablonów: blokada usuwania + GIN (EXPLAIN wykonany)
+- [x] Pomiar wydajności tygodnia na seedzie demo (wynik zapisany)
+- [x] UX check porcji rodzinnych i widoków planu (06_UIUX §2)
+- [x] Gotowość agregatów pod B10 oceniona
+- [x] `/security-review` + macierz uprawnień + audyt zależności
+- [x] Trzy ustalenia zaparkowane z B07 (Context) rozstrzygnięte
+- [x] D15/D16 rozstrzygnięte albo eskalowane w werdykcie
+- [x] Karty B08–B11 przejrzane i zaktualizowane
+- [x] Werdykt + wpis dziennika w PROGRESS.md
 
 ## Verification checklist
 
-- [ ] `task check` zielony po naprawach
-- [ ] Acceptance Criteria 1–8 odhaczone
-- [ ] Każde ustalenie: naprawione / follow-up (gdzie) / decyzja OPEN
-- [ ] Dokumentacja architektury zgodna ze stanem faktycznym
-- [ ] Commit `batch(R2): review ...`, `git status` czysty
+- [x] `task check` zielony po naprawach
+- [x] Acceptance Criteria 1–8 odhaczone
+- [x] Każde ustalenie: naprawione / follow-up (gdzie) / decyzja OPEN
+- [x] Dokumentacja architektury zgodna ze stanem faktycznym
+- [x] Commit `batch(R2): review ...`, `git status` czysty
 
 ## Completion notes
 
-(wypełnia agent wykonujący)
+**Werdykt: PASS.** B08 i B09 mogą startować, także równolegle (kolizje plików
+sprawdzone i skorygowane w obu kartach). Bez warunków blokujących. Pełny opis
+audytu i wyniki uruchomień: PROGRESS.md, wpis „2026-08-21 — REVIEW R2".
+
+### Wykonane
+
+- **Stage 1** — `task check` zielony na wejściu POTWIERDZONY realnie (exit 0,
+  ~40 min: 3 migrations-check / 242 unit / 147 int / 243 api / 198 vitest /
+  mypy 117 plików / vue-tsc / ruff / eslint / format 127 / vite build).
+- **Stage 2** — silnik nutrition czysty i poprawny, bez ustaleń. Property-based
+  testy przeczytane merytorycznie (strategie + asserty), nie tylko po nazwach.
+- **Stage 3** — niezmienniki §13.1–13.4 każdy z testem; `EXPLAIN` na containment
+  JSONB potwierdza użycie indeksu GIN; pomiar wydajności tygodnia wykonany
+  i zapisany (10 zapytań SQL na 112 pozycji, 100–177 ms przez HTTP).
+- **Stage 4** — `/security-review` na całym zakresie od R1: ZERO ustaleń.
+  `task audit` czysty, `task secrets-scan` doprowadzony do stanu używalnego
+  i czysty. Macierz uprawnień sprawdzona per nowy zasób.
+- **Stage 5** — karty B08–B11 przejrzane; B10 dostał sekcję o gotowości
+  agregatów (5 ustaleń wiążących) i o brakach seedu demo.
+- **Stage 6** — trzy zaparkowane ustalenia z B07 rozstrzygnięte, E2E 10/10
+  w dwóch kolejnych przebiegach, werdykt i propagacja w PROGRESS.
+
+### Odstępstwa od karty
+
+1. **Pomiar wydajności NIE na seedzie demo.** Karta wymaga budżetu <500 ms „na
+   seedzie demo", ale seed nie zawiera ani jednego dnia planu (ustalenie U18),
+   więc pomiar na nim mierzyłby pusty tydzień. Zamiast tego test seeduje
+   realistycznie gruby tydzień (7 dni × 4 posiłki × 4 pozycje = 112 pozycji,
+   przepisy po 5 składników, rozkłady rodzinne) i mierzy oba poziomy: serwis
+   i HTTP. Budżet spełniony z zapasem; brak seedu zgłoszony jako U18 do B10.
+2. **Naprawa wykroczyła poza „typówki i martwy kod"** w trzech miejscach, bo
+   karta wprost ich żąda albo bez nich nie da się spełnić Acceptance Criteria:
+   9 przycisków nawigacyjnych + test (Audit checklist), helper sprzątający E2E
+   + jednowątkowość suity (kryterium „dwa przebiegi"), `.gitleaks.toml`
+   (warunek 4 werdyktu R1 — bez tego `task secrets-scan` zwracał exit 1 na
+   czystym repo i nie dawał się użyć jako bramka).
+3. **Dwie zmiany infrastrukturalne poza literalnym zakresem**, obie addytywne
+   i uzasadnione: `{{.CLI_ARGS}}` w targetach pytest (bez tego nie da się
+   zawęzić przebiegu ani odczytać pomiaru bez wołania gołego pytesta) oraz
+   dołożenie pozycji z produktem do `week-template-cycle.spec.ts` (asercja
+   słupka `BarChart` była niespełnialna na planie o zerowych kaloriach).
+4. **`used_in` przy usuwaniu rodziny — ocenione, NIE naprawione.** Karta prosi
+   o ocenę („rozważyć albo świadomie przyjąć z uzasadnieniem"). Właściwym
+   rozwiązaniem jest rejestr finderów w `households/service.py` (wzorzec
+   z katalogu i przepisów), a zakładanie go teraz, gdy B08–B11 dołożą cztery
+   kolejne tabele ze scope, znaczyłoby robić to dwa razy. Przekazane jako U16
+   do R3 razem z powiązanym U17 (brak `DELETE /plan/days/{date}`).
+
+### Decyzje
+
+- **D15 i D16 ESKALOWANE, nie rozstrzygnięte.** Review nie zastępuje właściciela
+  (hierarchia 03_AI_SKILLS §1), a przy D16 konflikt jest między dokumentami
+  NADRZĘDNYMI wobec review (08_TESTING §4 vs 04_API §3 + 07_SECURITY §4).
+  Do 02_DECISIONS dopisany stan po R2 i rekomendacja: **D16 rozstrzygnąć przed
+  B08**, bo koszt odwrócenia rośnie z każdą nową encją ze scope (dziś 5, po
+  B08–B11 dziewięć).
+- **Suita E2E jest jednowątkowa z rozmysłem** (`workers: 1`). Determinizm ma tu
+  pierwszeństwo nad kilkudziesięcioma sekundami: specy dzielą jedną bazę, jedno
+  konto i globalny katalog, a szukajki są trigramowe, więc równoległość
+  produkowała czerwone przebiegi bez winy aplikacji. Reguła spisana
+  w 08_TESTING §3.1 i w skillu `ffp-frontend`.
+- **Purge danych E2E działa tylko przeciw localhostowi** (bramka `baseURL`
+  z `/security-review`) — funkcja kasuje szeroko i na koncie ADMIN-a.
+
+### Follow-upy
+
+- **U16 → karta R3**: rejestr referencji dla `delete_household` (puste `used_in`).
+- **U17 → karta R3**: brak `DELETE /plan/days/{date}` (04_API §2 mówi „CRUD");
+  pusty wiersz dnia zostaje na zawsze i blokuje usunięcie rodziny.
+- **U18 → karta B10 + 08_TESTING §5**: seed demo ma wyłącznie katalog; snapshoty
+  silnika zakupowego na seedzie wymagają najpierw jego rozszerzenia.
+- **Obserwacja → B17**: pierwsze żądanie `GET /plan/days` w świeżym procesie
+  ~1,5 s (budowanie schematów Pydantica), kolejne 100–180 ms.
+- Follow-upy R1 sprawdzone: U9/U10/U11 domknięte w B05, U12/U13/U14 nadal
+  w karcie B17 (nie przeterminowane — B17 jeszcze nie startował), **U15
+  ZAMKNIĘTY w tym batchu**.
+
+### Pytania do właściciela
+
+1. **D16 — czy ADMIN widzi cudze encje ze scope na ścieżkach użytkownika?**
+   Prośba o rozstrzygnięcie PRZED zleceniem B08. Stan faktyczny (ADMIN widzi
+   wszystko) jest zaasercjonowany testem, więc odwrócenie decyzji to zmiana
+   `core/scope.py:160` + ten test; z każdą nową encją ze scope rośnie liczba
+   testów do przejrzenia.
+2. **D15 — czy zmianę `measure_kind` zastrzec dla ADMIN-a?** Reszta
+   rekomendacji jest już wdrożona i potwierdzona.

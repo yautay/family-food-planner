@@ -310,6 +310,13 @@ class TemplatesService:
             )
 
         cycle = await _CYCLES.get_or_404(self._session, cycle_id, user)
+        # ISTNIENIE i widoczność szablonów sprawdzamy dla CAŁEJ listy cyklu, także
+        # dla tygodni poza zakresem: cykl z martwym id jest po prostu zepsuty i lepiej
+        # powiedzieć to wprost, niż zinstancjonować „część cyklu" i milczeć. Nie da
+        # się tu wpaść normalną ścieżką (`delete_week_template` zwraca 409, gdy
+        # szablon jest w cyklu) — pułapka czeka na import transferu B14, który
+        # przepisuje `template_ids` bez FK. Węższa jest walidacja REFERENCJI
+        # W PAYLOADACH (niżej): tam liczą się tylko szablony faktycznie użyte.
         templates = await self._week_templates_by_id(user, cycle.template_ids)
         missing = [
             template_id for template_id in cycle.template_ids if template_id not in templates
@@ -323,10 +330,12 @@ class TemplatesService:
             list(cycle.template_ids), cycle.start_date, payload.date_from, payload.date_to
         )
 
-        # Walidujemy WYŁĄCZNIE szablony, które faktycznie wypadają w tym zakresie.
-        # Cykl [A, B, C] zastosowany na jeden tydzień używa tylko A, więc martwa
-        # referencja w C nie ma prawa zablokować całej operacji ani dorzucić
-        # ostrzeżenia o pozycji, która nigdy nie trafi do planu (/code-review).
+        # PAYLOADY czytamy WYŁĄCZNIE z szablonów, które faktycznie wypadają w tym
+        # zakresie. Cykl [A, B, C] zastosowany na jeden tydzień używa tylko A, więc
+        # zarchiwizowany przepis w C nie ma prawa zablokować całej operacji ani
+        # dorzucić ostrzeżenia o pozycji, która nigdy nie trafi do planu
+        # (/code-review B07). To NIE to samo, co sprawdzenie istnienia samych
+        # szablonów wyżej — tam zakres jest szerszy z rozmysłem.
         used_template_ids = {template_id for _week, template_id in week_plan}
         contents = {
             template_id: _load_week(templates[template_id].payload)

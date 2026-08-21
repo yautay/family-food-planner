@@ -3,11 +3,11 @@ name: ffp-domain-calc
 description: Reguły logiki obliczeniowej Family Food Planner — Decimal end-to-end, normalizacja jednostek, wzory nutrition (kcal/makro/IG→ŁG), determinizm silnika zakupowego, zaokrąglenia, property-based testy. Ładuj przy każdym batchu liczącym ilości lub wartości.
 ---
 
-<!-- verified: 2026-08-16 (REVIEW R1 — uzgodnione z kodem B04: units.py
-     + nutrition_adapter.py; silniki nutrition/shopping dalej nie istnieją)
-     stack: Python 3.13 · Decimal (stdlib) · hypothesis NIE JEST jeszcze
-            zależnością — dokłada ją do `[dependency-groups] dev` batch
-            z pierwszym silnikiem (B05)
+<!-- verified: 2026-08-21 (REVIEW R2 — uzgodnione z kodem po B05–B07:
+     units.py + nutrition_adapter.py + nutrition/{engine,types}.py;
+     silnik ZAKUPOWY dalej nie istnieje — dokłada go B10)
+     stack: Python 3.13 · Decimal (stdlib) · hypothesis 6.165 (jest w
+            `[dependency-groups] dev` od B05) · pytest-cov
      źródła nadrzędne: ADR-004, ADR-005, ADR-008, 02_DOMAIN §6 i §9, 08_TESTING §2
      uruchamianie testów: `task test-unit` (silniki nie dotykają bazy) -->
 
@@ -23,6 +23,14 @@ description: Reguły logiki obliczeniowej Family Food Planner — Decimal end-to
 - Silniki (`nutrition/engine.py`, `shopping/engine.py`) = czyste funkcje:
   zero I/O, zero ORM, zero `datetime.now()`/losowości — czas i dane wchodzą
   parametrami. Wejścia/wyjścia: dataclassy, nie modele ORM.
+- **`nutrition/engine.py` ISTNIEJE od B05 i jest wzorcem** (audyt R2:
+  importuje wyłącznie `decimal`, `collections.abc`, `AppError` i własne typy —
+  zero ORM, zero zegara). Kontrakt wyjścia `NutritionValues`
+  (`nutrition/types.py`) jest wspólny dla B06/B07/B10/B13 — zmiany WYŁĄCZNIE
+  addytywne. Gotowe do reużycia: `ingredient_nutrition`, `aggregate`,
+  `recipe_nutrition`, `portion_nutrition`, `scale`, `glycemic_load`,
+  `goal_status`, `fit_servings_to_target`, `round_for_output`. Zaokrągla
+  JEDNA funkcja — `round_for_output` na krawędzi serializacji.
 
 ## Jednostki (ADR-005) — kod jest w `app/modules/catalog/units.py`
 

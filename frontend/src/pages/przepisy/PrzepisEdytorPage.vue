@@ -304,14 +304,10 @@ function onPhotoChange(event: Event): void {
   <section class="grid gap-6" data-testid="przepis-edytor-page">
     <header class="grid gap-2">
       <h1 class="text-2xl font-semibold">{{ isEdit ? texts.editTitle : texts.createTitle }}</h1>
-      <Button
-        as="router-link"
-        :to="{ name: 'przepisy' }"
-        variant="ghost"
-        class="min-h-11 justify-self-start"
-        data-testid="recipe-editor-back"
-      >
-        {{ texts.backToList }}
+      <Button as-child variant="ghost" class="min-h-11 justify-self-start">
+        <RouterLink :to="{ name: 'przepisy' }" data-testid="recipe-editor-back">
+          {{ texts.backToList }}
+        </RouterLink>
       </Button>
     </header>
 

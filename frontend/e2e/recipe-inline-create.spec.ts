@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test'
 
+import { cleanupE2eData } from './cleanup.js'
+
 /**
  * Core flow 1 (08_TESTING §3, karta B05): login → nowy przepis → w ProductPickerze
  * wpis bez trafienia → `+ Dodaj produkt` → drawer → zapis → auto-wybór → ilość →
@@ -10,11 +12,22 @@ import { expect, test } from '@playwright/test'
  * Test sprząta po sobie: usuwa przepis i utworzony produkt.
  */
 
+/** Wspólny prefiks nazw tego specu — po nim sprząta `cleanupE2eData`. */
+const PREFIX = 'E2E przepis'
+
+test.beforeAll(async ({ request }) => {
+  await cleanupE2eData(request, { namePrefix: PREFIX })
+})
+
+test.afterAll(async ({ request }) => {
+  await cleanupE2eData(request, { namePrefix: PREFIX })
+})
+
 test('przepis z inline create produktu i przeliczaniem porcji', async ({ page }) => {
   // Nazwy unikalne per przebieg: normalized_name produktu jest globalnym unikatem.
   const stamp = Date.now()
-  const productName = `Kalarepa E2E ${stamp}`
-  const recipeName = `Surówka E2E ${stamp}`
+  const productName = `${PREFIX} Kalarepa ${stamp}`
+  const recipeName = `${PREFIX} Surówka ${stamp}`
 
   page.on('dialog', (dialog) => dialog.accept())
 

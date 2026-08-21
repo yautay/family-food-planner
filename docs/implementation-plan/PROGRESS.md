@@ -16,9 +16,9 @@ commit wykonany). Kolumna „Blokery" = zależności + decyzje z 02_DECISIONS.
 | 05 RECIPES_AND_NUTRITION_ENGINE | [x] | — | `batch(05)` na master (hash wpisać po push) |
 | 06 GOALS_AND_DAY_PLAN | [x] | — | `d6bacd7` batch(06) |
 | 07 WEEK_TEMPLATES_AND_CYCLES | [x] | — | `batch(07)` na master (hash wpisać po push) |
-| R2 REVIEW_PLANNING_CORE | [ ] | 05–07 | |
-| 08 PANTRY | [ ] | 04, R2 | |
-| 09 RETAIL_PRODUCTS_AND_STORES | [ ] | 04, R2 | |
+| R2 REVIEW_PLANNING_CORE | [x] | — | `batch(R2)` na master (hash wpisać po push) |
+| 08 PANTRY | [ ] | 04, R2 ✔ (PASS) | |
+| 09 RETAIL_PRODUCTS_AND_STORES | [ ] | 04, R2 ✔ (PASS) | |
 | 10 SHOPPING_ENGINE | [ ] | 06, 08, 09 | |
 | 11 SHOPPING_LISTS_AND_SHARING | [ ] | 10 | |
 | R3 REVIEW_SHOPPING | [ ] | 08–11 | |
@@ -40,6 +40,202 @@ zmiany dotykające przyszłych batchy trzeba wpisać do ich kart
 (00_MASTER_PLAN §8); dziennik to indeks, nie schowek.
 
 ---
+
+**2026-08-21 — REVIEW R2 (REVIEW_PLANNING_CORE) — WERDYKT: PASS**
+
+**B08 i B09 mogą startować (także równolegle).** Rdzeń planowania jest zdrowy:
+silnik nutrition jest czysty i policzalny, niezmienniki 02_DOMAIN §13.1–13.4 są
+przypięte testami, widok tygodnia nie ma N+1, a dług E2E (U15) jest domknięty.
+Audyt objął zakres od `c87569f` (R1) do stanu roboczego: moduły `recipes`,
+`nutrition`, `planning`, frontend planu/tygodnia/przepisów oraz suitę E2E.
+Warunków blokujących NIE MA — trzy ustalenia idą jako follow-up do R3, dwie
+decyzje właściciela (D15/D16) są eskalowane, nie rozstrzygnięte przez review.
+
+**Silnik nutrition — CZYSTY, bez ustaleń.** `nutrition/engine.py` importuje
+wyłącznie `decimal`, `collections.abc`, `AppError` i własne typy: zero ORM, zero
+sesji, zero zegara i losowości (jedyny `date.today()` w module siedzi w routerze,
+czyli czas wchodzi parametrem). `float` nie występuje w torze obliczeń — jedyne
+wystąpienie w całym backendzie to `catalog_search_similarity_threshold` (próg
+pg_trgm, nie wartość domenowa). Zaokrągla DOKŁADNIE jedna funkcja
+(`round_for_output`, kcal→1, reszta→0,1, `ROUND_HALF_UP`) i tylko na krawędzi
+serializacji; kroki pośrednie niosą pełną precyzję. Wzory §6 zgodne, ŁG liczone
+z węglowodanów przyswajalnych z `max(carbs - fiber, 0)`. Braki nigdy nie są
+cichym zerem: `complete=False` + `missing` z nazwą produktu, także dla produktu
+UNVERIFIED. Testy property-based (hypothesis) przeczytane MERYTORYCZNIE — badają
+addytywność agregacji, liniowość skalowania, nieujemność, propagację
+niekompletności oraz „dzień = Σ posiłków = Σ pozycji"; strategie generują
+realny zakres kolumn NUMERIC. Progi D9 (90–110%, oba progi w przedziale „OK",
+konfigurowalne przez `ui_settings`) zgodne z decyzją.
+
+**Niezmienniki §13 — każdy ma test.** §13.1 `test_ilosc_nieprzeliczalna_odrzuca_zapis_bez_sladu`
+(422 + ZERO wierszy) i `tests/unit/test_units.py`; §13.2 inspekcja schematu
+(`test_wartosci_nie_sa_zapisywane_w_bazie`) + grep kolumn: poza
+`canonical_products` nie ma ani jednej kolumny z WYNIKIEM — `kcal_goal`,
+`kcal_target` i `user_nutrition_goals.kcal` to CELE, nie cache; §13.3 test przez
+API (`test_plan_api.py:346`) i przez serwis; §13.4 409 z `used_in` dla planu
+i dla obu rodzajów szablonów. Blokada JSONB potwierdzona `EXPLAIN`-em, który
+faktycznie pokazuje `ix_day_templates_payload_gin` (containment `@>`, klasa
+`jsonb_path_ops`) — nie założona, sprawdzona.
+
+**Pomiar wydajności tygodnia (nowy test `tests/integration/planning/test_plan_performance.py`).**
+Plan 7 dni × 4 posiłki × 4 pozycje = **112 pozycji**, przepisy po 5 składników,
+rozkłady rodzinne na każdej pozycji z przepisem. Wynik: **10 zapytań SQL dla
+JEDNEGO dnia i te same 10 dla całego tygodnia** — liczba zapytań nie zależy od
+zakresu dat ani liczby pozycji, czyli N+1 nie ma (licznik na zdarzeniu
+`before_cursor_execute`, nie „na oko"). Czas: `PlanningService.list_days`
+42–130 ms, `GET /plan/days` przez HTTP **100–177 ms** na rozgrzanym procesie.
+**Budżet <500 ms SPEŁNIONY.** Uwaga uczciwa: PIERWSZE żądanie w procesie trwa
+~1,5 s (budowanie modeli Pydantica i planów zapytań) — to koszt startu, nie
+zapytania, ale użytkownik po restarcie kontenera go zobaczy; obserwacja dla B17.
+Odstępstwo od karty: pomiar NIE mógł być zrobiony „na seedzie demo", bo seed nie
+zawiera planu (patrz niżej) — dane do pomiaru seeduje test.
+
+**Model porcji i UX planu — bez ustaleń.** Prosty przypadek został prosty: jedno
+pole `item-servings-input`, rozkład rodzinny jest opcjonalnym drawerem, a suma
+rozkładu = `servings` pilnowana czystą funkcją na `Decimal`
+(`assert_split_matches_servings`, test z przykładem 2×1,0+2×0,8+2×1,3).
+„Dopasuj porcję do celu" jest jawną akcją: `fit-to-target` zwraca PROPOZYCJĘ,
+zapis to osobny PATCH. Kliknięcia od intencji do efektu: dodanie posiłku 2,
+kopiuj dzień 2, zastosuj szablon 4. Frontend nie kopiuje planu do Pinii (jedyny
+store to sesja), a każda mutacja unieważnia `queryKeys.planDays.all`.
+
+**Gotowość pod B10 — PASS z jednym brakiem, wpisanym do karty.** Z planu da się
+wyciągnąć zakres dat → pozycje → ilości znormalizowane, ale brakuje publicznego
+wejścia po stronie właścicieli danych (`RecipesService` nie oddaje ilości
+składników, tylko wartości odżywcze porcji). Pięć ustaleń wiążących (w tym
+pułapka „ta sama data może mieć DWA widoczne dni — licząc prosto z `plan_days`
+policzysz zakupy podwójnie") wpisane do karty B10 §Context.
+
+**Ustalenia NAPRAWIONE w commicie review:**
+
+- **U15 DOMKNIĘTY — E2E 10/10 w DWÓCH kolejnych przebiegach** (kryterium z karty,
+  nie jednorazowe zielone; przed review 5/10). Trzy przyczyny, trzy naprawy:
+  1. **Martwe `Button as="router-link"`** — 9 wystąpień w 6 plikach z B04/B05
+     zamienione na `as-child` + zagnieżdżony `<RouterLink>`. `h()` z ciągiem
+     znaków tworzy ELEMENT o tej nazwie, nie komponent, więc powstawał nieznany
+     tag `<router-link>`: bez `href`, bez nawigacji, bez roli `link` dla czytnika
+     ekranu. Strażnik: `src/components/ui/button/Button.spec.ts` — test na `<a>`
+     z `href` i klasami wariantu ORAZ skan wszystkich `src/**/*.vue` przez
+     `import.meta.glob`, żeby dziewiąte wystąpienie nie wróciło niezauważone.
+  2. **Izolacja danych** — nowy `frontend/e2e/cleanup.ts`: sprzątanie per spec
+     (własny prefiks nazw, `beforeAll` + `afterAll`, kolejność wymuszona
+     blokadami: cykle → szablony → posiłki → przepisy → produkty) plus
+     `purgeE2eLeftovers` w projekcie `setup`, który raz na przebieg kasuje śmieci
+     ze starych konwencji nazw. Bez tego drugi przebieg padał, bo szukajka
+     TRIGRAMOWA znajdowała „Zupa E2E <stary stamp>" i `canCreate` w pickerze
+     (wymaga ZERA wyników) gasił opcję „+ Dodaj".
+  3. **Wspólne konto i równoległość** — suita jest teraz JEDNOWĄTKOWA
+     (`workers: 1`, `fullyParallel: false`), a `households.spec.ts` ma OSOBNY
+     projekt zależny od `chromium`, więc żaden spec nie tworzy encji ze scope
+     w czasie, gdy konto należy do tymczasowej rodziny.
+- **Asercja `BarChart` w `week-template-cycle.spec.ts` była NIESPEŁNIALNA.**
+  Poprawka z B07 zmieniła sposób pomiaru słupka (`data-height` zamiast
+  `toBeVisible`), ale dzień zbudowany z przepisu utworzonego inline (nazwa +
+  porcja bazowa, ZERO składników) ma 0 kcal, więc `BarChart` renderuje „brak
+  danych" i żaden słupek nie może mieć wysokości > 0. Spec dokłada teraz pozycję
+  z produktem z seedu („Ryż brązowy", 353 kcal/100 g) — asercja „przynajmniej
+  jeden słupek > 0" stała się prawdziwym testem „cykl skopiował plan RAZEM
+  z jego wartościami", a nie życzeniem.
+- **`task secrets-scan` był NIEUŻYWALNY jako bramka** (warunek 4 werdyktu R1).
+  Na czystym repo dawał 14 trafień i kod wyjścia 1 — wszystkie na dwóch
+  literałach haseł TESTOWYCH (`haslo-testowe-2026`, `nowe-haslo-2026`), których
+  nie da się użyć w żadnym środowisku. Nowy `.gitleaks.toml`: `useDefault = true`
+  (pełny zestaw reguł zachowany) + allowlist po WZORCU sekretu, nie po ścieżce,
+  więc dowolny inny sekret w tych samych plikach nadal wywala skan. Teraz
+  „no leaks found", exit 0.
+- **Komentarz w `apply_cycle` obiecywał co innego niż robi kod** (ustalenie
+  `/code-review`): sprawdzenie istnienia szablonów obejmuje CAŁĄ listę cyklu,
+  nie tylko tygodnie z zakresu — węższa jest walidacja referencji w payloadach.
+  Komentarz doprecyzowany, konsekwencja dla importu wpisana do karty B14.
+- **Targety pytest przepuszczają argumenty za `--`** (`task test-int -- -k
+  fraza -s`). Bez tego nie da się zawęzić przebiegu ani zobaczyć pomiaru bez
+  wołania gołego pytesta, którego CLAUDE.md §3 słusznie zabrania (nie widziałby
+  `.env`). Bramka `task check` woła te targety BEZ argumentów, więc pełny zakres
+  jest zawsze ten sam.
+
+**Ustalenia PRZEKAZANE dalej (follow-up z miejscem docelowym):**
+
+- **U16 → karta R3** `backend/app/modules/households/service.py:210` —
+  `delete_household` liczy referencje tylko dla `users` i `member_profiles`,
+  więc encje ze scope (dziś 5 tabel, po B08–B11 dziewięć) blokują usunięcie
+  przez FK RESTRICT i wpadają w drugą linię obrony: 409 z `used_in: []`.
+  Zachowanie jest POPRAWNE (409, nie 500), ale ADMIN nie wie, co blokuje.
+  R2 świadomie nie zakładał rejestru finderów teraz — R3 zastaje pełny zbiór
+  konsumentów i zrobi to raz, zamiast dwa razy.
+- **U17 → karta R3** `backend/app/modules/planning/router.py:215` — `04_API §2`
+  opisuje `/plan/days/{date}` jako CRUD, a jest tylko GET i PUT. Wiersz
+  `plan_days` powstaje implicite przy pierwszym posiłku i NIE ZNIKA po usunięciu
+  wszystkich posiłków (UI pokazuje „brak planu", wiersz trzyma `household_id`) —
+  to najczęstsza przyczyna pustego `used_in` z U16. Trzy warianty rozwiązania
+  w karcie R3.
+- **U18 → karta B10 (+ 08_TESTING §5)** `backend/scripts/seed_demo.py` — seed
+  demo ma WYŁĄCZNIE katalog (15 produktów). Rodziny 2+3, 5 przepisów, tygodnia
+  planu i listy z 08_TESTING §5 nie dołożył ani B05, ani B07, choć docstring
+  seedu tak zakładał. Konsekwencja twarda: snapshoty silnika zakupowego „na
+  seedzie demo" z karty B10 są dziś niewykonalne — rozszerzenie seedu należy do
+  zakresu B10 (jest w jego Expected files) i wymaga decyzji, czyją własnością
+  są encje ze scope (seed nie zna żadnego konta).
+- **Obserwacja dla B17**: pierwsze żądanie `GET /plan/days` w świeżym procesie
+  trwa ~1,5 s (budowanie schematów), kolejne ~100–180 ms.
+
+**Decyzje OPEN — ESKALOWANE, nie rozstrzygnięte:**
+
+- **D15** (zmiana `measure_kind`) — rekomendacja WDROŻONA w B05 i potwierdzona
+  przez R2; do formalnego głosu właściciela zostaje tylko, czy samą zmianę
+  zastrzec dla ADMIN-a. Nowa informacja: zmiana nie przelicza ilości JUŻ
+  ZAPISANYCH, więc stara ilość może stać się nieprzeliczalna — kod obsługuje to
+  jako `complete=False` z komunikatem (nie 500), a B10 musi zrobić to samo.
+- **D16** (czy ADMIN widzi cudze encje na ścieżkach użytkownika) — **decydować
+  PRZED B08.** Review nie może tego rozstrzygnąć, bo konflikt jest między
+  dokumentami NADRZĘDNYMI wobec review (08_TESTING §4 vs 04_API §3 + 07_SECURITY
+  §4). Dziś zachowanie dziedziczy 5 encji ze scope, B08–B11 dołożą kolejne
+  cztery — koszt odwrócenia rośnie z każdym batchem.
+
+**Security i zależności:** `/security-review` na całym zakresie od R1 —
+**ZERO ustaleń** (przejrzane wektory: SQL injection przez szukajkę trigramową
+i containment JSONB, path traversal w `core/uploads.py`, obejście scope przez
+payload szablonu, IDOR po zagnieżdżonych id, sesje/CSRF w nowych routerach,
+XSS w `frontend/src`). Jedna uwaga operacyjna do MOJEGO kodu, naprawiona
+w tym commicie: `purgeE2eLeftovers` kasuje szeroko (plan z lat 2030+, przepisy
+i produkty ze śladem testu, na koncie ADMIN-a), więc dostał bramkę
+`baseURL` — działa WYŁĄCZNIE przeciw localhostowi, w przeciwnym razie rzuca
+z komunikatem. `task audit`: pip-audit „No known vulnerabilities found",
+`npm audit --audit-level=high` „found 0 vulnerabilities" — bez podbić.
+`task secrets-scan`: po dołożeniu `.gitleaks.toml` „no leaks found".
+Macierz uprawnień 08 §4 sprawdzona per nowy zasób: recipes, ratings, goals,
+plan (dzień/posiłek/pozycja — łańcuch, nie samo id), templates, cycles —
+anonim 401, obcy 404, członek rodziny 200, zmiana scope przez członka 403,
+mutacja bez CSRF 403. Wszystkie testy istnieją i przechodzą.
+
+**Wyniki uruchomień (realne):** `task check` zielony na WEJŚCIU (exit 0:
+3 migrations-check / 242 unit / 147 int / 243 api / 198 vitest w 19 plikach /
+mypy 117 plików / vue-tsc / ruff / eslint / ruff format 127 plików / prettier /
+vite build) i po naprawach (**+3 testy integracyjne wydajności, +4 vitest** →
+150 int / 202 vitest / mypy 118 plików / format-check 128). E2E:
+**10/10 w dwóch kolejnych przebiegach** (55 s i 56 s; po dołożeniu bramki
+`baseURL` powtórzone: 40 s i 40 s — także 10/10). `task audit` i
+`task secrets-scan` czyste. Bez migracji — R2 nie dotknął schematu, `alembic
+heads` = `0009`, kolejna wolna migracja `0010`.
+
+**Co MUSZĄ wiedzieć kolejne batche:**
+
+1. **Przycisk, który nawiguje, to LINK**: `<Button as-child>` +
+   `<RouterLink>`. `as="router-link"` nie działa i jest teraz łapane testem.
+2. **Nowy spec E2E**: własny prefiks nazw `E2E <obszar>`, `cleanupE2eData`
+   w `beforeAll` I `afterAll`, daty planu z lat 2030+, ZERO założeń
+   o równoległości (suita ma `workers: 1`). Reguły spisane w 08_TESTING §3.1.
+3. **Nowa zależność `Base` ze scope = nowy blocker usuwania rodziny.** Dopóki
+   U16 jest otwarte, każda nowa tabela ze `ScopedMixin` powiększa zbiór blokad
+   z pustym `used_in` — odnotuj to w Completion notes swojego batcha.
+4. **`task test-* -- <argumenty pytesta>`** działa (np. `-k fraza -s`).
+5. Karty zaktualizowane: B08, B09 (nieistniejące ścieżki: `router/index.ts`,
+   `components/AppShell.vue`, `pages/ustawienia/`, `ProduktEdytujPage.vue`,
+   `src/composables/` — poprawione na stan faktyczny), B10 (gotowość agregatów
+   + seed demo), B11 (ścieżki), B13 (potwierdzone: `goal_for_day` + historia
+   celów wystarczają statystykom „wg celu z dnia" — bez zmian w karcie),
+   B14 (cykl z martwym `template_ids`), R3 (U16, U17, konwencje E2E).
+   Dokumenty: 07_SECURITY §7, 08_TESTING §3.1 i §5, CLAUDE.md §3 i §5,
+   skille `ffp-frontend` i `ffp-domain-calc` uzgodnione ze stanem po B07.
 
 **2026-08-20 — BATCH_07 (WEEK_TEMPLATES_AND_CYCLES)**: tydzień da się złożyć
 w kilku kliknięciach. Migracja `0009` (`day_templates`, `week_templates` z

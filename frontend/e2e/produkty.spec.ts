@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test'
 
+import { cleanupE2eData } from './cleanup.js'
+
 /**
  * Core flow BATCH_04 (08_TESTING §3): logowanie → Produkty → utworzenie produktu
  * (plakietka „Do weryfikacji") → uzupełnienie wartości → weryfikacja
@@ -14,9 +16,20 @@ import { expect, test } from '@playwright/test'
  * Test sprząta po sobie: na koniec usuwa utworzony produkt.
  */
 
+/** Wspólny prefiks nazw tego specu — po nim sprząta `cleanupE2eData`. */
+const PREFIX = 'E2E produkt'
+
+test.beforeAll(async ({ request }) => {
+  await cleanupE2eData(request, { namePrefix: PREFIX })
+})
+
+test.afterAll(async ({ request }) => {
+  await cleanupE2eData(request, { namePrefix: PREFIX })
+})
+
 test('użytkownik dodaje produkt, administrator go weryfikuje', async ({ page }) => {
   // Nazwa unikalna per przebieg: `normalized_name` jest globalnym unikatem.
-  const productName = `Kalarepa E2E ${Date.now()}`
+  const productName = `${PREFIX} Kalarepa ${Date.now()}`
 
   page.on('dialog', (dialog) => dialog.accept())
 

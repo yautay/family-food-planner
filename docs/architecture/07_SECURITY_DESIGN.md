@@ -84,6 +84,16 @@ Wyłącznie env (pydantic-settings): `DATABASE_URL`, `SECRET_KEY` (sesje/CSRF),
 `.env.example` z placeholderami. W prod: plik env na hoście `chmod 600`
 lub docker secrets. Klucz API Anthropic używany wyłącznie server-side.
 
+Skan repo: `task secrets-scan` (gitleaks w kontenerze). Konfiguracja
+`.gitleaks.toml` (od review R2, 2026-08-21) zachowuje WSZYSTKIE domyślne
+reguły (`useDefault = true`) i wycisza wyłącznie dwa literały haseł testowych
+(`haslo-testowe-2026`, `nowe-haslo-2026`) — wyciszenie jest po WZORCU, nie po
+ścieżce, więc każdy inny sekret w tych samych plikach nadal wywala skan.
+Bez tego skan zwracał 14 trafień, wszystkie na te dwa literały, i kończył się
+kodem 1 na czystym repo, czyli przestawał być użyteczną bramką. Hasła testowe
+nie otwierają żadnego środowiska: konta powstają komendą `task create-admin`
+(prompt albo `FFP_ADMIN_*`), a w repozytorium nie ma działającego hasła (§2).
+
 ## 8. Logowanie i błędy
 
 structlog: request id, user id (nie email), ścieżka, status, czas. NIGDY:

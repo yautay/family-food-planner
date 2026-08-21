@@ -104,13 +104,10 @@ const isSearching = computed(() => debouncedSearch.value.trim().length > 0)
       <p class="text-muted-foreground text-sm tabular-nums" data-testid="products-total">
         Produktów: {{ products.data.value?.total ?? 0 }}
       </p>
-      <Button
-        as="router-link"
-        :to="{ name: 'produkt-nowy' }"
-        class="min-h-11"
-        data-testid="products-add"
-      >
-        {{ texts.addProduct }}
+      <Button as-child class="min-h-11">
+        <RouterLink :to="{ name: 'produkt-nowy' }" data-testid="products-add">
+          {{ texts.addProduct }}
+        </RouterLink>
       </Button>
     </div>
 
@@ -176,14 +173,13 @@ const isSearching = computed(() => debouncedSearch.value.trim().length > 0)
           {{ texts.incompleteData }}
         </p>
 
-        <Button
-          as="router-link"
-          :to="{ name: 'produkt-edycja', params: { id: product.id } }"
-          variant="outline"
-          class="min-h-11 justify-self-start"
-          :data-testid="`product-edit-${product.id}`"
-        >
-          {{ common.edit }}
+        <Button as-child variant="outline" class="min-h-11 justify-self-start">
+          <RouterLink
+            :to="{ name: 'produkt-edycja', params: { id: product.id } }"
+            :data-testid="`product-edit-${product.id}`"
+          >
+            {{ common.edit }}
+          </RouterLink>
         </Button>
       </li>
     </ul>

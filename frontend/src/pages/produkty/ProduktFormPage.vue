@@ -314,14 +314,10 @@ const basisUnit = computed(() => (productValues.measure_kind === 'volume' ? 'ml'
   <section class="grid gap-6" data-testid="produkt-form-page">
     <header class="grid gap-2">
       <h1 class="text-2xl font-semibold">{{ isEdit ? texts.editTitle : texts.createTitle }}</h1>
-      <Button
-        as="router-link"
-        :to="{ name: 'produkty' }"
-        variant="ghost"
-        class="min-h-11 justify-self-start"
-        data-testid="product-back"
-      >
-        {{ texts.backToList }}
+      <Button as-child variant="ghost" class="min-h-11 justify-self-start">
+        <RouterLink :to="{ name: 'produkty' }" data-testid="product-back">
+          {{ texts.backToList }}
+        </RouterLink>
       </Button>
     </header>
 

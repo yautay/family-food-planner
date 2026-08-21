@@ -1,0 +1,28 @@
+# Konfiguracja gitleaks dla `task secrets-scan` (07_SECURITY §7).
+#
+# Domyślne reguły zostają W CAŁOŚCI (`useDefault = true`) — ten plik NIE osłabia
+# skanu, tylko wycisza JEDEN konkretny literał: hasło używane w testach.
+#
+# Dlaczego to nie jest sekret: `haslo-testowe-2026` nie otwiera żadnego
+# środowiska. Konta powstają komendą `task create-admin` (hasło z promptu albo
+# ze zmiennych `FFP_ADMIN_*`), a w repozytorium nie ma i nie może być
+# działającego hasła (07_SECURITY §2). Ten literał żyje wyłącznie w fabrykach
+# testowych (`backend/tests/factories.py`) i w testach frontendu, które
+# asercjonują payload logowania — reguła `generic-api-key` łapie go po entropii.
+#
+# Wyciszenie jest po WZORCU, nie po ścieżce: dowolny inny sekret w tych samych
+# plikach nadal wywala skan. Ustalenie review R2 — bez tego `task secrets-scan`
+# kończył się kodem 1 na czystym repo i przestawał być użyteczną bramką
+# (11 trafień, wszystkie to ten sam literał).
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Hasła testowe używane w fabrykach i testach — nigdy w żadnym środowisku"
+regexes = [
+  '''haslo-testowe-2026''',
+  # Drugie hasło testów: scenariusze zmiany hasła przez ADMIN-a
+  # (`test_admin_users.py`, `test_audit.py`, `test_accounts.py`).
+  '''nowe-haslo-2026''',
+]
