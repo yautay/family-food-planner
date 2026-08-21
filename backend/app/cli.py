@@ -24,6 +24,15 @@ from app.core.config import ConfigurationError, get_settings
 from app.core.db import get_session_factory, selector_loop_factory
 from app.core.errors import AppError
 from app.core.security import MIN_PASSWORD_LENGTH
+
+# Rejestr modeli MUSI być zaimportowany, choć nic z niego tu nie wołamy:
+# CLI omija `create_app()`, które ładuje wszystkie moduły przez routery, więc bez
+# tej linii `Base.registry` zna tylko `User`. Relacja `User.household` jest
+# adnotowana stringiem (`from __future__ import annotations`), więc SQLAlchemy
+# szuka klasy `Household` w rejestrze i wywala `InvalidRequestError: expression
+# 'Household' failed to locate a name` przy PIERWSZYM zapytaniu o użytkownika.
+# Ten sam wzorzec stosuje `migrations/env.py` (CLAUDE.md §4: rejestr modeli).
+from app.models import Base  # noqa: F401
 from app.modules.accounts.models import UserRole
 from app.modules.accounts.service import AccountsService
 
