@@ -35,6 +35,64 @@ Wymagane lektury przed startem:
 - ADR-004 (model wartości), ADR-005 (jednostki), ADR-008 (czyste silniki,
   Decimal), ADR-012 (usuwanie).
 
+### Ustalenia WEJŚCIOWE zaparkowane dla R2 (decyzja właściciela, 2026-08-21)
+
+Trzy sprawy znalezione przy domykaniu B07 — **żadna nie jest błędem w kodzie
+domenowym**, wszystkie mają dowód, więc R2 nie musi ich odkrywać od nowa.
+Właściciel świadomie odłożył je tutaj, zamiast naprawiać w B07.
+
+1. **Martwe przyciski nawigacyjne (UX + dostępność, B04/B05).**
+   `Button as="router-link"` renderuje SAM TEKST — ani `<button>`, ani `<a>`.
+   Przycisk jest nieklikalny i niewidoczny dla czytnika ekranu jako element
+   interaktywny. Dowód: snapshot ARIA Playwrighta ze strony produktów pokazuje
+   `- text: Dodaj produkt` tam, gdzie menu ma `- link "Produkty": /url: /produkty`.
+   **Skala: 9 wystąpień w 6 plikach** — `pages/produkty/{ProduktyPage,
+   ProduktFormPage}.vue`, `pages/przepisy/{PrzepisyPage,PrzepisSzczegolPage,
+   PrzepisEdytorPage}.vue`, `pages/admin/AdminWeryfikacjaPage.vue`.
+   Przyczyna: reka-ui `Primitive` dostaje `as` jako STRING `'router-link'`
+   i traktuje go jak nazwę tagu, zamiast rozwiązać komponent.
+   Rekomendacja: `:as="RouterLink"` (referencja komponentu) albo kanoniczne
+   `as-child` z zagnieżdżonym `<RouterLink>`; do tego test vitest asercjujący,
+   że renderuje się `<a>` z `href` — inaczej regres wróci niezauważony.
+   Blokuje `produkty.spec.ts` i `recipe-inline-create.spec.ts`.
+   **B07 jest wolny od tego błędu** — `PlanTygodniaPage` używa `<RouterLink>`
+   wprost, więc wzorzec do naśladowania jest już w repo.
+
+2. **Brak izolacji danych testowych E2E (dług U15).** Specy używają STAŁYCH dat
+   (`2031-03-05` w smoke, `2032-03-01` w week-template-cycle) i nie sprzątają po
+   sobie, więc kolejny przebieg pada na danych poprzedniego. Dwa zaobserwowane
+   objawy: (a) `plan-empty` nie jest już pusty, (b) szukajka **trigramowa**
+   przepisów znajduje „Zupa E2E <stamp>" z wcześniejszych przebiegów i ukrywa
+   opcję „+ Dodaj", więc inline create staje się nieosiągalny. To NIE jest
+   problem asercji — łatanie ich po jednej leczy objawy. Potrzebny teardown per
+   spec albo reset bazy przed przebiegiem E2E (08_TESTING §5).
+
+3. **Wspólne konto E2E + równoległość.** `households.spec.ts` przepisuje admina
+   do nowej rodziny, gdy inne specy tworzą jako TEN SAM admin encje ze scope.
+   Te dostają `household_id` tej rodziny — `ScopedQuery.ownership_for_create`
+   zapisuje `household_id` także dla scope PRIVATE (świadomie, ADR-006) — więc
+   sprzątające `DELETE /admin/households/{id}` kończy się 409 i spec pada.
+   Kod zachowuje się POPRAWNIE (jest druga linia obrony na `IntegrityError`,
+   `households/service.py::delete_household`), więc to problem projektu testów.
+   **Obserwacja przy okazji, warta oceny w tym audycie**: w tej ścieżce
+   `details.used_in` jest PUSTE, więc użytkownik widzi „rodzina nie jest pusta"
+   bez informacji, co ją blokuje. B07 powiększył zbiór blokad o trzy tabele
+   (`day_templates`, `week_templates`, `week_cycles` — wszystkie z
+   `household_id` ON DELETE RESTRICT). Rozważyć policzenie referencji także dla
+   encji ze scope, albo świadome przyjęcie tego ograniczenia z uzasadnieniem.
+
+Stan E2E na wejściu do R2: **5 z 10 zielonych** (`setup` + 4 specy). Naprawione
+w commicie `test(e2e)`: kolizja z limitem `/auth/login` (5/min/IP vs osiem
+logowań na sześciu workerach — teraz jedno logowanie i `storageState`), zły
+przepływ inline create przepisu w smoke i week-template-cycle
+(`recipe-picker-create` tylko OTWIERA drawer, brakowało `recipe-create-submit`)
+oraz asercja słupka `BarChart` (`<rect height=0>` ma zerowy bounding box, więc
+`toBeVisible()` zawodzi na dniu bez posiłków — liczy się `data-height`).
+
+**D15 i D16 pozostają OPEN w `02_DECISIONS`** — kod już podjął decyzję za
+właściciela (B05 wdrożył D15, B06 i B07 zaasercjonowały stan faktyczny D16
+testami). R2 powinien to rozstrzygnąć albo jawnie eskalować w werdykcie.
+
 ## Skills
 
 Mapa ID → skill: `docs/implementation-plan/03_AI_SKILLS.md` §3. Required
@@ -114,6 +172,19 @@ Review batch sam jest procesem przeglądowym — SKILL-REVIEW/SKILL-SECREV uruch
       jest jawną akcją, nie automatem
 - [ ] Frontend: brak kopii planu w Pinia; mutacje inwalidują query
       (przejrzeć `useXxxMutation`)
+
+### Ustalenia zaparkowane z B07 (patrz Context)
+
+- [ ] Martwe `Button as="router-link"` — naprawione (9 wystąpień) + test
+      asercjujący `<a>` z `href`; potwierdzić, że `produkty.spec.ts`
+      i `recipe-inline-create.spec.ts` przechodzą
+- [ ] Izolacja danych E2E — teardown albo reset bazy; potwierdzić, że DWA
+      kolejne przebiegi suity dają ten sam wynik (to jest właściwy test tej
+      naprawy, nie jednorazowe zielone)
+- [ ] `households.spec.ts` nie koliduje z równoległymi specami na wspólnym
+      koncie; ocenić puste `used_in` przy 409 usuwania rodziny
+- [ ] Werdykt dla U15: E2E zielone i powtarzalne, albo dług przechodzi do R3
+      z jawnym uzasadnieniem
 
 ### Przygotowanie pod zakupy (B10)
 
@@ -200,6 +271,8 @@ Review batch sam jest procesem przeglądowym — SKILL-REVIEW/SKILL-SECREV uruch
 - [ ] UX check porcji rodzinnych i widoków planu (06_UIUX §2)
 - [ ] Gotowość agregatów pod B10 oceniona
 - [ ] `/security-review` + macierz uprawnień + audyt zależności
+- [ ] Trzy ustalenia zaparkowane z B07 (Context) rozstrzygnięte
+- [ ] D15/D16 rozstrzygnięte albo eskalowane w werdykcie
 - [ ] Karty B08–B11 przejrzane i zaktualizowane
 - [ ] Werdykt + wpis dziennika w PROGRESS.md
 

@@ -127,17 +127,21 @@ więc wzorzec do `EXPLAIN` musi iść parametrem (`CAST(:pattern AS jsonb)`).
 10. Przy okazji naprawiony `ServingsSplitDrawer.spec.ts` z B06: `get(...)`
    zwraca wrapper BEZ `exists`, więc `vue-tsc` sypał 2x TS2339 i bramka nie
    mogła być zielona. Poprawka (`find(...).exists()`) weszła do commita B06.
-11. Kolejna wolna migracja: `0010`. Karty zaktualizowane: B10 (dni z szablonów
+11. **Trzy ustalenia z punktu 13 są PRZENIESIONE do karty R2** (sekcja Context
+    „Ustalenia WEJŚCIOWE" + pozycje w Audit checklist i Implementation
+    checklist) — z dowodami, plikami i rekomendacjami, żeby R2 nie odkrywał ich
+    od nowa. Ten dziennik jest indeksem, karta R2 jest miejscem pracy.
+12. Kolejna wolna migracja: `0010`. Karty zaktualizowane: B10 (dni z szablonów
     to zwykłe dni), B13 (kontrakt `BarChart`), B14 (payload `v:1` + remapowanie
     id). `03_DATABASE §6` i `04_API §2/§3` opisują stan faktyczny.
-12. **Obraz kontenera `app` był przestarzały od B05** — brakowało w nim
+13. **Obraz kontenera `app` był przestarzały od B05** — brakowało w nim
     `Pillow` (`ModuleNotFoundError: No module named 'PIL'` z `core/uploads.py`),
     więc `app` wysypywał się na importach, a `task dev` dawał kontener
     `unhealthy`. To NIE jest wina B07 — obraz nie był przebudowany od dołożenia
     zależności. Lekarstwo: `task dev-detached` (`up --build -d`), nie samo
     `up -d`. **Reguła: nowa zależność w `pyproject.toml` = przebudowa obrazu,
     inaczej stack dev kłamie o stanie kodu.**
-13. **E2E URUCHOMIONE pierwszy raz w projekcie — U15 ZOSTAJE OTWARTY.**
+14. **E2E URUCHOMIONE pierwszy raz w projekcie — U15 ZOSTAJE OTWARTY.**
     Suita nigdy wcześniej nie przeszła przez logowanie, więc jedno uruchomienie
     odsłoniło warstwę problemów. NAPRAWIONE w tej sesji:
     - **kolizja z rate limitem**: `/auth/login` ma 5/min/IP (07_SECURITY §2),
