@@ -12,6 +12,8 @@
  * zarejestrowanemu handlerowi (główna aplikacja czyści wtedy sesję).
  */
 
+import { recordServerDate } from '@/lib/offline/clock'
+
 export const API_PREFIX = '/api/v1'
 
 /** Cookie CSRF ustawiane przez backend — celowo bez HttpOnly. */
@@ -173,6 +175,12 @@ export async function apiFetch<T>(path: string, options: ApiRequestOptions = {})
       { cause },
     )
   }
+
+  // Zegar serwera z nagłówka `Date`: kolejka offline stempluje nim `checked_at`,
+  // bo LWW ma rozstrzygać, KTO odhaczył później, a nie czyj telefon się spieszy
+  // (ADR-009). Czytamy z KAŻDEJ odpowiedzi, także błędnej — nagłówek jest tam
+  // tak samo dobry, a im świeższe przesunięcie, tym lepiej.
+  recordServerDate(response.headers.get('Date'))
 
   if (response.status === 401) {
     unauthorizedHandler?.()

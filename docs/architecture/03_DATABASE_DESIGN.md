@@ -328,7 +328,9 @@ shopping_list_items (id, list_id FK CASCADE, category_id FK RESTRICT,
        packages_count INT NULL, package_size NUMERIC(8,2) NULL,
        leftover_amount NUMERIC(10,3) NULL,
        already_have BOOL DEFAULT false, from_pantry_amount NUMERIC(10,3) NULL,
-       checked BOOL DEFAULT false, checked_at timestamptz NULL, position INT)
+       checked BOOL DEFAULT false, checked_at timestamptz NULL,
+       received_at timestamptz NULL,                        -- przyjęte do spiżarni
+       position INT)
 ```
 
 `public_token`: 43 znaki base64url (256 bitów); index unique; lookup tylko
@@ -363,6 +365,27 @@ Stan faktyczny (BATCH_10, migracja `0012`):
 - Liczniki referencji dla 409 `used_in` rejestruje `shopping/service.py`:
   produkt kanoniczny, wariant sklepowy ORAZ sklep (`shopping_lists.store_id`
   ma SET NULL, więc bez licznika lista po cichu straciłaby profil sortowania).
+
+Stan faktyczny (BATCH_12, migracja `0013`, decyzja D19):
+
+- `shopping_list_items.received_at timestamptz NULL` — moment przyjęcia TEJ
+  pozycji do spiżarni; `NULL` znaczy „jeszcze nieprzyjęta". Stempluje ją
+  `shopping/lists_service.py::accept_to_pantry` w TEJ SAMEJ transakcji co wpis
+  w spiżarni, dzięki czemu akcja jest idempotentna i wolno ją ponowić także
+  z kolejki offline (ADR-009). Znacznik jest per POZYCJA, nie per lista —
+  „doniosłem jeszcze dwie rzeczy z torby i odhaczyłem je później" ma dalej
+  działać.
+- Migracja `0013` **nie backfilluje** istniejących wierszy: historyczne
+  przyjęcia nie są nigdzie zapisane, więc każda wartość poza `NULL` byłaby
+  wymyślona.
+- Kolumna wychodzi na zewnątrz WYŁĄCZNIE w odpowiedzi prywatnej
+  (`ShoppingListItemRead`). `PublicListItemRead` jej NIE MA i mieć nie może:
+  osoba z linkiem nie ma nic wiedzieć o spiżarni rodziny (02_DOMAIN §13.5,
+  pilnuje tego `test_public_response_has_no_pii`).
+- `checked_at` dostał w B12 drugie zastosowanie: PATCH pozycji (prywatny
+  i publiczny) przyjmuje opcjonalny `checked_at` klienta, a serwis stosuje
+  last-write-wins — starszy znacznik nie nadpisuje młodszego, a znacznik
+  z przyszłości ponad 5 minut jest przycinany do czasu serwera.
 
 ## 9. Schemat — importer
 

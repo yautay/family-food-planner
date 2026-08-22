@@ -44,6 +44,7 @@ from app.modules.shopping.models import ShoppingList, ShoppingListItem
 from app.modules.shopping.sorting import SortableItem, sort_into_sections
 
 __all__ = [
+    "ALREADY_RECEIVED",
     "LIST_GONE",
     "PUBLIC_URL_PREFIX",
     "ListSection",
@@ -65,6 +66,15 @@ LIST_GONE = "Ta lista zakupowa już wygasła lub została usunięta."
 #: istniał (karta B11, Implementation Notes pkt 5).
 LIST_TOKEN_UNKNOWN = LIST_GONE
 NOTHING_TO_RECEIVE = "Nie ma czego przyjąć do spiżarni — najpierw odhacz kupione pozycje na liście."
+#: Drugie 409 (D19): odhaczone pozycje SĄ, ale wszystkie mają już `received_at`.
+#: To inna sytuacja dla użytkownika niż „nic nie odhaczono", więc inny komunikat.
+ALREADY_RECEIVED = "Te zakupy są już w spiżarni."
+
+#: Ile zegar klienta może wyprzedzać serwer, zanim uznamy `checked_at` za
+#: rozjechany (karta B12 §Backend). Telefon spóźniony o minuty jest normalny —
+#: telefon wyprzedzający o godziny zablokowałby pozycję na zawsze, bo żadna
+#: późniejsza decyzja nie byłaby od niego „młodsza".
+CLOCK_SKEW_TOLERANCE = timedelta(minutes=5)
 
 #: Ścieżka publiczna linku (ADR-010). Origin dokłada frontend z `window.location`,
 #: bo backend nie zna adresu, pod którym stoi reverse proxy (karta B11, pkt 7).
@@ -161,6 +171,9 @@ class ReceivedToPantry:
     created: int
     increased: int
     skipped: int
+    #: Pominięte, bo mają już `received_at` (D19) — pole ADDYTYWNE, `skipped`
+    #: zachowuje znaczenie z R3.
+    already_received: int = 0
 
 
 class ShoppingListsService:
@@ -287,15 +300,19 @@ class ShoppingListsService:
         now: datetime,
         checked: bool | None = None,
         already_have: bool | None = None,
+        checked_at: datetime | None = None,
     ) -> ShoppingListItem:
         """Odhaczenie i „mam już w domu" — jedyne, co da się na pozycji zmienić.
 
         Reszta pozycji jest WYNIKIEM generacji (karta B11 §Out of Scope pkt 4),
-        więc ilości i produktu tu się nie edytuje.
+        więc ilości i produktu tu się nie edytuje. `checked_at` przysyła kolejka
+        offline; rozstrzyganie konfliktu należy do `_apply_item_changes`.
         """
         await _LISTS.get_or_404(self._session, list_id, user)
         item = await self._item_or_404(list_id, item_id)
-        _apply_item_changes(item, checked=checked, already_have=already_have, now=now)
+        _apply_item_changes(
+            item, checked=checked, already_have=already_have, now=now, checked_at=checked_at
+        )
         await self._session.commit()
         await self._session.refresh(item)
         return item
@@ -360,7 +377,13 @@ class ShoppingListsService:
         )
 
     async def public_check_item(
-        self, token: str, item_id: int, *, checked: bool, now: datetime
+        self,
+        token: str,
+        item_id: int,
+        *,
+        checked: bool,
+        now: datetime,
+        checked_at: datetime | None = None,
     ) -> PublicListItemView:
         """Odhaczenie pozycji z publicznego linku — WYŁĄCZNIE pole `checked`.
 
@@ -370,7 +393,9 @@ class ShoppingListsService:
         """
         shopping_list = await self._list_by_token(token, now=now)
         item = await self._item_or_404(shopping_list.id, item_id)
-        _apply_item_changes(item, checked=checked, already_have=None, now=now)
+        _apply_item_changes(
+            item, checked=checked, already_have=None, now=now, checked_at=checked_at
+        )
         await self._session.commit()
         await self._session.refresh(item)
         category_name = await self._category_name(item.category_id)
@@ -389,7 +414,9 @@ class ShoppingListsService:
 
     # --- przyjęcie zakupów do spiżarni (02_DOMAIN §8) ------------------------------
 
-    async def accept_to_pantry(self, list_id: int, *, user: User) -> ReceivedToPantry:
+    async def accept_to_pantry(
+        self, list_id: int, *, user: User, now: datetime
+    ) -> ReceivedToPantry:
         """Odhaczone pozycje → spiżarnia. Akcja JAWNA, nigdy w tle.
 
         Ilość: KUPIONA, czyli `packages_count * package_size`, a nie potrzeba.
@@ -410,14 +437,29 @@ class ShoppingListsService:
         (np. produkt usunięty w międzyczasie → 422) zostawiał spiżarnię w stanie
         pośrednim i zwracał użytkownikowi błąd, po którym ponowienie akcji
         dolewało już przyjęte pozycje DRUGI raz.
+
+        **Akcja jest IDEMPOTENTNA** (decyzja D19): pozycja przyjęta dostaje
+        `received_at` w TEJ SAMEJ transakcji co wpis w spiżarni, a kolejne
+        wywołanie ją pomija. To warunek wpuszczenia przyjęcia zakupów do kolejki
+        offline (ADR-009): tam ponowienie żądania po utracie odpowiedzi jest
+        normalną pracą, a nie awarią. Znacznik jest PER POZYCJA, nie per lista,
+        bo „doniosłem jeszcze dwie rzeczy z torby i odhaczyłem je później" ma
+        dalej działać — wtedy przyjmujemy wyłącznie te dwie.
         """
         await _LISTS.get_or_404(self._session, list_id, user)
         items = await self._items(list_id)
         created = 0
         increased = 0
         skipped = 0
+        already_received = 0
         for item in items:
             if not item.checked:
+                continue
+            if item.received_at is not None:
+                # Ta pozycja jest już w spiżarni (D19). Liczymy ją osobno od
+                # `skipped`, bo dla użytkownika to inna informacja: nie
+                # „pominięto, bo to nie zakup", tylko „to już wniosłeś".
+                already_received += 1
                 continue
             if item.already_have:
                 # „Mam już w domu" znaczy „nic nie kupujemy" (02_DOMAIN §9.3),
@@ -435,6 +477,11 @@ class ShoppingListsService:
             result = await self._pantry.receive_purchase(
                 actor=user, product_id=item.product_id, amount=amount
             )
+            # Stempel leci RAZEM z wpisem w spiżarni — atomowość jest tu
+            # warunkiem poprawności D19, nie ozdobą: przerwanie między jednym
+            # a drugim dałoby dokładnie ten podwójny zapis, przed którym
+            # znacznik broni.
+            item.received_at = now
             if result.merged:
                 increased += 1
             else:
@@ -443,9 +490,16 @@ class ShoppingListsService:
             # Rollback jawny: pętla mogła zrobić `flush` dla pozycji, które
             # ostatecznie policzyliśmy jako pominięte.
             await self._session.rollback()
+            if already_received > 0:
+                raise ConflictError(ALREADY_RECEIVED)
             raise ConflictError(NOTHING_TO_RECEIVE)
         await self._session.commit()
-        return ReceivedToPantry(created=created, increased=increased, skipped=skipped)
+        return ReceivedToPantry(
+            created=created,
+            increased=increased,
+            skipped=skipped,
+            already_received=already_received,
+        )
 
     # --- pomocnicze ----------------------------------------------------------------
 
@@ -599,24 +653,57 @@ def _share_view(shopping_list: ShoppingList) -> ShareView | None:
     )
 
 
+def _effective_checked_at(checked_at: datetime | None, now: datetime) -> datetime:
+    """Znacznik decyzji: czas klienta, a przy jego braku (albo bzdurze) czas serwera.
+
+    Przycinamy WYŁĄCZNIE przyszłość poza tolerancją. Zegar spóźniony jest
+    nieszkodliwy (taka decyzja po prostu przegra LWW), ale zegar wyprzedzający
+    o godziny zabetonowałby pozycję: żadna prawdziwa, późniejsza decyzja nie
+    byłaby od niego młodsza, więc checkbox przestałby reagować.
+    """
+    if checked_at is None:
+        return now
+    if checked_at > now + CLOCK_SKEW_TOLERANCE:
+        return now
+    return checked_at
+
+
 def _apply_item_changes(
     item: ShoppingListItem,
     *,
     checked: bool | None,
     already_have: bool | None,
     now: datetime,
+    checked_at: datetime | None = None,
 ) -> None:
-    """Zastosuj zmiany pozycji; `checked_at` ustawia SERWER, nigdy klient.
+    """Zastosuj zmiany pozycji; checkbox rozstrzyga LAST-WRITE-WINS (ADR-009).
 
     `checked_at` to moment OSTATNIEJ decyzji o checkboxie — także odznaczenia.
-    Tak go potrzebuje LWW z ADR-009 (B12): żeby rozstrzygnąć konflikt dwóch
-    telefonów, trzeba wiedzieć, która decyzja jest młodsza, a nie tylko kiedy
-    coś zostało odhaczone. Klient `checked_at` nie przysyła (karta B11,
-    Implementation Notes pkt 3).
+    Tak go potrzebuje LWW: żeby rozstrzygnąć konflikt dwóch telefonów, trzeba
+    wiedzieć, która decyzja jest młodsza, a nie tylko kiedy coś odhaczono.
+
+    Trzy reguły, które muszą obowiązywać RAZEM:
+
+    1. **Brak `checked_at` w żądaniu = czas serwera** (zachowanie z B11).
+       Odhaczanie online nic nie przysyła i ma działać natychmiast.
+    2. **Starszy znacznik przegrywa.** Odhaczenie sprzed pół godziny, które
+       dopiero teraz wypłynęło z kolejki offline, nie może cofnąć świeższej
+       decyzji z drugiego telefonu — takie żądanie zostaje bez efektu, a klient
+       przyjmuje stan serwera z odpowiedzi 200.
+    3. **Powtórka nie rusza znacznika.** Warunek `checked != item.checked` jest
+       tym, co czyni PATCH idempotentnym (ustalenie R3): kolejka offline po
+       utracie odpowiedzi wysyła to samo żądanie ponownie i nie może tym
+       przesunąć czasu decyzji.
+
+    `already_have` NIE podlega LWW: nie wchodzi do kolejki offline (karta B12
+    §Frontend — kolejkujemy wyłącznie checkbox), więc zawsze przychodzi online
+    i nie ma z czym konkurować.
     """
     if checked is not None and checked != item.checked:
-        item.checked = checked
-        item.checked_at = now
+        stamp = _effective_checked_at(checked_at, now)
+        if item.checked_at is None or stamp >= item.checked_at:
+            item.checked = checked
+            item.checked_at = stamp
     if already_have is not None:
         item.already_have = already_have
 

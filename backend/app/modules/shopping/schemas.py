@@ -19,7 +19,14 @@ from datetime import date, datetime
 from enum import StrEnum
 from typing import Annotated, Self
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
+from pydantic import (
+    AwareDatetime,
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    model_validator,
+)
 
 from app.core.schemas import DecimalString
 from app.core.scope import Scope
@@ -277,6 +284,10 @@ class ShoppingListItemRead(BaseModel):
     #: Moment OSTATNIEJ decyzji o checkboxie (także odznaczenia) — ustawia go
     #: serwer, a LWW z ADR-009 porównuje właśnie tę wartość (B12).
     checked_at: datetime | None
+    #: Moment przyjęcia pozycji do spiżarni; `None` = jeszcze nieprzyjęta (D19).
+    #: W odpowiedzi PUBLICZNEJ tego pola NIE MA — osoba z linkiem nie ma nic
+    #: wiedzieć o spiżarni rodziny (02_DOMAIN §13.5).
+    received_at: datetime | None
     position: int
 
 
@@ -398,14 +409,24 @@ class ListUpdateRequest(BaseModel):
 
 
 class ListItemUpdateRequest(BaseModel):
-    """Odhaczenie i „mam już w domu". `checked_at` ustawia SERWER (ADR-009).
+    """Odhaczenie i „mam już w domu"; `checked_at` opcjonalnie od klienta (ADR-009).
 
     Innych pól tu nie ma z rozmysłem: pozycja jest wynikiem generacji, a jej
     ilości zmienia się nową generacją (karta B11 §Out of Scope pkt 4).
+
+    `checked_at` przysyła WYŁĄCZNIE kolejka offline (B12): odhaczenie zrobione
+    w sklepie bez zasięgu trafia na serwer minuty później, więc bez znacznika
+    z momentu decyzji LWW rozstrzygałoby konflikt na korzyść telefonu, który
+    pierwszy złapał sieć, a nie tego, który odhaczył później. Pole pominięte =
+    zachowanie dotychczasowe, czyli czas serwera.
     """
 
     checked: bool | None = None
     already_have: bool | None = None
+    #: Wymagana strefa czasowa (`AwareDatetime`): porównanie z kolumną
+    #: `timestamptz` musi mieć jednoznaczny punkt w czasie, a nie „lokalną
+    #: godzinę czyjegoś telefonu".
+    checked_at: AwareDatetime | None = None
 
     @model_validator(mode="after")
     def _something_to_change(self) -> Self:
@@ -415,11 +436,17 @@ class ListItemUpdateRequest(BaseModel):
 
 
 class AcceptToPantryResponse(BaseModel):
-    """Ile pozycji weszło do spiżarni: nowe wiersze, dolane i pominięte."""
+    """Ile pozycji weszło do spiżarni: nowe wiersze, dolane, pominięte i już przyjęte.
+
+    `already_received` doszło ADDYTYWNIE w B12 (D19) — `skipped` zachowuje
+    znaczenie z R3 („odhaczone, ale nie jest zakupem albo nie ma czego dolać").
+    """
 
     created: int
     increased: int
     skipped: int
+    #: Pozycje pominięte, bo mają już `received_at` — zakupy wchodzą do spiżarni raz.
+    already_received: int = 0
 
 
 # --- ścieżka publiczna: BIAŁA LISTA pól (ADR-010, niezmiennik 02_DOMAIN §13.5) --------
@@ -455,13 +482,18 @@ class PublicListRead(BaseModel):
 
 
 class PublicListItemUpdateRequest(BaseModel):
-    """Uprawnienia tokenu w całości: JEDNO pole `checked` (ADR-010).
+    """Uprawnienia tokenu: `checked` + znacznik czasu tej decyzji (ADR-009/010).
 
     `model_config` z `extra="forbid"` jest tu zabezpieczeniem, nie ozdobą: próba
     przemycenia `already_have` albo ilości ma skończyć się 422, a nie cichym
     zignorowaniem pola (karta B11 §Security).
+
+    `checked_at` NIE poszerza uprawnień tokenu: nadal da się zmienić wyłącznie
+    checkbox, a znacznik mówi tylko, KIEDY ta zmiana zapadła. Bez niego lista
+    odhaczona offline nadpisywałaby świeższe decyzje z drugiego telefonu.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     checked: bool
+    checked_at: AwareDatetime | None = None

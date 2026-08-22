@@ -20,6 +20,7 @@
 
 import { API_PREFIX } from '@/api/client'
 import type { components } from '@/api/generated'
+import { recordServerDate } from '@/lib/offline/clock'
 
 export type PublicList = components['schemas']['PublicListRead']
 export type PublicListItem = components['schemas']['PublicListItemRead']
@@ -58,6 +59,11 @@ async function publicFetch<T>(path: string, init: RequestInit = {}): Promise<T> 
     throw new PublicListRequestError(0)
   }
 
+  // Zegar serwera z nagłówka `Date` — na nim stoi `checked_at` kolejki offline
+  // (ADR-009). Publiczna strona bywa jedynym ruchem HTTP na tym urządzeniu,
+  // więc bez tego wywołania telefon z rozjechanym zegarem przegrywałby LWW.
+  recordServerDate(response.headers.get('Date'))
+
   if (UNAVAILABLE_STATUSES.has(response.status)) {
     throw new PublicListUnavailableError()
   }
@@ -71,15 +77,26 @@ export function fetchPublicList(token: string): Promise<PublicList> {
   return publicFetch<PublicList>(`/lists/${encodeURIComponent(token)}`)
 }
 
-/** Token pozwala zmienić WYŁĄCZNIE `checked` — innych pól tu nie ma (ADR-010). */
+/**
+ * Token pozwala zmienić WYŁĄCZNIE `checked` — innych pól tu nie ma (ADR-010).
+ *
+ * `checkedAt` (ISO8601 w zegarze serwera) podaje kolejka offline i tylko ona:
+ * odhaczenie zrobione w sklepie bez zasięgu dociera minuty później, więc bez
+ * znacznika serwer stemplowałby je czasem PRZYJĘCIA, a nie decyzji — i nadpisało
+ * by świeższy stan z drugiego telefonu (ADR-009). Odhaczenie online pola nie
+ * wysyła: tam czas serwera jest czasem decyzji.
+ */
 export function checkPublicListItem(
   token: string,
   itemId: number,
   checked: boolean,
+  checkedAt?: string,
 ): Promise<PublicListItem> {
   return publicFetch<PublicListItem>(`/lists/${encodeURIComponent(token)}/items/${itemId}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ checked }),
+    body: JSON.stringify(
+      checkedAt === undefined ? { checked } : { checked, checked_at: checkedAt },
+    ),
   })
 }

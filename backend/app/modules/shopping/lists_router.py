@@ -164,7 +164,13 @@ def build_shopping_lists_router() -> APIRouter:
         "/{list_id}/items/{item_id}",
         response_model=ShoppingListItemRead,
         summary="Odhaczenie pozycji albo „mam już w domu”",
-        description="`checked_at` ustawia serwer (UTC) — klient go nie przysyła (ADR-009).",
+        description=(
+            "`checked_at` jest OPCJONALNE: online klient go nie przysyła i "
+            "znacznik ustawia serwer (UTC), a kolejka offline podaje moment "
+            "faktycznej decyzji. Konflikt rozstrzyga last-write-wins per pozycja "
+            "— starszy znacznik zostawia stan bez zmian i zwraca aktualną pozycję "
+            "(ADR-009)."
+        ),
     )
     async def update_item(
         list_id: int,
@@ -180,6 +186,7 @@ def build_shopping_lists_router() -> APIRouter:
             now=datetime.now(UTC),
             checked=payload.checked,
             already_have=payload.already_have,
+            checked_at=payload.checked_at,
         )
         return ShoppingListItemRead.model_validate(item)
 
@@ -220,15 +227,21 @@ def build_shopping_lists_router() -> APIRouter:
             "Akcja JAWNA (02_DOMAIN §8) — zakupy nie trafiają do spiżarni w tle. "
             "Ilość liczymy jako kupioną (`packages_count * package_size`), a bez "
             "opakowania jako `needed_amount`. Zakup dolewa się do pozycji tego "
-            "produktu BEZ daty ważności, a gdy takiej nie ma — zakłada nową."
+            "produktu BEZ daty ważności, a gdy takiej nie ma — zakłada nową. "
+            "Akcja jest IDEMPOTENTNA (D19): pozycja raz przyjęta dostaje "
+            "`received_at` i kolejne wywołanie ją pomija. 409 ma dwa warianty — "
+            "„nic nie odhaczono” i „te zakupy są już w spiżarni”."
         ),
     )
     async def accept_to_pantry(
         list_id: int, user: CurrentUser, service: ServiceDep
     ) -> AcceptToPantryResponse:
-        result = await service.accept_to_pantry(list_id, user=user)
+        result = await service.accept_to_pantry(list_id, user=user, now=datetime.now(UTC))
         return AcceptToPantryResponse(
-            created=result.created, increased=result.increased, skipped=result.skipped
+            created=result.created,
+            increased=result.increased,
+            skipped=result.skipped,
+            already_received=result.already_received,
         )
 
     return router

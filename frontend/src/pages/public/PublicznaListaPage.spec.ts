@@ -1,5 +1,6 @@
 import { VueQueryPlugin } from '@tanstack/vue-query'
 import { flushPromises, mount } from '@vue/test-utils'
+import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type * as PublicListApi from '@/api/publicList'
@@ -57,7 +58,10 @@ function list(overrides: Record<string, unknown> = {}) {
 }
 
 async function mountPage() {
-  const wrapper = mount(PublicznaListaPage, { global: { plugins: [VueQueryPlugin] } })
+  // Pinia od B12: strona czyta kolejkę offline (ADR-009).
+  const pinia = createPinia()
+  setActivePinia(pinia)
+  const wrapper = mount(PublicznaListaPage, { global: { plugins: [VueQueryPlugin, pinia] } })
   await flushPromises()
   return wrapper
 }

@@ -5046,7 +5046,7 @@
           "shopping"
         ],
         "summary": "Odhaczenie pozycji albo „mam już w domu”",
-        "description": "`checked_at` ustawia serwer (UTC) — klient go nie przysyła (ADR-009).",
+        "description": "`checked_at` jest OPCJONALNE: online klient go nie przysyła i znacznik ustawia serwer (UTC), a kolejka offline podaje moment faktycznej decyzji. Konflikt rozstrzyga last-write-wins per pozycja — starszy znacznik zostawia stan bez zmian i zwraca aktualną pozycję (ADR-009).",
         "operationId": "update_item_api_v1_shopping_lists__list_id__items__item_id__patch",
         "parameters": [
           {
@@ -5194,7 +5194,7 @@
           "shopping"
         ],
         "summary": "Przyjęcie odhaczonych zakupów do spiżarni",
-        "description": "Akcja JAWNA (02_DOMAIN §8) — zakupy nie trafiają do spiżarni w tle. Ilość liczymy jako kupioną (`packages_count * package_size`), a bez opakowania jako `needed_amount`. Zakup dolewa się do pozycji tego produktu BEZ daty ważności, a gdy takiej nie ma — zakłada nową.",
+        "description": "Akcja JAWNA (02_DOMAIN §8) — zakupy nie trafiają do spiżarni w tle. Ilość liczymy jako kupioną (`packages_count * package_size`), a bez opakowania jako `needed_amount`. Zakup dolewa się do pozycji tego produktu BEZ daty ważności, a gdy takiej nie ma — zakłada nową. Akcja jest IDEMPOTENTNA (D19): pozycja raz przyjęta dostaje `received_at` i kolejne wywołanie ją pomija. 409 ma dwa warianty — „nic nie odhaczono” i „te zakupy są już w spiżarni”.",
         "operationId": "accept_to_pantry_api_v1_shopping_lists__list_id__accept_to_pantry_post",
         "parameters": [
           {
@@ -5286,7 +5286,7 @@
           "public"
         ],
         "summary": "Odhaczenie pozycji z publicznego linku",
-        "description": "Token pozwala zmienić WYŁĄCZNIE `checked` (ADR-010) — każde inne pole w ciele żądania kończy się 422. Bez CSRF (autoryzuje token w URL), za to z limitem 60/min/IP.",
+        "description": "Token pozwala zmienić WYŁĄCZNIE `checked` (ADR-010) — każde inne pole w ciele żądania kończy się 422. Opcjonalne `checked_at` nie poszerza tych uprawnień: mówi tylko, KIEDY zapadła decyzja, żeby odhaczenie z kolejki offline nie nadpisało świeższego stanu (last-write-wins, ADR-009). Bez CSRF (autoryzuje token w URL), za to z limitem 60/min/IP.",
         "operationId": "public_check_item_api_v1_public_lists__token__items__item_id__patch",
         "parameters": [
           {
@@ -5511,6 +5511,11 @@
           "skipped": {
             "type": "integer",
             "title": "Skipped"
+          },
+          "already_received": {
+            "type": "integer",
+            "title": "Already Received",
+            "default": 0
           }
         },
         "type": "object",
@@ -5520,7 +5525,7 @@
           "skipped"
         ],
         "title": "AcceptToPantryResponse",
-        "description": "Ile pozycji weszło do spiżarni: nowe wiersze, dolane i pominięte."
+        "description": "Ile pozycji weszło do spiżarni: nowe wiersze, dolane, pominięte i już przyjęte.\n\n`already_received` doszło ADDYTYWNIE w B12 (D19) — `skipped` zachowuje\nznaczenie z R3 („odhaczone, ale nie jest zakupem albo nie ma czego dolać\")."
       },
       "AmountUnit": {
         "type": "string",
@@ -7305,11 +7310,23 @@
               }
             ],
             "title": "Already Have"
+          },
+          "checked_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checked At"
           }
         },
         "type": "object",
         "title": "ListItemUpdateRequest",
-        "description": "Odhaczenie i „mam już w domu\". `checked_at` ustawia SERWER (ADR-009).\n\nInnych pól tu nie ma z rozmysłem: pozycja jest wynikiem generacji, a jej\nilości zmienia się nową generacją (karta B11 §Out of Scope pkt 4)."
+        "description": "Odhaczenie i „mam już w domu\"; `checked_at` opcjonalnie od klienta (ADR-009).\n\nInnych pól tu nie ma z rozmysłem: pozycja jest wynikiem generacji, a jej\nilości zmienia się nową generacją (karta B11 §Out of Scope pkt 4).\n\n`checked_at` przysyła WYŁĄCZNIE kolejka offline (B12): odhaczenie zrobione\nw sklepie bez zasięgu trafia na serwer minuty później, więc bez znacznika\nz momentu decyzji LWW rozstrzygałoby konflikt na korzyść telefonu, który\npierwszy złapał sieć, a nie tego, który odhaczył później. Pole pominięte =\nzachowanie dotychczasowe, czyli czas serwera."
       },
       "ListSectionRead": {
         "properties": {
@@ -9566,6 +9583,18 @@
           "checked": {
             "type": "boolean",
             "title": "Checked"
+          },
+          "checked_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checked At"
           }
         },
         "additionalProperties": false,
@@ -9574,7 +9603,7 @@
           "checked"
         ],
         "title": "PublicListItemUpdateRequest",
-        "description": "Uprawnienia tokenu w całości: JEDNO pole `checked` (ADR-010).\n\n`model_config` z `extra=\"forbid\"` jest tu zabezpieczeniem, nie ozdobą: próba\nprzemycenia `already_have` albo ilości ma skończyć się 422, a nie cichym\nzignorowaniem pola (karta B11 §Security)."
+        "description": "Uprawnienia tokenu: `checked` + znacznik czasu tej decyzji (ADR-009/010).\n\n`model_config` z `extra=\"forbid\"` jest tu zabezpieczeniem, nie ozdobą: próba\nprzemycenia `already_have` albo ilości ma skończyć się 422, a nie cichym\nzignorowaniem pola (karta B11 §Security).\n\n`checked_at` NIE poszerza uprawnień tokenu: nadal da się zmienić wyłącznie\ncheckbox, a znacznik mówi tylko, KIEDY ta zmiana zapadła. Bez niego lista\nodhaczona offline nadpisywałaby świeższe decyzje z drugiego telefonu."
       },
       "PublicListRead": {
         "properties": {
@@ -11156,6 +11185,18 @@
             ],
             "title": "Checked At"
           },
+          "received_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Received At"
+          },
           "position": {
             "type": "integer",
             "title": "Position"
@@ -11177,6 +11218,7 @@
           "from_pantry_amount",
           "checked",
           "checked_at",
+          "received_at",
           "position"
         ],
         "title": "ShoppingListItemRead",

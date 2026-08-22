@@ -122,6 +122,21 @@ Dziewięć szczegółów wykonawczych, które trzeba utrzymać:
    formatuje ścieżkę sam z `record.args` i o middleware nie wie). Druga warstwa
    doszła w BATCH_11 po ręcznym sprawdzeniu `docker compose logs app` — token
    wychodził tam w całości. Testy: `tests/unit/test_logging.py`.
+10. **`checked_at` w publicznym PATCH (BATCH_12) NIE poszerza uprawnień tokenu.**
+   Ciało nadal ma `extra="forbid"` i dwa pola: `checked` (co) oraz opcjonalne
+   `checked_at` (kiedy zapadła decyzja — potrzebne kolejce offline, ADR-009).
+   Osoba z linkiem nie zyskuje przez to nic nowego: mogła już odhaczać. Granica
+   nadużycia jest ograniczona z DWÓCH stron — znacznik starszy niż zapisany jest
+   ignorowany, a znacznik z przyszłości ponad 5 minut przycinany do czasu
+   serwera, więc najgorsze, co da się zrobić, to „przypiąć" własny stan na te
+   kilka minut. Wymagana jest strefa czasowa (naiwna data to 422).
+11. **Snapshot listy w IndexedDB (BATCH_12)** trzyma WYŁĄCZNIE treść, którą
+   serwer i tak pokazuje osobie z linkiem: `label`, ilość, kategoria, `checked`.
+   Zero PII (02_DOMAIN §13.5). Token publiczny jest częścią klucza rekordu —
+   akceptowalne, bo mieszka na tym samym urządzeniu, na którym jest URL z tym
+   tokenem; do konsoli, logów ani raportów błędów nie trafia. Runtime cache
+   service workera świadomie POMIJA `/api/v1/auth/*`, żeby odpowiedzi
+   z `Set-Cookie` nie lądowały w Cache Storage.
 
 ## 6. Uploady
 

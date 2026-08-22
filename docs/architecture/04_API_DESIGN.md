@@ -80,11 +80,14 @@ U      /shopping/lists                     — GET listy (?status=active|expired
                                              (PATCH: nazwa i sklep = profil
                                              sortowania sekcji)
 U      /shopping/lists/{id}/items/{item_id} — PATCH `checked` / `already_have`
-                                             (`checked_at` ustawia serwer)
+                                             (`checked_at` opcjonalne: brak =
+                                             czas serwera, podane = LWW)
 U      /shopping/lists/{id}/share          — POST token / DELETE revoke
 U      /shopping/lists/{id}/accept-to-pantry — POST: odhaczone pozycje do spiżarni
+                                             (idempotentne, `received_at`)
 P      /public/lists/{token}               — GET treść + PATCH check pozycji
-                                             (rate limit, zero PII, 410 po expiry)
+                                             (`checked_at` jw.; rate limit,
+                                             zero PII, 410 po expiry)
 
 U      /import/pdf                         — upload → job; GET status/raport
 U      /import/jobs/{id}/staged            — staged recipes+ingredients+issues
@@ -174,7 +177,32 @@ Dzień planu NIE jest zasobem tworzonym i usuwanym wprost:
 3. `/public/lists/{token}`: lookup wyłącznie po pełnym tokenie (unique
    index), `410 Gone` po wygaśnięciu/odwołaniu z przyjaznym komunikatem,
    odpowiedź zawiera tylko: nazwę listy, pozycje (label, ilość, kategoria,
-   checked), expires_at. Żadnych nazwisk, emaili, id użytkowników.
+   checked), expires_at. Żadnych nazwisk, emaili, id użytkowników — ani
+   `received_at`: osoba z linkiem nie ma nic wiedzieć o spiżarni rodziny
+   (D19, pilnuje tego asercja dokładnego zbioru kluczy w
+   `tests/api/shopping/test_public_lists_api.py`).
+2e. **Odhaczanie pozycji i LWW (BATCH_12, ADR-009).** PATCH pozycji — prywatny
+   i publiczny — przyjmuje opcjonalne `checked_at` (ISO8601, WYMAGANA strefa
+   czasowa; naiwna data to 422). Reguły, wspólne dla obu ścieżek:
+   - pole pominięte = zachowanie sprzed B12, czyli znacznik z zegara serwera;
+   - znacznik STARSZY niż zapisany w bazie zostawia stan bez zmian i zwraca
+     **200 z aktualną pozycją** (klient przyjmuje stan serwera, nie ponawia);
+   - znacznik z przyszłości ponad 5 minut jest przycinany do czasu serwera —
+     inaczej telefon z rozjechanym zegarem zabetonowałby pozycję;
+   - powtórka tego samego żądania NIE przesuwa znacznika (idempotencja) — na
+     tym stoi ponawianie z kolejki offline po utracie odpowiedzi.
+   Uprawnienia tokenu publicznego się przez to nie poszerzają: nadal da się
+   zmienić wyłącznie `checked` (`extra="forbid"`).
+
+2f. **`accept-to-pantry` jest idempotentne (BATCH_12, decyzja D19).** Do
+   spiżarni wchodzą pozycje odhaczone, nie oznaczone „mam już w domu" i BEZ
+   `received_at`; przyjęte dostają stempel w tej samej transakcji co wpis
+   w spiżarni. Odpowiedź ma addytywne pole `already_received`. **409 ma dwa
+   warianty**, bo to dwie różne sytuacje: „nic nie odhaczono" i „Te zakupy są
+   już w spiżarni.". Pozycje odhaczone PÓŹNIEJ przyjmują się normalnie
+   („doniosłem dwie rzeczy z torby"). `received_at` wychodzi wyłącznie
+   w odpowiedzi PRYWATNEJ — patrz pkt 3.
+
 3a. **Stan faktyczny po BATCH_11** — pięć rzeczy wiążących dla kolejnych
    endpointów publicznych:
    - **404 i 410 mają IDENTYCZNĄ treść** („Ta lista zakupowa już wygasła lub

@@ -19,16 +19,23 @@
  *    ekran: nawigacja, panel akcji i kolory znikają, zostają nagłówki
  *    kategorii i kwadraty `☐` z `ShoppingItemRow`.
  *
+ * 5. **Offline to nie tryb awaryjny, tylko normalna praca** (B12, ADR-009):
+ *    treść listy leży w IndexedDB, a odhaczenia bez zasięgu idą do kolejki
+ *    z własnym `checked_at`. Snapshot HYDRATUJEMY DO CACHE'U TanStack Query,
+ *    a nie do osobnego ref-a — dzięki temu optimistic update, rollback i render
+ *    działają offline dokładnie tym samym kodem, co online.
+ *
  * Stan serwera mieszka w TanStack Query (ADR-007) — lista nie jest kopiowana
- * do żadnego ref-a; w komponencie żyje wyłącznie stan UI (otwarte panele).
+ * do żadnego ref-a; w komponencie żyje wyłącznie stan UI (otwarte panele)
+ * i kolejka offline (Pinia, bo to intencje użytkownika, nie stan serwera).
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { ApiError } from '@/api/client'
 import { queryKeys } from '@/api/queryKeys'
-import type { ShoppingListDetail } from '@/api/shoppingLists'
+import type { ShoppingListDetail, ShoppingListItem } from '@/api/shoppingLists'
 import {
   acceptListToPantry,
   deleteShoppingList,
@@ -38,13 +45,17 @@ import {
 } from '@/api/shoppingLists'
 import type { Store } from '@/api/stores'
 import { fetchStores } from '@/api/stores'
+import OfflineBanner from '@/components/domain/OfflineBanner.vue'
 import ShareListDialog from '@/components/domain/ShareListDialog.vue'
 import ShoppingItemRow from '@/components/domain/ShoppingItemRow.vue'
 import StorePicker from '@/components/domain/StorePicker.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatDate } from '@/lib/dates'
-import { common, shoppingList as texts } from '@/lib/texts'
+import { saveSnapshot, targetKey, type QueueTarget } from '@/lib/offline/db'
+import { hydrateFromSnapshot } from '@/lib/offline/hydrate'
+import { common, offline as offlineTexts, shoppingList as texts } from '@/lib/texts'
+import { useOfflineQueueStore } from '@/stores/offlineQueue'
 
 const route = useRoute()
 const router = useRouter()
@@ -72,6 +83,54 @@ const list = useQuery({
   enabled: hasValidId,
 })
 
+const offlineQueue = useOfflineQueueStore()
+const target = computed<QueueTarget>(() => ({ kind: 'list', listId: listId.value }))
+const pendingChanges = computed(() => offlineQueue.pendingFor(target.value))
+
+/**
+ * Snapshot z IndexedDB → cache TanStack Query (szczegóły: `offline/hydrate.ts`)
+ * plus nasłuch synchronizacji tej listy.
+ *
+ * Obserwujemy KLUCZ, a nie tylko montowanie: przejście z listy na listę
+ * (`/zakupy/listy/5` → `/zakupy/listy/6`) reużywa ten sam komponent, więc
+ * subskrypcja założona w `onMounted` zostałaby przy poprzedniej liście i po
+ * flushu unieważniałaby nie to zapytanie, co trzeba.
+ */
+watch(
+  () => (hasValidId.value ? targetKey(target.value) : null),
+  (snapshotKey, _previous, onCleanup) => {
+    if (snapshotKey === null) {
+      return
+    }
+    void hydrateFromSnapshot<ShoppingListDetail>(queryClient, listKey.value, snapshotKey)
+    onCleanup(
+      offlineQueue.subscribeToSync(target.value, () => {
+        void queryClient.invalidateQueries({ queryKey: listKey.value })
+      }),
+    )
+  },
+  { immediate: true },
+)
+
+/**
+ * Każdy KOMPLETNY stan listy w cache'u ląduje w IndexedDB.
+ *
+ * Zapisujemy też po optimistic update, nie tylko po odpowiedzi serwera:
+ * przeładowanie strony w sklepie bez zasięgu ma pokazać pozycje odhaczone
+ * przed chwilą, a nie stan sprzed wejścia do sklepu. Rollback po błędzie
+ * przechodzi tą samą drogą, więc snapshot nigdy nie utrwala stanu, którego
+ * użytkownik już nie widzi na ekranie.
+ */
+watch(
+  () => list.data.value,
+  (value) => {
+    if (value) {
+      void saveSnapshot(targetKey(target.value), value)
+    }
+  },
+  { immediate: true },
+)
+
 // Sklepy pobieramy po to, żeby `StorePicker` dostał WYBRANY sklep jako obiekt.
 // Słownik jest krótki i cache'owany pod tym samym kluczem co picker, więc to
 // nie jest dodatkowe zapytanie na każde wejście (B09).
@@ -86,7 +145,19 @@ const sections = computed(() => detail.value?.sections ?? [])
 const items = computed(() => sections.value.flatMap((section) => section.items))
 const total = computed(() => items.value.length)
 const checked = computed(() => items.value.filter((item) => item.checked).length)
-const hasChecked = computed(() => checked.value > 0)
+/**
+ * Ile pozycji WEJDZIE po kliknięciu „przyjmij" (D19).
+ *
+ * Te same trzy warunki co w serwisie: odhaczona, nie „mam już w domu", jeszcze
+ * nieprzyjęta. Liczymy je tutaj, żeby przycisk mówił prawdę PRZED kliknięciem —
+ * inaczej użytkownik dowiadywałby się o „wszystko już w spiżarni" dopiero z 409.
+ */
+const toReceive = computed(
+  () =>
+    items.value.filter((item) => item.checked && !item.already_have && item.received_at === null)
+      .length,
+)
+const hasReceived = computed(() => items.value.some((item) => item.received_at !== null))
 const isExpired = computed(
   () => detail.value !== null && new Date(detail.value.expires_at).getTime() <= Date.now(),
 )
@@ -101,6 +172,47 @@ function reportError(error: unknown): void {
 }
 
 /**
+ * Wyślij odhaczenie albo odłóż je do kolejki (ADR-009).
+ *
+ * Zwraca `null`, gdy zmiana poszła do kolejki — wtedy nie ma czym podmienić
+ * pozycji w cache'u i zostaje stan optimistic.
+ *
+ * Kolejkujemy w DWÓCH sytuacjach, nie w jednej: gdy przeglądarka wie, że jest
+ * offline, ORAZ gdy żądanie padło na sieci mimo `navigator.onLine === true`
+ * (Wi-Fi w sklepie, które łapie sygnał, ale nie przepuszcza ruchu — to jest
+ * właśnie ten przypadek, dla którego cały ten mechanizm powstał).
+ *
+ * `checked_at` wysyła TYLKO kolejka. Tutaj, online, czas serwera JEST czasem
+ * decyzji, więc doklejanie znacznika klienta dokładałoby zależność od jego
+ * zegara bez żadnego zysku.
+ */
+async function toggleItem(payload: {
+  itemId: number
+  checked: boolean
+}): Promise<ShoppingListItem | null> {
+  if (offlineQueue.isOffline) {
+    await offlineQueue.enqueue(target.value, payload.itemId, payload.checked)
+    return null
+  }
+  try {
+    const item = await updateShoppingListItem(listId.value, payload.itemId, {
+      checked: payload.checked,
+    })
+    // Zapis online unieważnia starszy wpis tej pozycji: bez tego poszedłby po
+    // odzyskaniu sieci i tak (przegrywając LWW), zjadając limit 60/min bez celu.
+    await offlineQueue.forget(target.value, payload.itemId)
+    return item
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 0) {
+      offlineQueue.markOffline()
+      await offlineQueue.enqueue(target.value, payload.itemId, payload.checked)
+      return null
+    }
+    throw error
+  }
+}
+
+/**
  * Optimistic toggle pozycji (karta B11 §Frontend).
  *
  * Podmieniamy pozycję w cache PRZED żądaniem, a przy błędzie wracamy do
@@ -110,8 +222,7 @@ function reportError(error: unknown): void {
  * odhaczeniu.
  */
 const toggle = useMutation({
-  mutationFn: (payload: { itemId: number; checked: boolean }) =>
-    updateShoppingListItem(listId.value, payload.itemId, { checked: payload.checked }),
+  mutationFn: (payload: { itemId: number; checked: boolean }) => toggleItem(payload),
   onMutate: async (payload) => {
     await queryClient.cancelQueries({ queryKey: listKey.value })
     const previous = queryClient.getQueryData<ShoppingListDetail>(listKey.value)
@@ -136,6 +247,11 @@ const toggle = useMutation({
   },
   onSuccess: (item) => {
     actionError.value = null
+    // `null` = odhaczenie poszło do kolejki offline. Stan optimistic jest wtedy
+    // JEDYNYM, jaki mamy — i ma zostać, bo serwer go dopiero zobaczy.
+    if (item === null) {
+      return
+    }
     const current = queryClient.getQueryData<ShoppingListDetail>(listKey.value)
     if (!current) {
       return
@@ -173,7 +289,15 @@ const accept = useMutation({
   onSuccess: (result) => {
     actionError.value = null
     acceptOpen.value = false
-    actionInfo.value = texts.acceptDone(result.created, result.increased, result.skipped)
+    actionInfo.value = texts.acceptDone(
+      result.created,
+      result.increased,
+      result.skipped,
+      result.already_received,
+    )
+    // Pozycje dostały `received_at` — lista musi to pokazać, więc pobieramy ją
+    // na nowo (znacznik nie da się policzyć na kliencie).
+    void queryClient.invalidateQueries({ queryKey: listKey.value })
     void queryClient.invalidateQueries({ queryKey: queryKeys.pantry.all })
   },
   onError: reportError,
@@ -207,7 +331,7 @@ const remove = useMutation({
     </p>
 
     <p
-      v-else-if="!hasValidId || list.isError.value || detail === null"
+      v-else-if="!hasValidId || detail === null"
       class="text-muted-foreground text-sm"
       data-testid="lista-zakupowa-brak"
     >
@@ -235,16 +359,27 @@ const remove = useMutation({
         </p>
       </header>
 
-      <!-- Wybór sklepu: profil decyduje o kolejności sekcji (AC 1). -->
+      <OfflineBanner
+        :offline="offlineQueue.isOffline"
+        :pending="pendingChanges"
+        :syncing="offlineQueue.flushing"
+      />
+
+      <!-- Wybór sklepu: profil decyduje o kolejności sekcji (AC 1).
+           Offline WYŁĄCZONY: kolejność sekcji składa serwer z profilu sklepu
+           (ustalenie R3), a przeglądarka nie zna `store_category_order` — nie
+           umiałaby pokazać skutku tej zmiany, więc nie wchodzi ona do kolejki. -->
       <Card class="rounded-xl print:hidden" data-testid="lista-sklep">
         <CardContent class="grid gap-2 pt-4">
           <StorePicker
             :model-value="selectedStore"
             :label="texts.store"
-            :disabled="changeStore.isPending.value"
+            :disabled="changeStore.isPending.value || offlineQueue.isOffline"
             @update:model-value="changeStore.mutate($event)"
           />
-          <p class="text-muted-foreground text-xs">{{ texts.storeHint }}</p>
+          <p class="text-muted-foreground text-xs">
+            {{ offlineQueue.isOffline ? offlineTexts.storeNeedsNetwork : texts.storeHint }}
+          </p>
         </CardContent>
       </Card>
 
@@ -294,6 +429,7 @@ const remove = useMutation({
             :leftover="item.leftover_amount"
             :packages-count="item.packages_count"
             :package-size="item.package_size"
+            :received="item.received_at !== null"
             @toggle="toggle.mutate($event)"
           />
         </ul>
@@ -326,7 +462,7 @@ const remove = useMutation({
             type="button"
             variant="outline"
             class="min-h-11"
-            :disabled="!hasChecked"
+            :disabled="toReceive === 0 || offlineQueue.isOffline"
             data-testid="lista-accept-open"
             @click="acceptOpen = true"
           >
@@ -349,8 +485,13 @@ const remove = useMutation({
         </CardContent>
       </Card>
 
-      <p v-if="!hasChecked" class="text-muted-foreground text-xs print:hidden">
-        {{ texts.acceptNothing }}
+      <!-- Podpowiedź mówi, DLACZEGO przycisk jest nieaktywny — trzy różne
+           powody, trzy różne komunikaty (06_UIUX §3). -->
+      <p class="text-muted-foreground text-xs print:hidden" data-testid="lista-accept-hint">
+        <template v-if="offlineQueue.isOffline">{{ offlineTexts.acceptNeedsNetwork }}</template>
+        <template v-else-if="toReceive > 0">{{ texts.acceptCount(toReceive) }}</template>
+        <template v-else-if="hasReceived">{{ texts.acceptAllReceived }}</template>
+        <template v-else>{{ texts.acceptNothing }}</template>
       </p>
 
       <ShareListDialog
@@ -370,6 +511,9 @@ const remove = useMutation({
       >
         <h3 class="text-sm font-medium">{{ texts.acceptTitle }}</h3>
         <p class="text-muted-foreground text-xs">{{ texts.acceptDescription }}</p>
+        <p class="text-xs font-medium" data-testid="accept-count">
+          {{ texts.acceptCount(toReceive) }}
+        </p>
         <footer class="flex flex-wrap gap-2">
           <Button
             type="button"

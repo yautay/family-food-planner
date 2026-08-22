@@ -389,38 +389,254 @@ diffie przed commitem (krok 11).
 
 ## Implementation checklist
 
-- [ ] Backend: `checked_at` w PATCH + LWW + przycinanie przyszłości
-- [ ] Testy API LWW zielone
-- [ ] Migracja `received_at` (numer = pierwszy wolny, up i down na czystej bazie)
-- [ ] `accept_to_pantry` idempotentne + 409 „już w spiżarni"; `received_at`
+- [x] Backend: `checked_at` w PATCH + LWW + przycinanie przyszłości
+- [x] Testy API LWW zielone
+- [x] Migracja `received_at` (numer = pierwszy wolny, up i down na czystej bazie)
+- [x] `accept_to_pantry` idempotentne + 409 „już w spiżarni"; `received_at`
       w odpowiedzi PRYWATNEJ, NIE w publicznej
-- [ ] Pięć scenariuszy znacznika przyjęcia z §Tests (w tym „doniosłem dwie
+- [x] Pięć scenariuszy znacznika przyjęcia z §Tests (w tym „doniosłem dwie
       rzeczy z torby" i regresja czerwona bez znacznika)
-- [ ] Lista pokazuje pozycje już przyjęte; przycisk nieaktywny, gdy nie ma nic
+- [x] Lista pokazuje pozycje już przyjęte; przycisk nieaktywny, gdy nie ma nic
       nowego do przyjęcia
-- [ ] 03_DATABASE §8 uzupełnione o `received_at`
-- [ ] vite-plugin-pwa: manifest PL, ikony, standalone, splash
-- [ ] Workbox: precache shell, NetworkFirst `/api/*` (timeout 3 s),
+- [x] 03_DATABASE §8 uzupełnione o `received_at`
+- [x] vite-plugin-pwa: manifest PL, ikony, standalone, splash
+- [x] Workbox: precache shell, NetworkFirst `/api/*` (timeout 3 s),
       CacheFirst statyki, wykluczenia auth/uploads
-- [ ] idb: store snapshotów + store kolejki
-- [ ] Pinia `offlineQueue`: enqueue, deduplikacja, flush, korekta zegara
-- [ ] Snapshot + hydratacja: `ListaZakupowPage` i `PublicznaListaPage`
-- [ ] `OfflineBanner` + licznik oczekujących zmian
-- [ ] Obsługa 410 (token wygasły offline)
-- [ ] vitest: 5 scenariuszy kolejki + komponenty
-- [ ] E2E offline (zalogowany + publiczny token)
-- [ ] 05_FRONTEND §6 zaktualizowane, PROGRESS.md wpis
+- [x] idb: store snapshotów + store kolejki
+- [x] Pinia `offlineQueue`: enqueue, deduplikacja, flush, korekta zegara
+- [x] Snapshot + hydratacja: `ListaZakupowPage` i `PublicznaListaPage`
+- [x] `OfflineBanner` + licznik oczekujących zmian
+- [x] Obsługa 410 (token wygasły offline)
+- [x] vitest: 5 scenariuszy kolejki + komponenty
+- [x] E2E offline (zalogowany + publiczny token)
+- [x] 05_FRONTEND §6 zaktualizowane, PROGRESS.md wpis
 
 ## Verification checklist
 
-- [ ] `task check` zielony (unit+int+api+fe-test+typecheck+lint)
-- [ ] `task test-e2e` zielony, w tym nowe scenariusze offline
-- [ ] Lighthouse: PWA installable pass (build produkcyjny)
-- [ ] Ręcznie: DevTools offline → odhaczenie → online → stan na serwerze
-- [ ] Brak nowych migracji (potwierdzić `alembic heads` = 1 głowa po merge)
-- [ ] Acceptance Criteria 1–7 odhaczone z dowodem (test lub zrzut)
-- [ ] Dokumentacja i PROGRESS.md zaktualizowane; commit `batch(12): …`
+- [x] `task check` zielony (unit+int+api+fe-test+typecheck+lint+format+fe-build)
+- [x] `task test-e2e` zielony w CAŁOŚCI (16/16), w tym nowy `offline-lista.spec.ts`
+- [ ] **Lighthouse: PWA installable — NIE uruchomione.** Wymaga buildu
+      produkcyjnego po HTTPS (SW rejestruje się tylko na `https://` albo
+      `localhost`), czego środowisko dev nie zapewnia. Sprawdzone zastępczo na
+      artefaktach buildu: `dist/sw.js` + `dist/manifest.webmanifest`, 61 wpisów
+      precache (w tym chunk `PublicznaListaPage`), `NetworkFirst` z
+      `networkTimeoutSeconds: 3`, `CacheFirst` dla `/uploads/`, komplet ikon
+      192/512 `any`+`maskable`. Weryfikacja na prawdziwej domenie dopisana do
+      karty **B18** (Completion notes, follow-up 1).
+- [x] Offline → odhaczenie → online → stan na serwerze: pokryte AUTOMATYCZNIE
+      przez `offline-lista.spec.ts` (`context.setOffline`), zamiast ręcznego
+      klikania w DevTools — ten sam scenariusz, ale powtarzalny. Wariant
+      publiczny `/l/:token` w tym samym spec-u.
+- [x] `alembic heads` = jedna głowa (`0013`). **Uwaga: linia „brak nowych
+      migracji" z pierwotnej karty jest nieaktualna** — decyzja D19 dołożyła
+      migrację i sama karta opisuje ją w §Database/migrations.
+- [x] Acceptance Criteria 1–8 z dowodami (niżej, w Completion notes)
+- [x] Dokumentacja i PROGRESS.md zaktualizowane; commit `batch(12): …`
+
+### Dowody dla Acceptance Criteria
+
+1. **PWA instalowalna** — `dist/manifest.webmanifest` (PL, `standalone`, ikony
+   192/512 `any`+`maskable`), `apple-touch-icon` w `index.html`, `dist/sw.js`
+   z 61 wpisami precache. Lighthouse: patrz wyżej.
+2. **Lista renderuje się po odcięciu sieci** — `hydrate.spec.ts` (4 testy:
+   hydratacja, brak nadpisania świeższych danych, brak snapshotu, `updatedAt`).
+3. **Odhaczenia offline natychmiast i bez utraty** — E2E `offline-lista.spec.ts`
+   (2 odhaczenia offline → `Odhaczone 2 z 2` natychmiast → online → reload →
+   stan na serwerze) + vitest scenariusz 1. **Brak dublowania**: vitest
+   scenariusz 2 (podwójne odhaczenie = jeden PATCH).
+4. **Konflikt LWW** — API: `test_shopping_lww.py` (9 testów, obie ścieżki);
+   vitest scenariusz 3; E2E: odznaczenie offline pod publicznym linkiem wygrywa
+   z wcześniejszym odhaczeniem zalogowanego.
+5. **Wskaźnik offline + licznik** — `OfflineBanner.spec.ts` (6 testów) + E2E
+   (`offline-banner`, `offline-pending`).
+6. **Token wygasły w trakcie offline** — vitest scenariusz 4: kolejka i snapshot
+   wyczyszczone, stan „wygasła" ustawiony, DOKŁADNIE jedno żądanie (bez pętli).
+7. **Idempotentne przyjęcie zakupów** — integration `test_accept_to_pantry.py`
+   (5 nowych scenariuszy D19, w tym „doniosłem dwie rzeczy z torby") + UI:
+   `ListaZakupowPage.spec.ts` (znacznik „W spiżarni", licznik „Do przyjęcia",
+   przycisk nieaktywny).
+8. **`task check` + E2E offline zielone; jedna głowa migracji** — jak wyżej.
 
 ## Completion notes
 
-(wypełnia agent wykonujący)
+**Data: 2026-08-22. Status: WYKONANE.**
+
+### Co weszło
+
+**Backend (etapy 1 i 1a — razem, jedna migracja, jeden przebieg testów):**
+
+- `ListItemUpdateRequest` i `PublicListItemUpdateRequest` przyjmują opcjonalne
+  `checked_at` typu `AwareDatetime` (naiwna data = 422 — porównanie
+  z `timestamptz` musi mieć jednoznaczny punkt w czasie).
+- `_apply_item_changes` w `lists_service.py` rozstrzyga LWW: starszy znacznik
+  zostawia stan bez zmian (200 ze stanem serwera), znacznik z przyszłości ponad
+  `CLOCK_SKEW_TOLERANCE` (5 min) jest przycinany do `now()` serwera, brak pola =
+  czas serwera. Warunek `checked != item.checked` został NIENARUSZONY, więc
+  idempotencja z R3 nadal obowiązuje.
+- Migracja **`0013_shopping_item_received_at`** (`down_revision = 0012`,
+  wzięte z `task db-heads`; upgrade i downgrade przechodzą na czystej bazie,
+  `alembic heads` = jedna głowa). Bez backfillu — świadomie.
+- `accept_to_pantry(list_id, *, user, now)` pomija pozycje z `received_at`,
+  stempluje przyjęte w TEJ SAMEJ transakcji co wpis w spiżarni, zwraca
+  addytywne `already_received` i rozróżnia DWA 409 (`NOTHING_TO_RECEIVE` vs
+  `ALREADY_RECEIVED`). `ShoppingListItemRead` zwraca `received_at`;
+  `PublicListItemRead` — NIE.
+
+**PWA (etap 2):** komplet ikon PNG 192/512 w wariantach `any` i `maskable`
+plus `apple-touch-icon` (`frontend/public/icons/`, wygenerowane Pillow
+z geometrii placeholderów SVG z B01), manifest PL ze `short_name: FFP`,
+Workbox z `NetworkFirst` dla `/api/*` (`networkTimeoutSeconds: 3`)
+i `CacheFirst` dla `/uploads/*`, `navigateFallbackDenylist` rozszerzony
+o `/uploads/`, `devOptions.enabled: false`, prompt aktualizacji zamiast cichej
+podmiany (`src/lib/offline/registerSW.ts`). Build produkcyjny generuje
+`dist/sw.js` z 61 wpisami precache — w tym chunk `PublicznaListaPage`, więc
+strona publiczna ma swój kod offline (wymóg §Context pkt 4).
+
+**Offline (etapy 3–5):** `src/lib/offline/{db,clock,sync,hydrate,registerSW}.ts`,
+`src/stores/offlineQueue.ts`, `src/components/domain/OfflineBanner.vue`,
+integracja obu stron listy, prop `received` w `ShoppingItemRow`, nowa sekcja
+`offline` w `texts.ts`, `networkMode: 'always'` w `main.ts` (patrz niżej —
+bez tego kolejka nie dostaje mutacji w ogóle).
+
+**Poza kodem funkcji:** `task test-e2e` przepuszcza teraz argumenty za `--`
+(wzorzec targetów pytest — bez tego nie da się uruchomić pojedynczego spec-u
+z wstrzykniętym `.env`, a `npx playwright` z gołego shella nie widzi
+`E2E_ADMIN_*`); CLAUDE.md dostał sekcję §5a opisującą warstwę offline jako
+fundament do reużycia i wpis o `received_at`/LWW w §4.
+
+### Odstępstwa od karty (świadome, z uzasadnieniem)
+
+1. **Nazwy plików testów: `*.spec.ts`, nie `*.test.ts`.** Karta wymienia
+   `frontend/src/lib/offline/*.test.ts`, ale `vite.config.ts` zbiera
+   `src/**/*.spec.ts` (i tak samo mówi CLAUDE.md §5). Plik `.test.ts` po prostu
+   by się nie uruchomił. Testy leżą w `src/stores/offlineQueue.spec.ts`,
+   `src/lib/offline/hydrate.spec.ts` i
+   `src/components/domain/OfflineBanner.spec.ts`.
+2. **Klucz kolejki jest DETERMINISTYCZNY (`{target}#{itemId}`), nie auto.**
+   Karta mówi „klucz auto" i zarazem wymaga deduplikacji per pozycja — klucz
+   pochodny od pozycji daje ją za darmo przez `put()`, zamiast dokładać ręczne
+   przeszukiwanie kolejki przy każdym enqueue. Kształt wartości jest z karty
+   (`{target, itemId, checked, checked_at, attempts}`) plus `queuedAt`, który
+   utrzymuje KOLEJNOŚĆ wysyłki (klucz jej już nie niesie).
+3. **Przyjęcie zakupów do spiżarni NIE weszło do kolejki offline.** Karta mówi,
+   że dzięki D19 „MOŻE" wejść — i faktycznie może, bo jest już idempotentne.
+   Nie wchodzi, bo jego wartością dla użytkownika jest POLICZALNA odpowiedź
+   serwera („dodano 3 nowe, zwiększono 2, pominięto 1"), a offline nie da się
+   jej pokazać ani zgadnąć: `received_at` i wynik scalania w spiżarni liczy
+   serwer. Akcja jest offline wyłączona z podpowiedzią „Przyjęcie zakupów do
+   spiżarni wymaga połączenia". Idempotencja i tak zarabia na siebie —
+   zabezpiecza ponowienie po utracie odpowiedzi, czyli sytuację, dla której
+   D19 powstała.
+4. **Zmiana sklepu offline WYŁĄCZONA** (karta dopuszczała też wariant
+   „z jawną informacją, że kolejność odświeży się po synchronizacji"). Wybrano
+   wyłączenie, bo drugi wariant pokazywałby przez cały pobyt w sklepie
+   kolejność NIEPRAWDZIWĄ dla wybranego sklepu — czyli dokładnie to, przed czym
+   broni ustalenie B11 pkt 1 („jedna lista = jedna kolejność").
+5. **Nowa zależność deweloperska `fake-indexeddb`** (karta wymienia tylko
+   `idb`). Powód: deduplikacja per pozycja i kolejność wysyłki wynikają
+   z kluczy `db.ts`, więc atrapa magazynu sprawdzałaby wyłącznie samą siebie.
+   Testy jadą na prawdziwym IndexedDB. `db.ts` dostał `resetOfflineDb()`
+   (test-only, wzorzec `resetClockSkew` z `clock.ts`) — otwarte połączenie
+   blokuje `indexedDB.deleteDatabase`.
+6. **`hydrate.ts` jako osobny moduł** zamiast dwóch kopii logiki w stronach.
+   Karta wymienia `db.ts` i `sync.ts`; wydzielenie hydratacji było warunkiem
+   przetestowania jej bez montowania całej strony i usunęło duplikat.
+7. **Dwa spece z B11 dostały `createPinia()`** w helperze montującym (strona
+   czyta teraz kolejkę offline). To nie osłabienie asercji — bez pinii
+   komponent w ogóle nie startuje. Do fabryki pozycji dopisano
+   `received_at: null`.
+8. **`test_migrations.py`**: oczekiwana głowa po `upgrade head` zmieniona
+   z `0012` na `0013` (asercja z definicji śledzi bieżącą głowę).
+9. **`networkMode: 'always'` jest zmianą GLOBALNĄ** (`main.ts`, queries
+   i mutations), a nie lokalną dla listy zakupowej. Karta tego nie przewidywała,
+   bo to nieoczywista właściwość TanStack Query — ale bez niej etap 4 nie
+   działa w ogóle (mutacja jest pauzowana i `mutationFn` nigdy nie startuje).
+   Skutek uboczny dla pozostałych ekranów: mutacja bez sieci nie wisi w pamięci,
+   tylko od razu pada z komunikatem — to zachowanie SPÓJNE z resztą aplikacji,
+   bo nigdzie indziej nie ma kolejki, która mogłaby ją przechować.
+10. **`task test-e2e` przyjmuje argumenty za `--`.** Bramka wyjścia woła target
+   bez argumentów, więc pełny przebieg jest niezmieniony; zawężenie jest
+   narzędziem diagnostycznym, dokładnie jak w targetach pytest.
+
+### Decyzja pozostawiona implementującemu (karta, Implementation Notes)
+
+**Kiedy odświeżać snapshot: przy KAŻDEJ zmianie kompletnego stanu w cache'u,
+nie tylko po pełnym sukcesie fetcha.** Jeden `watch` na `list.data` pokrywa trzy
+przypadki naraz: odpowiedź serwera, optimistic update i rollback. Wariant „tylko
+po sukcesie zapytania" wyglądał bezpieczniej, ale gubiłby dokładnie ten
+scenariusz, dla którego snapshot istnieje: odświeżenie strony w sklepie bez
+zasięgu po odhaczeniu pięciu pozycji pokazywałoby stan sprzed wejścia do sklepu.
+Zapisujemy zawsze KOMPLETNY payload z cache'u (nigdy fragment), więc snapshot
+nie może być niespójny, a rollback po błędzie przechodzi tą samą drogą —
+snapshot nie utrwala stanu, którego użytkownik już nie widzi na ekranie.
+
+### Znalezione i naprawione w trakcie
+
+- **Pętla żądań na martwym tokenie.** Flush iteruje po MIGAWCE kolejki, więc po
+  410 `clearQueueFor` nie powstrzymywało kolejnych wpisów tej samej listy —
+  drugie żądanie i tak szło na serwer. Złapał to scenariusz 4 z §Tests
+  (`checkPublicListItem` wywołany 2 razy zamiast 1). Naprawione zbiorem `dead`
+  w `flush()`; test tego pilnuje (AC 6).
+- **Subskrypcja synchronizacji była wiązana w `onMounted`.** Przejście z listy
+  na listę reużywa ten sam komponent, więc po flushu unieważniany byłby klucz
+  poprzedniej listy. Zamienione na `watch` po kluczu z `onCleanup`.
+- **DWA błędy, których nie miał szans złapać vitest — wyszły dopiero w E2E
+  z `context.setOffline(true)` na prawdziwym Chromium.** Obydwa dawały UI
+  wyglądający POPRAWNIE (optimistic update żyje w pamięci karty), a gubiły
+  odhaczenia po przeładowaniu strony:
+  1. **`DataCloneError` przy zapisie do IndexedDB.** Structured clone rzuca na
+     proxy Vue, a takie obiekty przychodzą z cache'u TanStack Query. Wyjątek
+     łykał `withDb`, więc snapshot i kolejka zostawały PUSTE, bez śladu.
+     Naprawione konwersją `plain()` na granicy `db.ts`. `fake-indexeddb`
+     w vitest tego nie pokazał, bo tam przekazujemy obiekty literalne.
+  2. **TanStack Query PAUZUJE mutacje offline** (domyślne
+     `networkMode: 'online'`): `onMutate` się wykonuje, `mutationFn` nie —
+     więc kolejka nigdy nie widziała odhaczenia. Naprawione
+     `networkMode: 'always'` w `main.ts` (queries i mutations). To nie jest
+     obejście frameworka: mamy WŁASNĄ, trwałą kolejkę, a pauza TanStack żyje
+     w pamięci karty i nie przeżywa reloadu, czyli nie spełnia ADR-009.
+     Uzasadnienie wpisane do 05_FRONTEND §6.
+
+### Review skille
+
+- **`/code-review` (SKILL-REVIEW) — uruchomiony na diffie przed commitem.**
+  Trzy ustalenia, wszystkie NAPRAWIONE w tym commicie i pokryte testami:
+  (1) `sync.ts` — błąd sieci zużywał limit prób, więc kolejka kasowała
+  odhaczenia po ~2 minutach bez zasięgu (dokładnie w scenariuszu, dla którego
+  powstała); rozdzielone na wyniki `offline` i `retry`, licznik rośnie tylko
+  przy odmowie serwera; (2) `offlineQueue.flush` — po 410 kolejne wpisy tej
+  samej listy szły z migawki na martwy token; (3) subskrypcja synchronizacji
+  wiązana w `onMounted` zostawała przy poprzedniej liście po zmianie trasy.
+- **SKILL-SEC (Recommended)** — załadowany i przejrzany pod kątem
+  07_SECURITY §5. Bez ustaleń blokujących; dwie rzeczy dopisane wprost do
+  dokumentu (§5 pkt 10 i 11): `checked_at` nie poszerza uprawnień tokenu
+  publicznego (najgorsze możliwe nadużycie to „przypięcie" własnego stanu na
+  ≤5 minut, bo starszy znacznik przegrywa, a przyszły jest przycinany) oraz
+  zakres tego, co ląduje w IndexedDB i w Cache Storage.
+- `/security-review` NIE był wymagany — karta wymienia w §Skills tylko
+  SKILL-REVIEW w sekcji Review (SKILL-SECREV nie występuje).
+
+### Follow-upy (poza zakresem tego batcha)
+
+1. **Lighthouse „PWA installable" nie został uruchomiony automatycznie** —
+   wymaga buildu produkcyjnego serwowanego po HTTPS, czego środowisko
+   deweloperskie nie zapewnia (SW rejestruje się wyłącznie na `https://` albo
+   `localhost`). Sprawdzono to, co da się sprawdzić bez przeglądarki: build
+   generuje `dist/sw.js` i `dist/manifest.webmanifest` z kompletem ikon,
+   `NetworkFirst` z `networkTimeoutSeconds: 3` oraz `CacheFirst` dla
+   `/uploads/`. Punkt weryfikacji na prawdziwej domenie jest dopisany do karty
+   **B18**.
+2. **`already_have` nie podlega LWW** (nie wchodzi do kolejki, więc zawsze
+   przychodzi online). Gdyby kiedyś wszedł — potrzebuje własnego znacznika
+   czasu, bo `checked_at` opisuje wyłącznie checkbox.
+3. **Cache Storage trzyma odpowiedzi API zalogowanego użytkownika** (to cel
+   `NetworkFirst`). Odpowiedzi z `Set-Cookie` są wykluczone, ale wylogowanie
+   nie czyści cache'u SW. Do rozważenia w **B17**: `caches.delete('ffp-api')`
+   przy wylogowaniu. Ryzyko jest lokalne (to samo urządzenie, ta sama
+   przeglądarka), więc nie blokuje tego batcha.
+
+### Pytania do właściciela
+
+Brak — D18 i D19 były zatwierdzone przed startem, a wszystkie wybory
+implementacyjne mieściły się w wariantach dopuszczonych przez kartę.
+

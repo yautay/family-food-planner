@@ -128,10 +128,14 @@ tasks:
       - npx vite build
 
   test-e2e:
-    desc: Testy E2E (Playwright, chromium) — wymaga `task e2e-install`
+    desc: 'Testy E2E (Playwright, chromium) — wymaga `task e2e-install`. Zawężenie: -- spec.ts'
     dir: frontend
     cmds:
-      - npm run e2e
+      # Argumenty za `--` trafiają do Playwrighta (wzorzec targetów pytest):
+      #   task test-e2e -- offline-lista.spec.ts
+      # Bramka wyjścia batcha woła target BEZ argumentów, więc pełny przebieg
+      # jest zawsze ten sam — zawężenie jest narzędziem diagnostycznym.
+      - npm run e2e -- {{.CLI_ARGS}}
 
   e2e-install:
     desc: Instaluje przeglądarkę dla Playwrighta (jednorazowo)

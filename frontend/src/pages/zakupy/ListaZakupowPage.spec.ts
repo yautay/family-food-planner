@@ -1,8 +1,11 @@
 import { VueQueryPlugin } from '@tanstack/vue-query'
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
+import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type * as ShoppingListsApi from '@/api/shoppingLists'
+
+import { useOfflineQueueStore } from '@/stores/offlineQueue'
 
 import ListaZakupowPage from './ListaZakupowPage.vue'
 
@@ -67,6 +70,7 @@ function item(overrides: Record<string, unknown> = {}) {
     from_pantry_amount: null,
     checked: false,
     checked_at: null,
+    received_at: null,
     position: 0,
     ...overrides,
   }
@@ -110,9 +114,20 @@ function detail(overrides: Record<string, unknown> = {}) {
   }
 }
 
-async function mountPage() {
+async function mountPage(
+  prepare?: (store: ReturnType<typeof useOfflineQueueStore>) => void,
+): Promise<VueWrapper> {
+  // Pinia jest potrzebna od B12: strona czyta kolejkę offline (ADR-009).
+  // jsdom nie ma IndexedDB, więc `db.ts` degraduje się do „brak snapshotu,
+  // pusta kolejka" — czyli dokładnie zachowanie online, o które chodzi tu.
+  const pinia = createPinia()
+  setActivePinia(pinia)
+  prepare?.(useOfflineQueueStore())
   const wrapper = mount(ListaZakupowPage, {
-    global: { plugins: [VueQueryPlugin], stubs: { RouterLink: { template: '<a><slot /></a>' } } },
+    global: {
+      plugins: [VueQueryPlugin, pinia],
+      stubs: { RouterLink: { template: '<a><slot /></a>' } },
+    },
   })
   await flushPromises()
   return wrapper
@@ -262,5 +277,70 @@ describe('ListaZakupowPage', () => {
     const wrapper = await mountPage()
 
     expect(wrapper.find('[data-testid="lista-wygasla"]').exists()).toBe(true)
+  })
+
+  // --- znacznik przyjęcia (D19) i tryb offline (ADR-009) -------------------------
+
+  it('pozycja już przyjęta ma TEKSTOWY znacznik, a przycisk liczy tylko nowe (D19)', async () => {
+    fetchShoppingList.mockResolvedValue(
+      detail({
+        sections: [
+          {
+            category_id: 10,
+            category_name: 'Sypkie',
+            items: [
+              item({ id: 1, checked: true, received_at: '2030-01-06T12:00:00Z' }),
+              item({ id: 2, label: 'Ryż', checked: true, position: 1 }),
+            ],
+          },
+        ],
+      }),
+    )
+    const wrapper = await mountPage()
+
+    expect(wrapper.get('[data-testid="shopping-received-1"]').text()).toBe('W spiżarni')
+    expect(wrapper.find('[data-testid="shopping-received-2"]').exists()).toBe(false)
+    // Do przyjęcia zostaje JEDNA pozycja, choć odhaczone są dwie.
+    expect(wrapper.get('[data-testid="lista-accept-hint"]').text()).toBe('Do przyjęcia: 1')
+  })
+
+  it('gdy wszystko jest już w spiżarni, przycisk przyjęcia jest nieaktywny (D19)', async () => {
+    fetchShoppingList.mockResolvedValue(
+      detail({
+        sections: [
+          {
+            category_id: 10,
+            category_name: 'Sypkie',
+            items: [item({ id: 1, checked: true, received_at: '2030-01-06T12:00:00Z' })],
+          },
+        ],
+      }),
+    )
+    const wrapper = await mountPage()
+
+    const przycisk = wrapper.get('[data-testid="lista-accept-open"]')
+    expect(przycisk.attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-testid="lista-accept-hint"]').text()).toBe(
+      'Wszystko z tej listy jest już w spiżarni.',
+    )
+  })
+
+  it('offline: odhaczenie NIE idzie na serwer, ale UI reaguje i pokazuje banner', async () => {
+    const wrapper = await mountPage(({ markOffline }) => markOffline())
+
+    expect(wrapper.get('[data-testid="offline-banner"]').text()).toContain('Tryb offline')
+
+    await wrapper.get('[data-testid="shopping-check-1"]').trigger('change')
+    await flushPromises()
+
+    // Zero ruchu na sieci — zmiana czeka w kolejce…
+    expect(updateShoppingListItem).not.toHaveBeenCalled()
+    // …a checkbox jest odhaczony NATYCHMIAST (optimistic, AC 3).
+    expect(wrapper.get('[data-testid="lista-progress"]').text()).toBe('Odhaczone 1 z 3')
+    // Zmiana sklepu offline jest zablokowana: kolejność sekcji układa serwer
+    // z profilu sklepu, więc przeglądarka nie umiałaby pokazać skutku (R3).
+    expect(wrapper.get('[data-testid="lista-sklep"]').text()).toContain(
+      'Zmiana sklepu wymaga połączenia',
+    )
   })
 })

@@ -23,7 +23,11 @@ from app.modules.catalog.models import CanonicalProduct, MeasureKind, Perishabil
 from app.modules.catalog.units import AmountUnit
 from app.modules.pantry.models import PantryItem
 from app.modules.pantry.service import PantryService
-from app.modules.shopping.lists_service import ShoppingListsService
+from app.modules.shopping.lists_service import (
+    ALREADY_RECEIVED,
+    NOTHING_TO_RECEIVE,
+    ShoppingListsService,
+)
 from app.modules.shopping.models import ShoppingList, ShoppingListItem
 from tests.factories import (
     assign_to_household,
@@ -127,6 +131,7 @@ async def test_przyjmuje_wylacznie_odhaczone_pozycje(db_session: AsyncSession) -
     result = await service.accept_to_pantry(
         data.shopping_list.id,
         user=data.user,
+        now=NOW,
     )
 
     assert (result.created, result.increased, result.skipped) == (1, 0, 0)
@@ -154,6 +159,7 @@ async def test_ilosc_to_kupione_opakowania_a_nie_potrzeba(db_session: AsyncSessi
     result = await service.accept_to_pantry(
         data.shopping_list.id,
         user=data.user,
+        now=NOW,
     )
 
     assert (result.created, result.increased) == (2, 0)
@@ -188,6 +194,7 @@ async def test_dolewa_do_istniejacej_pozycji_bez_daty_waznosci(
     result = await service.accept_to_pantry(
         data.shopping_list.id,
         user=data.user,
+        now=NOW,
     )
 
     assert (result.created, result.increased) == (0, 1)
@@ -219,6 +226,7 @@ async def test_pozycja_z_data_waznosci_nie_jest_dolewana(db_session: AsyncSessio
     result = await service.accept_to_pantry(
         data.shopping_list.id,
         user=data.user,
+        now=NOW,
     )
 
     assert (result.created, result.increased) == (1, 0)
@@ -239,6 +247,7 @@ async def test_brak_odhaczonych_pozycji_daje_409(db_session: AsyncSession) -> No
         await service.accept_to_pantry(
             data.shopping_list.id,
             user=data.user,
+            now=NOW,
         )
 
 
@@ -271,6 +280,7 @@ async def test_pozycja_bez_produktu_kanonicznego_jest_pomijana(
     result = await service.accept_to_pantry(
         data.shopping_list.id,
         user=data.user,
+        now=NOW,
     )
 
     assert bez_produktu.product_id is None
@@ -407,7 +417,7 @@ async def test_admin_nie_dolewa_do_cudzej_spizarni(db_session: AsyncSession) -> 
     )
 
     service = ShoppingListsService(db_session)
-    result = await service.accept_to_pantry(lista.id, user=admin)
+    result = await service.accept_to_pantry(lista.id, user=admin, now=NOW)
 
     assert pozycja.checked is True
     assert (result.created, result.increased) == (1, 0)
@@ -446,7 +456,7 @@ async def test_blad_w_polowie_listy_nie_zostawia_spizarni_w_stanie_posrednim(
     monkeypatch.setattr(PantryService, "receive_purchase", failing_receive_purchase)
 
     with pytest.raises(RuntimeError):
-        await service.accept_to_pantry(fixture.shopping_list.id, user=fixture.user)
+        await service.accept_to_pantry(fixture.shopping_list.id, user=fixture.user, now=NOW)
 
     await db_session.rollback()
     rows = (await db_session.execute(select(PantryItem))).scalars().all()
@@ -480,8 +490,152 @@ async def test_pozycja_mam_juz_w_domu_nie_wchodzi_do_spizarni(
         checked=True,
     )
 
-    result = await service.accept_to_pantry(fixture.shopping_list.id, user=fixture.user)
+    result = await service.accept_to_pantry(fixture.shopping_list.id, user=fixture.user, now=NOW)
 
     assert (result.created, result.increased, result.skipped) == (1, 0, 1)
     assert await _pantry_rows(db_session, fixture.flour.id) == []
     assert len(await _pantry_rows(db_session, fixture.tomato.id)) == 1
+
+
+# --- znacznik przyjęcia: idempotencja (decyzja D19, karta B12 §Tests) --------------
+
+
+async def test_przyjecie_stempluje_received_at_przyjetych_pozycji(
+    db_session: AsyncSession,
+) -> None:
+    """D19: pozycja, która weszła do spiżarni, dostaje znacznik przyjęcia.
+
+    Bez tego stempla nie da się odróżnić „jeszcze nie wniesione" od „już
+    wniesione", więc każde ponowienie akcji dolewałoby zakupy od nowa.
+    """
+    data = await _list_with_two_items(db_session)
+    service = ShoppingListsService(db_session)
+    for item in (data.flour_item, data.tomato_item):
+        await service.update_item(
+            data.shopping_list.id, item.id, user=data.user, now=NOW, checked=True
+        )
+
+    result = await service.accept_to_pantry(data.shopping_list.id, user=data.user, now=NOW)
+
+    assert (result.created, result.already_received) == (2, 0)
+    await db_session.refresh(data.flour_item)
+    await db_session.refresh(data.tomato_item)
+    assert data.flour_item.received_at == NOW
+    assert data.tomato_item.received_at == NOW
+
+
+async def test_drugie_przyjecie_tej_samej_listy_daje_409_i_nie_dubluje_spizarni(
+    db_session: AsyncSession,
+) -> None:
+    """D19 — TEST REGRESYJNY DECYZJI: powtórka nie dolewa zakupów drugi raz.
+
+    Bez kolumny `received_at` ten test jest czerwony: druga próba kończyła się
+    sukcesem, a spiżarnia pokazywała 4000 g mąki zamiast 2000 g. Skutek był
+    CICHY — użytkownik dowiadywał się o nim dopiero, gdy silnik zakupowy
+    przestawał mu tę mąkę kupować.
+    """
+    data = await _list_with_two_items(db_session)
+    service = ShoppingListsService(db_session)
+    # Id-ki zapamiętane PRZED akcją: 409 robi jawny rollback, który wygasza
+    # obiekty ORM, a leniwe doczytanie atrybutu poza greenletem to `MissingGreenlet`.
+    list_id, item_id, flour_id = data.shopping_list.id, data.flour_item.id, data.flour.id
+    await service.update_item(list_id, item_id, user=data.user, now=NOW, checked=True)
+    await service.accept_to_pantry(list_id, user=data.user, now=NOW)
+    po_pierwszym = await _pantry_rows(db_session, flour_id)
+    assert [row.amount for row in po_pierwszym] == [Decimal("2000.000")]
+
+    with pytest.raises(ConflictError) as konflikt:
+        await service.accept_to_pantry(list_id, user=data.user, now=NOW + timedelta(minutes=5))
+
+    assert konflikt.value.message == ALREADY_RECEIVED
+    rows = await _pantry_rows(db_session, flour_id)
+    assert [row.amount for row in rows] == [Decimal("2000.000")]
+
+
+async def test_pozycja_odhaczona_po_przyjeciu_wchodzi_osobno(
+    db_session: AsyncSession,
+) -> None:
+    """„Doniosłem jeszcze dwie rzeczy z torby" — przypadek, dla którego D19 jest PER POZYCJA.
+
+    Znacznik na LIŚCIE (odrzucony wariant b) zablokowałby to zupełnie legalne
+    zachowanie: pierwsze przyjęcie zamknęłoby listę na zawsze.
+    """
+    data = await _list_with_two_items(db_session)
+    service = ShoppingListsService(db_session)
+    await service.update_item(
+        data.shopping_list.id, data.flour_item.id, user=data.user, now=NOW, checked=True
+    )
+    await service.accept_to_pantry(data.shopping_list.id, user=data.user, now=NOW)
+
+    pozniej = NOW + timedelta(hours=2)
+    await service.update_item(
+        data.shopping_list.id, data.tomato_item.id, user=data.user, now=pozniej, checked=True
+    )
+    result = await service.accept_to_pantry(data.shopping_list.id, user=data.user, now=pozniej)
+
+    assert (result.created, result.increased, result.already_received) == (1, 0, 1)
+    # Mąka nie drgnęła: jej stempel jest starszy, więc drugie przyjęcie ją minęło.
+    assert [row.amount for row in await _pantry_rows(db_session, data.flour.id)] == [
+        Decimal("2000.000")
+    ]
+    assert [row.amount for row in await _pantry_rows(db_session, data.tomato.id)] == [
+        Decimal("700.000")
+    ]
+    await db_session.refresh(data.flour_item)
+    await db_session.refresh(data.tomato_item)
+    assert data.flour_item.received_at == NOW
+    assert data.tomato_item.received_at == pozniej
+
+
+async def test_pozycja_mam_juz_w_domu_nie_dostaje_znacznika_przyjecia(
+    db_session: AsyncSession,
+) -> None:
+    """„Mam już w domu" nie jest zakupem (R3), więc nie ma czego stemplować.
+
+    Gdyby dostawała `received_at`, znacznik zaczynałby znaczyć „obejrzana",
+    a nie „przyjęta do spiżarni" — a na tym drugim znaczeniu stoi idempotencja.
+    """
+    data = await _list_with_two_items(db_session)
+    service = ShoppingListsService(db_session)
+    await service.update_item(
+        data.shopping_list.id,
+        data.flour_item.id,
+        user=data.user,
+        now=NOW,
+        checked=True,
+        already_have=True,
+    )
+    await service.update_item(
+        data.shopping_list.id, data.tomato_item.id, user=data.user, now=NOW, checked=True
+    )
+
+    result = await service.accept_to_pantry(data.shopping_list.id, user=data.user, now=NOW)
+
+    assert (result.created, result.skipped, result.already_received) == (1, 1, 0)
+    await db_session.refresh(data.flour_item)
+    assert data.flour_item.received_at is None
+
+
+async def test_brak_odhaczonych_daje_INNY_komunikat_niz_juz_przyjete(
+    db_session: AsyncSession,
+) -> None:
+    """Dwa różne 409 (D19 pkt 4) — dla użytkownika to dwie różne sytuacje."""
+    data = await _list_with_two_items(db_session)
+    service = ShoppingListsService(db_session)
+    # Jak wyżej: 409 rollbackuje sesję, więc id-ki bierzemy zawczasu.
+    list_id, item_id, user = data.shopping_list.id, data.flour_item.id, data.user
+
+    with pytest.raises(ConflictError) as nic_nie_odhaczono:
+        await service.accept_to_pantry(list_id, user=user, now=NOW)
+    assert nic_nie_odhaczono.value.message == NOTHING_TO_RECEIVE
+    # 409 rollbackuje sesję, co wygasza także `user` — bez odświeżenia kolejne
+    # wywołanie serwisu czytałoby jego atrybuty leniwie, poza greenletem.
+    await db_session.refresh(user)
+
+    await service.update_item(list_id, item_id, user=user, now=NOW, checked=True)
+    await service.accept_to_pantry(list_id, user=user, now=NOW)
+
+    with pytest.raises(ConflictError) as juz_przyjete:
+        await service.accept_to_pantry(list_id, user=user, now=NOW)
+    assert juz_przyjete.value.message == ALREADY_RECEIVED
+    assert juz_przyjete.value.message != NOTHING_TO_RECEIVE

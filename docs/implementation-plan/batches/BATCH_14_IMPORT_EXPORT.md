@@ -17,6 +17,17 @@ całą instancję. Pełne odzyskanie danych bez SaaS (02_DOMAIN §11).
 
 Batch zastaje (po R3):
 
+- **B12 wszedł równolegle i ZOSTAWIA ŚLADY, o które trzeba zadbać przy merge'u**
+  (00_MASTER §5): (a) migracja `0013_shopping_item_received_at` — jeśli ten
+  batch startował z gałęzi sprzed B12, jego „pierwszy wolny numer" też wypadł
+  na `0013`; po merge'u sprawdź `task db-heads` i przy dwóch głowach zrób
+  migrację scalającą PRZED `task check`; (b) `frontend/package.json` +
+  lockfile — B12 dołożył `idb` i `fake-indexeddb`, konflikt rozwiązuje się
+  UNIĄ zależności, po czym `npm ci` w kontenerze frontendu; (c) pola
+  `received_at` (pozycja listy) i `already_received` (odpowiedź
+  `accept-to-pantry`) są w `frontend/src/api/generated.ts` — po merge'u
+  przepuść `task fe-types` i zacommituj wynik zamiast ręcznie sklejać diff.
+
 - Moduł `backend/app/modules/transfer/` — pusty szkielet (struktura
   z ADR-001); mapa API rezerwuje `A /transfer/export /transfer/import`
   (04_API §2) — UWAGA: eksport użytkownika wymaga rozszerzenia mapy o

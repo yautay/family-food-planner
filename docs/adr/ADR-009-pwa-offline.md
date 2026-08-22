@@ -21,3 +21,21 @@ skomplikowanego systemu realtime.
   akceptowany (skala rodzinna), UX zawsze responsywny.
 − Kolejka offline wymaga testów vitest (scenariusze: offline→online,
   podwójne odhaczenie, wygaśnięcie tokenu w trakcie).
+
+## Stan wdrożenia (BATCH_12, 2026-08-22)
+
+Decyzja zrealizowana w całości; szczegóły techniczne trzyma 05_FRONTEND §6.
+Trzy rzeczy, których ADR nie przewidział, a które okazały się częścią kontraktu:
+
+1. **429 to stan przejściowy, nie porażka mutacji.** Limit 60/min/IP jest
+   WSPÓLNY dla GET i PATCH całej ścieżki publicznej (ustalenie R3), więc
+   kolejka z kilkudziesięcioma odhaczeniami wchodzi w niego przy normalnej
+   pracy. Flush jest sekwencyjny i zatrzymuje się z backoffem, zamiast gubić
+   zmiany.
+2. **`checked_at` z przyszłości trzeba przycinać.** Bez tego telefon
+   z zegarem spieszącym o godziny zabetonowałby pozycję: żadna późniejsza
+   decyzja nie byłaby od jego znacznika młodsza. Próg: 5 minut.
+3. **Zmiana sklepu nie wchodzi do kolejki.** Kolejność sekcji składa serwer
+   z profilu `store_category_order`, więc offline nie da się jej przeliczyć bez
+   złamania reguły „jedna lista = jedna kolejność na ekranie, w druku i pod
+   linkiem" (B11).

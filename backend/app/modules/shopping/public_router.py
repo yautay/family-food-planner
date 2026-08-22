@@ -105,8 +105,11 @@ def build_public_lists_router(limiter: Limiter) -> APIRouter:
         summary="Odhaczenie pozycji z publicznego linku",
         description=(
             "Token pozwala zmienić WYŁĄCZNIE `checked` (ADR-010) — każde inne "
-            "pole w ciele żądania kończy się 422. Bez CSRF (autoryzuje token "
-            "w URL), za to z limitem 60/min/IP."
+            "pole w ciele żądania kończy się 422. Opcjonalne `checked_at` nie "
+            "poszerza tych uprawnień: mówi tylko, KIEDY zapadła decyzja, żeby "
+            "odhaczenie z kolejki offline nie nadpisało świeższego stanu "
+            "(last-write-wins, ADR-009). Bez CSRF (autoryzuje token w URL), "
+            "za to z limitem 60/min/IP."
         ),
         responses=GONE_RESPONSE,
     )
@@ -120,7 +123,11 @@ def build_public_lists_router(limiter: Limiter) -> APIRouter:
     ) -> PublicListItemRead:
         return _item_read(
             await service.public_check_item(
-                token, item_id, checked=payload.checked, now=datetime.now(UTC)
+                token,
+                item_id,
+                checked=payload.checked,
+                now=datetime.now(UTC),
+                checked_at=payload.checked_at,
             )
         )
 

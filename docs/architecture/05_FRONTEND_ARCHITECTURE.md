@@ -10,8 +10,9 @@ Bez Nuxta, bez i18n (UI wyłącznie PL).
   optimistic updates). Klucze zapytań centralnie w `src/api/queryKeys.ts`.
 - **Pinia** = wyłącznie stan UI/klienta: sesja użytkownika (`authStore`),
   stan szkicu generacji zakupów (`shoppingDraft` — zakres dat, odpowiedź na
-  pytanie o spiżarnię, otwarte sekcje; od B10), kolejka offline checkboxów,
-  preferencje widoku (`pantryView`). Store NIE trzyma kopii danych serwera —
+  pytanie o spiżarnię, otwarte sekcje; od B10), kolejka offline checkboxów
+  (`offlineQueue` — od B12; źródłem prawdy jest IndexedDB, store trzyma jej
+  odbicie dla licznika w bannerze), preferencje widoku (`pantryView`). Store NIE trzyma kopii danych serwera —
   podgląd zakupów liczy silnik na serwerze, więc jest stanem serwera i mieszka
   w TanStack Query.
 - Mutacje przez composables `useXxxMutation` z jawnym `invalidateQueries`.
@@ -113,15 +114,80 @@ prawdą jest walidacja serwera (422 mapowane na pola formularza).
 
 ## 6. PWA i offline (ADR-009)
 
-- vite-plugin-pwa: manifest (ikony, PL, standalone), Workbox precache
-  shella; strategie: `NetworkFirst` dla `/api/*` list zakupowych,
-  `CacheFirst` dla statyków.
-- Offline listy zakupowej: otwarta lista zapisywana do IndexedDB (idb);
-  odhaczenia offline trafiają do kolejki i po odzyskaniu sieci PATCH-ują
-  serwer (last-write-wins per pozycja; konflikt = wygrywa późniejszy
-  `checked_at`). Wskaźnik trybu offline w UI listy.
-- Publiczna strona `/l/:token` również działa offline po pierwszym
-  otwarciu (ten sam mechanizm).
+Stan faktyczny po BATCH_12.
+
+**PWA** (`vite.config.ts`, `index.html`):
+
+- manifest PL: `name` „Family Food Planner", `short_name` „FFP", `lang: pl`,
+  `display: standalone`, `theme_color` #E07A2F, `background_color` #FAF6EF,
+  ikony PNG 192/512 w wariantach `any` i `maskable` (`public/icons/`).
+  Splash na Androidzie składa przeglądarka z ikony 512 + `background_color`;
+  iOS nie czyta manifestu w tym zakresie, więc `apple-touch-icon` i metatagi
+  `apple-mobile-web-app-*` siedzą w `index.html`.
+- Workbox `generateSW`: precache shella (`**/*.{js,css,html,svg,png,woff2}`),
+  `navigateFallback: index.html` z wykluczeniem `/api/` i `/uploads/`
+  (te obsługuje backend, ADR-014). Runtime: `NetworkFirst` dla `/api/*`
+  z `networkTimeoutSeconds: 3` (bez tego offline UX to 30 s spinnera) oraz
+  `CacheFirst` dla `/uploads/*`. **`/api/v1/auth/*` jest wykluczone** —
+  odpowiedzi z `Set-Cookie` nie wchodzą do cache (07_SECURITY).
+- `registerType: 'autoUpdate'`, ale podmiana NIE jest cicha:
+  `src/lib/offline/registerSW.ts` pyta „Dostępna jest nowa wersja aplikacji.
+  Odświeżyć teraz?", żeby przeładowanie nie trafiło w środek odhaczania listy.
+  W dev SW jest wyłączony (`devOptions.enabled: false`) — precache w trakcie
+  pracy zatruwa cache; testuje się go na buildzie produkcyjnym.
+
+**Offline listy zakupowej** (`src/lib/offline/*`, `src/stores/offlineQueue.ts`):
+
+- **Wszystko, co idzie do IndexedDB, przechodzi przez `plain()`** (`db.ts`):
+  structured clone rzuca `DataCloneError` na proxy Vue, a dokładnie takie
+  obiekty przychodzą z cache'u TanStack Query. Bez tej konwersji zapis padał
+  po cichu (błąd łykany przez `withDb`), UI wyglądał poprawnie, bo optimistic
+  update żyje w pamięci, a kolejka i snapshot zostawały puste.
+- `db.ts` — IndexedDB (`idb`) z dwoma magazynami: `list-snapshots`
+  (klucz `list:{id}` albo `public:{token}`) i `mutation-queue` (klucz
+  `{target}#{itemId}`, czyli deduplikacja per pozycja za darmo — podwójne
+  odhaczenie tej samej rzeczy daje JEDEN PATCH z ostatnim stanem). Brak
+  IndexedDB (tryb prywatny, zablokowany storage) degraduje się do zachowania
+  sprzed B12, a nie do białego ekranu.
+- `hydrate.ts` — snapshot wchodzi do CACHE'U TanStack Query (`updatedAt: 1`,
+  więc jest od razu nieświeży i nie blokuje refetchu przez `staleTime`), a nie
+  do osobnego ref-a strony. Dzięki temu render, optimistic update i rollback
+  działają offline tym samym kodem, co online.
+- `clock.ts` — przesunięcie zegara liczone z nagłówka `Date` KAŻDEJ odpowiedzi
+  (oba klienty HTTP). `checked_at` w kolejce jest w czasie SERWERA, bo LWW ma
+  rozstrzygać, kto odhaczył później, a nie czyj telefon się spieszy.
+- `offlineQueue.ts` (Pinia — stan UI, ADR-007) — enqueue w momencie
+  KLIKNIĘCIA, flush po `online`, `focus` i `visibilitychange`. Flush jest
+  SEKWENCYJNY: limit 60/min/IP jest wspólny dla całej ścieżki publicznej
+  (ustalenie R3), więc równoległy wystrzał kolejki sam by w niego wpadł.
+- **`networkMode: 'always'` w `main.ts` jest WARUNKIEM działania kolejki**, nie
+  optymalizacją. Domyślny tryb `'online'` PAUZUJE mutację przy
+  `navigator.onLine === false`: `onMutate` się wykonuje (optimistic update
+  wygląda poprawnie), ale `mutationFn` nie jest wołane aż do powrotu sieci —
+  więc kolejka nigdy nie zobaczyłaby odhaczenia. Pauza TanStack żyje w pamięci
+  karty i nie przeżywa reloadu; nasza kolejka przeżywa (ADR-009). Wyłapało to
+  dopiero E2E z `context.setOffline(true)`.
+- `sync.ts` — klasyfikacja wyniku: `sent` (200, także gdy LWW odrzucił starszy
+  znacznik), `retry` (brak sieci, 429, 5xx — wpis zostaje, backoff 15 s),
+  `gone` (404/410 — kolejka tej listy i jej snapshot idą do kosza, strona
+  pokazuje ekran „wygasła", bez pętli retry) i `dropped` (4xx trwałe albo
+  wyczerpane 8 prób, żeby jeden wpis nie zablokował kolejki na zawsze).
+- `OfflineBanner.vue` w UI obu stron listy: komunikat trybu offline + licznik
+  oczekujących zmian; niewidoczny, gdy nie ma o czym mówić.
+- Czego kolejka NIE obsługuje i dlaczego: **zmiany sklepu** (kolejność sekcji
+  składa serwer z profilu `store_category_order`, którego przeglądarka nie zna
+  — ustalenie R3) i **przyjęcia zakupów do spiżarni** (jego wartością jest
+  policzalna odpowiedź serwera, a bez niej użytkownik nie wie, co weszło).
+  Obie akcje są offline wyłączone z podpowiedzią, dlaczego.
+- Publiczna strona `/l/:token` ma DOKŁADNIE ten sam mechanizm, ale własny
+  klient HTTP (`api/publicList.ts`, bez cookies i CSRF) i własny kształt
+  snapshotu (`PublicListRead` nie ma sekcji ani `received_at`).
+- Backend: PATCH pozycji (prywatny i publiczny) przyjmuje opcjonalne
+  `checked_at`; last-write-wins per pozycja, znacznik z przyszłości ponad
+  5 minut przycinany do czasu serwera, powtórka tego samego żądania nie
+  przesuwa znacznika (idempotencja, na której stoi ponawianie z kolejki).
+- Offline dla innych widoków (plan, przepisy) jest poza zakresem —
+  osobna decyzja po R4.
 
 ## 7. Konwencje jakości
 

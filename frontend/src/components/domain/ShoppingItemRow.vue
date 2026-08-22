@@ -34,6 +34,12 @@ const props = defineProps<{
   leftover?: string | null
   packagesCount?: number | null
   packageSize?: string | null
+  /**
+   * Pozycja jest już w spiżarni (D19). Strona PUBLICZNA tego nie przekazuje —
+   * osoba z linkiem nie ma nic wiedzieć o spiżarni rodziny (02_DOMAIN §13.5),
+   * więc pole jest opcjonalne, a nie „zawsze false".
+   */
+  received?: boolean
   /** Blokada podczas mutacji w locie (nie blokuje optimistic update). */
   disabled?: boolean
 }>()
@@ -88,6 +94,15 @@ const packagesLine = computed(() => {
           </span>
           <span v-if="alreadyHave" class="font-medium" :data-testid="`shopping-have-${itemId}`">
             {{ texts.alreadyHave }}
+          </span>
+          <!-- Stan „przyjęte" ma TEKST, nie sam kolor (06_UIUX §1) — inaczej
+               nie dałoby się go odczytać na wydruku ani czytnikiem ekranu. -->
+          <span
+            v-if="received"
+            class="text-secondary font-medium"
+            :data-testid="`shopping-received-${itemId}`"
+          >
+            {{ texts.received }}
           </span>
         </span>
       </span>

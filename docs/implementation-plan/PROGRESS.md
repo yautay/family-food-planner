@@ -22,7 +22,7 @@ commit wykonany). Kolumna „Blokery" = zależności + decyzje z 02_DECISIONS.
 | 10 SHOPPING_ENGINE | [x] | — | `batch(10)` na master (hash wpisać po push) |
 | 11 SHOPPING_LISTS_AND_SHARING | [x] | — | `batch(11)` na master (hash wpisać po push) |
 | R3 REVIEW_SHOPPING | [x] | — | `batch(R3)` na master (hash wpisać po push) |
-| 12 PWA_AND_OFFLINE | [ ] | — (R3 PASS) | |
+| 12 PWA_AND_OFFLINE | [x] | — | `batch(12)` na master (hash wpisać po push) |
 | 13 STATISTICS | [ ] | — (R3 PASS) | |
 | 14 IMPORT_EXPORT | [ ] | — (R3 PASS) | |
 | 15 PDF_IMPORT_EXTRACTION | [ ] | 05 (zalecane po R3) | |
@@ -40,6 +40,69 @@ zmiany dotykające przyszłych batchy trzeba wpisać do ich kart
 (00_MASTER_PLAN §8); dziennik to indeks, nie schowek.
 
 ---
+
+**2026-08-22 — BATCH_12 (PWA_AND_OFFLINE).** Aplikacja jest instalowalną PWA
+(manifest PL, komplet ikon PNG 192/512 `any`+`maskable`, `apple-touch-icon`,
+Workbox: precache shella, `NetworkFirst` dla `/api/*` z `networkTimeoutSeconds: 3`,
+`CacheFirst` dla `/uploads/*`), a lista zakupowa — zalogowana i publiczna
+`/l/:token` — działa bez sieci: treść leży w IndexedDB, odhaczenia idą do kolejki
+z własnym `checked_at` i synchronizują się po powrocie zasięgu (LWW per pozycja).
+Weszła też decyzja **D19**: `shopping_list_items.received_at` (migracja `0013`)
+czyni `accept-to-pantry` idempotentnym.
+
+**Osiem rzeczy, o których muszą wiedzieć następne batche:**
+
+1. **Migracja `0013_shopping_item_received_at`** — head to teraz `0013`.
+   B13/B14 idące równolegle numerują od `0014`; po merge'u sprawdź
+   `task db-heads` (obie karty mają o tym wpis).
+2. **PATCH pozycji (prywatny i publiczny) przyjmuje opcjonalne `checked_at`**
+   z WYMAGANĄ strefą czasową; starszy znacznik nie nadpisuje młodszego (200 ze
+   stanem serwera), znacznik z przyszłości ponad 5 minut jest przycinany do
+   `now()` serwera, a powtórka tego samego żądania NIE przesuwa znacznika.
+   Ta ostatnia własność (idempotencja z R3) jest warunkiem ponawiania z kolejki
+   i nie wolno jej zepsuć „optymalizacją" warunku w `_apply_item_changes`.
+3. **`accept_to_pantry` przyjmuje teraz `now` z routera** i stempluje
+   `received_at` w tej samej transakcji co wpis w spiżarni. **409 ma dwa
+   warianty** (`NOTHING_TO_RECEIVE` i `ALREADY_RECEIVED`), a
+   `ReceivedToPantry`/`AcceptToPantryResponse` mają addytywne
+   `already_received`.
+4. **`received_at` NIE wchodzi do odpowiedzi publicznej** — pilnuje tego
+   asercja dokładnego zbioru kluczy w `test_public_lists_api.py`. Każde nowe
+   pole pozycji listy wymaga świadomej decyzji, po której stronie tej granicy
+   stoi.
+5. **Nowa warstwa `frontend/src/lib/offline/`**: `db.ts` (IndexedDB przez `idb`;
+   klucz kolejki `{target}#{itemId}` = deduplikacja per pozycja), `clock.ts`
+   (przesunięcie zegara z nagłówka `Date` KAŻDEJ odpowiedzi — hook siedzi
+   w `api/client.ts` i `api/publicList.ts`), `sync.ts` (klasyfikacja
+   sent/retry/gone/dropped), `hydrate.ts` (snapshot → cache TanStack Query
+   z `updatedAt: 1`), `registerSW.ts`. Store `stores/offlineQueue.ts` (Pinia).
+   Ekran, który ma działać offline, reużywa TEGO — nie pisze drugiej kolejki.
+6. **`checkPublicListItem` ma czwarty, opcjonalny argument `checkedAt`**;
+   `updateShoppingListItem` przyjmuje `checked_at` w payloadzie.
+7. **Czego kolejka świadomie NIE obsługuje**: zmiany sklepu (kolejność sekcji
+   składa serwer, ustalenie R3) i przyjęcia zakupów do spiżarni (jego wartością
+   jest policzalna odpowiedź serwera). Obie akcje są offline wyłączone
+   z podpowiedzią. Wpuszczenie ich do kolejki wymaga decyzji, nie „ulepszenia".
+8. **Nowe zależności frontendu**: `idb` (runtime) i `fake-indexeddb` (dev —
+   testy jadą na prawdziwym IndexedDB, nie na atrapie). B13/B14 rozwiązują
+   konflikt `package.json` unią zależności.
+9. **`networkMode: 'always'` w `main.ts`** (queries I mutations) — zmiana
+   GLOBALNA, nie lokalna dla listy. Domyślny tryb `'online'` pauzuje mutacje
+   przy `navigator.onLine === false`, więc kolejka offline nigdy nie
+   zobaczyłaby odhaczenia. Skutek uboczny dla innych ekranów: mutacja bez sieci
+   nie wisi w pamięci, tylko od razu pada z komunikatem — czyli zachowuje się
+   jak przed wprowadzeniem TanStack pauzy i tak też jest opisana w 05_FRONTEND §6.
+10. **Wszystko, co idzie do IndexedDB, przechodzi przez `plain()`** — structured
+   clone rzuca `DataCloneError` na proxy Vue. Nowy magazyn albo nowe pole
+   w `db.ts` musi trzymać się tej granicy; błąd jest CICHY (`withDb` go łyka).
+11. **`task test-e2e` przepuszcza argumenty za `--`** (`task test-e2e --
+   offline-lista.spec.ts`) — wzorzec targetów pytest. Bramka woła target bez
+   argumentów, więc pełny przebieg jest zawsze ten sam.
+
+Ustalenia dla B17 (CSP musi dopuszczać SW z `'self'`, `manifest.webmanifest`
+z właściwym typem, wykluczenie `/api/v1/auth/*` z runtime cache) i B18 (HTTPS
+jest warunkiem działania SW; trzy sprawdzenia po wdrożeniu) są wpisane do ICH
+kart, nie tylko tutaj.
 
 **2026-08-22 — D18 i D19 ZAMKNIĘTE przez właściciela (ustalenia R3).**
 Rejestr 02_DECISIONS nie ma już żadnej decyzji dotyczącej batchy 12–17;

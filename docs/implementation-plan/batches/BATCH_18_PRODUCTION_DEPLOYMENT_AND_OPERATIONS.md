@@ -38,6 +38,20 @@ Wymagane lektury przed startem:
 - `docs/implementation-plan/02_DECISIONS.md` — treść zatwierdzonych D6/D7
   (+ D10 retencja, rekomendacja z R4).
 - Karta `BATCH_17` (Completion notes — faktyczne nazwy skryptów/targetów).
+
+**Warunek z B12 (PWA, ADR-009) — HTTPS jest tu funkcjonalnością, nie ozdobą.**
+Przeglądarka rejestruje service workera WYŁĄCZNIE na `https://` (albo
+`localhost`), więc bez działającego TLS na reverse proxy lista zakupowa
+przestaje działać offline — cicho, bez błędu widocznego dla użytkownika.
+Do procedury i do healthchecku (09_DEPLOYMENT §2) dopisz trzy sprawdzenia po
+wdrożeniu, wykonywane na PRAWDZIWEJ domenie, nie na localhoście:
+
+1. `GET /manifest.webmanifest` → 200 z typem `application/manifest+json`,
+2. `GET /sw.js` → 200 z typem JavaScript i **bez agresywnego cache** (SW musi
+   dać się podmienić przy kolejnym wdrożeniu — inaczej użytkownicy zostaną
+   z poprzednią wersją aplikacji),
+3. w DevTools na urządzeniu mobilnym: „Application → Service Workers"
+   pokazuje aktywnego workera, a prompt instalacji jest dostępny.
 - ADR-002 (bind mounts, migracje w update), ADR-014 (jeden kontener app).
 - `docs/architecture/05_FRONTEND_ARCHITECTURE.md` §6 (PWA — acceptance).
 

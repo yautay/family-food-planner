@@ -45,6 +45,19 @@ Konkrety z B01 do wykorzystania/uzupełnienia:
      blokady konta (10 porażek / 15 min) — stałe w `app/core/security.py`.
 - `task audit` i `task secrets-scan` istnieją w Taskfile (nieuruchamiane
   w `task check`).
+- **Do przeglądu z B12 (PWA, ADR-009)** — service worker jest od B12 częścią
+  produkcyjnego builda i CSP musi go dopuszczać:
+  1. **`worker-src`/`script-src` z `'self'`**: `dist/sw.js` i `workbox-*.js`
+     rejestrują się z tego samego originu. Zaostrzenie CSP bez tego wyłącza
+     SW po cichu — aplikacja działa, ale przestaje działać offline, czego nie
+     złapie żaden istniejący test. Po zmianie nagłówków **zweryfikuj
+     rejestrację SW na buildzie produkcyjnym**, nie tylko brak błędów w konsoli.
+  2. `manifest.webmanifest` musi być serwowany przez backend (ADR-014) z typem
+     `application/manifest+json`; bez tego przeglądarka nie zaproponuje
+     instalacji, a Lighthouse „installable" spada.
+  3. Runtime cache SW świadomie POMIJA `/api/v1/auth/*` (odpowiedzi
+     z `Set-Cookie`). Rozszerzając strategie cache, tego wykluczenia nie
+     wolno zdjąć (07_SECURITY).
 - **Do przeglądu z R1** (ustalenia review fundamentów, patrz dziennik
   `PROGRESS.md`):
   1. **Świeżość kontraktu API nie jest bramkowana**: `task check` nie

@@ -632,9 +632,17 @@ export const shoppingList = {
   // `skipped` MUSI być widoczne: pozycja odhaczona, ale oznaczona „mam już
   // w domu" (albo bez produktu kanonicznego) nie wchodzi do spiżarni, a bez
   // tej informacji użytkownik uznałby, że wszystko się dodało (ustalenie R3).
-  acceptDone: (created: number, increased: number, skipped: number) =>
+  // `alreadyReceived` doszło z D19: to pozycje wniesione WCZEŚNIEJ — nie awaria,
+  // tylko powód, dla którego akcja jest bezpieczna do powtórzenia.
+  acceptDone: (created: number, increased: number, skipped: number, alreadyReceived: number) =>
     `Dodano do spiżarni: ${created} nowych pozycji, zwiększono ${increased}.` +
-    (skipped > 0 ? ` Pominięto ${skipped} — „mam już w domu" to nie zakup.` : ''),
+    (skipped > 0 ? ` Pominięto ${skipped} — „mam już w domu" to nie zakup.` : '') +
+    (alreadyReceived > 0 ? ` ${alreadyReceived} było już w spiżarni.` : ''),
+  // Stan „przyjęte" ma TEKST, nie sam kolor (06_UIUX §1).
+  received: 'W spiżarni',
+  receivedAria: (label: string) => `${label} — już przyjęte do spiżarni`,
+  acceptCount: (count: number) => `Do przyjęcia: ${count}`,
+  acceptAllReceived: 'Wszystko z tej listy jest już w spiżarni.',
 
   deleteTitle: 'Usunąć tę listę zakupową?',
   deleteDescription:
@@ -676,5 +684,26 @@ export const publicList = {
   empty: 'Ta lista nie ma pozycji.',
   progress: (checked: number, total: number) => `Odhaczone ${checked} z ${total}`,
   alreadyHave: 'Mam już w domu',
-  offlineHint: 'Odhaczenia zapisują się na serwerze — możesz odświeżyć stronę.',
+  // Po B12 ta strona działa bez zasięgu — podpowiedź musi mówić stan faktyczny,
+  // inaczej ktoś w sklepie przestanie odhaczać „bo i tak nie zapisze".
+  offlineHint: 'Możesz odhaczać także bez zasięgu — zmiany zapiszą się, gdy wróci połączenie.',
+} as const
+
+/**
+ * Tryb offline listy zakupowej (ADR-009).
+ *
+ * Komunikaty mówią, CO SIĘ STANIE ze zmianami, a nie tylko „brak sieci":
+ * w sklepie liczy się pewność, że odhaczenie nie przepadnie.
+ */
+export const offline = {
+  banner: 'Tryb offline — zmiany zapiszą się po odzyskaniu zasięgu.',
+  pending: (count: number) =>
+    count === 1 ? 'Oczekuje 1 zmiana' : `Oczekują ${count} zmiany/zmian`,
+  syncing: 'Zapisuję zmiany na serwerze…',
+  synced: 'Wszystkie zmiany zapisane.',
+  fromSnapshot: 'Pokazujemy ostatnio pobraną wersję listy.',
+  // Kolejność sekcji układa SERWER z profilu sklepu (ustalenie R3) — offline
+  // nie ma z czego jej policzyć, więc zmiana sklepu nie wchodzi do kolejki.
+  storeNeedsNetwork: 'Zmiana sklepu wymaga połączenia — kolejność sekcji układa serwer.',
+  acceptNeedsNetwork: 'Przyjęcie zakupów do spiżarni wymaga połączenia.',
 } as const

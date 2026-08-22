@@ -1144,7 +1144,7 @@ export interface paths {
         head?: never;
         /**
          * Odhaczenie pozycji albo „mam już w domu”
-         * @description `checked_at` ustawia serwer (UTC) — klient go nie przysyła (ADR-009).
+         * @description `checked_at` jest OPCJONALNE: online klient go nie przysyła i znacznik ustawia serwer (UTC), a kolejka offline podaje moment faktycznej decyzji. Konflikt rozstrzyga last-write-wins per pozycja — starszy znacznik zostawia stan bez zmian i zwraca aktualną pozycję (ADR-009).
          */
         patch: operations["update_item_api_v1_shopping_lists__list_id__items__item_id__patch"];
         trace?: never;
@@ -1181,7 +1181,7 @@ export interface paths {
         put?: never;
         /**
          * Przyjęcie odhaczonych zakupów do spiżarni
-         * @description Akcja JAWNA (02_DOMAIN §8) — zakupy nie trafiają do spiżarni w tle. Ilość liczymy jako kupioną (`packages_count * package_size`), a bez opakowania jako `needed_amount`. Zakup dolewa się do pozycji tego produktu BEZ daty ważności, a gdy takiej nie ma — zakłada nową.
+         * @description Akcja JAWNA (02_DOMAIN §8) — zakupy nie trafiają do spiżarni w tle. Ilość liczymy jako kupioną (`packages_count * package_size`), a bez opakowania jako `needed_amount`. Zakup dolewa się do pozycji tego produktu BEZ daty ważności, a gdy takiej nie ma — zakłada nową. Akcja jest IDEMPOTENTNA (D19): pozycja raz przyjęta dostaje `received_at` i kolejne wywołanie ją pomija. 409 ma dwa warianty — „nic nie odhaczono” i „te zakupy są już w spiżarni”.
          */
         post: operations["accept_to_pantry_api_v1_shopping_lists__list_id__accept_to_pantry_post"];
         delete?: never;
@@ -1225,7 +1225,7 @@ export interface paths {
         head?: never;
         /**
          * Odhaczenie pozycji z publicznego linku
-         * @description Token pozwala zmienić WYŁĄCZNIE `checked` (ADR-010) — każde inne pole w ciele żądania kończy się 422. Bez CSRF (autoryzuje token w URL), za to z limitem 60/min/IP.
+         * @description Token pozwala zmienić WYŁĄCZNIE `checked` (ADR-010) — każde inne pole w ciele żądania kończy się 422. Opcjonalne `checked_at` nie poszerza tych uprawnień: mówi tylko, KIEDY zapadła decyzja, żeby odhaczenie z kolejki offline nie nadpisało świeższego stanu (last-write-wins, ADR-009). Bez CSRF (autoryzuje token w URL), za to z limitem 60/min/IP.
          */
         patch: operations["public_check_item_api_v1_public_lists__token__items__item_id__patch"];
         trace?: never;
@@ -1270,7 +1270,10 @@ export interface components {
     schemas: {
         /**
          * AcceptToPantryResponse
-         * @description Ile pozycji weszło do spiżarni: nowe wiersze, dolane i pominięte.
+         * @description Ile pozycji weszło do spiżarni: nowe wiersze, dolane, pominięte i już przyjęte.
+         *
+         *     `already_received` doszło ADDYTYWNIE w B12 (D19) — `skipped` zachowuje
+         *     znaczenie z R3 („odhaczone, ale nie jest zakupem albo nie ma czego dolać").
          */
         AcceptToPantryResponse: {
             /** Created */
@@ -1279,6 +1282,11 @@ export interface components {
             increased: number;
             /** Skipped */
             skipped: number;
+            /**
+             * Already Received
+             * @default 0
+             */
+            already_received: number;
         };
         /**
          * AmountUnit
@@ -2040,16 +2048,24 @@ export interface components {
         };
         /**
          * ListItemUpdateRequest
-         * @description Odhaczenie i „mam już w domu". `checked_at` ustawia SERWER (ADR-009).
+         * @description Odhaczenie i „mam już w domu"; `checked_at` opcjonalnie od klienta (ADR-009).
          *
          *     Innych pól tu nie ma z rozmysłem: pozycja jest wynikiem generacji, a jej
          *     ilości zmienia się nową generacją (karta B11 §Out of Scope pkt 4).
+         *
+         *     `checked_at` przysyła WYŁĄCZNIE kolejka offline (B12): odhaczenie zrobione
+         *     w sklepie bez zasięgu trafia na serwer minuty później, więc bez znacznika
+         *     z momentu decyzji LWW rozstrzygałoby konflikt na korzyść telefonu, który
+         *     pierwszy złapał sieć, a nie tego, który odhaczył później. Pole pominięte =
+         *     zachowanie dotychczasowe, czyli czas serwera.
          */
         ListItemUpdateRequest: {
             /** Checked */
             checked?: boolean | null;
             /** Already Have */
             already_have?: boolean | null;
+            /** Checked At */
+            checked_at?: string | null;
         };
         /**
          * ListSectionRead
@@ -2768,15 +2784,21 @@ export interface components {
         };
         /**
          * PublicListItemUpdateRequest
-         * @description Uprawnienia tokenu w całości: JEDNO pole `checked` (ADR-010).
+         * @description Uprawnienia tokenu: `checked` + znacznik czasu tej decyzji (ADR-009/010).
          *
          *     `model_config` z `extra="forbid"` jest tu zabezpieczeniem, nie ozdobą: próba
          *     przemycenia `already_have` albo ilości ma skończyć się 422, a nie cichym
          *     zignorowaniem pola (karta B11 §Security).
+         *
+         *     `checked_at` NIE poszerza uprawnień tokenu: nadal da się zmienić wyłącznie
+         *     checkbox, a znacznik mówi tylko, KIEDY ta zmiana zapadła. Bez niego lista
+         *     odhaczona offline nadpisywałaby świeższe decyzje z drugiego telefonu.
          */
         PublicListItemUpdateRequest: {
             /** Checked */
             checked: boolean;
+            /** Checked At */
+            checked_at?: string | null;
         };
         /**
          * PublicListRead
@@ -3350,6 +3372,8 @@ export interface components {
             checked: boolean;
             /** Checked At */
             checked_at: string | null;
+            /** Received At */
+            received_at: string | null;
             /** Position */
             position: number;
         };

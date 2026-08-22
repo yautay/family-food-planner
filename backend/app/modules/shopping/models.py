@@ -265,6 +265,10 @@ class ShoppingListItem(TimestampMixin, Base):
         Boolean, nullable=False, default=False, server_default=text("false")
     )
     checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    #: Moment przyjęcia TEJ pozycji do spiżarni; `NULL` = jeszcze nieprzyjęta (D19).
+    #: Bez tego znacznika `accept_to_pantry` nie jest idempotentne, a ponowienie
+    #: żądania z kolejki offline (ADR-009) dolewa zakupy DRUGI raz — po cichu.
+    received_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     position: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
 
     shopping_list: Mapped[ShoppingList] = relationship(back_populates="items")

@@ -27,15 +27,49 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      // BATCH_01: wyłącznie manifest + precache shella z domyślnych ustawień.
-      // Strategie cache dla /api i kolejka offline → BATCH_12 (ADR-009).
+      // Dev server NIE rejestruje SW (BATCH_12, Implementation Notes): precache
+      // w trakcie pracy zatruwa cache i zwraca stary chunk po każdej zmianie.
+      // Service worker testuje się na buildzie (`task fe-build` + `vite preview`).
+      devOptions: { enabled: false },
+      includeAssets: ['icons/apple-touch-icon.png', 'icon.svg'],
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,woff2}'],
-        navigateFallbackDenylist: [/^\/api\//],
+        globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+        // `/api/` i `/uploads/` obsługuje BACKEND (ADR-014) — fallback nawigacyjny
+        // na `index.html` zamieniłby 404 API w stronę SPA, a plik z uploadów w HTML.
+        navigateFallbackDenylist: [/^\/api\//, /^\/uploads\//],
+        // Publiczna strona listy jest trasą LENIWĄ i poza `AppShell` (B11), więc
+        // jej chunk nie wchodzi do precache przez shell — ale wchodzi przez
+        // `globPatterns` (każdy `.js` z `dist`). Nic tu nie wykluczamy.
+        runtimeCaching: [
+          {
+            // Listy zakupowe i reszta API: NetworkFirst z KRÓTKIM timeoutem.
+            // Bez `networkTimeoutSeconds` offline UX to 30 s spinnera, zanim
+            // przeglądarka odpuści połączenie (karta B12, Implementation Notes).
+            urlPattern: ({ url }: { url: URL }) =>
+              url.pathname.startsWith('/api/') && !url.pathname.startsWith('/api/v1/auth/'),
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'ffp-api',
+              networkTimeoutSeconds: 3,
+              expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 },
+              cacheableResponse: { statuses: [200] },
+            },
+          },
+          {
+            // Uploady (zdjęcia przepisów) — statyczne i adresowane ścieżką pliku.
+            urlPattern: ({ url }: { url: URL }) => url.pathname.startsWith('/uploads/'),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'ffp-uploads',
+              expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              cacheableResponse: { statuses: [200] },
+            },
+          },
+        ],
       },
       manifest: {
         name: 'Family Food Planner',
-        short_name: 'Planer',
+        short_name: 'FFP',
         description: 'Planowanie posiłków, wartości odżywczych i zakupów dla rodziny.',
         lang: 'pl',
         dir: 'ltr',
@@ -45,18 +79,22 @@ export default defineConfig({
         scope: '/',
         background_color: '#FAF6EF',
         theme_color: '#E07A2F',
-        // Ikony placeholder — komplet (PNG 192/512 + maskable) dostarcza BATCH_12.
+        // Splash na Androidzie składa przeglądarka z ikony 512 + `background_color`
+        // + `name`; iOS bierze `apple-touch-icon` z `index.html` (brak wsparcia
+        // dla manifestu w tym zakresie) — stąd oba warianty.
         icons: [
+          { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
           {
-            src: '/icon.svg',
-            sizes: 'any',
-            type: 'image/svg+xml',
-            purpose: 'any',
+            src: '/icons/icon-maskable-192.png',
+            sizes: '192x192',
+            type: 'image/png',
+            purpose: 'maskable',
           },
           {
-            src: '/icon-maskable.svg',
-            sizes: 'any',
-            type: 'image/svg+xml',
+            src: '/icons/icon-maskable-512.png',
+            sizes: '512x512',
+            type: 'image/png',
             purpose: 'maskable',
           },
         ],

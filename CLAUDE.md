@@ -50,7 +50,7 @@ Start od zera: `cp .env.example .env` → `task install` → `task dev`.
 | `task check` | **BRAMKA DoD**: migrations-check + unit + int + api + fe-test + typecheck + lint + format-check + fe-build |
 | `task test-unit` / `test-int` / `test-api` / `test-be` | pytest wg markerów; zawężenie przez `--`, np. `task test-int -- -k wydajnosc -s` |
 | `task fe-test` | vitest |
-| `task test-e2e` (+ `task e2e-install`) | Playwright, chromium |
+| `task test-e2e` (+ `task e2e-install`) | Playwright, chromium; zawężenie przez `--`, np. `task test-e2e -- offline-lista.spec.ts` |
 | `task typecheck` / `lint` / `format` / `format-check` | mypy+vue-tsc / ruff+eslint / ruff format+prettier |
 | `task db-migrate` / `db-heads` / `db-revision -- --rev-id 0002 -m "opis"` | Alembic |
 | `task fe-types` | OpenAPI → `backend/openapi.json` → `frontend/src/api/generated.ts` (oba commitowane) |
@@ -227,6 +227,21 @@ Dołożone w REVIEW R3 (audyt pionu zakupowego — też fundament):
   każdy tekst ma klasę z tokens, więc bez tego wydruk wychodził brązowo-szary,
   a 06_UIUX §6 mówi „czarno-biały".
 
+Dołożone w BATCH_12 (też fundament):
+
+- `shopping_list_items.received_at` (migracja `0013`, decyzja D19) —
+  `accept_to_pantry` jest IDEMPOTENTNE: bierze pozycje odhaczone, nie
+  „mam już w domu" i BEZ stempla, po czym stempluje je w TEJ SAMEJ transakcji
+  co wpis w spiżarni. Dwa różne 409 (`NOTHING_TO_RECEIVE` i `ALREADY_RECEIVED`),
+  addytywne `already_received` w odpowiedzi. Pole jest w odpowiedzi PRYWATNEJ,
+  **nigdy w publicznej** (biała lista `PublicListItemRead`).
+- `_apply_item_changes` w `lists_service.py` stosuje LAST-WRITE-WINS: PATCH
+  checkboxa (prywatny i publiczny) przyjmuje opcjonalne `checked_at`
+  (`AwareDatetime`, naiwna data = 422); starszy znacznik nie zmienia stanu,
+  znacznik z przyszłości ponad `CLOCK_SKEW_TOLERANCE` (5 min) jest przycinany.
+  **Warunku `checked != item.checked` nie wolno ruszać** — na nim stoi
+  idempotencja PATCH-a, bez której kolejka offline dublowałaby zapisy.
+
 Testy: `tests/{unit,integration,api}/` (pakiet — z `__init__.py`), markery
 `unit`/`integration`/`api` (wymagane — bez markera test nie wejdzie do
 żadnego targetu), docstring po polsku opisujący scenariusz. Fixture'y
@@ -268,6 +283,30 @@ a suita jest jednowątkowa (08_TESTING §3.1) — nie zakładaj równoległości
 Nowa zależność npm wymaga odświeżenia `node_modules` w kontenerze:
 `docker compose --env-file .env -f docker/compose.dev.yml exec frontend
 npm ci` + restart serwisu.
+
+## 5a. Frontend — warstwa offline (BATCH_12, ADR-009)
+
+Ekran, który ma działać bez sieci, REUŻYWA tego, nie pisze drugiej kolejki:
+
+- `src/lib/offline/db.ts` — IndexedDB (`idb`): snapshoty list i kolejka mutacji.
+  Klucz kolejki `{target}#{itemId}` = deduplikacja per pozycja. **Wszystko, co
+  tam wchodzi, przechodzi przez `plain()`** — structured clone rzuca
+  `DataCloneError` na proxy Vue, a błąd jest CICHY (`withDb` go łyka).
+- `src/lib/offline/clock.ts` — przesunięcie zegara z nagłówka `Date` każdej
+  odpowiedzi (hook w `api/client.ts` i `api/publicList.ts`). `checked_at`
+  kolejki jest w czasie SERWERA.
+- `src/lib/offline/sync.ts` — klasyfikacja wyniku wysyłki:
+  `sent`/`offline`/`retry`/`gone`/`dropped`. Licznik prób rośnie WYŁĄCZNIE przy
+  `retry` (odmowa serwera) — brak sieci nie może kasować zakupów.
+- `src/lib/offline/hydrate.ts` — snapshot → cache TanStack Query
+  z `updatedAt: 1` (inaczej `staleTime` blokuje refetch po powrocie sieci).
+- `src/stores/offlineQueue.ts` (Pinia) — enqueue/flush/backoff, `start()`
+  wołane raz z `main.ts`. Flush jest SEKWENCYJNY (wspólny limit 60/min/IP).
+- `main.ts` ustawia **`networkMode: 'always'`** dla queries i mutations. Bez
+  tego TanStack pauzuje mutacje offline i kolejka nigdy ich nie zobaczy.
+- Offline NIE obejmuje zmiany sklepu (kolejność sekcji składa serwer) ani
+  przyjęcia zakupów do spiżarni (wartością jest policzalna odpowiedź serwera) —
+  obie akcje są wtedy wyłączone z podpowiedzią. Wpuszczenie ich wymaga decyzji.
 
 ## 6. Migracje
 
