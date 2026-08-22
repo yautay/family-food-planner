@@ -292,6 +292,19 @@ Obiekt bazodanowy: pozycje (produkt, ilość, kategoria, tura, stan checkboxa,
 tura, sklep (profil sortowania), **publiczny token** (opcjonalny).
 Stan checkboxów trwały (persystowany, synchronizowany z offline — ADR-009).
 
+**Lista jest w CAŁOŚCI wynikiem generacji — pozycji nie dopisuje się ręcznie**
+(decyzja właściciela **D18**, 2026-08-22). Każda pozycja ma produkt kanoniczny,
+kategorię i (gdy jest wariant) opakowanie, a z tych trzech rzeczy żyją sekcje
+sortowane profilem sklepu, plakietka resztki i przyjęcie zakupów do spiżarni.
+Pozycja dopisana „luźnym tekstem" wypadałaby ze wszystkich trzech. Brakującą
+rzecz dopisuje się do PLANU i generuje turę ponownie.
+
+**Przyjęcie zakupów jest znaczone PER POZYCJA** (decyzja właściciela **D19**,
+2026-08-22): pozycja raz przyjęta do spiżarni nie zostanie przyjęta drugi raz,
+a pozycje odhaczone później dają się przyjąć normalnie. Znacznik na LIŚCIE
+(„lista przyjęta") był rozważany i odrzucony — blokowałby uzasadniony przypadek
+„doniosłem jeszcze dwie rzeczy z torby".
+
 ### 9.5 Publiczny link (ADR-010)
 
 Token `secrets.token_urlsafe(32)` (256 bitów), unikat, w URL ścieżkowym;

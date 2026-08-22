@@ -41,6 +41,58 @@ zmiany dotykające przyszłych batchy trzeba wpisać do ich kart
 
 ---
 
+**2026-08-22 — D18 i D19 ZAMKNIĘTE przez właściciela (ustalenia R3).**
+Rejestr 02_DECISIONS nie ma już żadnej decyzji dotyczącej batchy 12–17;
+otwarte zostają D6/D7 (bramki B18) i cztery pozycje bez konsumenta.
+
+**D18 — ręczne pozycje listy zakupowej: NIE.** Rekomendacja agenta („tak, ale
+jako pozycja z produktem kanonicznym, w B12") została ODRZUCONA. Lista pozostaje
+w CAŁOŚCI wynikiem generacji z planu, bo z metadanych pozycji (produkt kanoniczny
++ kategoria + opakowanie) żyją trzy rzeczy naraz: sekcje sortowane profilem
+sklepu, plakietka resztki i przyjęcie zakupów do spiżarni — pozycja dopisana
+ręcznie byłaby wyjątkiem w każdym z tych miejsc. Ścieżka dla brakującej rzeczy:
+dopisać do PLANU i wygenerować turę ponownie. Wpisane do **02_DOMAIN §9.4**
+(reguła jawna) i do **Out of Scope karty B12** — z adnotacją, że nie wolno tego
+wprowadzić „jako ułatwienia offline".
+
+**D19 — znacznik przyjęcia zakupów: PER POZYCJA (opcja 3), wdrożenie w B12.**
+Odrzucone: (a) „zostaje sam dialog" — po wejściu kolejki offline ponowienie
+żądania po utracie odpowiedzi jest normalną pracą, nie awarią, więc podwójne
+dolanie zrobiłoby się samo, a skutek jest CICHY (spiżarnia pokazuje 4 l mleka
+zamiast 2 l i użytkownik dowiaduje się o tym, gdy silnik przestaje je kupować);
+(b) „znacznik na LIŚCIE" — jedna lista = jedno przyjęcie blokuje uzasadniony
+przypadek „doniosłem jeszcze dwie rzeczy z torby i odhaczyłem je później".
+Koszt (a) był zerowy, ale kupował bezpieczeństwo za cenę wyłączenia akcji
+offline; koszt (b) i (c) jest IDENTYCZNY (jedna kolumna, jedna migracja), więc
+wybór wariantu poprawnego semantycznie nic nie kosztował.
+
+**Co to znaczy dla B12** (karta zaktualizowana w §Database/migrations, §Backend,
+§Frontend, §Stages 1a, §Tests, Acceptance Criteria 7–8, Out of Scope, Expected
+files i Implementation checklist):
+
+1. **B12 przestał być batchem bez migracji** — dochodzi
+   `shopping_list_items.received_at timestamptz NULL`. Numer = pierwszy wolny,
+   `down_revision` z `task db-heads`, a po merge'u z równoległymi B13/B14
+   trzeba sprawdzić, czy `alembic heads` daje jedną głowę (obie te karty też
+   mogą dołożyć migrację). Migracja NIE backfilluje istniejących list —
+   historyczne przyjęcia nie są nigdzie zapisane, więc każda wartość byłaby
+   wymyślona.
+2. **Atomowość z R3 jest warunkiem poprawności D19**, nie ozdobą: stempel
+   `received_at` i wpis w spiżarni muszą lecieć w JEDNEJ transakcji
+   (`receive_purchase` nie commituje od R3), inaczej przerwanie między nimi
+   daje dokładnie ten podwójny zapis, przed którym decyzja broni.
+3. **`received_at` NIE wchodzi do odpowiedzi publicznej.** `PublicListItemRead`
+   to biała lista pól (02_DOMAIN §13.5) — osoba z linkiem nie ma nic wiedzieć
+   o spiżarni rodziny. Test dokładnego zbioru kluczy w
+   `test_public_lists_api.py` musi to złapać.
+4. **Dwa różne 409, nie jedno**: „nic nie odhaczone" (dotychczasowe
+   `NOTHING_TO_RECEIVE`) i „te zakupy są już w spiżarni" — dla użytkownika to
+   dwie różne sytuacje. Odpowiedź `ReceivedToPantry` dostaje ADDYTYWNIE pole
+   `already_received`.
+5. **Dzięki znacznikowi przyjęcie zakupów MOŻE wejść do kolejki offline**
+   (Stage 5). Bez niego trzeba by je offline zablokować — to była realna
+   alternatywa, nie hipoteza.
+
 **2026-08-22 — REVIEW R3 (REVIEW_SHOPPING) — WERDYKT: PASS**
 
 **B12, B13 i B14 mogą startować (także równolegle).** Pion zakupowy jest zdrowy:

@@ -100,15 +100,16 @@ Batch zastaje (po B11 + R3):
    tylko online) albo wchodzi z jawną informacją, że kolejność odświeży się po
    synchronizacji. Nie licz kolejności na kliencie — to złamałoby ustalenie
    B11 pkt 1 (jedna lista = jedna kolejność na ekranie, w druku i pod linkiem).
-4. **Przyjęcie zakupów do spiżarni jest atomowe, ale NIE idempotentne**
-   (`accept_to_pantry`, decyzja **D19** w 02_DECISIONS). Offline czyni powtórkę
-   prawdopodobną (ponowienie żądania po utracie odpowiedzi), więc albo ta akcja
-   NIE wchodzi do kolejki offline, albo batch wdraża znacznik `received_at`
-   z rekomendacji D19. Rozstrzygnąć PRZED Stage 5.
-5. **Ręczne pozycje listy** to decyzja **D18** (OPEN, rekomendacja: „tak, ale
-   dopiero w batchu dotykającym tej strony, czyli tutaj"). Jeśli właściciel
-   zatwierdzi, pozycja ręczna MUSI mieć produkt kanoniczny — inaczej wypada
-   z sortowania sekcji i z przyjęcia do spiżarni.
+4. **Przyjęcie zakupów do spiżarni jest atomowe (R3), ale NIE było
+   idempotentne** — powtórka dolewała zakupy drugi raz. **Decyzja właściciela
+   D19 ZATWIERDZONA 2026-08-22: znacznik PER POZYCJA, wdrożenie w TYM batchu.**
+   Pełna instrukcja: §Database/migrations i §Backend niżej. To warunek wejścia
+   przyjęcia zakupów do kolejki offline (Stage 5) — bez znacznika ta akcja
+   musiałaby być offline zablokowana.
+5. **Ręczne pozycje listy — decyzja D18 ZATWIERDZONA 2026-08-22: NIE, nic nie
+   dopisujemy ręcznie.** Lista pozostaje w całości wynikiem generacji; brakującą
+   rzecz dopisuje się do PLANU i generuje turę ponownie (02_DOMAIN §9.4).
+   Ten batch NIE dokłada pola „dodaj pozycję" — jest w Out of Scope.
 
 Wymagane lektury: **ADR-009** (całość — kontrakt tego batcha),
 05_FRONTEND §6 (PWA i offline), §1 (Pinia = kolejka offline), 06_UIUX §5
@@ -119,6 +120,10 @@ Wymagane lektury: **ADR-009** (całość — kontrakt tego batcha),
 
 1. **Backend LWW** — `PATCH` checkboxa przyjmuje opcjonalne `checked_at`
    klienta; serwis stosuje last-write-wins per pozycja; testy API zielone.
+1a. **Backend: znacznik przyjęcia (D19)** — migracja `received_at` na pozycjach,
+   `accept_to_pantry` idempotentne, 409 gdy nie ma nic nowego; testy API
+   i integracyjne zielone. Robić RAZEM z etapem 1 (jedna migracja, jeden
+   przebieg testów backendu), a nie na końcu batcha.
 2. **PWA shell** — vite-plugin-pwa skonfigurowany (manifest, ikony,
    Workbox precache + NetworkFirst `/api/*`); aplikacja instalowalna,
    Lighthouse PWA installable = pass.
@@ -133,10 +138,29 @@ Wymagane lektury: **ADR-009** (całość — kontrakt tego batcha),
 
 ## Database / migrations
 
-**Brak nowych migracji.** Schemat wystarcza: `shopping_list_items.checked`,
-`checked_at timestamptz` (03_DATABASE §8). Jeśli w trakcie okaże się
-potrzebna kolumna — STOP i wpis do 02_DECISIONS (nie zgadywać), bo B13/B14
-mogą równolegle dodawać migracje (po merge'u `alembic heads` = jedna głowa).
+**Jedna migracja — kolumna `received_at` (decyzja D19).**
+
+| Tabela | Kolumna | Typ | Uwagi |
+|---|---|---|---|
+| `shopping_list_items` | `received_at` | `timestamptz NULL` | moment przyjęcia TEJ pozycji do spiżarni; `NULL` = jeszcze nieprzyjęta |
+
+Zasady bez zmian: numer = pierwszy wolny w `migrations/versions/`,
+`down_revision` = wynik `task db-heads` (NIGDY numer z tej karty), `upgrade`
+i `downgrade` przechodzą na czystej bazie, `alembic heads` = jedna głowa.
+**B13 i B14 mogą iść równolegle i też dodawać migracje** — po merge'u gałęzi
+sprawdź `task db-heads` i przy dwóch głowach zrób migrację scalającą, zanim
+puścisz `task check`.
+
+Czego migracja NIE robi: nie backfilluje istniejących list (wszystkie pozycje
+zostają `NULL`, czyli „nieprzyjęte"). To świadome — historyczne przyjęcia nie są
+nigdzie zapisane, więc każda inna wartość byłaby wymyślona. Praktyczny skutek
+jest znikomy: listy sprzed wdrożenia wygasły albo mają zakupy dawno w spiżarni.
+
+Reszta schematu wystarcza: `shopping_list_items.checked` i
+`checked_at timestamptz` istnieją od `0012` (03_DATABASE §8). **Po wdrożeniu
+zaktualizuj 03_DATABASE §8 o nową kolumnę** (living documentation) oraz
+`DB_TABLES` nie ruszaj (tabela istnieje), ale dopisz kolumnę do asercji tam,
+gdzie testy sprawdzają kształt pozycji.
 
 ## Backend
 
@@ -147,7 +171,34 @@ Zmiany minimalne, wyłącznie w module `shopping`:
 | `/api/v1/shopping/lists/{id}/items/{item_id}` | PATCH | U | body przyjmuje opcjonalne `checked_at` (ISO8601 UTC); LWW |
 | `/api/v1/public/lists/{token}` | PATCH | P | jw. dla pozycji publicznych; 410 po expiry/revoke bez zmian |
 
-Logika LWW w `shopping/service.py`: jeżeli przysłane `checked_at` jest
+| `/api/v1/shopping/lists/{id}/accept-to-pantry` | POST | U | przyjmuje WYŁĄCZNIE pozycje odhaczone i nieprzyjęte; stempluje `received_at`; 409 gdy nie ma nic nowego |
+
+**Znacznik przyjęcia (D19) — instrukcja wykonawcza.** Zmiana siedzi w
+`shopping/lists_service.py::accept_to_pantry` (nie w `service.py` — to drugi
+serwis modułu, od B11):
+
+1. Pętla pomija pozycje `received_at IS NOT NULL` obok istniejących warunków
+   (`not checked` i `already_have` — ten drugi doszedł w R3: „mam już w domu"
+   nie jest zakupem).
+2. `received_at = now` ustawia SERWER (czas wchodzi parametrem z routera, jak
+   `checked_at`), w TEJ SAMEJ transakcji co zapis w spiżarni. **Atomowość jest
+   warunkiem poprawności, nie ozdobą**: `PantryService.receive_purchase` nie
+   commituje od R3, więc commit jest jeden — gdyby stempel i wpis w spiżarni
+   szły osobno, przerwanie między nimi dawałoby dokładnie ten podwójny zapis,
+   przed którym D19 broni.
+3. Gdy nie ma ANI JEDNEJ pozycji do przyjęcia, ale jakaś była już przyjęta —
+   409 z komunikatem „Te zakupy są już w spiżarni." Gdy nic nie jest odhaczone —
+   zostaje dotychczasowe 409 `NOTHING_TO_RECEIVE`. Dwa różne komunikaty, bo to
+   dwie różne sytuacje dla użytkownika.
+4. Odpowiedź `ReceivedToPantry` dostaje pole `already_received: int` (liczba
+   pominiętych bo już przyjętych) obok `created`/`increased`/`skipped`. Zmiana
+   ADDYTYWNA — `skipped` zachowuje znaczenie z R3.
+5. `ShoppingListItemRead` zwraca `received_at`, żeby lista mogła oznaczyć
+   pozycje już przyjęte. **Odpowiedź PUBLICZNA (`PublicListItemRead`) tego pola
+   NIE DOSTAJE** — to biała lista pól (02_DOMAIN §13.5), a osoba z linkiem nie
+   ma nic wiedzieć o spiżarni rodziny.
+
+Logika LWW w `shopping/lists_service.py`: jeżeli przysłane `checked_at` jest
 **starsze** niż zapisane w DB — mutacja ignorowana (odpowiedź 200 ze stanem
 aktualnym; klient przyjmuje stan serwera). Brak `checked_at` w body =
 zachowanie dotychczasowe (natychmiastowe, `now()` serwera) — kompatybilność
@@ -156,6 +207,14 @@ przycinane do `now()` serwera (ochrona przed rozjechanym zegarem klienta).
 
 ## Frontend
 
+- **Stan „przyjęte" na liście (D19)**: pozycja z `received_at` dostaje dyskretny
+  znacznik (tekst, nie tylko kolor — 06_UIUX §1), a przycisk „Przyjmij zakupy
+  do spiżarni" pokazuje, ile pozycji WEJDZIE przy kliknięciu (0 = przycisk
+  nieaktywny z podpowiedzią „wszystko już przyjęte"). Komunikat po akcji
+  rozszerza istniejący `texts.shoppingList.acceptDone` — dziś ma
+  `(created, increased, skipped)`, dochodzi `alreadyReceived`.
+  Dzięki znacznikowi ta akcja MOŻE wejść do kolejki offline; bez niego musiałaby
+  być offline zablokowana.
 - `vite.config.ts` + vite-plugin-pwa: manifest — `name`/`short_name` PL
   („Family Food Planner" / „FFP"), `lang: "pl"`, `display: "standalone"`,
   `theme_color: "#E07A2F"`, `background_color: "#FAF6EF"` (tokens 06_UIUX
@@ -224,6 +283,19 @@ diffie przed commitem (krok 11).
 - **API (pytest):** PATCH z `checked_at` starszym niż DB → stan bez zmian;
   nowszym → zapis; `checked_at` z przyszłości → przycięte; publiczny PATCH
   z `checked_at` na wygasłym tokenie → 410.
+- **Znacznik przyjęcia (D19) — integration + API:**
+  1. przyjęcie dwóch odhaczonych pozycji stempluje `received_at` obu;
+  2. DRUGIE wywołanie tej samej akcji → 409 „już w spiżarni", spiżarnia BEZ
+     zmian (to jest test regresyjny decyzji — sprawdź, że jest czerwony bez
+     znacznika);
+  3. odhaczenie TRZECIEJ pozycji po przyjęciu → kolejne przyjęcie wchodzi
+     i dotyczy WYŁĄCZNIE tej trzeciej („doniosłem dwie rzeczy z torby" —
+     przypadek, dla którego odrzucono znacznik na liście);
+  4. pozycja `already_have` odhaczona nie dostaje `received_at` (nie jest
+     zakupem — ustalenie R3);
+  5. odpowiedź publiczna NIE zawiera `received_at` (asercja dokładnego zbioru
+     kluczy w `test_public_lists_api.py` musi zostać czerwona, jeśli ktoś to
+     pole tam dołoży).
 - **E2E (Playwright, `context.setOffline(true)`):** otwórz listę → offline
   → odhacz 2 pozycje (UI reaguje natychmiast, banner widoczny) → online →
   reload → pozycje odhaczone na serwerze. Wariant dla `/l/:token` bez
@@ -241,10 +313,18 @@ diffie przed commitem (krok 11).
 5. UI listy pokazuje wskaźnik offline + liczbę oczekujących zmian.
 6. Token wygasły w trakcie offline ⇒ przyjazny ekran 410, kolejka
    wyczyszczona, bez pętli retry.
-7. `task check` + E2E offline zielone.
+7. **Przyjęcie zakupów jest idempotentne (D19)**: powtórzone wywołanie —
+   także z kolejki offline — nie dubluje ilości w spiżarni, a pozycje odhaczone
+   PÓŹNIEJ dają się przyjąć normalnie. Lista pokazuje, co już przyjęte.
+8. `task check` + E2E offline zielone; `alembic heads` = jedna głowa po merge'u
+   z równoległymi B13/B14.
 
 ## Out of Scope
 
+- **Ręczne pozycje listy zakupowej — decyzja D18 (2026-08-22): NIE.** Lista
+  jest w całości wynikiem generacji; brakującą rzecz dopisuje się do planu
+  i generuje turę ponownie (02_DOMAIN §9.4). Nie dokładać pola „dodaj pozycję"
+  ani jako ułatwienia offline — rewizja wymaga nowej decyzji właściciela.
 - Offline dla innych widoków niż lista zakupowa (plan/przepisy — FUTURE,
   osobna decyzja po R4).
 - WebSockety/realtime (ADR-009: polling przy focusie wystarcza).
@@ -260,11 +340,17 @@ diffie przed commitem (krok 11).
 - `frontend/src/stores/offlineQueue.ts` (N)
 - `frontend/src/components/domain/OfflineBanner.vue` (N)
 - `frontend/src/pages/ListaZakupowPage.vue` (M), `PublicznaListaPage.vue` (M)
-- `backend/app/modules/shopping/service.py` (M — LWW), `schemas.py` (M),
-  `router.py` (M — pole `checked_at`)
+- `backend/app/modules/shopping/lists_service.py` (M — LWW + znacznik D19),
+  `models.py` (M — `received_at`), `schemas.py` (M), `lists_router.py` (M)
+- `backend/migrations/versions/00XX_received_at.py` (N — numer = pierwszy wolny,
+  `down_revision` z `task db-heads`)
+- `frontend/src/lib/texts.ts` (M — `acceptDone` + stan „przyjęte")
 - `frontend/src/lib/offline/*.test.ts`, `backend/tests/api/test_shopping_lww.py`,
   `frontend/e2e/offline-lista.spec.ts` (N)
-- `docs/architecture/05_FRONTEND_ARCHITECTURE.md` §6 (M — stan faktyczny)
+- `backend/tests/integration/shopping/test_accept_to_pantry.py` (M — scenariusze
+  idempotencji z §Tests)
+- `docs/architecture/05_FRONTEND_ARCHITECTURE.md` §6 (M — stan faktyczny),
+  `docs/architecture/03_DATABASE_DESIGN.md` §8 (M — kolumna `received_at`)
 
 ## Implementation Notes
 
@@ -305,6 +391,14 @@ diffie przed commitem (krok 11).
 
 - [ ] Backend: `checked_at` w PATCH + LWW + przycinanie przyszłości
 - [ ] Testy API LWW zielone
+- [ ] Migracja `received_at` (numer = pierwszy wolny, up i down na czystej bazie)
+- [ ] `accept_to_pantry` idempotentne + 409 „już w spiżarni"; `received_at`
+      w odpowiedzi PRYWATNEJ, NIE w publicznej
+- [ ] Pięć scenariuszy znacznika przyjęcia z §Tests (w tym „doniosłem dwie
+      rzeczy z torby" i regresja czerwona bez znacznika)
+- [ ] Lista pokazuje pozycje już przyjęte; przycisk nieaktywny, gdy nie ma nic
+      nowego do przyjęcia
+- [ ] 03_DATABASE §8 uzupełnione o `received_at`
 - [ ] vite-plugin-pwa: manifest PL, ikony, standalone, splash
 - [ ] Workbox: precache shell, NetworkFirst `/api/*` (timeout 3 s),
       CacheFirst statyki, wykluczenia auth/uploads
