@@ -82,6 +82,36 @@ przy udostępnieniu), revoke, 410 z przyjaznym ekranem; odpowiedź bez PII
 (tylko pozycje listy); rate limit 60/min/IP na `/public/*`; tokeny nie
 logowane (filtr w logach — ścieżka maskowana do `/public/lists/***`).
 
+**WDROŻONE w BATCH_11** (`app/modules/shopping/{public_router,lists_service}.py`).
+Sześć szczegółów wykonawczych, które trzeba utrzymać:
+
+1. Router publiczny siedzi dokładnie pod `/api/v1/public/` — tylko ten prefiks
+   jest w `CSRF_EXEMPT_PREFIXES` i tylko on jest maskowany przez `mask_path()`.
+   Przeniesienie ścieżki wyłączyłoby publiczny PATCH (403) i odsłoniłoby tokeny
+   w logach.
+2. Token w ścieżce jest ograniczony wzorcem `^[A-Za-z0-9_-]{43}$`, więc skanowanie
+   kończy się 422 przed zapytaniem do bazy.
+3. 404 (nieznany token) i 410 (wygasły/odwołany) mają IDENTYCZNY komunikat —
+   nie potwierdzamy istnienia. Kod `gone` i wyjątek `GoneError` doszły do
+   `app/core/errors.py`.
+4. Odwołanie NIE zeruje kolumny `public_token` (żeby nowy losowy token nie mógł
+   wskrzesić starego linku); ponowne udostępnienie zawsze zapisuje nowy token.
+5. Odpowiedź publiczna to jawna biała lista pól, a nie serializacja encji;
+   dokładny zbiór kluczy pilnuje test (08_TESTING §2.9).
+6. Publiczny klient frontendu (`src/api/publicList.ts`) wysyła żądania
+   z `credentials: 'omit'` — otwarcie linku na zalogowanej przeglądarce nie
+   wysyła cookie sesji rodziny.
+7. Limit jest WSPÓLNY dla całej ścieżki publicznej (`limiter.shared_limit`
+   ze scope `public-lists`), a nie liczony per endpoint — inaczej `/public/*`
+   miałoby faktycznie 120/min/IP (60 na GET + 60 na PATCH). Kolejny endpoint
+   publiczny dołącza do TEGO scope.
+8. Maskowanie działa w DWÓCH warstwach, bo obie piszą na stdout kontenera:
+   `mask_path()` w `RequestLoggingMiddleware` (nasz log) oraz
+   `MaskPublicTokenFilter` na loggerze `uvicorn.access` (access log Uvicorna
+   formatuje ścieżkę sam z `record.args` i o middleware nie wie). Druga warstwa
+   doszła w BATCH_11 po ręcznym sprawdzeniu `docker compose logs app` — token
+   wychodził tam w całości. Testy: `tests/unit/test_logging.py`.
+
 ## 6. Uploady
 
 Dotyczy zdjęć (przepisy/produkty) i PDF-ów importu:

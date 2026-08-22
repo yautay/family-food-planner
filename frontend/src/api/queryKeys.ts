@@ -52,6 +52,12 @@ export interface StoresFiltersKey {
   include_archived?: boolean
 }
 
+export interface ShoppingListsFiltersKey {
+  limit: number
+  offset: number
+  status?: 'active' | 'expired'
+}
+
 export interface PantryFiltersKey {
   limit: number
   offset: number
@@ -117,6 +123,24 @@ export const queryKeys = {
     roundConfigs: ['shopping', 'round-configs'] as const,
     /** Podgląd generacji to stan serwera: liczy go silnik z `params` (B10). */
     generation: (id: number) => ['shopping', 'generations', id] as const,
+    /**
+     * Gotowe listy zakupowe (B11) — sekcje składa serwer, nie przeglądarka.
+     *
+     * `listsIndex` i `list` mają ROZŁĄCZNE prefiksy (`index` vs `detail`)
+     * z rozmysłem: klucz szczegółu `['shopping','lists', id]` byłby dzieckiem
+     * klucza indeksu, więc `invalidateQueries` po zapisie na liście list
+     * unieważniałby też otwarty szczegół i kasował świeżo podmienioną
+     * odpowiedź PATCH-a (złapał to test zmiany sklepu).
+     */
+    lists: ['shopping', 'lists'] as const,
+    listsIndex: ['shopping', 'lists', 'index'] as const,
+    listsIndexFiltered: (filters: ShoppingListsFiltersKey) =>
+      ['shopping', 'lists', 'index', filters] as const,
+    list: (id: number) => ['shopping', 'lists', 'detail', id] as const,
+  },
+  /** Publiczna lista po tokenie — POZA sesją, więc własna gałąź kluczy. */
+  publicList: {
+    detail: (token: string) => ['public-list', token] as const,
   },
   adminUsers: {
     all: ['admin', 'users'] as const,

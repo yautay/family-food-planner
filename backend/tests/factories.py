@@ -7,7 +7,7 @@ Hasła w testach są jawne i celowo trywialne; hash liczony jest raz na wartoś�
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from functools import lru_cache
 
@@ -43,7 +43,7 @@ from app.modules.planning.models import (
 )
 from app.modules.recipes.models import Recipe, RecipeIngredient, RecipeRating, Tag, recipe_tags
 from app.modules.shopping.engine import RoundMode
-from app.modules.shopping.models import ShoppingRoundConfig
+from app.modules.shopping.models import ShoppingList, ShoppingListItem, ShoppingRoundConfig
 
 #: Hasło używane przez fabryki. Nie jest sekretem — istnieje wyłącznie w testach.
 TEST_PASSWORD = "haslo-testowe-2026"
@@ -673,3 +673,77 @@ async def create_round_config(
     await session.commit()
     await session.refresh(config)
     return config
+
+
+async def create_shopping_list(
+    session: AsyncSession,
+    *,
+    owner: User,
+    name: str = "Zakupy 07.01-13.01.2030",
+    round_name: str | None = "Niedziela",
+    store: Store | None = None,
+    expires_at: datetime | None = None,
+    public_token: str | None = None,
+    token_revoked: bool = False,
+    scope: Scope = Scope.PRIVATE,
+) -> ShoppingList:
+    """Gotowa lista zakupowa (fabryka omija finalizację generacji).
+
+    `generation_id` zostaje `None`: kolumna jest NULLABLE właśnie po to, żeby
+    lista mogła istnieć bez generacji, a testy list nie muszą przechodzić całej
+    drogi plan → podgląd → finalizacja, żeby sprawdzić odhaczanie i sortowanie.
+    """
+    shopping_list = ShoppingList(
+        name=name,
+        round_name=round_name,
+        store_id=store.id if store is not None else None,
+        expires_at=expires_at or (utcnow() + timedelta(days=7)),
+        public_token=public_token,
+        token_revoked=token_revoked,
+        **ScopedQuery.ownership_for_create(owner, scope),
+    )
+    session.add(shopping_list)
+    await session.commit()
+    await session.refresh(shopping_list)
+    return shopping_list
+
+
+async def create_shopping_list_item(
+    session: AsyncSession,
+    *,
+    shopping_list: ShoppingList,
+    category: ProductCategory,
+    product: CanonicalProduct | None = None,
+    retail_product: RetailProduct | None = None,
+    label: str = "Mąka pszenna",
+    needed_amount: Decimal = Decimal("500.000"),
+    amount_unit: AmountUnit = AmountUnit.GRAM,
+    packages_count: int | None = None,
+    package_size: Decimal | None = None,
+    leftover_amount: Decimal | None = None,
+    already_have: bool = False,
+    from_pantry_amount: Decimal | None = None,
+    checked: bool = False,
+    position: int = 0,
+) -> ShoppingListItem:
+    """Pozycja listy zakupowej z ilością JUŻ na osi produktu (jak po finalizacji)."""
+    item = ShoppingListItem(
+        list_id=shopping_list.id,
+        category_id=category.id,
+        product_id=product.id if product is not None else None,
+        retail_product_id=retail_product.id if retail_product is not None else None,
+        label=label,
+        needed_amount=needed_amount,
+        amount_unit=amount_unit,
+        packages_count=packages_count,
+        package_size=package_size,
+        leftover_amount=leftover_amount,
+        already_have=already_have,
+        from_pantry_amount=from_pantry_amount,
+        checked=checked,
+        position=position,
+    )
+    session.add(item)
+    await session.commit()
+    await session.refresh(item)
+    return item

@@ -13,6 +13,14 @@ const apiTarget = process.env.VITE_API_PROXY_TARGET ?? 'http://127.0.0.1:8000'
 // HMR nie widzi zmian w kontenerze (compose ustawia VITE_USE_POLLING).
 const usePolling = process.env.VITE_USE_POLLING === 'true'
 
+// Playwright zapisuje raport i artefakty do `test-results/` oraz
+// `playwright-report/` WEWNĄTRZ katalogu frontendu, czyli wprost pod watcherem
+// Vite. Każdy taki zapis w trakcie przebiegu wywoływał PEŁNE przeładowanie
+// strony (w logach: „page reload playwright-report/index.html"), a reload gubi
+// stan UI — spec listy zakupowej tracił w połowie otwarty panel udostępniania
+// i padał bez winy aplikacji (ustalenie BATCH_11).
+const watchIgnored = ['**/test-results/**', '**/playwright-report/**']
+
 export default defineConfig({
   plugins: [
     vue(),
@@ -62,7 +70,7 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    watch: usePolling ? { usePolling: true, interval: 300 } : undefined,
+    watch: { ignored: watchIgnored, ...(usePolling ? { usePolling: true, interval: 300 } : {}) },
     proxy: {
       '/api': {
         target: apiTarget,

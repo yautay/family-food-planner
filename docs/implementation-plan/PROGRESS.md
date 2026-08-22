@@ -20,7 +20,7 @@ commit wykonany). Kolumna „Blokery" = zależności + decyzje z 02_DECISIONS.
 | 08 PANTRY | [x] | — | `batch(08)` na master (hash wpisać po push) |
 | 09 RETAIL_PRODUCTS_AND_STORES | [x] | — | `batch(09)` na master (hash wpisać po push) |
 | 10 SHOPPING_ENGINE | [x] | — | `batch(10)` na master (hash wpisać po push) |
-| 11 SHOPPING_LISTS_AND_SHARING | [ ] | 10 | |
+| 11 SHOPPING_LISTS_AND_SHARING | [x] | — | `batch(11)` na master (hash wpisać po push) |
 | R3 REVIEW_SHOPPING | [ ] | 08–11 | |
 | 12 PWA_AND_OFFLINE | [ ] | 11, R3 | |
 | 13 STATISTICS | [ ] | 06, R3 | |
@@ -40,6 +40,75 @@ zmiany dotykające przyszłych batchy trzeba wpisać do ich kart
 (00_MASTER_PLAN §8); dziennik to indeks, nie schowek.
 
 ---
+
+**2026-08-22 — BATCH_11 (SHOPPING_LISTS_AND_SHARING): lista działa w sklepie i da się
+ją wysłać linkiem.** Weszły: `shopping/lists_service.py` (drugi serwis modułu —
+życie gotowej listy), czysty `shopping/sorting.py`, routery `/shopping/lists/*`
+i `/api/v1/public/lists/*`, `GoneError` (410) w core, maskowanie tokenu w access
+logu Uvicorna, `PantryService.receive_purchase`, strona listy z sekcjami i
+checkboxami 48 px, `ShareListDialog` (link/QR/Web Share/odwołanie), publiczna
+strona `/l/:token` poza shellem, wariant do druku i E2E domykające core flow 3.
+**Bez migracji — head zostaje `0012`** (unique index na `public_token` założyła
+`0012`). Siedem rzeczy, o których muszą wiedzieć następne batche:
+
+1. **Sekcje listy składa SERWER, nie przeglądarka.** `GET /shopping/lists/{id}`
+   zwraca `sections` już w kolejności przejścia po sklepie (profil `store_category_order`
+   → reszta wg globalnej pozycji kategorii; `already_have` na dół sekcji).
+   Gdyby kolejność liczył frontend, ta sama lista miałaby trzy różne porządki:
+   na ekranie, na wydruku i pod publicznym linkiem. Sklep przypisuje się PATCH-em
+   LISTY (`store_id`/`clear_store`), nie przy finalizacji generacji.
+2. **`checked_at` to moment OSTATNIEJ decyzji o checkboxie — także odznaczenia.**
+   Ustawia go serwer przy każdej zmianie `checked`, w obie strony; klient go nie
+   przysyła. Tak go potrzebuje LWW z ADR-009: B12 musi wiedzieć, która decyzja
+   jest MŁODSZA, a nie tylko kiedy coś odhaczono. Karta B12 zaktualizowana.
+3. **Odpowiedź publiczna to jawna BIAŁA LISTA pól** (`PublicListRead`, bez
+   `from_attributes`), a test asercjonuje DOKŁADNY zbiór kluczy. Dołożenie
+   czegokolwiek do tej odpowiedzi jest zmianą kontraktu bezpieczeństwa
+   (02_DOMAIN §13.5), nie ulepszeniem UI. Strona zalogowana dostaje INNY kształt
+   (`sections`) — offline w B12 to dwa osobne snapshoty.
+4. **Publiczny router MUSI siedzieć pod `/api/v1/public/`.** Dokładnie ten prefiks
+   jest zwolniony z CSRF i tylko on jest maskowany w logach. Limit 60/min/IP jest
+   WSPÓLNY dla całej ścieżki (`limiter.shared_limit`, scope `public-lists`) —
+   `limiter.limit` liczyłby per trasę, czyli dawałby faktycznie 120/min.
+   Kolejny endpoint publiczny dołącza do tego scope, nie zakłada własnego.
+5. **Maskowanie tokenu wymaga DWÓCH warstw** i to jest ustalenie z review, nie
+   ozdoba: `mask_path` w naszym middleware ORAZ `MaskPublicTokenFilter` na
+   loggerze `uvicorn.access`. Uvicorn formatuje ścieżkę sam z `record.args`, więc
+   bez filtra token wychodził w `docker compose logs app` w całości.
+6. **„Co mamy w domu" to przynależność, nie widoczność.** `receive_purchase`
+   szuka pozycji do scalenia przez `select_own_household`, bo `select_visible`
+   zwraca ADMIN-owi `true()` (D16) — pierwsza wersja dolewała mu zakupy do
+   spiżarni obcej rodziny. Każdy nowy ZAPIS w encji „zawsze household" musi
+   wybrać ten sam warunek co `get_household_state`.
+7. **Playwright zapisuje artefakty pod watcherem Vite.** `test-results/` i
+   `playwright-report/` leżą w katalogu frontendu, więc każdy zapis w trakcie
+   przebiegu wywoływał PEŁNE przeładowanie strony i gubił stan UI (spec tracił
+   w połowie otwarty panel). `server.watch.ignored` w `vite.config.ts` to zamyka —
+   następny spec z dłuższym flow nie musi tego odkrywać od nowa.
+
+`task check` ZIELONY W CAŁOŚCI (exit 0): migrations-check (3),
+**test-unit (303)**, **test-int (229)**, **test-api (343)**,
+fe-test (296 w 32 plikach), typecheck (mypy 164 pliki + vue-tsc), lint,
+format-check, fe-build. E2E: **dwa kolejne przebiegi
+z identycznym wynikiem 15/15** (nowy spec `shopping-list-sharing` otwiera
+`/l/{token}` w OSOBNYM kontekście przeglądarki — bez `storageState`, więc bez
+ciasteczka sesji; inaczej test przechodziłby też wtedy, gdy strona publiczna po
+cichu korzysta z cookies). Maskowanie tokenu sprawdzone RĘCZNIE na realnym
+stacku w obu logach.
+
+**`/code-review` + `/security-review` na diffie: sześć ustaleń, wszystkie
+NAPRAWIONE w tym commicie**, dwa poważne (token w access logu Uvicorna; ADMIN
+dolewający zakupy do cudzej spiżarni — oba z testem regresyjnym, drugi
+sprawdzony jako czerwony przed naprawą) i cztery mniejsze (`MissingGreenlet` na
+PATCH-u listy po `updated_at` z `onupdate`; klucz szczegółu listy był dzieckiem
+klucza indeksu w TanStack Query, więc invalidacja kasowała świeżą odpowiedź
+PATCH-a; limit `/public/*` liczony per endpoint; śmieciowe id w URL-u dawało
+wieczny spinner). Szczegóły i uzasadnienia: Completion notes karty B11.
+
+**Follow-upy dla R3** (wpisane też do karty R3): `accept_to_pantry` nie jest
+atomowe i jest powtarzalne (brak znacznika „już przyjęte"); specy zakupowe mogą
+wrócić do własnych produktów, bo `clearShoppingLists` już istnieje; dług z B10
+(dryf modelu `pantry_items.retail_product_id`) bez zmian.
 
 **2026-08-21 — BATCH_10 (SHOPPING_ENGINE): zakupy liczą się z planu.** Weszły:
 migracja `0012` (`shopping_round_configs`, `shopping_generations`,

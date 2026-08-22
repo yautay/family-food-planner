@@ -1087,6 +1087,149 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/shopping/lists": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Listy zakupowe widoczne dla użytkownika
+         * @description Najnowsze pierwsze. `status=expired` pokazuje listy po terminie — te NIE są usuwane automatycznie (D10), przestaje działać wyłącznie ich publiczny link.
+         */
+        get: operations["list_lists_api_v1_shopping_lists_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/shopping/lists/{list_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lista zakupowa z pozycjami w sekcjach (kolejność profilu sklepu) */
+        get: operations["get_list_api_v1_shopping_lists__list_id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Usunięcie listy (właściciel albo ADMIN)
+         * @description Ręczna, jawna decyzja — automat nie kasuje niczego (D10). Pozycje giną kaskadą, więc produkt użyty tylko na tej liście da się potem usunąć.
+         */
+        delete: operations["delete_list_api_v1_shopping_lists__list_id__delete"];
+        options?: never;
+        head?: never;
+        /** Edycja listy: nazwa i sklep (zmiana sklepu przesortowuje sekcje) */
+        patch: operations["update_list_api_v1_shopping_lists__list_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/shopping/lists/{list_id}/items/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Odhaczenie pozycji albo „mam już w domu”
+         * @description `checked_at` ustawia serwer (UTC) — klient go nie przysyła (ADR-009).
+         */
+        patch: operations["update_item_api_v1_shopping_lists__list_id__items__item_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/shopping/lists/{list_id}/share": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Udostępnienie listy publicznym linkiem
+         * @description Generuje NOWY publiczny token (`secrets.token_urlsafe(32)`, 43 znaki base64url) i ustawia ważność listy. Ponowne udostępnienie zawsze tworzy nowy link — odwołany nie wraca do życia (ADR-010).
+         */
+        post: operations["share_list_api_v1_shopping_lists__list_id__share_post"];
+        /** Odwołanie publicznego linku (natychmiast 410 dla odwiedzających) */
+        delete: operations["revoke_share_api_v1_shopping_lists__list_id__share_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/shopping/lists/{list_id}/accept-to-pantry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Przyjęcie odhaczonych zakupów do spiżarni
+         * @description Akcja JAWNA (02_DOMAIN §8) — zakupy nie trafiają do spiżarni w tle. Ilość liczymy jako kupioną (`packages_count * package_size`), a bez opakowania jako `needed_amount`. Zakup dolewa się do pozycji tego produktu BEZ daty ważności, a gdy takiej nie ma — zakłada nową.
+         */
+        post: operations["accept_to_pantry_api_v1_shopping_lists__list_id__accept_to_pantry_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/lists/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Treść listy zakupowej po publicznym tokenie (bez logowania)
+         * @description Odpowiedź zawiera WYŁĄCZNIE treść listy: nazwę, ważność i pozycje. Nieznany token → 404, wygasły albo odwołany → 410. Komunikat jest w obu przypadkach identyczny — nie ujawniamy, czy token istniał.
+         */
+        get: operations["public_list_api_v1_public_lists__token__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/lists/{token}/items/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Odhaczenie pozycji z publicznego linku
+         * @description Token pozwala zmienić WYŁĄCZNIE `checked` (ADR-010) — każde inne pole w ciele żądania kończy się 422. Bez CSRF (autoryzuje token w URL), za to z limitem 60/min/IP.
+         */
+        patch: operations["public_check_item_api_v1_public_lists__token__items__item_id__patch"];
+        trace?: never;
+    };
     "/api/v1/audit": {
         parameters: {
             query?: never;
@@ -1125,6 +1268,18 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * AcceptToPantryResponse
+         * @description Ile pozycji weszło do spiżarni: nowe wiersze, dolane i pominięte.
+         */
+        AcceptToPantryResponse: {
+            /** Created */
+            created: number;
+            /** Increased */
+            increased: number;
+            /** Skipped */
+            skipped: number;
+        };
         /**
          * AmountUnit
          * @description Oś, na której ilość jest przechowywana (03_DATABASE §5: `ENUM(g,ml,piece)`).
@@ -1884,6 +2039,46 @@ export interface components {
             position?: number | null;
         };
         /**
+         * ListItemUpdateRequest
+         * @description Odhaczenie i „mam już w domu". `checked_at` ustawia SERWER (ADR-009).
+         *
+         *     Innych pól tu nie ma z rozmysłem: pozycja jest wynikiem generacji, a jej
+         *     ilości zmienia się nową generacją (karta B11 §Out of Scope pkt 4).
+         */
+        ListItemUpdateRequest: {
+            /** Checked */
+            checked?: boolean | null;
+            /** Already Have */
+            already_have?: boolean | null;
+        };
+        /**
+         * ListSectionRead
+         * @description Sekcja listy: kategoria i jej pozycje w kolejności przejścia po sklepie.
+         */
+        ListSectionRead: {
+            /** Category Id */
+            category_id: number;
+            /** Category Name */
+            category_name: string;
+            /** Items */
+            items: components["schemas"]["ShoppingListItemRead"][];
+        };
+        /**
+         * ListUpdateRequest
+         * @description Edycja listy: nazwa i sklep (profil sortowania). Pominięte = bez zmian.
+         */
+        ListUpdateRequest: {
+            /** Name */
+            name?: string | null;
+            /** Store Id */
+            store_id?: number | null;
+            /**
+             * Clear Store
+             * @default false
+             */
+            clear_store: boolean;
+        };
+        /**
          * LoginRequest
          * @description Dane logowania. Hasło bez dolnego limitu — złe dane to 401, nie 422.
          */
@@ -2542,6 +2737,63 @@ export interface components {
             perishability_override?: components["schemas"]["Perishability"] | null;
         };
         /**
+         * PublicListItemRead
+         * @description Pozycja listy w widoku publicznym.
+         *
+         *     Ten schemat jest jawną BIAŁĄ LISTĄ i nie ma `from_attributes`: gdyby
+         *     powstawał z encji, dołożenie kolumny do `shopping_list_items` mogłoby po
+         *     cichu wypchnąć dane rodziny na publiczną stronę. Zbiór kluczy odpowiedzi
+         *     pilnuje test `test_public_response_has_no_pii`.
+         */
+        PublicListItemRead: {
+            /** Id */
+            id: number;
+            /** Label */
+            label: string;
+            /** Amount */
+            amount: string;
+            unit: components["schemas"]["AmountUnit"];
+            /** Category Name */
+            category_name: string;
+            /** Checked */
+            checked: boolean;
+            /** Leftover Amount */
+            leftover_amount: string | null;
+            /** Already Have */
+            already_have: boolean;
+            /** Packages Count */
+            packages_count: number | null;
+            /** Package Size */
+            package_size: string | null;
+        };
+        /**
+         * PublicListItemUpdateRequest
+         * @description Uprawnienia tokenu w całości: JEDNO pole `checked` (ADR-010).
+         *
+         *     `model_config` z `extra="forbid"` jest tu zabezpieczeniem, nie ozdobą: próba
+         *     przemycenia `already_have` albo ilości ma skończyć się 422, a nie cichym
+         *     zignorowaniem pola (karta B11 §Security).
+         */
+        PublicListItemUpdateRequest: {
+            /** Checked */
+            checked: boolean;
+        };
+        /**
+         * PublicListRead
+         * @description Publiczna treść listy: nazwa, ważność, pozycje. Żadnych danych rodziny.
+         */
+        PublicListRead: {
+            /** Name */
+            name: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Items */
+            items: components["schemas"]["PublicListItemRead"][];
+        };
+        /**
          * RatingRequest
          * @description Własna ocena 1-5; `user_id` pochodzi z sesji, nigdy z body (karta B05).
          */
@@ -2996,6 +3248,77 @@ export interface components {
          */
         Scope: "private" | "household";
         /**
+         * ShareCreateRequest
+         * @description Udostępnienie listy: ważność w dniach (default 7 — ADR-010).
+         */
+        ShareCreateRequest: {
+            /**
+             * Expires In Days
+             * @default 7
+             */
+            expires_in_days: number;
+        };
+        /**
+         * ShareRead
+         * @description Publiczny link listy (ADR-010).
+         *
+         *     `url` jest ŚCIEŻKĄ (`/l/{token}`), nie adresem absolutnym: backend nie wie,
+         *     pod jaką domeną stoi reverse proxy, a frontend zna `window.location.origin`
+         *     (karta B11, Implementation Notes pkt 7).
+         */
+        ShareRead: {
+            /** Url */
+            url: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Revoked */
+            revoked: boolean;
+        };
+        /**
+         * ShoppingListDetailRead
+         * @description Lista z pozycjami POSORTOWANYMI w sekcje (karta B11 §Backend „Sortowanie").
+         *
+         *     Sekcje składa serwer, a nie przeglądarka: kolejność zależy od profilu sklepu
+         *     (`store_category_order`, B09) i od globalnych pozycji kategorii, więc gdyby
+         *     układał ją frontend, ta sama lista wyglądałaby inaczej na papierze i na
+         *     publicznym linku.
+         */
+        ShoppingListDetailRead: {
+            /** Id */
+            id: number;
+            /** Generation Id */
+            generation_id: number | null;
+            /** Name */
+            name: string;
+            /** Round Name */
+            round_name: string | null;
+            /** Store Id */
+            store_id: number | null;
+            /** Store Name */
+            store_name: string | null;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            share: components["schemas"]["ShareRead"] | null;
+            /** Sections */
+            sections: components["schemas"]["ListSectionRead"][];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
          * ShoppingListItemRead
          * @description Pozycja utworzonej listy zakupowej (pełny widok listy dostarcza BATCH_11).
          */
@@ -3025,6 +3348,8 @@ export interface components {
             from_pantry_amount: string | null;
             /** Checked */
             checked: boolean;
+            /** Checked At */
+            checked_at: string | null;
             /** Position */
             position: number;
         };
@@ -3053,6 +3378,52 @@ export interface components {
             expires_at: string;
             /** Items */
             items: components["schemas"]["ShoppingListItemRead"][];
+        };
+        /**
+         * ShoppingListStatus
+         * @description Filtr listy list. `expired` NIE znaczy „usunięta" — D10: historia zostaje.
+         * @enum {string}
+         */
+        ShoppingListStatus: "active" | "expired";
+        /**
+         * ShoppingListSummaryRead
+         * @description Lista na liście list — bez pozycji, z licznikiem odhaczonych.
+         */
+        ShoppingListSummaryRead: {
+            /** Id */
+            id: number;
+            /** Generation Id */
+            generation_id: number | null;
+            /** Name */
+            name: string;
+            /** Round Name */
+            round_name: string | null;
+            /** Store Id */
+            store_id: number | null;
+            /** Store Name */
+            store_name: string | null;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Items Total */
+            items_total: number;
+            /** Items Checked */
+            items_checked: number;
+            share: components["schemas"]["ShareRead"] | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** ShoppingListsResponse */
+        ShoppingListsResponse: {
+            /** Items */
+            items: components["schemas"]["ShoppingListSummaryRead"][];
+            /** Total */
+            total: number;
         };
         /**
          * StoreCategoryOrderEntry
@@ -6939,6 +7310,346 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["FinalizeResponse"];
                 };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_lists_api_v1_shopping_lists_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+                status?: components["schemas"]["ShoppingListStatus"] | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShoppingListsResponse"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_list_api_v1_shopping_lists__list_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                list_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShoppingListDetailRead"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_list_api_v1_shopping_lists__list_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                list_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_list_api_v1_shopping_lists__list_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                list_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ListUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShoppingListDetailRead"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_item_api_v1_shopping_lists__list_id__items__item_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                list_id: number;
+                item_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ListItemUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShoppingListItemRead"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    share_list_api_v1_shopping_lists__list_id__share_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                list_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ShareCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShareRead"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    revoke_share_api_v1_shopping_lists__list_id__share_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                list_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    accept_to_pantry_api_v1_shopping_lists__list_id__accept_to_pantry_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                list_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AcceptToPantryResponse"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    public_list_api_v1_public_lists__token__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicListRead"];
+                };
+            };
+            /** @description Link wygasł albo został odwołany */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    public_check_item_api_v1_public_lists__token__items__item_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+                item_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PublicListItemUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicListItemRead"];
+                };
+            };
+            /** @description Link wygasł albo został odwołany */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Błąd */
             default: {

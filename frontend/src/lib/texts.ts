@@ -592,3 +592,85 @@ export const shopping = {
   openList: 'Otwórz listę',
   itemsCount: (count: number) => `${count} poz.`,
 } as const
+
+/**
+ * Strona listy zakupowej i udostępnianie (BATCH_11).
+ *
+ * Teksty publicznej strony są tu razem z prywatnymi świadomie: komunikat
+ * wygaśnięcia MUSI być identyczny w obu miejscach (ADR-010), a rozbicie go na
+ * dwa pliki to zaproszenie do rozjechania się treści.
+ */
+export const shoppingList = {
+  title: 'Lista zakupowa',
+  loading: 'Wczytywanie listy…',
+  notFound: 'Nie znaleziono tej listy zakupowej.',
+  empty: 'Ta lista jest pusta. Wygeneruj zakupy z planu posiłków.',
+  backToShopping: 'Wróć do zakupów',
+
+  store: 'Sklep',
+  storeHint: 'Kolejność sekcji bierzemy z profilu wybranego sklepu.',
+  storeNone: 'Bez sklepu',
+  expiresAt: 'Ważna do',
+  expired: 'Lista wygasła — publiczny link już nie działa.',
+  progress: (checked: number, total: number) => `Odhaczone ${checked} z ${total}`,
+
+  alreadyHave: 'Mam już w domu',
+  packagesLine: (count: number, size: string) => `${count} x ${size}`,
+  toggleAria: (label: string) => `Odhacz: ${label}`,
+
+  print: 'Drukuj',
+  share: 'Udostępnij',
+  acceptToPantry: 'Przyjmij zakupy do spiżarni',
+  deleteList: 'Usuń listę',
+
+  acceptTitle: 'Przyjąć zakupy do spiżarni?',
+  acceptDescription:
+    'Doda odhaczone pozycje do spiżarni w ilościach, które kupiłeś (całe opakowania). ' +
+    'Pozycji nieodhaczonych nie ruszamy.',
+  acceptConfirm: 'Dodaj do spiżarni',
+  acceptNothing: 'Najpierw odhacz kupione pozycje.',
+  acceptDone: (created: number, increased: number) =>
+    `Dodano do spiżarni: ${created} nowych pozycji, zwiększono ${increased}.`,
+
+  deleteTitle: 'Usunąć tę listę zakupową?',
+  deleteDescription:
+    'Lista i jej pozycje znikną bezpowrotnie, a publiczny link przestanie działać. ' +
+    'Historii zakupów nie da się odtworzyć.',
+  deleteConfirm: 'Usuń listę',
+
+  shareTitle: 'Udostępnij listę',
+  shareDescription:
+    'Wyślij link osobie, która zrobi zakupy. Link pokazuje wyłącznie treść listy ' +
+    'i pozwala odhaczać pozycje — bez logowania i bez dostępu do reszty danych.',
+  shareValidity: 'Ważność linku',
+  shareDays: (days: number) => (days === 1 ? '1 dzień' : `${days} dni`),
+  shareCreate: 'Utwórz link',
+  shareRecreate: 'Utwórz nowy link',
+  shareActiveUntil: (date: string) => `Link aktywny do ${date}`,
+  shareRevoked: 'Link został odwołany. Utwórz nowy, jeśli chcesz udostępnić listę ponownie.',
+  shareNone: 'Ta lista nie jest jeszcze udostępniona.',
+  shareCopy: 'Kopiuj link',
+  shareCopied: 'Link skopiowany.',
+  shareSystem: 'Wyślij',
+  shareQr: 'Pokaż QR',
+  shareQrHide: 'Ukryj QR',
+  shareQrAlt: 'Kod QR z linkiem do listy zakupowej',
+  shareRevoke: 'Odwołaj link',
+  shareRevokeConfirm: 'Odwołać link? Osoby, które go mają, stracą dostęp natychmiast.',
+} as const
+
+/** Publiczna strona `/l/:token` — poza shellem, bez danych rodziny. */
+export const publicList = {
+  brand: 'Family Food Planner',
+  heading: 'Lista zakupowa',
+  loading: 'Wczytywanie listy…',
+  // DOKŁADNIE ten komunikat wymaga ADR-010 — nie parafrazować.
+  unavailable: 'Ta lista zakupowa już wygasła lub została usunięta.',
+  unavailableHint: 'Poproś o nowy link osobę, która Ci go wysłała.',
+  retry: 'Spróbuj ponownie',
+  expiresAt: (date: string) => `Link ważny do ${date}`,
+  empty: 'Ta lista nie ma pozycji.',
+  progress: (checked: number, total: number) => `Odhaczone ${checked} z ${total}`,
+  alreadyHave: 'Mam już w domu',
+  offlineHint: 'Odhaczenia zapisują się na serwerze — możesz odświeżyć stronę.',
+} as const

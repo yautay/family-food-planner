@@ -354,32 +354,170 @@ konfiguracja slowapi, serwis stores z B09 (rozszerzenie blokady usuwania),
 
 ## Implementation checklist
 
-- [ ] Endpointy list + PATCH pozycji (checked/already_have, `checked_at`)
-- [ ] Sortowanie wg profilu sklepu + wybór sklepu na liście
-- [ ] share POST/DELETE (token, expiry, revoke) + rozszerzenie blokady sklepu
-- [ ] Publiczne GET/PATCH: 404/410, zero PII (biała lista), rate limit
-- [ ] Maskowanie tokenów w logach
-- [ ] `accept_to_pantry` przez `PantryService`
-- [ ] Testy API §2.9 w komplecie + macierz uprawnień + integration
-- [ ] `ListaZakupowPage` (sekcje, checkboxy 48 px, optimistic, resztki, already_have)
-- [ ] Wariant print
-- [ ] `ShareListDialog` (link/QR/Web Share/odwołaj)
-- [ ] `PublicznaListaPage` poza shellem + ekran 410
-- [ ] Testy frontend + E2E core flow 3
-- [ ] PROGRESS.md + aktualizacja karty B12
+- [x] Endpointy list + PATCH pozycji (checked/already_have, `checked_at`)
+- [x] Sortowanie wg profilu sklepu + wybór sklepu na liście
+- [x] share POST/DELETE (token, expiry, revoke) + rozszerzenie blokady sklepu
+      (licznik referencji sklepu zarejestrował już B10 — ten batch dodał TEST 409)
+- [x] Publiczne GET/PATCH: 404/410, zero PII (biała lista), rate limit
+- [x] Maskowanie tokenów w logach (`mask_path` z B02 obejmuje `/api/v1/public/lists/*`
+      — nowy `logging_filters.py` NIE był potrzebny)
+- [x] `accept_to_pantry` przez `PantryService` (+ nowa metoda `receive_purchase`)
+- [x] Testy API §2.9 w komplecie + macierz uprawnień + integration
+- [x] `ListaZakupowPage` (sekcje, checkboxy 48 px, optimistic, resztki, already_have)
+- [x] Wariant print
+- [x] `ShareListDialog` (link/QR/Web Share/odwołaj)
+- [x] `PublicznaListaPage` poza shellem + ekran 410
+- [x] Testy frontend + E2E core flow 3
+- [x] PROGRESS.md + aktualizacja karty B12
 
 ## Verification checklist
 
-- [ ] `task check` zielony (unit+int+api+fe-test+typecheck+lint)
-- [ ] `alembic heads` = jedna głowa (migracje tylko jeśli dotyczy)
-- [ ] Acceptance Criteria 1–9 sprawdzone ręcznie lub testem
-- [ ] Test białej listy pól odpowiedzi publicznej zielony
-- [ ] Rate limit zweryfikowany testem (429)
-- [ ] Log z requestu publicznego nie zawiera tokenu (sprawdzone ręcznie)
-- [ ] E2E: odhaczenie na `/l/{token}` w kontekście bez sesji przechodzi
-- [ ] Dokumentacja + karta B12 zaktualizowane
-- [ ] Commit `batch(11): …`, `git status` czysty w zakresie batcha
+- [x] `task check` zielony (unit+int+api+fe-test+typecheck+lint)
+- [x] `alembic heads` = jedna głowa (BEZ nowej migracji — unique index na
+      `public_token` założyła już `0012`, head zostaje `0012`)
+- [x] Acceptance Criteria 1–9 sprawdzone testem albo E2E
+- [x] Test białej listy pól odpowiedzi publicznej zielony
+- [x] Rate limit zweryfikowany testem (429, licznik WSPÓLNY dla `/public/*`)
+- [x] Log z requestu publicznego nie zawiera tokenu (sprawdzone ręcznie na logach
+      kontenera `app`: ścieżka wychodzi jako `/api/v1/public/lists/***`)
+- [x] E2E: odhaczenie na `/l/{token}` w kontekście bez sesji przechodzi
+- [x] Dokumentacja + karta B12 zaktualizowane
+- [x] Commit `batch(11): …`, `git status` czysty w zakresie batcha
 
 ## Completion notes
 
-(wypełnia agent wykonujący)
+**Wykonane (2026-08-22).** Lista zakupowa jest narzędziem w sklepie: backend
+zwraca ją POSORTOWANĄ w sekcje, publiczny link działa bez logowania i bez PII,
+a zakupy da się jednym kliknięciem przyjąć do spiżarni.
+
+Backend (bez nowej migracji — head zostaje `0012`):
+
+- `app/modules/shopping/lists_service.py` — DRUGI serwis modułu (życie gotowej
+  listy). Ścieżka publiczna ma tu własne metody bez `User` i bez `ScopedQuery`.
+- `app/modules/shopping/sorting.py` — czyste funkcje kolejności sekcji
+  (profil sklepu → reszta wg globalnej pozycji kategorii; `already_have` na dół).
+- `app/modules/shopping/{lists_router,public_router}.py` — `/shopping/lists/*`
+  oraz `/api/v1/public/lists/*` (limit 60/min/IP WSPÓLNY dla ścieżki).
+- `app/core/errors.py += GoneError` (410, kod `gone`).
+- `app/core/logging.py += MaskPublicTokenFilter` + `install_access_log_filter()`.
+- `PantryService.receive_purchase` — przyjęcie zakupów z jawną regułą scalania.
+
+Frontend: `ListaZakupowPage` (sekcje sticky, checkbox 48 px, optimistic toggle
+z rollbackiem, `StorePicker` z create-in-context, dialogi „przyjmij do spiżarni"
+i „usuń listę"), `ShoppingItemRow` (współdzielony ze stroną publiczną, w druku
+`☐`), `ShareListDialog` (ważność 1/7/30 dni, kopiuj/QR/Web Share, „Odwołaj
+link"), `PublicznaListaPage` (`/l/:token`, poza shellem, ekran wygaśnięcia),
+`api/{shoppingLists,publicList}.ts`, `assets/print.css`, `meta.anonymous`
+w routerze.
+
+### Decyzje wykonawcze (uzasadnienia)
+
+1. **Ilość przyjmowana do spiżarni = KUPIONA** (`packages_count * package_size`),
+   a bez wariantu sklepowego `needed_amount` (karta, Implementation Notes pkt 4).
+   Do domu wraca całe opakowanie, więc resztka też jest stanem domowym —
+   przyjmowanie `needed_amount` zaniżałoby spiżarnię dokładnie o wyliczoną
+   resztkę już przy pierwszych zakupach. Jednostek nie przeliczamy:
+   `package_size` jest z definicji na osi produktu kanonicznego (niezmiennik B09).
+2. **Reguła scalania duplikatów**: dolewamy do pozycji tego produktu BEZ daty
+   ważności (najstarszej, gdy jest ich kilka), a gdy takiej nie ma — zakładamy
+   nową. Wiersz z datą ważności to KONKRETNA partia, więc dolanie skłamałoby
+   o dacie; wiersz bez daty to stan luzem. Zrealizowane jako
+   `PantryService.receive_purchase` (wariant „albo" z karty §Context), z własnymi
+   testami integracyjnymi — `create_item` per pozycja rozsypywałby spiżarnię na
+   duplikaty przy każdych zakupach.
+3. **Sklep wybiera się NA LIŚCIE** (rekomendacja z karty §Context pkt 3):
+   „gdzie dziś jadę" to decyzja momentu zakupów, nie właściwość generacji.
+4. **Sekcje składa SERWER** (`sections` w odpowiedzi), nie przeglądarka —
+   inaczej ta sama lista miałaby inną kolejność na ekranie, na wydruku i pod
+   publicznym linkiem (trzy różne implementacje tej samej reguły).
+5. **`checked_at` to moment OSTATNIEJ decyzji o checkboxie, także odznaczenia.**
+   Wybrane pod LWW z ADR-009 (B12 musi wiedzieć, która decyzja jest młodsza,
+   a nie tylko kiedy coś odhaczono). Klient go nie przysyła.
+6. **Odwołanie linku nie zeruje `public_token`** — nowy losowy token nie może
+   (choćby teoretycznie) wskrzesić starego linku.
+7. **`GoneError` zamiast 404 dla wygasłego tokenu**, ale z IDENTYCZNYM
+   komunikatem: kod odpowiedzi jest dla API, treść dla człowieka.
+8. **Limit `/public/*` jako `shared_limit`** (scope `public-lists`) —
+   `limiter.limit` liczy per trasa, więc ścieżka miałaby faktycznie 120/min/IP.
+
+### Odstępstwa od karty
+
+- **Nowy plik `app/core/logging_filters.py` NIE powstał** (karta dopuszczała go
+  warunkowo). Maskowanie ścieżki istniało od B02 w `app/core/logging.py`, więc
+  brakującą warstwę (access log Uvicorna) dołożyłem tam, gdzie mieszka
+  `mask_path` — osobny plik rozdzielałby jedną odpowiedzialność na dwa miejsca.
+- **`frontend/src/styles/print.css` → `frontend/src/assets/print.css`** —
+  katalogu `styles/` w repo nie ma, `assets/` trzyma `tailwind.css`.
+- **Rozszerzenie blokady usuwania sklepu było już zrobione w B10** (licznik
+  `_lists_using_store` zarejestrowany). Ten batch dołożył brakujący TEST 409
+  z `used_in`, a nie kod.
+- **Poza „Zmieniane": `frontend/vite.config.ts`** (`server.watch.ignored` dla
+  `test-results/` i `playwright-report/`). Playwright zapisuje artefakty wewnątrz
+  katalogu frontendu, czyli pod watcherem Vite, więc każdy zapis w trakcie
+  przebiegu wywoływał PEŁNE przeładowanie strony i gubił stan UI (spec listy
+  tracił w połowie otwarty panel udostępniania). To naprawa infrastruktury
+  testowej, bez której AC 8 nie dało się spełnić — nie zmiana zachowania aplikacji.
+- **Poza „Zmieniane": `frontend/src/layouts/AppShell.vue`** — nawigacja dostała
+  `print:hidden` (a `main` reset paddingu w druku). Strona listy nie ma jak
+  ukryć shella, pod którym jest osadzona; alternatywa (selektory po
+  `data-testid` w `print.css`) byłaby krucha.
+
+### Ustalenia review (naprawione w tym commicie)
+
+`/code-review` (SKILL-REVIEW) i `/security-review` (SKILL-SECREV) na diffie.
+Dwa ustalenia POWAŻNE, oba naprawione z testem regresyjnym:
+
+1. **Access log Uvicorna logował PEŁNY token** (`docker compose logs app`).
+   `mask_path` maskowało tylko nasz log; Uvicorn formatuje linię sam
+   z `record.args`. Naprawa: `MaskPublicTokenFilter` na loggerze
+   `uvicorn.access`, testy `tests/unit/test_logging.py`, weryfikacja ręczna na
+   realnym stacku. To była realna droga do cudzej listy dla każdego z dostępem
+   do logów — 07_SECURITY §5 wymagał tej warstwy wprost.
+2. **ADMIN „przyjmując zakupy" dolewał do CUDZEJ spiżarni.**
+   `receive_purchase` szukało kandydata przez `select_visible`, które dla
+   ADMIN-a zwraca `true()` (D16). Naprawa: `select_own_household` (ten sam
+   warunek, co `get_household_state`) + test
+   `test_admin_nie_dolewa_do_cudzej_spizarni`, sprawdzony jako CZERWONY przed
+   naprawą. „Co mamy w domu" jest przynależnością, nie widocznością.
+
+Cztery ustalenia mniejsze, też naprawione: PATCH listy padał na
+`MissingGreenlet` (`updated_at` z `onupdate` jest po commicie wygaszone →
+`refresh`); klucz szczegółu listy był dzieckiem klucza indeksu w TanStack Query
+(invalidacja kasowała świeżą odpowiedź PATCH-a); limit `/public/*` był liczony
+per endpoint; śmieciowe id w URL-u dawało wieczny spinner zamiast „nie
+znaleziono".
+
+### Follow-upy (poza zakresem, do R3)
+
+1. **`accept_to_pantry` nie jest atomowe** — każda pozycja to osobny commit
+   (`receive_purchase` commituje sam, jak reszta `PantryService`). W praktyce
+   nieosiągalne (produkt pozycji chroni FK RESTRICT, więc nie ma na czym paść),
+   ale przy dokładaniu walidacji do tej ścieżki trzeba to wziąć pod uwagę.
+2. **Akcja „przyjmij zakupy" jest powtarzalna** — nie ma kolumny „już przyjęte",
+   więc jedyną ochroną jest dialog potwierdzenia. Do oceny w R3 (alternatywa:
+   znacznik na liście).
+3. **Specy zakupowe wciąż pracują na produktach seedu**, mimo że
+   `clearShoppingLists` już istnieje (karta §Context pkt 5 dopuszczała powrót do
+   własnych danych). Zmiana specu B10 nie była konieczna do AC, a `clearProducts`
+   po liście działa — do zrobienia przy okazji R3.
+4. Dług z B10 bez zmian: dryf modelu `pantry_items.retail_product_id`
+   (`alembic check`).
+
+### Wyniki (realne)
+
+`task check` exit 0: migrations-check (3), test-unit (303), test-int (229),
+test-api (343), fe-test (296 w 32 plikach), typecheck (mypy 164 pliki + vue-tsc),
+lint, format-check, fe-build. `alembic heads` = jedna głowa (`0012`).
+E2E: dwa kolejne przebiegi 15/15 z identycznym wynikiem.
+
+Uwaga wykonawcza dla następnych sesji: PRZERWANY przebieg `task check` zostawia
+w bazie testowej tabelę `scoped_notes` (fixture nie dobiega do teardownu), a ta
+zależy od typu `entity_scope` — kolejny przebieg wywala wtedy 5 testów migracji
+i seedu („cannot drop type entity_scope", „Nieoczekiwany zestaw tabel"). To NIE
+jest regresja: wystarczy usunąć tabelę z db-test albo pozwolić dobiec pełnemu
+przebiegowi (`test_scope_matrix` sprząta ją na końcu).
+
+### Pytania do właściciela
+
+Brak — batch nie miał decyzji-bramek, a wszystkie rozstrzygnięcia mieściły się
+w rekomendacjach karty (punkty 1–3 wyżej).

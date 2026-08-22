@@ -27,10 +27,50 @@ Batch zastaje (po B11 + R3):
 - `frontend/src/main.ts`;
   strony `ZakupyPage`, `ListaZakupowPage` (`/zakupy/listy/:id`),
   `PublicznaListaPage` (`/l/:token`, poza shellem, bez auth).
-- Backend: `backend/app/modules/shopping/` — `router.py` z
-  `PATCH /shopping/lists/{id}/items/{item_id}` (check/already-have) oraz
-  publiczny `PATCH /public/lists/{token}` (rate limit, 410 po expiry);
-  kolumny `checked`, `checked_at` w `shopping_list_items` już istnieją.
+- Backend: `backend/app/modules/shopping/` — **stan faktyczny po B11**:
+  `lists_router.py` z `PATCH /shopping/lists/{id}/items/{item_id}`
+  (`{checked?, already_have?}`) i `public_router.py` z
+  `PATCH /api/v1/public/lists/{token}/items/{item_id}` (WYŁĄCZNIE `{checked}`,
+  `extra="forbid"`, rate limit 60/min/IP, 410 po expiry/revoke). Logika obu
+  ścieżek mieszka w `lists_service.py`, nie w `service.py`.
+
+### Sześć rzeczy z B11, które wiążą ten batch
+
+1. **`checked_at` to moment OSTATNIEJ decyzji o checkboxie — także odznaczenia.**
+   Ustawia go SERWER (`_apply_item_changes` w `lists_service.py`) przy każdej
+   zmianie `checked`, w obie strony; klient go dziś NIE przysyła. Ta semantyka
+   jest wybrana pod LWW z ADR-009: żeby rozstrzygnąć konflikt dwóch telefonów,
+   trzeba wiedzieć, która decyzja jest MŁODSZA, a nie tylko kiedy coś odhaczono.
+   Dokładając `checked_at` od klienta (Stage 1), nie zmieniaj tej semantyki —
+   rozszerz ją: `checked_at` z żądania wygrywa tylko wtedy, gdy jest MŁODSZE od
+   zapisanego, a pole pominięte znaczy „użyj czasu serwera".
+2. **Kształt odpowiedzi publicznej** (biała lista pól, `PublicListRead`):
+   `{name, expires_at, items: [{id, label, amount, unit, category_name, checked,
+   leftover_amount, already_have, packages_count, package_size}]}`. Snapshot
+   IndexedDB buduj na TYM kształcie — nie ma tu `position` ani `category_id`,
+   bo kolejność pozycji jest już ustalona przez serwer (sekcje idą po sobie
+   w kolejności profilu sklepu). Dokładanie pól do tej odpowiedzi wymaga
+   aktualizacji testu białej listy i jest zmianą kontraktu bezpieczeństwa.
+   Strona zalogowana dostaje `sections` (`ShoppingListDetailRead`) — dwa różne
+   kształty, dwa snapshoty.
+3. **Publiczny klient HTTP już istnieje**: `frontend/src/api/publicList.ts`
+   (`credentials: 'omit'`, bez CSRF, `PublicListUnavailableError` dla 404/410
+   i `PublicListRequestError` dla reszty). Kolejka offline ma używać JEGO,
+   nie `apiFetch` — i musi rozróżniać te dwa błędy: wygaśnięcie tokenu
+   w trakcie offline (Stage 5) to `PublicListUnavailableError`, a nie brak sieci.
+4. **Trasa `/l/:token` ma `meta.anonymous: true`** (nowa flaga w `router.ts`,
+   sprawdzana PRZED `auth.ensureLoaded()`), jest importowana leniwie i renderuje
+   własny minimalny layout. Service worker musi więc precache'ować TEN chunk
+   osobno — shell aplikacji nie jest na tej stronie ładowany.
+5. **Optimistic update jest już zaimplementowany** na obu stronach przez
+   `setQueryData` w `onMutate` + rollback z kontekstu (`ListaZakupowPage.vue`,
+   `PublicznaListaPage.vue`). Kolejka offline ma go ROZSZERZYĆ (persystencja
+   w idb), nie zastąpić — i nie przepisywać na Pinia stanu serwera (ADR-007).
+6. **Klucze TanStack Query**: `queryKeys.shopping.list(id)` =
+   `['shopping','lists','detail', id]`, `queryKeys.publicList.detail(token)` =
+   `['public-list', token]`. Prefiks indeksu (`['shopping','lists','index']`)
+   jest ROZŁĄCZNY ze szczegółem świadomie — wspólny prefiks kasował świeżo
+   podmienioną odpowiedź PATCH-a przy invalidacji listy list.
 - `shopping_list_items.label` — tekst pozycji renderowalny offline
   (03_DATABASE §8, celowo zdenormalizowany). **Stan faktyczny po B10**:
   `label` to nazwa WYBRANEGO WARIANTU SKLEPOWEGO („Mąka pszenna 1 kg"), a gdy

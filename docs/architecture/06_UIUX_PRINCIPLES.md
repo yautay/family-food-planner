@@ -73,6 +73,12 @@ przyciskową (mobile/dostępność).
 5. **Lista zakupów** — sekcje per kategoria w kolejności profilu sklepu,
    pozycje z dużym checkboxem, ilością i plakietką resztki; panel akcji:
    udostępnij (link/QR/systemowe share), drukuj, eksport PDF later.
+   Stan po BATCH_11: sklep wybiera się NA LIŚCIE (`StorePicker` z create-in-context)
+   i zmiana od razu przesortowuje sekcje; nagłówki sekcji są sticky; odhaczenie
+   jest optimistic z rollbackiem i komunikatem przy błędzie; pozycje „mam już
+   w domu" są wyszarzone na końcu swojej sekcji; panel akcji ma dodatkowo
+   „Przyjmij zakupy do spiżarni" (dialog potwierdzenia) i „Usuń listę" (dialog
+   z konsekwencjami). Eksport PDF pozostaje „later".
 6. **Spiżarnia** — grid/lista z filtrem kategorii i sortowaniem po dacie
    ważności; produkty bliskie przeterminowania wyróżnione.
 7. **Statystyki** — zakładki Kalorie/Makroskładniki; słupki stacked
@@ -106,6 +112,14 @@ przyciskową (mobile/dostępność).
 Widok listy zakupów ma wariant print (`@media print`): czarno-biały,
 checkboxy jako ☐, kategorie jako nagłówki, bez nawigacji; przycisk
 „Drukuj" = `window.print()`.
+
+Stan faktyczny po BATCH_11: reguły druku żyją w `src/assets/print.css`
+(importowanym w `main.ts`), bo elementy do ukrycia — sidebar, bottom-nav,
+nagłówek mobilny — należą do `AppShell`, a strona listy nie ma jak zabrać
+nawigacji, pod którą jest osadzona. Wszystko siedzi w `@media print`, więc na
+ekranie ten plik nic nie zmienia. Znak `☐` rysuje `ShoppingItemRow` (checkbox
+przeglądarki dostaje `print:hidden`), a pozycje mają `break-inside: avoid`,
+żeby wiersz nie łamał się między stronami.
 
 ## 7. Język interfejsu
 

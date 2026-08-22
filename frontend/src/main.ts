@@ -1,4 +1,6 @@
 import './assets/tailwind.css'
+// Wariant do druku listy zakupowej (06_UIUX §6) — reguły wyłącznie w `@media print`.
+import './assets/print.css'
 
 import { VueQueryPlugin } from '@tanstack/vue-query'
 import { createPinia } from 'pinia'

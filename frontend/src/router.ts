@@ -9,7 +9,10 @@ import { useAuthStore } from '@/stores/auth'
  * Mapa tras wg 05_FRONTEND §3. Sekcje domenowe pokazują na razie
  * `PlaceholderPage` — kolejne batche podmieniają wyłącznie `component`.
  *
- * `meta.public` = trasa dostępna bez sesji, `meta.admin` = wymaga roli ADMIN.
+ * `meta.public` = trasa LOGOWANIA (dostępna bez sesji, ale zalogowany jest z niej
+ * odsyłany), `meta.anonymous` = trasa dostępna dla KAŻDEGO — zalogowanego też,
+ * bez przekierowania (publiczny link listy, ADR-010), `meta.admin` = wymaga
+ * roli ADMIN.
  */
 export const routes: RouteRecordRaw[] = [
   {
@@ -95,13 +98,12 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/pages/zakupy/ZakupyPage.vue'),
         meta: { title: 'Zakupy' },
       },
-      // Trasa-zaślepka strony listy zakupowej: finalizacja linkuje tutaj, a pełny
-      // widok (checkboxy, sortowanie per sklep, druk, udostępnianie) dostarcza
-      // BATCH_11 — podmieni WYŁĄCZNIE `component`, bez nowego wpisu nawigacji.
+      // Strona listy zakupowej — trasa istnieje od B10 (finalizacja tu linkuje),
+      // BATCH_11 podmienił WYŁĄCZNIE `component`, bez nowego wpisu nawigacji.
       {
         path: 'zakupy/listy/:id',
         name: 'zakupy-lista',
-        component: PlaceholderPage,
+        component: () => import('@/pages/zakupy/ListaZakupowPage.vue'),
         meta: { title: 'Lista zakupowa' },
       },
       {
@@ -136,6 +138,15 @@ export const routes: RouteRecordRaw[] = [
       },
     ],
   },
+  // Publiczny link listy (ADR-010): POZA `AppShell` i poza guardem sesji.
+  // Osobny chunk (import leniwy), bo strona ma być lekka i nie ciągnąć shella —
+  // B12 zrobi ją offline-capable (karta B11, Implementation Notes pkt 2).
+  {
+    path: '/l/:token',
+    name: 'publiczna-lista',
+    component: () => import('@/pages/public/PublicznaListaPage.vue'),
+    meta: { anonymous: true, title: 'Lista zakupowa' },
+  },
   {
     path: '/:pathMatch(.*)*',
     redirect: { name: 'plan-dnia' },
@@ -151,6 +162,14 @@ export async function authGuard(
   to: { name?: unknown; fullPath: string; meta: Record<string, unknown> },
   auth: ReturnType<typeof useAuthStore>,
 ): Promise<true | { name: string; query?: Record<string, string> }> {
+  // Publiczny link jest dostępny dla WSZYSTKICH i nie wymaga wiedzy o sesji:
+  // sprawdzamy to PRZED `ensureLoaded`, żeby otwarcie `/l/{token}` nie strzelało
+  // do `/auth/me` i żeby zalogowany nie został odesłany na plan dnia (co robi
+  // `meta.public`, przeznaczone dla ekranu logowania).
+  if (to.meta.anonymous === true) {
+    return true
+  }
+
   await auth.ensureLoaded()
 
   if (to.meta.public === true) {

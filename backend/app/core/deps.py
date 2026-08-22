@@ -29,6 +29,7 @@ from app.modules.pantry.service import PantryService
 from app.modules.planning.service import PlanningService
 from app.modules.planning.templates_service import TemplatesService
 from app.modules.recipes.service import RecipesService
+from app.modules.shopping.lists_service import ShoppingListsService
 from app.modules.shopping.service import ShoppingService
 
 
@@ -107,6 +108,13 @@ def get_shopping_service(
 ) -> ShoppingService:
     """Serwis zakupów: tury, generacje, finalizacja list (BATCH_10)."""
     return ShoppingService(session)
+
+
+def get_shopping_lists_service(
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> ShoppingListsService:
+    """Serwis gotowych list zakupowych: odhaczanie, sklep, udostępnianie (BATCH_11)."""
+    return ShoppingListsService(session)
 
 
 def get_audit_service(

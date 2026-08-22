@@ -34,9 +34,9 @@ odpowiedzi API nie piszemy.
 /produkty, /produkty/nowy, /produkty/:id/edytuj   (widok 8)
 /spizarnia            SpizarniaPage       (widok 6)
 /zakupy               ZakupyPage — konfig tur + generacja + preview
-/zakupy/listy/:id     ListaZakupowPage    (widok 5; wariant print)
-                      — od B10 istnieje jako TRASA-ZAŚLEPKA (PlaceholderPage);
-                        finalizacja zakupów już tu linkuje, komponent dowozi B11
+/zakupy/listy/:id     ListaZakupowPage    (widok 5; wariant print) — DOSTARCZONE
+                        w B11: sekcje per kategoria wg profilu sklepu, checkboxy
+                        48 px z optimistic update, udostępnianie, druk
 /statystyki           StatystykiPage      (widok 7)
 /ustawienia           UstawieniaPage      (cele, profile rodziny, sklepy, konto)
 /admin/*              AdminPage (użytkownicy, rodziny, weryfikacja produktów,
@@ -47,6 +47,20 @@ odpowiedzi API nie piszemy.
 
 Guard: brak sesji → `/login` (poza `/l/:token`). Layout: `AppShell`
 (sidebar desktop / bottom-nav mobile — patrz 06_UIUX).
+
+Stan faktyczny po BATCH_11 — trzy rzeczy, które wiążą kolejne trasy publiczne:
+
+- `meta.public` znaczy „ekran LOGOWANIA": trasa działa bez sesji, ale zalogowany
+  jest z niej odsyłany na plan dnia. Dla `/l/:token` to byłoby błędem (właściciel
+  listy ma prawo otworzyć własny link), więc doszła osobna flaga
+  **`meta.anonymous`** — dostępne dla każdego, bez przekierowania. Guard sprawdza
+  ją PRZED `auth.ensureLoaded()`, więc publiczna strona nie strzela do `/auth/me`.
+- `/l/:token` jest importowane leniwie i renderuje WŁASNY, minimalny layout —
+  `AppShell` ciągnąłby stan sesji i menu, których ta strona nie ma prawa pokazać.
+- Wywołania `/api/v1/public/*` idą osobnym, lekkim klientem
+  (`src/api/publicList.ts`) z `credentials: 'omit'` i bez nagłówka CSRF —
+  `client.ts` NIE dostał trybu warunkowego, bo jeden `if` w warstwie HTTP całej
+  aplikacji łatwo pomylić, a pomyłka oznaczałaby wysyłanie cudzej sesji.
 
 ## 4. Komponenty
 

@@ -71,8 +71,14 @@ U      /shopping/generations/{id}          — GET odtwarza preview z params;
                                              DELETE = miękkie odrzucenie
 U      /shopping/generations/{id}/resolve  — decyzje niejasności
 U      /shopping/generations/{id}/finalize — tworzy listy per tura
-U      /shopping/lists (+items PATCH check/already-have)
+U      /shopping/lists                     — GET listy (?status=active|expired,
+                                             paginacja); GET|PATCH|DELETE /{id}
+                                             (PATCH: nazwa i sklep = profil
+                                             sortowania sekcji)
+U      /shopping/lists/{id}/items/{item_id} — PATCH `checked` / `already_have`
+                                             (`checked_at` ustawia serwer)
 U      /shopping/lists/{id}/share          — POST token / DELETE revoke
+U      /shopping/lists/{id}/accept-to-pantry — POST: odhaczone pozycje do spiżarni
 P      /public/lists/{token}               — GET treść + PATCH check pozycji
                                              (rate limit, zero PII, 410 po expiry)
 
@@ -149,6 +155,33 @@ z podpowiedzią archiwizacji. Mutacje `/categories`: ADMIN; odczyt: każdy.
    index), `410 Gone` po wygaśnięciu/odwołaniu z przyjaznym komunikatem,
    odpowiedź zawiera tylko: nazwę listy, pozycje (label, ilość, kategoria,
    checked), expires_at. Żadnych nazwisk, emaili, id użytkowników.
+3a. **Stan faktyczny po BATCH_11** — pięć rzeczy wiążących dla kolejnych
+   endpointów publicznych:
+   - **404 i 410 mają IDENTYCZNĄ treść** („Ta lista zakupowa już wygasła lub
+     została usunięta." — ADR-010). Rozróżnienie zostaje w KODZIE odpowiedzi
+     dla API; użytkownik nie dowiaduje się, czy token kiedykolwiek istniał.
+     Kod `gone` (410) doszedł do `STATUS_TO_CODE` w `app/core/errors.py`
+     razem z wyjątkiem `GoneError`.
+   - Token w ścieżce jest walidowany kształtem (43 znaki base64url), więc skaner
+     dostaje 422 PRZED zapytaniem do bazy.
+   - Odpowiedź publiczna to jawna BIAŁA LISTA pól (`PublicListRead` /
+     `PublicListItemRead`, bez `from_attributes`): `{name, expires_at,
+     items: [{id, label, amount, unit, category_name, checked, leftover_amount,
+     already_have, packages_count, package_size}]}`. Dokładny zbiór kluczy
+     asercjonuje `tests/api/shopping/test_public_lists_api.py::test_public_response_has_no_pii`.
+   - Publiczny PATCH przyjmuje WYŁĄCZNIE `{checked}` (`extra="forbid"`), więc
+     każde inne pole to 422, a nie ciche pominięcie.
+   - Rate limit 60/min/IP WSPÓLNY dla całej ścieżki publicznej
+     (`limiter.shared_limit`, scope `public-lists`) — nie per endpoint; limiter
+     jest wstrzykiwany do buildera routera z `create_app` (jak w `/auth`).
+3b. **Sortowanie pozycji listy zakupowej robi SERWER** (BATCH_11).
+   `GET /shopping/lists/{id}` zwraca `sections` — sekcje per kategoria już
+   w kolejności przejścia po sklepie: najpierw kategorie z profilu sklepu
+   (`store_category_order`, B09) w jego kolejności, potem pozostałe wg globalnego
+   `product_categories.position`; w sekcji pozycje `already_have` na końcu.
+   Frontend tej kolejności NIE liczy — inaczej ta sama lista wyglądałaby inaczej
+   na ekranie, na wydruku i pod publicznym linkiem. Sklep przypisuje się PATCH-em
+   listy (`store_id` / `clear_store`), a nie przy finalizacji generacji.
 
 ## 4. Wersjonowanie i kompatybilność
 

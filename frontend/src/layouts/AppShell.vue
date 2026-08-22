@@ -41,8 +41,11 @@ const logout = useMutation({
 <template>
   <div class="bg-background text-foreground min-h-dvh md:flex" data-testid="app-shell">
     <!-- Sidebar (desktop) -->
+    <!-- `print:hidden` na wszystkich elementach nawigacji: wariant do druku listy
+         zakupowej (06_UIUX §6) nie może zabrać ich z poziomu strony, bo strona
+         jest osadzona POD shellem. Reszta reguł druku: `assets/print.css`. -->
     <aside
-      class="border-border bg-card hidden w-64 shrink-0 border-r md:flex md:flex-col"
+      class="border-border bg-card hidden w-64 shrink-0 border-r md:flex md:flex-col print:hidden"
       data-testid="nav-sidebar"
     >
       <div class="border-border flex items-center gap-3 border-b px-4 py-4">
@@ -95,11 +98,13 @@ const logout = useMutation({
 
     <div class="flex min-w-0 flex-1 flex-col">
       <!-- Nagłówek (mobile) -->
-      <header class="border-border bg-card border-b px-4 py-3 md:hidden">
+      <header class="border-border bg-card border-b px-4 py-3 md:hidden print:hidden">
         <p class="text-base font-semibold">{{ APP_NAME }}</p>
       </header>
 
-      <main class="mx-auto w-full max-w-5xl flex-1 px-4 py-6 pb-28 md:pb-8">
+      <main
+        class="mx-auto w-full max-w-5xl flex-1 px-4 py-6 pb-28 md:pb-8 print:max-w-none print:p-0"
+      >
         <RouterView />
       </main>
     </div>
@@ -107,7 +112,7 @@ const logout = useMutation({
     <!-- Panel „Więcej" (mobile) -->
     <div
       v-if="moreOpen"
-      class="border-border bg-card fixed inset-x-0 bottom-16 z-20 border-t p-2 md:hidden"
+      class="border-border bg-card fixed inset-x-0 bottom-16 z-20 border-t p-2 md:hidden print:hidden"
       data-testid="nav-more-panel"
     >
       <RouterLink
@@ -135,7 +140,7 @@ const logout = useMutation({
 
     <!-- Bottom-nav (mobile) -->
     <nav
-      class="border-border bg-card fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t md:hidden"
+      class="border-border bg-card fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t md:hidden print:hidden"
       aria-label="Nawigacja główna (mobile)"
       data-testid="nav-bottom"
     >

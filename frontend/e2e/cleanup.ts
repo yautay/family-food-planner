@@ -272,6 +272,54 @@ async function deleteStores(
   }
 }
 
+/**
+ * Kasuje listy zakupowe z OKNA DAT E2E (lata 2030+).
+ *
+ * Listy nie mają prefiksu nazwy — finalizacja nadaje im nazwę z zakresu dat
+ * („Zakupy 07.03-13.03.2033"), więc identyfikuje je ROK. To ta sama konwencja,
+ * co przy planie: daty testowe leżą w latach 2030+, a „dziś" zostaje dla
+ * ręcznego klikania (08_TESTING §3.1 pkt 4).
+ *
+ * MUSI iść przed `clearRetailProducts` i `clearProducts`: pozycje listy trzymają
+ * produkt kanoniczny i wariant sklepowy FK RESTRICT (ADR-012), więc dopóki
+ * lista istnieje, produktu nie da się usunąć. Do BATCH_11 endpointu usuwania
+ * list nie było i to właśnie dlatego specy zakupowe pracują na produktach seedu.
+ */
+export async function clearShoppingLists(request: APIRequestContext): Promise<void> {
+  const headers = await csrfHeaders(request)
+  await deleteShoppingLists(request, headers)
+}
+
+/** Nazwa listy z finalizacji: „Zakupy DD.MM-DD.MM.RRRR". */
+const LIST_NAME_PATTERN = /^Zakupy \d{2}\.\d{2}-\d{2}\.\d{2}\.(\d{4})$/
+
+/**
+ * Czy lista pochodzi z okna dat zarezerwowanego dla E2E (lata 2030+).
+ *
+ * Rok czytamy z NAZWY, bo listy nie mają prefiksu — finalizacja nadaje nazwę
+ * z zakresu dat. To ta sama konwencja co przy planie (08_TESTING §3.1 pkt 4),
+ * więc lista ręcznie wygenerowana z dzisiejszego planu nigdy tu nie wpadnie.
+ */
+function isE2eListName(name: string): boolean {
+  const match = LIST_NAME_PATTERN.exec(name)
+  const year = match === null ? null : Number(match[1])
+  return year !== null && E2E_YEARS.some((allowed) => allowed === year)
+}
+
+async function deleteShoppingLists(
+  request: APIRequestContext,
+  headers: Record<string, string>,
+): Promise<void> {
+  const rows = await listNamed(
+    request,
+    `${API}/shopping/lists?limit=${PAGE}&offset=0`,
+    isE2eListName,
+  )
+  for (const list of rows) {
+    await tryDelete(request, `${API}/shopping/lists/${list.id}`, headers)
+  }
+}
+
 /** Kasuje produkty kanoniczne o nazwie z danym prefiksem (konto E2E jest ADMIN-em). */
 export async function clearProducts(request: APIRequestContext, prefix: string): Promise<void> {
   const headers = await csrfHeaders(request)
@@ -307,6 +355,7 @@ export async function cleanupE2eData(
   await clearPlanDays(request, dates)
   await clearRecipes(request, namePrefix)
   await clearPantry(request, namePrefix)
+  await clearShoppingLists(request)
   await clearRetailProducts(request, namePrefix)
   await clearStores(request, namePrefix)
   await clearProducts(request, namePrefix)
@@ -385,6 +434,7 @@ export async function purgeE2eLeftovers(
 
   await deleteRecipes(request, headers, anyE2e)
   await deletePantryItems(request, headers, anyE2e)
+  await deleteShoppingLists(request, headers)
   await deleteRetailProducts(request, headers, anyE2e)
   await deleteStores(request, headers, anyE2e)
   await deleteProducts(request, headers, anyE2e)

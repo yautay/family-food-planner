@@ -34,6 +34,7 @@ from app.modules.pantry.schemas import PantryItemCreateRequest, PantrySort
 
 __all__ = [
     "PantryItemView",
+    "PantryReceipt",
     "PantryService",
     "PantryStateItem",
     "PantryValidationError",
@@ -71,6 +72,18 @@ class PantryItemView:
     item: PantryItem
     product: CanonicalProduct | None
     category: ProductCategory | None
+
+
+@dataclass(frozen=True)
+class PantryReceipt:
+    """Wynik przyjęcia zakupów: pozycja + czy DOLANO do istniejącej partii.
+
+    Rozróżnienie jest dla użytkownika, nie dla kodu: „dodano 3 pozycje,
+    zwiększono 2" mówi mu, że spiżarnia nie rozsypała się na duplikaty.
+    """
+
+    item: PantryItem
+    merged: bool
 
 
 @dataclass(frozen=True)
@@ -205,6 +218,64 @@ class PantryService:
         self._session.add(item)
         await self._session.commit()
         return await self._view(item)
+
+    async def receive_purchase(
+        self, *, actor: User, product_id: int, amount: Decimal
+    ) -> PantryReceipt:
+        """Przyjęcie ZAKUPÓW do spiżarni (konsument: „przyjmij zakupy", B11).
+
+        Reguła scalania — jawna, bo to decyzja domenowa, a nie szczegół zapisu:
+        zakupy dolewamy do istniejącej pozycji tego produktu **bez daty
+        ważności**, a gdy takiej nie ma, zakładamy nową. Uzasadnienie: wiersz
+        z datą ważności jest KONKRETNĄ partią („ten jogurt do 12.09"), więc
+        dolanie do niego świeżego zakupu skłamałoby o dacie; wiersz bez daty to
+        stan luzem („mąka w szafce”) i tam nowa torba po prostu się dodaje.
+        Gdy takich wierszy jest kilka (użytkownik mógł je założyć ręcznie),
+        bierzemy najstarszy — wybór musi być deterministyczny.
+
+        Zakupy nie znają daty ważności (lista zakupowa jej nie nosi), więc nowa
+        pozycja powstaje bez niej i użytkownik może ją uzupełnić w spiżarni.
+        Ilość jest już na osi produktu — przelicznikami zajmuje się wołający.
+
+        Kandydata do dolania szukamy przez `select_own_household`, a NIE
+        `select_visible`: dla ADMIN-a widoczność to `true()` (D16), więc
+        przyjęcie zakupów dolałoby mu ilość do NAJSTARSZEJ pasującej pozycji
+        w całej instancji — czyli do cudzej spiżarni. „Co mamy w domu" jest
+        przynależnością, nie widocznością (ten sam powód, dla którego
+        `get_household_state` używa tego samego warunku).
+        """
+        product = await self._product_or_422(product_id)
+        existing = (
+            (
+                await self._session.execute(
+                    _PANTRY.select_own_household(actor)
+                    .where(
+                        PantryItem.product_id == product.id,
+                        PantryItem.expiry_date.is_(None),
+                    )
+                    .order_by(PantryItem.id)
+                    .limit(1)
+                    .execution_options(populate_existing=True)
+                )
+            )
+            .scalars()
+            .first()
+        )
+
+        if existing is not None:
+            existing.amount = existing.amount + amount
+            await self._session.commit()
+            return PantryReceipt(item=(await self._view(existing)).item, merged=True)
+
+        item = PantryItem(
+            product_id=product.id,
+            amount=amount,
+            amount_unit=self._unit_for(product, None),
+            **HouseholdScopedQuery.ownership_for_create(actor),
+        )
+        self._session.add(item)
+        await self._session.commit()
+        return PantryReceipt(item=(await self._view(item)).item, merged=False)
 
     async def update_item(
         self, item_id: int, *, actor: User, changes: Mapping[str, Any]

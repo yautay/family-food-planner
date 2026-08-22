@@ -4841,6 +4841,513 @@
         }
       }
     },
+    "/api/v1/shopping/lists": {
+      "get": {
+        "tags": [
+          "shopping"
+        ],
+        "summary": "Listy zakupowe widoczne dla użytkownika",
+        "description": "Najnowsze pierwsze. `status=expired` pokazuje listy po terminie — te NIE są usuwane automatycznie (D10), przestaje działać wyłącznie ich publiczny link.",
+        "operationId": "list_lists_api_v1_shopping_lists_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ShoppingListStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShoppingListsResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/shopping/lists/{list_id}": {
+      "get": {
+        "tags": [
+          "shopping"
+        ],
+        "summary": "Lista zakupowa z pozycjami w sekcjach (kolejność profilu sklepu)",
+        "operationId": "get_list_api_v1_shopping_lists__list_id__get",
+        "parameters": [
+          {
+            "name": "list_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "List Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShoppingListDetailRead"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "shopping"
+        ],
+        "summary": "Edycja listy: nazwa i sklep (zmiana sklepu przesortowuje sekcje)",
+        "operationId": "update_list_api_v1_shopping_lists__list_id__patch",
+        "parameters": [
+          {
+            "name": "list_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "List Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ListUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShoppingListDetailRead"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "shopping"
+        ],
+        "summary": "Usunięcie listy (właściciel albo ADMIN)",
+        "description": "Ręczna, jawna decyzja — automat nie kasuje niczego (D10). Pozycje giną kaskadą, więc produkt użyty tylko na tej liście da się potem usunąć.",
+        "operationId": "delete_list_api_v1_shopping_lists__list_id__delete",
+        "parameters": [
+          {
+            "name": "list_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "List Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/shopping/lists/{list_id}/items/{item_id}": {
+      "patch": {
+        "tags": [
+          "shopping"
+        ],
+        "summary": "Odhaczenie pozycji albo „mam już w domu”",
+        "description": "`checked_at` ustawia serwer (UTC) — klient go nie przysyła (ADR-009).",
+        "operationId": "update_item_api_v1_shopping_lists__list_id__items__item_id__patch",
+        "parameters": [
+          {
+            "name": "list_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "List Id"
+            }
+          },
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ListItemUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShoppingListItemRead"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/shopping/lists/{list_id}/share": {
+      "post": {
+        "tags": [
+          "shopping"
+        ],
+        "summary": "Udostępnienie listy publicznym linkiem",
+        "description": "Generuje NOWY publiczny token (`secrets.token_urlsafe(32)`, 43 znaki base64url) i ustawia ważność listy. Ponowne udostępnienie zawsze tworzy nowy link — odwołany nie wraca do życia (ADR-010).",
+        "operationId": "share_list_api_v1_shopping_lists__list_id__share_post",
+        "parameters": [
+          {
+            "name": "list_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "List Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShareCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShareRead"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "shopping"
+        ],
+        "summary": "Odwołanie publicznego linku (natychmiast 410 dla odwiedzających)",
+        "operationId": "revoke_share_api_v1_shopping_lists__list_id__share_delete",
+        "parameters": [
+          {
+            "name": "list_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "List Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/shopping/lists/{list_id}/accept-to-pantry": {
+      "post": {
+        "tags": [
+          "shopping"
+        ],
+        "summary": "Przyjęcie odhaczonych zakupów do spiżarni",
+        "description": "Akcja JAWNA (02_DOMAIN §8) — zakupy nie trafiają do spiżarni w tle. Ilość liczymy jako kupioną (`packages_count * package_size`), a bez opakowania jako `needed_amount`. Zakup dolewa się do pozycji tego produktu BEZ daty ważności, a gdy takiej nie ma — zakłada nową.",
+        "operationId": "accept_to_pantry_api_v1_shopping_lists__list_id__accept_to_pantry_post",
+        "parameters": [
+          {
+            "name": "list_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "List Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AcceptToPantryResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/public/lists/{token}": {
+      "get": {
+        "tags": [
+          "public"
+        ],
+        "summary": "Treść listy zakupowej po publicznym tokenie (bez logowania)",
+        "description": "Odpowiedź zawiera WYŁĄCZNIE treść listy: nazwę, ważność i pozycje. Nieznany token → 404, wygasły albo odwołany → 410. Komunikat jest w obu przypadkach identyczny — nie ujawniamy, czy token istniał.",
+        "operationId": "public_list_api_v1_public_lists__token__get",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 43,
+              "maxLength": 43,
+              "pattern": "^[A-Za-z0-9_-]{43}$",
+              "title": "Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicListRead"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Link wygasł albo został odwołany"
+          }
+        }
+      }
+    },
+    "/api/v1/public/lists/{token}/items/{item_id}": {
+      "patch": {
+        "tags": [
+          "public"
+        ],
+        "summary": "Odhaczenie pozycji z publicznego linku",
+        "description": "Token pozwala zmienić WYŁĄCZNIE `checked` (ADR-010) — każde inne pole w ciele żądania kończy się 422. Bez CSRF (autoryzuje token w URL), za to z limitem 60/min/IP.",
+        "operationId": "public_check_item_api_v1_public_lists__token__items__item_id__patch",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 43,
+              "maxLength": 43,
+              "pattern": "^[A-Za-z0-9_-]{43}$",
+              "title": "Token"
+            }
+          },
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublicListItemUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicListItemRead"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Link wygasł albo został odwołany"
+          }
+        }
+      }
+    },
     "/api/v1/audit": {
       "get": {
         "tags": [
@@ -4991,6 +5498,30 @@
   },
   "components": {
     "schemas": {
+      "AcceptToPantryResponse": {
+        "properties": {
+          "created": {
+            "type": "integer",
+            "title": "Created"
+          },
+          "increased": {
+            "type": "integer",
+            "title": "Increased"
+          },
+          "skipped": {
+            "type": "integer",
+            "title": "Skipped"
+          }
+        },
+        "type": "object",
+        "required": [
+          "created",
+          "increased",
+          "skipped"
+        ],
+        "title": "AcceptToPantryResponse",
+        "description": "Ile pozycji weszło do spiżarni: nowe wiersze, dolane i pominięte."
+      },
       "AmountUnit": {
         "type": "string",
         "enum": [
@@ -6750,6 +7281,99 @@
         "type": "object",
         "title": "ItemUpdateRequest",
         "description": "Częściowa edycja pozycji. Pola pominięte zostają bez zmian.\n\n`servings_split` podane jawnie ZASTĘPUJE cały rozkład (pusta lista = brak\nrozkładu); pominięte zostawia go nietkniętym."
+      },
+      "ListItemUpdateRequest": {
+        "properties": {
+          "checked": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checked"
+          },
+          "already_have": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Already Have"
+          }
+        },
+        "type": "object",
+        "title": "ListItemUpdateRequest",
+        "description": "Odhaczenie i „mam już w domu\". `checked_at` ustawia SERWER (ADR-009).\n\nInnych pól tu nie ma z rozmysłem: pozycja jest wynikiem generacji, a jej\nilości zmienia się nową generacją (karta B11 §Out of Scope pkt 4)."
+      },
+      "ListSectionRead": {
+        "properties": {
+          "category_id": {
+            "type": "integer",
+            "title": "Category Id"
+          },
+          "category_name": {
+            "type": "string",
+            "title": "Category Name"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ShoppingListItemRead"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "category_id",
+          "category_name",
+          "items"
+        ],
+        "title": "ListSectionRead",
+        "description": "Sekcja listy: kategoria i jej pozycje w kolejności przejścia po sklepie."
+      },
+      "ListUpdateRequest": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "store_id": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Store Id"
+          },
+          "clear_store": {
+            "type": "boolean",
+            "title": "Clear Store",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "ListUpdateRequest",
+        "description": "Edycja listy: nazwa i sklep (profil sortowania). Pominięte = bez zmian."
       },
       "LoginRequest": {
         "properties": {
@@ -8858,6 +9482,128 @@
         "title": "ProductUpdateRequest",
         "description": "Częściowa edycja pól opisowych produktu (USER)."
       },
+      "PublicListItemRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "amount": {
+            "type": "string",
+            "title": "Amount"
+          },
+          "unit": {
+            "$ref": "#/components/schemas/AmountUnit"
+          },
+          "category_name": {
+            "type": "string",
+            "title": "Category Name"
+          },
+          "checked": {
+            "type": "boolean",
+            "title": "Checked"
+          },
+          "leftover_amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Leftover Amount"
+          },
+          "already_have": {
+            "type": "boolean",
+            "title": "Already Have"
+          },
+          "packages_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Packages Count"
+          },
+          "package_size": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Package Size"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "amount",
+          "unit",
+          "category_name",
+          "checked",
+          "leftover_amount",
+          "already_have",
+          "packages_count",
+          "package_size"
+        ],
+        "title": "PublicListItemRead",
+        "description": "Pozycja listy w widoku publicznym.\n\nTen schemat jest jawną BIAŁĄ LISTĄ i nie ma `from_attributes`: gdyby\npowstawał z encji, dołożenie kolumny do `shopping_list_items` mogłoby po\ncichu wypchnąć dane rodziny na publiczną stronę. Zbiór kluczy odpowiedzi\npilnuje test `test_public_response_has_no_pii`."
+      },
+      "PublicListItemUpdateRequest": {
+        "properties": {
+          "checked": {
+            "type": "boolean",
+            "title": "Checked"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "checked"
+        ],
+        "title": "PublicListItemUpdateRequest",
+        "description": "Uprawnienia tokenu w całości: JEDNO pole `checked` (ADR-010).\n\n`model_config` z `extra=\"forbid\"` jest tu zabezpieczeniem, nie ozdobą: próba\nprzemycenia `already_have` albo ilości ma skończyć się 422, a nie cichym\nzignorowaniem pola (karta B11 §Security)."
+      },
+      "PublicListRead": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PublicListItemRead"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "expires_at",
+          "items"
+        ],
+        "title": "PublicListRead",
+        "description": "Publiczna treść listy: nazwa, ważność, pozycje. Żadnych danych rodziny."
+      },
       "RatingRequest": {
         "properties": {
           "rating": {
@@ -10160,6 +10906,149 @@
         "title": "Scope",
         "description": "Zakres widoczności encji współdzielnej (ADR-006)."
       },
+      "ShareCreateRequest": {
+        "properties": {
+          "expires_in_days": {
+            "type": "integer",
+            "maximum": 365.0,
+            "minimum": 1.0,
+            "title": "Expires In Days",
+            "default": 7
+          }
+        },
+        "type": "object",
+        "title": "ShareCreateRequest",
+        "description": "Udostępnienie listy: ważność w dniach (default 7 — ADR-010)."
+      },
+      "ShareRead": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          },
+          "revoked": {
+            "type": "boolean",
+            "title": "Revoked"
+          }
+        },
+        "type": "object",
+        "required": [
+          "url",
+          "expires_at",
+          "revoked"
+        ],
+        "title": "ShareRead",
+        "description": "Publiczny link listy (ADR-010).\n\n`url` jest ŚCIEŻKĄ (`/l/{token}`), nie adresem absolutnym: backend nie wie,\npod jaką domeną stoi reverse proxy, a frontend zna `window.location.origin`\n(karta B11, Implementation Notes pkt 7)."
+      },
+      "ShoppingListDetailRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "generation_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generation Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "round_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Round Name"
+          },
+          "store_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Store Id"
+          },
+          "store_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Store Name"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          },
+          "share": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ShareRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sections": {
+            "items": {
+              "$ref": "#/components/schemas/ListSectionRead"
+            },
+            "type": "array",
+            "title": "Sections"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "generation_id",
+          "name",
+          "round_name",
+          "store_id",
+          "store_name",
+          "expires_at",
+          "share",
+          "sections",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ShoppingListDetailRead",
+        "description": "Lista z pozycjami POSORTOWANYMI w sekcje (karta B11 §Backend „Sortowanie\").\n\nSekcje składa serwer, a nie przeglądarka: kolejność zależy od profilu sklepu\n(`store_category_order`, B09) i od globalnych pozycji kategorii, więc gdyby\nukładał ją frontend, ta sama lista wyglądałaby inaczej na papierze i na\npublicznym linku."
+      },
       "ShoppingListItemRead": {
         "properties": {
           "id": {
@@ -10255,6 +11144,18 @@
             "type": "boolean",
             "title": "Checked"
           },
+          "checked_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checked At"
+          },
           "position": {
             "type": "integer",
             "title": "Position"
@@ -10275,6 +11176,7 @@
           "already_have",
           "from_pantry_amount",
           "checked",
+          "checked_at",
           "position"
         ],
         "title": "ShoppingListItemRead",
@@ -10348,6 +11250,136 @@
         ],
         "title": "ShoppingListRead",
         "description": "Lista zakupowa utworzona przez finalizację.\n\n`public_token` świadomie NIE JEST tu wystawiany: kolumna istnieje od tej\nmigracji, ale udostępnianie należy do BATCH_11 (karta B10 §Security)."
+      },
+      "ShoppingListStatus": {
+        "type": "string",
+        "enum": [
+          "active",
+          "expired"
+        ],
+        "title": "ShoppingListStatus",
+        "description": "Filtr listy list. `expired` NIE znaczy „usunięta\" — D10: historia zostaje."
+      },
+      "ShoppingListSummaryRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "generation_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generation Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "round_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Round Name"
+          },
+          "store_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Store Id"
+          },
+          "store_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Store Name"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          },
+          "items_total": {
+            "type": "integer",
+            "title": "Items Total"
+          },
+          "items_checked": {
+            "type": "integer",
+            "title": "Items Checked"
+          },
+          "share": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ShareRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "generation_id",
+          "name",
+          "round_name",
+          "store_id",
+          "store_name",
+          "expires_at",
+          "items_total",
+          "items_checked",
+          "share",
+          "created_at"
+        ],
+        "title": "ShoppingListSummaryRead",
+        "description": "Lista na liście list — bez pozycji, z licznikiem odhaczonych."
+      },
+      "ShoppingListsResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ShoppingListSummaryRead"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "ShoppingListsResponse"
       },
       "StoreCategoryOrderEntry": {
         "properties": {

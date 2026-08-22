@@ -2,7 +2,9 @@
 
 07_SECURITY §8: w logach request id, ścieżka, status, czas, docelowo user id
 (NIE email). NIGDY hasła, tokeny ani payloady. Ścieżki z publicznym tokenem
-listy maskowane do `/public/lists/***` (ADR-010).
+listy maskowane do `/public/lists/***` (ADR-010) — **także w access logu
+Uvicorna** (07_SECURITY §5), który formatuje ścieżkę sam i o naszym middleware
+nic nie wie.
 Dev: czytelna konsola. Prod/test: JSON na stdout (zbiera Docker).
 """
 
@@ -30,11 +32,57 @@ def mask_path(path: str) -> str:
     return _PUBLIC_TOKEN_PATH.sub(r"\1***", path)
 
 
+class MaskPublicTokenFilter(logging.Filter):
+    """Maskuje publiczny token listy w access logu Uvicorna (07_SECURITY §5).
+
+    Nasze middleware loguje ścieżkę już zamaskowaną, ale Uvicorn ma WŁASNY
+    access log i składa linię z `record.args` (`client_addr`, `method`,
+    `full_path`, `http_version`, `status_code`). Bez tego filtra token wychodził
+    w logach kontenera w całości — a token jest sekretem równym hasłu do listy
+    (znalezione ręcznie w BATCH_11 na logach `docker compose logs app`).
+
+    Filtr podmienia WYŁĄCZNIE ścieżkę i tylko wtedy, gdy maskowanie coś zmienia,
+    więc dla pozostałych żądań rekord zostaje bitowo taki sam.
+    """
+
+    #: Pozycja `full_path` w `record.args` access logu Uvicorna.
+    PATH_INDEX = 2
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        args = record.args
+        if not isinstance(args, tuple) or len(args) <= self.PATH_INDEX:
+            return True
+        path = args[self.PATH_INDEX]
+        if not isinstance(path, str):
+            return True
+        masked = mask_path(path)
+        if masked != path:
+            record.args = (
+                *args[: self.PATH_INDEX],
+                masked,
+                *args[self.PATH_INDEX + 1 :],
+            )
+        return True
+
+
+def install_access_log_filter() -> None:
+    """Podłącz maskowanie do `uvicorn.access`. Idempotentne (wołane z `create_app`).
+
+    Bez sprawdzenia typu filtry narastałyby przy każdym `create_app()` — a testy
+    tworzą aplikację dla każdego testu z osobna.
+    """
+    access_logger = logging.getLogger("uvicorn.access")
+    if any(isinstance(existing, MaskPublicTokenFilter) for existing in access_logger.filters):
+        return
+    access_logger.addFilter(MaskPublicTokenFilter())
+
+
 def configure_logging(*, app_env: str, log_level: str = "INFO") -> None:
     """Skonfiguruj structlog i stdlib logging. Idempotentne — wołane z `create_app`."""
     level = logging.getLevelNamesMapping().get(log_level.upper(), logging.INFO)
 
     logging.basicConfig(format="%(message)s", stream=sys.stdout, level=level, force=True)
+    install_access_log_filter()
 
     renderer: structlog.typing.Processor = (
         structlog.dev.ConsoleRenderer() if app_env == "dev" else structlog.processors.JSONRenderer()

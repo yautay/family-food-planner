@@ -1,0 +1,34 @@
+/* Wydruk listy zakupowej (06_UIUX §6).
+ *
+ * Tu są WYŁĄCZNIE reguły, których nie da się wyrazić klasą Tailwinda na
+ * elemencie: kolory dokumentu, marginesy strony i zakaz łamania wiersza między
+ * stronami. Nawigację ukrywa `print:hidden` wprost w `AppShell.vue`, a panel
+ * akcji i plakietki — `print:hidden` w komponentach listy. Selektory po
+ * `data-testid` byłyby tu kruche: żyłyby daleko od znaczników, na których
+ * działają, i cicho przestawałyby pasować po każdej zmianie layoutu.
+ *
+ * Wszystko siedzi w `@media print`, więc na ekranie ten plik nie zmienia nic.
+ */
+
+@media print {
+  /* Tło zawsze białe, tekst czarny: oszczędza atrament i podnosi kontrast. */
+  html,
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  /* Cienie kart są na papierze brudem, nie informacją. */
+  * {
+    box-shadow: none !important;
+  }
+
+  /* Pozycja listy nie może się łamać między stronami w połowie wiersza. */
+  [data-testid^='shopping-item-'] {
+    break-inside: avoid;
+  }
+
+  @page {
+    margin: 12mm;
+  }
+}

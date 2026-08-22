@@ -20,6 +20,33 @@ spiżarnia, zakupy (konfig tur, generacja, preview), lista zakupowa
 (mobile + print) i publiczna strona `/l/:token` bez auth. Aplikacja jest
 od tego momentu „używalna na co dzień" (00_MASTER_PLAN §5).
 
+### Gdzie szukać po B11 (stan faktyczny, 2026-08-21)
+
+- Ścieżka publiczna: `app/modules/shopping/public_router.py` (router pod
+  `/api/v1/public/`, limit 60/min/IP, walidacja kształtu tokenu) + metody
+  `public_list` / `public_check_item` w `app/modules/shopping/lists_service.py`.
+  Biała lista pól: `PublicListRead` / `PublicListItemRead` w `schemas.py`.
+- Kolejność sekcji listy: czysty `app/modules/shopping/sorting.py`
+  (unit: `tests/unit/shopping/test_list_sorting.py`).
+- 410: `GoneError` w `app/core/errors.py`; komunikat 404 i 410 jest CELOWO
+  identyczny (ADR-010) — to nie przeoczenie.
+- Przyjęcie zakupów: `ShoppingListsService.accept_to_pantry` +
+  `PantryService.receive_purchase` (reguła scalania: dolewamy do pozycji BEZ
+  daty ważności; ilość = kupione opakowania, nie potrzeba).
+- Testy: `tests/api/shopping/test_public_lists_api.py`,
+  `tests/api/shopping/test_shopping_lists_api.py`,
+  `tests/integration/shopping/test_accept_to_pantry.py`,
+  E2E `frontend/e2e/shopping-list-sharing.spec.ts`.
+
+Do rozstrzygnięcia w tym review (zgłoszone przez B11):
+
+- **Ręczne pozycje listy** (Out of Scope B11 pkt 4) — czy są potrzebne; dziś
+  lista jest wyłącznie wynikiem generacji.
+- **`accept_to_pantry` można wywołać wielokrotnie** — nie ma kolumny „już
+  przyjęte", więc ochroną jest dialog potwierdzenia w UI. Ocenić, czy to
+  wystarcza (alternatywa: znacznik na liście).
+- Dług z B10: dryf modelu `pantry_items.retail_product_id` (`alembic check`).
+
 Wymagane lektury przed startem:
 
 - `docs/implementation-plan/implementation_prompt.md` (sekcja Review)

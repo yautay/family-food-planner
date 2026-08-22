@@ -31,6 +31,7 @@ STATUS_TO_CODE: dict[int, str] = {
     404: "not_found",
     405: "method_not_allowed",
     409: "conflict",
+    410: "gone",
     422: "validation_error",
     429: "rate_limited",
 }
@@ -42,6 +43,7 @@ DEFAULT_MESSAGES: dict[int, str] = {
     404: "Nie znaleziono zasobu.",
     405: "Metoda niedozwolona dla tego zasobu.",
     409: "Operacja jest w konflikcie z aktualnym stanem danych.",
+    410: "Ten zasób nie jest już dostępny.",
     422: "Dane w żądaniu są nieprawidłowe.",
     429: "Zbyt wiele żądań. Spróbuj ponownie za chwilę.",
     500: "Wystąpił nieoczekiwany błąd. Spróbuj ponownie później.",
@@ -117,6 +119,20 @@ class ConflictError(AppError):
 
     status_code = 409
     code = "conflict"
+
+
+class GoneError(AppError):
+    """410 — zasób ISTNIAŁ, ale przestał być dostępny (wygasły/odwołany token, ADR-010).
+
+    Świadomie osobny kod od 404: publiczny link listy zakupowej musi umieć
+    powiedzieć „to już wygasło" zamiast „nie ma czegoś takiego", bo pierwsze jest
+    prawdą i podpowiada, co zrobić dalej (poprosić o nowy link). Sama TREŚĆ
+    komunikatu jest dla 404 i 410 identyczna — użytkownik nie dowiaduje się, czy
+    token kiedykolwiek istniał (karta B11, Implementation Notes pkt 5).
+    """
+
+    status_code = 410
+    code = "gone"
 
 
 def error_response(

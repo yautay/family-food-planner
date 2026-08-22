@@ -40,7 +40,11 @@ w transakcji z rollbackiem; migracje aplikowane raz na sesję testową.
    plan krótszy niż okno tury.
 8. **Uprawnienia**: macierz §4.
 9. **Tokeny publiczne**: ważny/wygasły/odwołany/nieistniejący; brak PII;
-   rate limit; PATCH checkboxa.
+   rate limit; PATCH checkboxa. **Pokryte w BATCH_11**:
+   `tests/api/shopping/test_public_lists_api.py` (komplet, w tym asercja
+   DOKŁADNEGO zbioru kluczy odpowiedzi i 429 po 60 żądaniach/min) oraz
+   `tests/api/shopping/test_shopping_lists_api.py` (macierz uprawnień listy,
+   sortowanie wg profilu sklepu, 409 przy usuwaniu użytego sklepu).
 10. **Import PDF**: korpus = 8 realnych PDF-ów w `data/source_pdfs/`
     (testy parsera na plikach, snapshoty wyników); anomalie z 01_PDF_AUDIT
     jako nazwane przypadki testowe; walidacja krzyżowa z
@@ -55,6 +59,11 @@ Core flows (rozbudowywane w batchach, które je dostarczają):
 2. Tydzień: kopiuj dzień, szablon, cykl.
 3. Zakupy: generacja → pytanie o spiżarnię → preview z resztkami →
    finalizacja → publiczny link → odhaczenie bez logowania.
+   Dwa specy: `shopping-generate.spec.ts` (B10, do finalizacji) i
+   `shopping-list-sharing.spec.ts` (B11, od strony listy do odwołania linku).
+   Publiczny link otwiera się w OSOBNYM kontekście przeglądarki
+   (`browser.newContext()` — bez `storageState`), inaczej test przechodziłby
+   także wtedy, gdy strona publiczna po cichu korzysta z cookies sesji.
 4. Import PDF: upload dieta.pdf → review (gołąbki 7 porcji!) → zatwierdzenie
    → przepis widoczny.
 Konwencje: selektory `data-testid`, bez sleepów (expect z timeoutem),
@@ -76,7 +85,11 @@ WIĄŻĄCE dla każdego nowego specu:
    Szukajki produktów i przepisów są trigramowe, a inline create wymaga ZERA
    wyników — encja utworzona równolegle przez inny spec pod podobną nazwą
    ukrywa opcję „+ Dodaj" i test pada bez winy aplikacji.
-3. **Własny prefiks nazw + sprzątanie po obu stronach.** Każdy spec podpisuje
+3. **Własny prefiks nazw + sprzątanie po obu stronach.** Wyjątek: listy
+   zakupowe nie mają prefiksu (nazwę nadaje im finalizacja z zakresu dat), więc
+   `clearShoppingLists` rozpoznaje je po ROKU z nazwy — oknem dat E2E (lata
+   2030+). Sprzątanie list MUSI iść przed produktami: pozycje trzymają produkt
+   i wariant sklepowy FK RESTRICT. Każdy spec podpisuje
    swoje encje wspólnym prefiksem (`E2E <obszar>`) i wywołuje
    `cleanupE2eData` z `e2e/cleanup.ts` w `beforeAll` (leczy stan po przebiegu
    przerwanym w połowie) ORAZ w `afterAll` (wykonuje się także po nieudanym

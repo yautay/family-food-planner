@@ -164,6 +164,43 @@ Dołożone w BATCH_10 (też fundament):
 - `scripts/` jest PAKIETEM: snapshot silnika importuje stałe seedu demo
   (`scripts.seed_demo`), żeby dane testu i dane komendy nie istniały dwa razy.
 
+Dołożone w BATCH_11 (też fundament):
+
+- `app/core/logging.py += MaskPublicTokenFilter` / `install_access_log_filter()`
+  — maskowanie publicznego tokenu w **access logu Uvicorna** (nasz log maskuje
+  `mask_path`, ale Uvicorn formatuje ścieżkę sam). Nowy endpoint pod
+  `/public/lists/` dziedziczy to bez zmian; inny prefiks publiczny wymaga
+  rozszerzenia wzorca `_PUBLIC_TOKEN_PATH`.
+- `app/core/errors.py += GoneError` (410, kod `gone`) — zasób, który ISTNIAŁ,
+  ale przestał być dostępny. Treść komunikatu 410 i 404 na ścieżce publicznej
+  jest IDENTYCZNA (nie potwierdzamy istnienia tokenu, ADR-010).
+- `app/modules/shopping/lists_service.py` — DRUGI serwis modułu shopping (życie
+  gotowej listy: odhaczanie, sklep, udostępnianie, przyjęcie do spiżarni).
+  Ścieżka publiczna ma tu własne metody, które NIE przyjmują `User` i nie tykają
+  `ScopedQuery` — autoryzuje je wyłącznie pełny token z URL-a.
+- `app/modules/shopping/sorting.py` — czyste funkcje kolejności pozycji listy
+  (profil sklepu → reszta wg globalnej pozycji kategorii; `already_have` na dół).
+  **Sekcje składa SERWER**, nie przeglądarka: inaczej ta sama lista wyglądałaby
+  inaczej na ekranie, na wydruku i pod publicznym linkiem.
+- `app/modules/shopping/public_router.py` — JEDYNY router bez sesji poza
+  `/health`. MUSI siedzieć pod `/api/v1/public/`: dokładnie ten prefiks jest
+  zwolniony z CSRF (`CSRF_EXEMPT_PREFIXES`) i maskowany w logach (`mask_path`).
+  Limit 60/min/IP jest WSPÓLNY dla całej ścieżki (`limiter.shared_limit`, scope
+  `public-lists`), nie per endpoint; limiter wstrzykuje `create_app` (wzór
+  `build_auth_router`).
+- `PantryService.receive_purchase(actor, product_id, amount)` — przyjęcie
+  ZAKUPÓW z jawną regułą scalania: dolewamy do pozycji tego produktu BEZ daty
+  ważności, a gdy takiej nie ma, zakładamy nową (wiersz z datą to konkretna
+  partia i dolanie skłamałoby o dacie).
+- `checked_at` to moment OSTATNIEJ decyzji o checkboxie (także odznaczenia) —
+  ustawia go serwer, klient nigdy go nie przysyła. Na tym oprze LWW z ADR-009
+  w B12.
+- Frontend: `meta.anonymous` w `src/router.ts` (trasa dla KAŻDEGO, bez
+  przekierowania zalogowanego — inaczej niż `meta.public`, czyli ekran
+  logowania), osobny klient `src/api/publicList.ts` (`credentials: 'omit'`, bez
+  CSRF — `client.ts` NIE dostaje trybów warunkowych) oraz `src/assets/print.css`
+  (reguły wyłącznie w `@media print`; ukrywają nawigację `AppShell`).
+
 Testy: `tests/{unit,integration,api}/` (pakiet — z `__init__.py`), markery
 `unit`/`integration`/`api` (wymagane — bez markera test nie wejdzie do
 żadnego targetu), docstring po polsku opisujący scenariusz. Fixture'y
