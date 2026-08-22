@@ -70,8 +70,15 @@ description: Reguły bezpieczeństwa Family Food Planner — sesje/CSRF/rate-lim
 - Token pozwala WYŁĄCZNIE: odczyt listy + PATCH `checked`. Odpowiedź:
   nazwa listy, pozycje (label, ilość, kategoria, checked), expires_at —
   **test asercji białej listy pól** obowiązkowy (zero nazwisk/emaili/id).
-- Wygasły/odwołany/nieistniejący → 410 + przyjazny ekran (nigdy stacktrace).
-- Rate limit `/public/*` 60/min/IP; `/auth/login` 5/min/IP + blokada konta.
+- Wygasły/odwołany → **410**, nieznany token → **404**, token o złym kształcie
+  → **422** (wzorzec `^[A-Za-z0-9_-]{43}$` odsiewa skanery przed zapytaniem).
+  Komunikat we wszystkich trzech przypadkach jest IDENTYCZNY, a frontend mapuje
+  404 i 410 na jeden ekran — różnica statusów jest świadomie przyjęta
+  (07_SECURITY §5 pkt 8, audyt REVIEW R3), nie do „naprawiania" po cichu.
+- Rate limit `/public/*` 60/min/IP na WSPÓLNYM liczniku całej ścieżki
+  (`limiter.shared_limit`, scope `public-lists`) — nowy endpoint publiczny
+  dołącza do tego scope, nie zakłada własnego. `/auth/login` 5/min/IP
+  + blokada konta.
 - Tokeny maskowane w logach (`/public/lists/***`) — dotyczy też access
   logów Uvicorna.
 

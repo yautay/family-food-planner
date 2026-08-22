@@ -54,7 +54,11 @@ GET    /uploads/{path}                     — serving uploadów; POZA /api/v1,
                                              wymaga sesji (07_SECURITY §6)
 
 U      /plan/days?from=&to=                — dni z posiłkami+pozycjami+nutrition
-U      /plan/days/{date} (+meals, +items)  — CRUD; PATCH mnożników
+U      /plan/days/{date}                   — GET + PUT (tytuł, widoczność);
+                                             DELETE świadomie NIE ISTNIEJE —
+                                             patrz „Cykl życia dnia planu"
+U      /plan/days/{date}/meals, /plan/meals/{id}, /plan/items/{id}
+                                           — POST|PATCH|DELETE posiłków i pozycji
 U      /plan/items/{id}/fit-to-target      — PROPOZYCJA mnożnika (nic nie zapisuje)
 U      /plan/copy                          — {source, target(s), what: day|meal|block}
                                              block: {source_from, source_days,
@@ -98,6 +102,22 @@ UNVERIFIED); edycja wartości odżywczych i statusu weryfikacji: ADMIN.
 **Fizyczne usunięcie produktu kanonicznego: wyłącznie ADMIN** (D13) i tylko
 gdy produkt jest nieużywany — inaczej 409 z `details.used_in`. USER dostaje 403
 z podpowiedzią archiwizacji. Mutacje `/categories`: ADMIN; odczyt: każdy.
+
+### Cykl życia dnia planu (stan faktyczny, ustalenie REVIEW R3)
+
+Dzień planu NIE jest zasobem tworzonym i usuwanym wprost:
+
+- wiersz `plan_days` powstaje **implicite** przy pierwszym posiłku
+  (`POST /plan/days/{date}/meals`) albo jawnie przez `PUT /plan/days/{date}`,
+  gdy użytkownik nadaje dniowi tytuł lub zmienia widoczność,
+- `GET /plan/days/{date}` dla daty bez planu zwraca **pusty dzień, nie 404** —
+  interfejs nie musi wiedzieć, czy wiersz istnieje,
+- usunięcie ostatniego posiłku **sprząta pusty dzień bez tytułu**
+  (`PlanningService.delete_meal`). Dzień z tytułem zostaje, bo tytuł jest jawną
+  decyzją użytkownika. Bez tego sprzątania niewidzialny wiersz trzymał
+  `household_id` z FK RESTRICT i blokował usunięcie rodziny (dług U17 z R2),
+- `DELETE /plan/days/{date}` świadomie **nie istnieje**: nie ma go co usuwać
+  poza tytułem, a ten zdejmuje `PUT` z `title: null`.
 
 ## 3. Zasady autoryzacji w API
 

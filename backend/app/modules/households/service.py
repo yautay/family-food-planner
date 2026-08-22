@@ -22,7 +22,7 @@ konfiguracji kaskad, a nie odczytowi w warstwie HTTP.**
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Mapping
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
@@ -31,6 +31,7 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.deletion import USED_IN_LIMIT, UsedInRef
 from app.core.errors import ConflictError, NotFoundError
 from app.modules.accounts.models import User
 from app.modules.audit.service import AuditAction, AuditEntity, AuditService
@@ -40,9 +41,37 @@ HOUSEHOLD_NOT_FOUND = "Nie znaleziono rodziny o podanym identyfikatorze."
 PROFILE_NOT_FOUND = "Nie znaleziono profilu członka rodziny."
 NO_HOUSEHOLD = "Nie należysz do żadnej rodziny. Poproś administratora o przypisanie Cię do rodziny."
 HOUSEHOLD_NOT_EMPTY = (
-    "Rodzina ma przypisane konta lub profile członków i nie może zostać usunięta. "
-    "Odepnij konta i usuń profile, a potem spróbuj ponownie."
+    "Rodzina ma przypisane konta, profile albo dane (przepisy, plany, spiżarnię, zakupy) "
+    "i nie może zostać usunięta. Usuń to, co jest wymienione w „Używane w:”, a potem "
+    "spróbuj ponownie."
 )
+
+#: Funkcja licząca referencje do rodziny w innym module.
+HouseholdReferenceFinder = Callable[[AsyncSession, int], Awaitable[Sequence[UsedInRef]]]
+
+#: Rejestr konsumentów rodziny — ustalenie REVIEW R3 (dług U16 z R2).
+#: Każda encja ze scope trzyma `household_id` z `ON DELETE RESTRICT`, więc baza
+#: sama obroni referencję, ale ADMIN dostawał wtedy 409 z PUSTĄ listą „Używane
+#: w:" (druga linia obrony z `core/deletion.py`) i nie miał pojęcia, co blokuje
+#: usunięcie. R2 świadomie odłożył ten rejestr do R3, żeby zakładać go RAZ, gdy
+#: zbiór konsumentów jest pełny: dziś to przepisy (B05), plany i szablony
+#: (B06/B07), spiżarnia (B08) oraz tury, generacje i listy zakupowe (B10/B11).
+#: Moduł z nową tabelą trzymającą `household_id` dopisuje tu swój licznik —
+#: inaczej wraca 409 bez listy.
+_HOUSEHOLD_REFERENCE_FINDERS: list[HouseholdReferenceFinder] = []
+
+
+def register_household_reference_finder(finder: HouseholdReferenceFinder) -> None:
+    """Zarejestruj licznik referencji do rodziny (wołane przy imporcie modułu)."""
+    if finder not in _HOUSEHOLD_REFERENCE_FINDERS:
+        _HOUSEHOLD_REFERENCE_FINDERS.append(finder)
+
+
+def unregister_household_reference_finder(finder: HouseholdReferenceFinder) -> None:
+    """Wyrejestruj licznik — testy sprzątają po sobie, żeby nie przeciekał dalej."""
+    if finder in _HOUSEHOLD_REFERENCE_FINDERS:
+        _HOUSEHOLD_REFERENCE_FINDERS.remove(finder)
+
 
 #: Biała lista pól, które PATCH profilu może ruszyć. Serwis ustawia je przez
 #: `setattr`, więc lista jest jedynym zabezpieczeniem przed wstrzyknięciem
@@ -214,8 +243,15 @@ class HouseholdsService:
             {"type": "member_profile", "id": profile.id, "name": profile.name}
             for profile in view.profiles
         ]
+        # Encje ze scope liczą MODUŁY, które je posiadają (rejestr wyżej) —
+        # inaczej `households` musiałby importować pół domeny i sam wiedzieć,
+        # jak nazwać przepis czy listę zakupową (01_ARCHITECTURE §2).
+        for finder in _HOUSEHOLD_REFERENCE_FINDERS:
+            used_in.extend(
+                reference.as_dict() for reference in await finder(self._session, household_id)
+            )
         if used_in:
-            raise ConflictError(HOUSEHOLD_NOT_EMPTY, details={"used_in": used_in})
+            raise ConflictError(HOUSEHOLD_NOT_EMPTY, details={"used_in": used_in[:USED_IN_LIMIT]})
 
         name = view.household.name
         # DELETE zapytaniem, a nie `session.delete()`: kaskady pilnuje baza
@@ -231,8 +267,11 @@ class HouseholdsService:
         try:
             await self._session.commit()
         except IntegrityError as exc:
-            # Encje ze scope (od BATCH_05) trzymają `household_id` z ON DELETE
-            # RESTRICT — bez tego wyjątku admin dostałby 500 zamiast 409.
+            # DRUGA linia obrony: encje ze scope trzymają `household_id`
+            # z ON DELETE RESTRICT, więc gdyby jakiś moduł nie zarejestrował
+            # swojego licznika, admin dostałby 500 zamiast 409. Od REVIEW R3
+            # pusta lista `used_in` tutaj znaczy „konsument bez licznika",
+            # a nie „nie wiadomo, co blokuje".
             await self._session.rollback()
             raise ConflictError(HOUSEHOLD_NOT_EMPTY, details={"used_in": []}) from exc
 

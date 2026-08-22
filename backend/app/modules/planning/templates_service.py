@@ -39,6 +39,7 @@ from app.core.scope import Scope, ScopedQuery
 from app.modules.accounts.models import User
 from app.modules.catalog.models import CanonicalProduct
 from app.modules.catalog.service import register_product_reference_finder
+from app.modules.households.service import register_household_reference_finder
 from app.modules.planning.models import DayTemplate, WeekCycle, WeekTemplate
 from app.modules.planning.schemas import (
     CycleApplyRequest,
@@ -745,7 +746,33 @@ async def count_template_references(session: AsyncSession, field: str, entity_id
     return total
 
 
+async def _templates_in_household(session: AsyncSession, household_id: int) -> Sequence[UsedInRef]:
+    """Szablony i cykle rodziny — licznik dla `households` (REVIEW R3, dług U16).
+
+    Trzy tabele w jednym liczniku, bo wszystkie trzy należą do TEGO modułu:
+    szablon dnia, szablon tygodnia i cykl. Każda trzyma `household_id`
+    z `ON DELETE RESTRICT`, więc każda umie zablokować usunięcie rodziny.
+    """
+    references: list[UsedInRef] = []
+    for model, kind in (
+        (DayTemplate, "day_template"),
+        (WeekTemplate, "week_template"),
+        (WeekCycle, "week_cycle"),
+    ):
+        rows = (
+            await session.execute(
+                select(model.id, model.name)
+                .where(model.household_id == household_id)
+                .order_by(model.name, model.id)
+                .limit(USED_IN_LIMIT)
+            )
+        ).all()
+        references.extend(UsedInRef(type=kind, id=int(row[0]), name=str(row[1])) for row in rows)
+    return references
+
+
 # Rejestracja przy imporcie modułu — dokładamy WŁASNE liczniki obok tych z planu
 # (`_plans_using_recipe`/`_plans_using_product`), nie ruszając istniejących.
 register_recipe_reference_finder(_templates_using_recipe)
 register_product_reference_finder(_templates_using_product)
+register_household_reference_finder(_templates_in_household)

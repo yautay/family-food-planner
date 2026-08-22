@@ -257,6 +257,28 @@ diffie przed commitem (krok 11).
 
 ## Cross-Batch Impact
 
+- **Cztery ustalenia REVIEW R3 (2026-08-22), wiążące dla serializera:**
+  1. **`shopping_lists.public_token` NIE MOŻE wyjść w eksporcie.** To żywy
+     token dostępu bez logowania (ADR-010), a plik eksportu ląduje na dysku,
+     w mailu i w kopii zapasowej — wyeksportowany token jest wyciekiem, nawet
+     gdy lista jest nieciekawa. Eksport pomija `public_token` i `token_revoked`,
+     import zakłada listę BEZ linku (właściciel udostępnia ją ponownie, co
+     i tak generuje nowy token). To samo dotyczy `sessions` (nie eksportujemy).
+  2. **`shopping_generations.params` to wersjonowane WEJŚCIE silnika**
+     (`{"v": 1, …}`), nie wynik. Eksport przenosi je dosłownie albo pomija
+     generacje w całości — przepisywanie kluczy „po swojemu" da po imporcie
+     409 z `ShoppingParamsError` przy pierwszym otwarciu generacji. Czytać
+     wyłącznie przez `shopping.engine.load_input`.
+  3. **Kolejność importu wymuszają FK z RESTRICT**: kategorie → produkty
+     kanoniczne → sklepy → warianty retail → spiżarnia → tury → listy.
+     `pantry_items.retail_product_id` MA constraint FK (od migracji `0011`,
+     w modelu domknięte w R3), więc pozycja spiżarni wskazująca wariant, który
+     jeszcze nie wszedł, wysadzi transakcję.
+  4. **Rejestr liczników referencji do rodziny** (`households.service.
+     register_household_reference_finder`, R3): encje wniesione importem
+     natychmiast blokują usunięcie rodziny i pokazują się ADMIN-owi w
+     `details.used_in`. Jeśli import dołoży NOWĄ tabelę ze `household_id`,
+     musi dołożyć też jej licznik.
 - **Kolizje równoległości (B12 ∥ B13 ∥ B14)**: wspólne pliki —
   `frontend/package.json`/lockfile, `src/api/queryKeys.ts`,
   `backend/app/main.py` (rejestracja routera — B12/B13 nie dodają

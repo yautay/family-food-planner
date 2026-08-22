@@ -82,8 +82,9 @@ przy udostępnieniu), revoke, 410 z przyjaznym ekranem; odpowiedź bez PII
 (tylko pozycje listy); rate limit 60/min/IP na `/public/*`; tokeny nie
 logowane (filtr w logach — ścieżka maskowana do `/public/lists/***`).
 
-**WDROŻONE w BATCH_11** (`app/modules/shopping/{public_router,lists_service}.py`).
-Sześć szczegółów wykonawczych, które trzeba utrzymać:
+**WDROŻONE w BATCH_11** (`app/modules/shopping/{public_router,lists_service}.py`),
+**zweryfikowane realnymi requestami w REVIEW R3** (każdy punkt tej sekcji).
+Dziewięć szczegółów wykonawczych, które trzeba utrzymać:
 
 1. Router publiczny siedzi dokładnie pod `/api/v1/public/` — tylko ten prefiks
    jest w `CSRF_EXEMPT_PREFIXES` i tylko on jest maskowany przez `mask_path()`.
@@ -105,7 +106,17 @@ Sześć szczegółów wykonawczych, które trzeba utrzymać:
    ze scope `public-lists`), a nie liczony per endpoint — inaczej `/public/*`
    miałoby faktycznie 120/min/IP (60 na GET + 60 na PATCH). Kolejny endpoint
    publiczny dołącza do TEGO scope.
-8. Maskowanie działa w DWÓCH warstwach, bo obie piszą na stdout kontenera:
+8. **Status 404 vs 410 to świadomie przyjęty ślad** (audyt REVIEW R3):
+   komunikat jest identyczny, ale KOD odpowiedzi mówi, czy token kiedykolwiek
+   istniał (404 = nigdy, 410 = był i przestał działać). Zostaje tak, bo przy
+   entropii 256 bitów i limicie 60/min/IP wyrocznia jest bezużyteczna
+   (trafienie w istniejący token trzeba najpierw wylosować), a rozróżnienie
+   ratuje diagnostykę: „link wygasł" i „zły link" to dla właściciela listy dwa
+   różne problemy. Frontend świadomie NIE korzysta z tej różnicy —
+   `publicList.ts` mapuje 404 i 410 na jeden ekran, więc osoba z linkiem
+   niczego się nie dowiaduje. Zmiana na „410 zawsze" wymaga decyzji, nie
+   refaktoru.
+9. Maskowanie działa w DWÓCH warstwach, bo obie piszą na stdout kontenera:
    `mask_path()` w `RequestLoggingMiddleware` (nasz log) oraz
    `MaskPublicTokenFilter` na loggerze `uvicorn.access` (access log Uvicorna
    formatuje ścieżkę sam z `record.args` i o middleware nie wie). Druga warstwa

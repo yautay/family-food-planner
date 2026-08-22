@@ -45,6 +45,7 @@ from app.modules.catalog.retail_service import (
 )
 from app.modules.catalog.service import register_product_reference_finder
 from app.modules.catalog.stores_service import register_store_reference_finder
+from app.modules.households.service import register_household_reference_finder
 from app.modules.pantry.service import PantryService
 from app.modules.planning.service import PlanningService
 from app.modules.recipes.service import RecipesService
@@ -776,7 +777,57 @@ async def _lists_using_store(session: AsyncSession, store_id: int) -> Sequence[U
     return [UsedInRef(type="shopping_list", id=int(row[0]), name=str(row[1])) for row in rows]
 
 
+async def _shopping_in_household(session: AsyncSession, household_id: int) -> Sequence[UsedInRef]:
+    """Tury, generacje i listy rodziny — licznik dla `households` (REVIEW R3, U16).
+
+    Trzy tabele modułu trzymają `household_id` z `ON DELETE RESTRICT`, więc
+    każda z nich umie zablokować usunięcie rodziny. Generacja nie ma nazwy, więc
+    identyfikujemy ją zakresem dat — inaczej ADMIN dostałby na liście gołe id.
+    """
+    references: list[UsedInRef] = []
+    configs = (
+        await session.execute(
+            select(ShoppingRoundConfig.id, ShoppingRoundConfig.name)
+            .where(ShoppingRoundConfig.household_id == household_id)
+            .order_by(ShoppingRoundConfig.position, ShoppingRoundConfig.id)
+            .limit(USED_IN_LIMIT)
+        )
+    ).all()
+    references.extend(
+        UsedInRef(type="shopping_round_config", id=int(row[0]), name=str(row[1])) for row in configs
+    )
+    generations = (
+        await session.execute(
+            select(ShoppingGeneration.id, ShoppingGeneration.date_from, ShoppingGeneration.date_to)
+            .where(ShoppingGeneration.household_id == household_id)
+            .order_by(ShoppingGeneration.id)
+            .limit(USED_IN_LIMIT)
+        )
+    ).all()
+    references.extend(
+        UsedInRef(
+            type="shopping_generation",
+            id=int(row[0]),
+            name=f"Generacja {row[1]:%d.%m.%Y}-{row[2]:%d.%m.%Y}",
+        )
+        for row in generations
+    )
+    lists = (
+        await session.execute(
+            select(ShoppingList.id, ShoppingList.name)
+            .where(ShoppingList.household_id == household_id)
+            .order_by(ShoppingList.id)
+            .limit(USED_IN_LIMIT)
+        )
+    ).all()
+    references.extend(
+        UsedInRef(type="shopping_list", id=int(row[0]), name=str(row[1])) for row in lists
+    )
+    return references
+
+
 # Rejestracja przy imporcie modułu — jak w recipes (B05) i pantry (B08).
 register_product_reference_finder(_lists_using_product)
 register_retail_reference_finder(_lists_using_retail_product)
 register_store_reference_finder(_lists_using_store)
+register_household_reference_finder(_shopping_in_household)

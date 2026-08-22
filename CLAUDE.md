@@ -201,6 +201,32 @@ Dołożone w BATCH_11 (też fundament):
   CSRF — `client.ts` NIE dostaje trybów warunkowych) oraz `src/assets/print.css`
   (reguły wyłącznie w `@media print`; ukrywają nawigację `AppShell`).
 
+Dołożone w REVIEW R3 (audyt pionu zakupowego — też fundament):
+
+- `app/modules/households/service.py += register_household_reference_finder`
+  — rejestr liczników referencji do RODZINY (dług U16). Każda tabela ze scope
+  trzyma `household_id` z `ON DELETE RESTRICT`, więc bez wpisu ADMIN dostaje
+  409 z PUSTĄ listą „Używane w:" i nie wie, co blokuje usunięcie. Liczniki
+  rejestrują dziś `recipes`, `planning` (dni), `planning/templates`
+  (szablony + cykle), `pantry` i `shopping` (tury, generacje, listy).
+  **Nowa tabela z `household_id` = nowy licznik w TYM SAMYM batchu.**
+- **Pusty dzień planu sprząta się sam**: `PlanningService.delete_meal` usuwa
+  wiersz `plan_days` bez posiłków i BEZ TYTUŁU (dług U17). `DELETE
+  /plan/days/{date}` nie istnieje i nie ma powstać — 04_API §2 „Cykl życia
+  dnia planu" opisuje stan faktyczny.
+- `PantryService.receive_purchase` **NIE COMMITUJE** (wzorzec
+  `AuditService.record`): commit należy do `accept_to_pantry`, więc przyjęcie
+  całej listy jest JEDNĄ transakcją. Metoda serwisu wołana w pętli po pozycjach
+  jednej akcji użytkownika nigdy nie commituje sama.
+- **Dryf modelu jest teraz bramką**:
+  `tests/integration/test_migrations.py::test_modele_nie_dryfuja_od_schematu_po_migracjach`
+  porównuje `Base.metadata` ze schematem po `upgrade head`. Kolumna, której FK
+  dopina PÓŹNIEJSZA migracja, musi dostać `ForeignKey` w modelu w tym samym
+  commicie — inaczej pierwszy `--autogenerate` skasuje constraint.
+- `src/assets/print.css` wymusza `color: #000` na `*` (nie tylko `body`):
+  każdy tekst ma klasę z tokens, więc bez tego wydruk wychodził brązowo-szary,
+  a 06_UIUX §6 mówi „czarno-biały".
+
 Testy: `tests/{unit,integration,api}/` (pakiet — z `__init__.py`), markery
 `unit`/`integration`/`api` (wymagane — bez markera test nie wejdzie do
 żadnego targetu), docstring po polsku opisujący scenariusz. Fixture'y

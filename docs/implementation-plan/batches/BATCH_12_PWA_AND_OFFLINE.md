@@ -78,6 +78,38 @@ Batch zastaje (po B11 + R3):
   kolumny nie wolno zmieniać: offline nie ma dostępu do katalogu, więc pozycja
   musi umieć pokazać się sama.
 
+### Pięć ustaleń z REVIEW R3 (2026-08-22, sprawdzone realnymi requestami)
+
+1. **Publiczny PATCH JEST idempotentny** i to jest własność, na której kolejka
+   offline może się oprzeć: `_apply_item_changes` ustawia `checked_at` TYLKO
+   przy faktycznej zmianie wartości, więc powtórzone `{"checked": true}` zwraca
+   200 i NIE przesuwa znacznika czasu. Rozszerzając PATCH o `checked_at`
+   klienta (Stage 1), zachowaj to: powtórka tego samego żądania nie może
+   zmieniać stanu, bo kolejka po utracie odpowiedzi wyśle je ponownie.
+2. **Limit 60/min/IP jest WSPÓLNY dla GET i PATCH całej ścieżki publicznej**
+   (`limiter.shared_limit`, scope `public-lists` — zweryfikowane: 60. żądanie
+   przechodzi, 61. to 429, a PATCH po wyczerpaniu limitu GET-ami też dostaje
+   429). Kolejka, która po odzyskaniu sieci wypluje 40 odhaczeń plus odświeżenia
+   listy, wejdzie w limit. **429 to stan przejściowy, nie porażka mutacji**:
+   wymagany backoff i zachowanie pozycji w kolejce. Ta sama lista otwarta na
+   dwóch telefonach za jednym NAT-em dzieli ten licznik.
+3. **Sekcje składa SERWER** (`sorting.py`), więc offline nie potrafi ich
+   przeliczyć: zmiana sklepu listy (`PATCH /shopping/lists/{id}`) zmienia
+   KOLEJNOŚĆ sekcji, a offline nie zna profilu `store_category_order`. Wniosek
+   dla tego batcha: zmiana sklepu **nie wchodzi do kolejki offline** (dostępna
+   tylko online) albo wchodzi z jawną informacją, że kolejność odświeży się po
+   synchronizacji. Nie licz kolejności na kliencie — to złamałoby ustalenie
+   B11 pkt 1 (jedna lista = jedna kolejność na ekranie, w druku i pod linkiem).
+4. **Przyjęcie zakupów do spiżarni jest atomowe, ale NIE idempotentne**
+   (`accept_to_pantry`, decyzja **D19** w 02_DECISIONS). Offline czyni powtórkę
+   prawdopodobną (ponowienie żądania po utracie odpowiedzi), więc albo ta akcja
+   NIE wchodzi do kolejki offline, albo batch wdraża znacznik `received_at`
+   z rekomendacji D19. Rozstrzygnąć PRZED Stage 5.
+5. **Ręczne pozycje listy** to decyzja **D18** (OPEN, rekomendacja: „tak, ale
+   dopiero w batchu dotykającym tej strony, czyli tutaj"). Jeśli właściciel
+   zatwierdzi, pozycja ręczna MUSI mieć produkt kanoniczny — inaczej wypada
+   z sortowania sekcji i z przyjęcia do spiżarni.
+
 Wymagane lektury: **ADR-009** (całość — kontrakt tego batcha),
 05_FRONTEND §6 (PWA i offline), §1 (Pinia = kolejka offline), 06_UIUX §5
 (mobile, lista krytyczna), 04_API §2 (`/public/lists/{token}`),

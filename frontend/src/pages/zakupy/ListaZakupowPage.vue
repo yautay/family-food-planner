@@ -173,7 +173,7 @@ const accept = useMutation({
   onSuccess: (result) => {
     actionError.value = null
     acceptOpen.value = false
-    actionInfo.value = texts.acceptDone(result.created, result.increased)
+    actionInfo.value = texts.acceptDone(result.created, result.increased, result.skipped)
     void queryClient.invalidateQueries({ queryKey: queryKeys.pantry.all })
   },
   onError: reportError,

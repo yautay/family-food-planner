@@ -18,6 +18,17 @@
     color: #000 !important;
   }
 
+  /* Kolor DZIEDZICZY się tylko do elementów, które własnego nie mają, a każdy
+   * tekst w aplikacji ma klasę z tokens (`text-muted-foreground`,
+   * `text-foreground`) — bez tej reguły wydruk wychodził brązowo-szary
+   * (#2B2620 i #6F675C), czyli nie „czarno-biały" z 06_UIUX §6. Ustalenie
+   * REVIEW R3: sprawdzone realnie emulacją mediów `print` w przeglądarce. */
+  *,
+  *::before,
+  *::after {
+    color: #000 !important;
+  }
+
   /* Cienie kart są na papierze brudem, nie informacją. */
   * {
     box-shadow: none !important;

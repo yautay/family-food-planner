@@ -2,16 +2,28 @@
 
 from __future__ import annotations
 
+from datetime import date
+
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.deletion import USED_IN_LIMIT
 from tests.factories import (
     assign_to_household,
     create_admin,
+    create_category,
+    create_day_template,
     create_household,
     create_member_profile,
+    create_pantry_item,
+    create_plan_day,
+    create_product,
+    create_recipe,
+    create_round_config,
+    create_shopping_list,
     create_user,
+    day_payload,
 )
 from tests.helpers import API, csrf_headers, login
 
@@ -225,6 +237,72 @@ async def test_odpiete_konto_pozwala_usunac_rodzine(
     )
 
     assert response.status_code == 204
+
+
+async def test_u16_rodzine_trzymaja_encje_ze_scope_i_widac_je_w_used_in(
+    db_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """Ustalenie REVIEW R3 (dług U16): 409 wymienia encje ze scope, nie pustą listę.
+
+    Konto zostaje ODPIĘTE od rodziny, więc członków ani profili już nie ma —
+    blokują wyłącznie encje ze scope, które zapisują `household_id` także dla
+    `private` (ADR-006). Przed R3 ADMIN dostawał tu 409 z `used_in: []`
+    (druga linia obrony na `IntegrityError`) i nie wiedział, co blokuje.
+    """
+    admin = await create_admin(db_session)
+    household = await create_household(db_session)
+    member = await create_user(db_session, email="czlonek@example.com", household=household)
+    category = await create_category(db_session, name="Warzywa R3")
+    product = await create_product(db_session, category=category, name="Marchew R3")
+    recipe = await create_recipe(db_session, owner=member, name="Zupa R3")
+    plan_day = await create_plan_day(db_session, owner=member, day=date(2030, 5, 6))
+    template = await create_day_template(
+        db_session, owner=member, name="Szablon R3", payload=day_payload()
+    )
+    pantry_item = await create_pantry_item(db_session, owner=member, product=product)
+    config = await create_round_config(db_session, owner=member, name="Tura R3")
+    shopping_list = await create_shopping_list(db_session, owner=member, name="Zakupy R3")
+    await assign_to_household(db_session, user=member, household=None)
+    await login(db_client, admin.email)
+
+    response = await db_client.delete(
+        f"{HOUSEHOLDS}/{household.id}", headers=csrf_headers(db_client)
+    )
+
+    body = response.json()
+    assert response.status_code == 409
+    used_in = body["error"]["details"]["used_in"]
+    assert used_in, "409 bez listy użyć nie mówi ADMIN-owi, co blokuje rodzinę"
+    assert {"type": "recipe", "id": recipe.id, "name": "Zupa R3"} in used_in
+    assert {"type": "plan_day", "id": plan_day.id, "name": "Plan dnia 06.05.2030"} in used_in
+    assert {"type": "day_template", "id": template.id, "name": "Szablon R3"} in used_in
+    assert {"type": "pantry_item", "id": pantry_item.id, "name": "Marchew R3"} in used_in
+    assert {
+        "type": "shopping_round_config",
+        "id": config.id,
+        "name": "Tura R3",
+    } in used_in
+    assert {"type": "shopping_list", "id": shopping_list.id, "name": "Zakupy R3"} in used_in
+
+
+async def test_u16_lista_uzyc_nie_przekracza_limitu_kontraktu(
+    db_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """`used_in` jest listą DLA CZŁOWIEKA — kontrakt `core/deletion` ją przycina."""
+    admin = await create_admin(db_session)
+    household = await create_household(db_session)
+    member = await create_user(db_session, email="czlonek@example.com", household=household)
+    for index in range(USED_IN_LIMIT + 5):
+        await create_recipe(db_session, owner=member, name=f"Przepis R3 {index:02d}")
+    await assign_to_household(db_session, user=member, household=None)
+    await login(db_client, admin.email)
+
+    response = await db_client.delete(
+        f"{HOUSEHOLDS}/{household.id}", headers=csrf_headers(db_client)
+    )
+
+    assert response.status_code == 409
+    assert len(response.json()["error"]["details"]["used_in"]) == USED_IN_LIMIT
 
 
 # --- skład rodziny --------------------------------------------------------------

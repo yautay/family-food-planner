@@ -29,6 +29,7 @@ from app.modules.catalog.models import CanonicalProduct, ProductCategory, Retail
 from app.modules.catalog.retail_service import register_retail_reference_finder
 from app.modules.catalog.service import register_product_reference_finder
 from app.modules.catalog.units import AmountUnit, base_unit
+from app.modules.households.service import register_household_reference_finder
 from app.modules.pantry.models import PantryItem
 from app.modules.pantry.schemas import PantryItemCreateRequest, PantrySort
 
@@ -243,6 +244,13 @@ class PantryService:
         w całej instancji — czyli do cudzej spiżarni. „Co mamy w domu" jest
         przynależnością, nie widocznością (ten sam powód, dla którego
         `get_household_state` używa tego samego warunku).
+
+        **Ta metoda NIE COMMITUJE** (wzorzec `AuditService.record`, ustalenie
+        REVIEW R3). Przyjęcie zakupów to jedna decyzja użytkownika o CAŁEJ
+        liście: przy commicie per pozycja wyjątek na piątej z ośmiu pozycji
+        zostawiał cztery w spiżarni i zwracał błąd, więc użytkownik nie wiedział,
+        co właściwie weszło — a ponowna próba dolałaby te cztery drugi raz.
+        Commit należy do wołającego (`ShoppingListsService.accept_to_pantry`).
         """
         product = await self._product_or_422(product_id)
         existing = (
@@ -264,7 +272,7 @@ class PantryService:
 
         if existing is not None:
             existing.amount = existing.amount + amount
-            await self._session.commit()
+            await self._session.flush()
             return PantryReceipt(item=(await self._view(existing)).item, merged=True)
 
         item = PantryItem(
@@ -274,7 +282,12 @@ class PantryService:
             **HouseholdScopedQuery.ownership_for_create(actor),
         )
         self._session.add(item)
-        await self._session.commit()
+        # `flush` nadaje id (i pozwala kolejnej pozycji tej samej listy znaleźć
+        # ten wiersz jako kandydata do dolania), ale zostawia transakcję otwartą.
+        # `_view` zostaje, bo to ono sprowadza ilość do SKALI KOLUMNY
+        # (`populate_existing` — nota 5 karty B08): bez niego zwrócony wiersz
+        # niósłby `Decimal("2000")` z żądania zamiast `Decimal("2000.000")`.
+        await self._session.flush()
         return PantryReceipt(item=(await self._view(item)).item, merged=False)
 
     async def update_item(
@@ -450,7 +463,31 @@ async def _pantry_using_retail_product(
     return [UsedInRef(type="pantry_item", id=int(row[0]), name=str(row[1])) for row in rows]
 
 
+async def _pantry_in_household(session: AsyncSession, household_id: int) -> Sequence[UsedInRef]:
+    """Pozycje spiżarni rodziny — licznik dla `households` (REVIEW R3, dług U16).
+
+    Nazwa pozycji to nazwa produktu: „mamy w domu mąkę" jest dla ADMIN-a
+    czytelniejsze niż `pantry_item #17`. Pozycja bez produktu kanonicznego
+    (wyłącznie wariant sklepowy) nadal musi się pokazać, więc join jest LEWY.
+    """
+    rows = (
+        await session.execute(
+            select(PantryItem.id, func.coalesce(CanonicalProduct.name, RetailProduct.name))
+            .outerjoin(CanonicalProduct, PantryItem.product_id == CanonicalProduct.id)
+            .outerjoin(RetailProduct, PantryItem.retail_product_id == RetailProduct.id)
+            .where(PantryItem.household_id == household_id)
+            .order_by(PantryItem.id)
+            .limit(USED_IN_LIMIT)
+        )
+    ).all()
+    return [
+        UsedInRef(type="pantry_item", id=int(row[0]), name=str(row[1] or "pozycja spiżarni"))
+        for row in rows
+    ]
+
+
 # Rejestracja przy imporcie modułu — jak w recipes (B05): każdy proces budujący
 # aplikację ma licznik wpięty automatycznie.
 register_product_reference_finder(_pantry_using_product)
 register_retail_reference_finder(_pantry_using_retail_product)
+register_household_reference_finder(_pantry_in_household)

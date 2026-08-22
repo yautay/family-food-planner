@@ -415,3 +415,73 @@ async def test_admin_nie_dolewa_do_cudzej_spizarni(db_session: AsyncSession) -> 
     assert cudza_pozycja.amount == Decimal("500.000")
     wiersze = await _pantry_rows(db_session, maka.id)
     assert [row.owner_user_id for row in wiersze] == [obcy.id, admin.id]
+
+
+async def test_blad_w_polowie_listy_nie_zostawia_spizarni_w_stanie_posrednim(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ustalenie REVIEW R3: przyjęcie zakupów jest JEDNĄ transakcją.
+
+    Do R3 `receive_purchase` commitowało per pozycja, więc wyjątek na drugiej
+    z dwóch pozycji zostawiał pierwszą w spiżarni — a użytkownik dostawał błąd
+    i ponawiał akcję, dolewając tę pierwszą DRUGI raz.
+    """
+    fixture = await _list_with_two_items(db_session)
+    service = ShoppingListsService(db_session)
+    for item in (fixture.flour_item, fixture.tomato_item):
+        await service.update_item(
+            fixture.shopping_list.id, item.id, user=fixture.user, now=NOW, checked=True
+        )
+    original = PantryService.receive_purchase
+    calls = {"n": 0}
+
+    async def failing_receive_purchase(
+        self: PantryService, *, actor: User, product_id: int, amount: Decimal
+    ) -> object:
+        calls["n"] += 1
+        if calls["n"] == 2:
+            raise RuntimeError("awaria w połowie listy")
+        return await original(self, actor=actor, product_id=product_id, amount=amount)
+
+    monkeypatch.setattr(PantryService, "receive_purchase", failing_receive_purchase)
+
+    with pytest.raises(RuntimeError):
+        await service.accept_to_pantry(fixture.shopping_list.id, user=fixture.user)
+
+    await db_session.rollback()
+    rows = (await db_session.execute(select(PantryItem))).scalars().all()
+    assert rows == [], "pierwsza pozycja nie mogła zostać zapisana bez drugiej"
+
+
+async def test_pozycja_mam_juz_w_domu_nie_wchodzi_do_spizarni(
+    db_session: AsyncSession,
+) -> None:
+    """Ustalenie REVIEW R3: „mam już w domu" to NIE zakup, nawet odhaczone.
+
+    Wiersz oznaczony `already_have` jest na liście jako przypomnienie, a nie
+    jako coś do kupienia (02_DOMAIN §9.1). Przed R3 odhaczenie takiej pozycji
+    dokładało jej ilość do spiżarni — czyli zapisywało zakup, którego nie było.
+    """
+    fixture = await _list_with_two_items(db_session)
+    service = ShoppingListsService(db_session)
+    await service.update_item(
+        fixture.shopping_list.id,
+        fixture.flour_item.id,
+        user=fixture.user,
+        now=NOW,
+        checked=True,
+        already_have=True,
+    )
+    await service.update_item(
+        fixture.shopping_list.id,
+        fixture.tomato_item.id,
+        user=fixture.user,
+        now=NOW,
+        checked=True,
+    )
+
+    result = await service.accept_to_pantry(fixture.shopping_list.id, user=fixture.user)
+
+    assert (result.created, result.increased, result.skipped) == (1, 0, 1)
+    assert await _pantry_rows(db_session, fixture.flour.id) == []
+    assert len(await _pantry_rows(db_session, fixture.tomato.id)) == 1

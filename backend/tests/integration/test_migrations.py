@@ -11,11 +11,16 @@ from pathlib import Path
 
 import pytest
 from alembic import command
+from alembic.autogenerate import compare_metadata
 from alembic.config import Config
+from alembic.runtime.migration import MigrationContext
 from sqlalchemy import create_engine, inspect, text
 
+# Import rejestru modeli: bez niego `Base.metadata` nie zna tabel i porównanie
+# ze schematem raportowałoby usunięcie wszystkiego (app/models.py, BATCH_01).
+import app.models  # noqa: F401
 from app.core.config import get_settings
-from app.core.db import normalize_database_url
+from app.core.db import Base, normalize_database_url
 
 pytestmark = pytest.mark.integration
 
@@ -156,3 +161,58 @@ def test_downgrade_usuwa_takze_typy_enumowe(alembic_config: Config, test_databas
     assert typy == [], f"Typy enumowe przetrwały downgrade: {typy}"
 
     command.upgrade(alembic_config, "head")
+
+
+#: Tabele, których migracje produkcyjne świadomie NIE tworzą — encja testowa
+#: `scoped_notes` (BATCH_03) żyje wyłącznie w fixture na czas jednego testu,
+#: a jej model siedzi na tym samym `Base`, więc porównanie metadanych ze
+#: schematem musi ją pominąć.
+DRIFT_IGNORED_TABLES = {"scoped_notes"}
+
+
+def _drift_after_head(alembic_config: Config, test_database_url: str) -> list[object]:
+    """Różnice między `Base.metadata` a schematem po `upgrade head`."""
+    command.upgrade(alembic_config, "head")
+
+    engine = create_engine(normalize_database_url(test_database_url))
+    try:
+        with engine.connect() as connection:
+            context = MigrationContext.configure(
+                connection,
+                opts={
+                    "include_name": lambda name, type_, parent: (
+                        type_ != "table" or name not in DRIFT_IGNORED_TABLES
+                    )
+                },
+            )
+            return [
+                difference
+                for difference in compare_metadata(context, Base.metadata)
+                if not _touches_ignored_table(difference)
+            ]
+    finally:
+        engine.dispose()
+
+
+def _touches_ignored_table(difference: object) -> bool:
+    """Czy różnica dotyczy encji testowej (krotka albo obiekt operacji)."""
+    return any(name in repr(difference) for name in DRIFT_IGNORED_TABLES)
+
+
+def test_modele_nie_dryfuja_od_schematu_po_migracjach(
+    alembic_config: Config, test_database_url: str
+) -> None:
+    """Model bez `ForeignKey`, którego constraint dopina migracja, to CICHY dryf.
+
+    Ustalenie REVIEW R3: `pantry_items.retail_product_id` przez dwa batche nie
+    miało `ForeignKey` w modelu (constraint dopięła migracja `0011`), więc
+    pierwszy `--autogenerate` po tamtej migracji SKASOWAŁBY ten constraint.
+    `task migrations-check` tego nie widzi, bo bada wyłącznie liczbę głów —
+    dlatego bramka porównuje metadane modeli ze schematem realnej bazy.
+    """
+    differences = _drift_after_head(alembic_config, test_database_url)
+
+    assert differences == [], (
+        "Modele rozjechały się ze schematem migracji — uzupełnij model albo "
+        f"dopisz migrację: {differences}"
+    )

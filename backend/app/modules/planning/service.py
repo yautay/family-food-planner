@@ -50,6 +50,7 @@ from app.modules.catalog.units import (
     to_basis_amount,
 )
 from app.modules.households.models import MemberProfile
+from app.modules.households.service import register_household_reference_finder
 from app.modules.nutrition.engine import (
     aggregate,
     fit_servings_to_target,
@@ -434,11 +435,41 @@ class PlanningService:
         return await self.get_day(user, day_entity.day)
 
     async def delete_meal(self, meal_id: int, *, user: User) -> DayView:
-        """Usunięcie posiłku razem z pozycjami i rozkładami (kaskada bazy)."""
+        """Usunięcie posiłku razem z pozycjami i rozkładami (kaskada bazy).
+
+        Ostatni posiłek zabiera ze sobą PUSTY dzień — ustalenie REVIEW R3
+        (dług U17). Wiersz `plan_days` powstaje implicite przy pierwszym posiłku
+        (`_day_for_write`), a po usunięciu wszystkich posiłków UI pokazuje „brak
+        planu", więc dzień staje się niewidoczny — ale nadal trzyma
+        `household_id` z `ON DELETE RESTRICT` i blokuje usunięcie rodziny bez
+        żadnego śladu w interfejsie. Dzień z TYTUŁEM zostaje: tytuł jest jawną
+        decyzją użytkownika („Urodziny Zosi"), a nie artefaktem zapisu.
+        """
         meal, day_entity = await self._meal_or_404(meal_id, user)
         await self._session.execute(delete(PlanMeal).where(PlanMeal.id == meal.id))
+        await self._delete_day_if_empty(day_entity)
         await self._session.commit()
         return await self.get_day(user, day_entity.day)
+
+    async def _delete_day_if_empty(self, day_entity: PlanDay) -> None:
+        """Skasuj wiersz dnia, jeśli nic w nim nie zostało z decyzji użytkownika.
+
+        Sprzątamy WYŁĄCZNIE dzień bez posiłków, bez tytułu i z domyślną
+        widocznością. Tytuł i `scope='household'` to jawne decyzje — ich cichy
+        reset przy usuwaniu posiłku byłby utratą danych, a nie porządkami
+        (a dzień udostępniony rodzinie ADMIN zobaczy w `used_in` z datą).
+        """
+        if day_entity.title is not None or day_entity.scope is not Scope.PRIVATE:
+            return
+        remaining = (
+            await self._session.execute(
+                select(func.count())
+                .select_from(PlanMeal)
+                .where(PlanMeal.plan_day_id == day_entity.id)
+            )
+        ).scalar_one()
+        if int(remaining) == 0:
+            await self._session.execute(delete(PlanDay).where(PlanDay.id == day_entity.id))
 
     # --- pozycje ------------------------------------------------------------------
 
@@ -1272,7 +1303,28 @@ async def _plans_using_product(session: AsyncSession, product_id: int) -> Sequen
     return _used_in_days((int(row[0]), row[1], row[2]) for row in rows)
 
 
+async def _plan_days_in_household(session: AsyncSession, household_id: int) -> Sequence[UsedInRef]:
+    """Licznik referencji dla modułu households (ustalenie REVIEW R3, dług U16/U17).
+
+    Dni planu są NAJCZĘSTSZYM blokerem usunięcia rodziny i najmniej oczywistym:
+    wiersz `plan_days` powstaje implicite przy pierwszym posiłku, a UI pokazuje
+    „brak planu", gdy dzień jest pusty. Od R3 pusty dzień sprząta samo usunięcie
+    ostatniego posiłku (`delete_meal`), a te, które zostały, ADMIN widzi tutaj
+    z datą — zamiast 409 z pustą listą.
+    """
+    rows = (
+        await session.execute(
+            select(PlanDay.id, PlanDay.day, PlanDay.title)
+            .where(PlanDay.household_id == household_id)
+            .order_by(PlanDay.day, PlanDay.id)
+            .limit(USED_IN_LIMIT)
+        )
+    ).all()
+    return _used_in_days((int(row[0]), row[1], row[2]) for row in rows)
+
+
 # Rejestracja przy imporcie modułu: każdy proces budujący aplikację
 # (create_app → deps → PlanningService) ma oba liczniki wpięte automatycznie.
 register_recipe_reference_finder(_plans_using_recipe)
 register_product_reference_finder(_plans_using_product)
+register_household_reference_finder(_plan_days_in_household)

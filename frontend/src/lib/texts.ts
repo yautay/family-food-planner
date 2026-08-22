@@ -626,11 +626,15 @@ export const shoppingList = {
   acceptTitle: 'Przyjąć zakupy do spiżarni?',
   acceptDescription:
     'Doda odhaczone pozycje do spiżarni w ilościach, które kupiłeś (całe opakowania). ' +
-    'Pozycji nieodhaczonych nie ruszamy.',
+    'Pozycji nieodhaczonych i oznaczonych „mam już w domu” nie ruszamy.',
   acceptConfirm: 'Dodaj do spiżarni',
   acceptNothing: 'Najpierw odhacz kupione pozycje.',
-  acceptDone: (created: number, increased: number) =>
-    `Dodano do spiżarni: ${created} nowych pozycji, zwiększono ${increased}.`,
+  // `skipped` MUSI być widoczne: pozycja odhaczona, ale oznaczona „mam już
+  // w domu" (albo bez produktu kanonicznego) nie wchodzi do spiżarni, a bez
+  // tej informacji użytkownik uznałby, że wszystko się dodało (ustalenie R3).
+  acceptDone: (created: number, increased: number, skipped: number) =>
+    `Dodano do spiżarni: ${created} nowych pozycji, zwiększono ${increased}.` +
+    (skipped > 0 ? ` Pominięto ${skipped} — „mam już w domu" to nie zakup.` : ''),
 
   deleteTitle: 'Usunąć tę listę zakupową?',
   deleteDescription:

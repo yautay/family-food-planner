@@ -524,6 +524,57 @@ async def test_kopiowanie_nieistniejacego_dnia_daje_404(db_session: AsyncSession
         )
 
 
+# --- sprzątanie pustego dnia (ustalenie REVIEW R3, dług U17) ------------------------------
+
+
+async def test_usuniecie_ostatniego_posilku_kasuje_pusty_dzien(db_session: AsyncSession) -> None:
+    """Dzień bez posiłków i bez tytułu przestaje istnieć razem z ostatnim posiłkiem.
+
+    Wiersz `plan_days` powstaje implicite, a puste UI pokazuje jako „brak planu" —
+    zostawiony trzymał `household_id` z FK RESTRICT i blokował usunięcie rodziny
+    bez śladu w interfejsie (U17).
+    """
+    household = await create_household(db_session)
+    user = await create_user(db_session, household=household)
+    plan_day = await create_plan_day(db_session, owner=user, day=DAY)
+    first = await create_plan_meal(db_session, plan_day=plan_day, name="Obiad", position=0)
+    second = await create_plan_meal(db_session, plan_day=plan_day, name="Kolacja", position=1)
+    service = PlanningService(db_session)
+
+    await service.delete_meal(first.id, user=user)
+    assert await _count(db_session, PlanDay) == 1, "dzień z jednym posiłkiem musi zostać"
+
+    view = await service.delete_meal(second.id, user=user)
+
+    assert await _count(db_session, PlanDay) == 0
+    assert view.meals == []
+    assert view.day == DAY
+
+
+async def test_pusty_dzien_z_tytulem_zostaje(db_session: AsyncSession) -> None:
+    """Tytuł to jawna decyzja użytkownika, więc sprzątanie go nie dotyczy."""
+    household = await create_household(db_session)
+    user = await create_user(db_session, household=household)
+    plan_day = await create_plan_day(db_session, owner=user, day=DAY, title="Urodziny Zosi")
+    meal = await create_plan_meal(db_session, plan_day=plan_day)
+
+    await PlanningService(db_session).delete_meal(meal.id, user=user)
+
+    assert await _count(db_session, PlanDay) == 1
+
+
+async def test_pusty_dzien_udostepniony_rodzinie_zostaje(db_session: AsyncSession) -> None:
+    """`scope='household'` też jest decyzją — sprzątanie nie może jej cofnąć."""
+    household = await create_household(db_session)
+    user = await create_user(db_session, household=household)
+    plan_day = await create_plan_day(db_session, owner=user, day=DAY, scope=Scope.HOUSEHOLD)
+    meal = await create_plan_meal(db_session, plan_day=plan_day)
+
+    await PlanningService(db_session).delete_meal(meal.id, user=user)
+
+    assert await _count(db_session, PlanDay) == 1
+
+
 # --- kaskady i blokady usuwania -----------------------------------------------------------
 
 

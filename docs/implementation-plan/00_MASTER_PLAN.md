@@ -101,6 +101,18 @@ Minimalny zestaw „aplikacja używalna na co dzień": B01–B11 (plan + zakupy)
 B15–B16 dowożą treść (przepisy z diet) — bez nich baza jest pusta poza
 wpisami ręcznymi, dlatego NIE odkładać ich za B17/B18.
 
+**Potwierdzenie kolejności po REVIEW R3 (2026-08-22)**: sekwencja zostaje
+B12 ∥ B13 ∥ B14 → B15 → B16 → R4. Wariant „B15 od razu po R3" rozważony
+i ODRZUCONY: B15 dokłada migrację stagingu, a równoległe worktree z drugą
+migracją łamią wymóg jednej głowy po merge'u; do tego trzy batche PLAT są
+krótsze i nie wchodzą w moduł `recipes`. Warunek z D2 pozostaje twardy —
+B15/B16 wchodzą PRZED B17/B18. Kolizje w dozwolonej trójce są znane i opisane
+w kartach (Cross-Batch Impact): `frontend/package.json` + lockfile,
+`frontend/src/api/queryKeys.ts` (B13 i B14), `backend/app/main.py` (B14) oraz
+`docs/architecture/04_API_DESIGN.md` (B13 i B14 — konflikt czysto
+dokumentacyjny). Wszystkie rozwiązywane unią przy sekwencyjnym merge'u;
+kolejność merge'ów ustala właściciel.
+
 ## 6. Szablon karty batcha (obowiązkowy)
 
 Każdy plik `batches/BATCH_XX_NAZWA.md` ma dokładnie te sekcje:

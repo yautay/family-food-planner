@@ -403,6 +403,13 @@ class ShoppingListsService:
         `PantryService`. Nieodhaczone pozycje nie wchodzą w ogóle, a odhaczone
         bez produktu kanonicznego albo z zerową ilością liczymy jako `skipped` —
         nie ma czego dołożyć, ale użytkownik ma o tym wiedzieć.
+
+        **Całość jest JEDNĄ transakcją** (ustalenie REVIEW R3): `receive_purchase`
+        nie commituje, a commit jest tutaj, po przejściu wszystkich pozycji.
+        Wcześniej każda pozycja commitowała osobno, więc błąd w połowie listy
+        (np. produkt usunięty w międzyczasie → 422) zostawiał spiżarnię w stanie
+        pośrednim i zwracał użytkownikowi błąd, po którym ponowienie akcji
+        dolewało już przyjęte pozycje DRUGI raz.
         """
         await _LISTS.get_or_404(self._session, list_id, user)
         items = await self._items(list_id)
@@ -411,6 +418,15 @@ class ShoppingListsService:
         skipped = 0
         for item in items:
             if not item.checked:
+                continue
+            if item.already_have:
+                # „Mam już w domu" znaczy „nic nie kupujemy" (02_DOMAIN §9.3),
+                # więc pozycja nie jest zakupem — nawet odhaczona. Bez tego warunku
+                # odhaczenie wyszarzonego wiersza („tak, potwierdzam, że mam")
+                # dokładało do spiżarni ilość, której nikt nie kupił (ustalenie
+                # REVIEW R3). Liczymy ją jako pominiętą, żeby użytkownik zobaczył,
+                # że nie zniknęła po cichu.
+                skipped += 1
                 continue
             amount = _purchased_amount(item)
             if item.product_id is None or amount <= Decimal("0"):
@@ -424,7 +440,11 @@ class ShoppingListsService:
             else:
                 created += 1
         if created == 0 and increased == 0:
+            # Rollback jawny: pętla mogła zrobić `flush` dla pozycji, które
+            # ostatecznie policzyliśmy jako pominięte.
+            await self._session.rollback()
             raise ConflictError(NOTHING_TO_RECEIVE)
+        await self._session.commit()
         return ReceivedToPantry(created=created, increased=increased, skipped=skipped)
 
     # --- pomocnicze ----------------------------------------------------------------

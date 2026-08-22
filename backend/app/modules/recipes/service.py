@@ -52,6 +52,7 @@ from app.modules.catalog.units import (
     normalize_amount,
     to_basis_amount,
 )
+from app.modules.households.service import register_household_reference_finder
 from app.modules.nutrition.engine import (
     ingredient_nutrition,
     portion_nutrition,
@@ -911,6 +912,25 @@ async def _recipes_using_product(session: AsyncSession, product_id: int) -> Sequ
     return [UsedInRef(type="recipe", id=int(row[0]), name=str(row[1])) for row in rows]
 
 
+async def _recipes_in_household(session: AsyncSession, household_id: int) -> Sequence[UsedInRef]:
+    """Licznik referencji dla modułu households (ustalenie REVIEW R3, dług U16).
+
+    `recipes.household_id` ma `ON DELETE RESTRICT`, więc bez tego licznika ADMIN
+    dostawał 409 z pustą listą „Używane w:" i nie wiedział, że rodzinę trzymają
+    przepisy.
+    """
+    rows = (
+        await session.execute(
+            select(Recipe.id, Recipe.name)
+            .where(Recipe.household_id == household_id)
+            .order_by(Recipe.name, Recipe.id)
+            .limit(USED_IN_LIMIT)
+        )
+    ).all()
+    return [UsedInRef(type="recipe", id=int(row[0]), name=str(row[1])) for row in rows]
+
+
 # Rejestracja przy imporcie modułu: każdy proces, który buduje aplikację
 # (create_app → deps → RecipesService), ma licznik wpięty automatycznie.
 register_product_reference_finder(_recipes_using_product)
+register_household_reference_finder(_recipes_in_household)

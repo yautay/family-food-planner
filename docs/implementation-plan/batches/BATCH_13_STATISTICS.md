@@ -254,6 +254,13 @@ diffie przed commitem (krok 11).
 
 ## Cross-Batch Impact
 
+- **Ustalenie REVIEW R3 (2026-08-22)**: zakres karty POTWIERDZONY bez zmian,
+  bramka R3 = PASS. Dwa doprecyzowania: (a) `docs/architecture/04_API_DESIGN.md`
+  modyfikują RÓWNIEŻ B14 i R3 — konflikt jest wyłącznie dokumentacyjny (dopisanie
+  wiersza do mapy zasobów), rozwiązywany unią; (b) od R3 pusty dzień planu bez
+  tytułu nie zostaje w bazie (`delete_meal` go sprząta), więc zapytanie
+  statystyk po zakresie dat nie musi filtrować dni-widm — dzień bez posiłków
+  albo nie istnieje, albo ma tytuł nadany przez użytkownika.
 - **Kolizje równoległości (B12 ∥ B13 ∥ B14)**: wspólne pliki —
   `frontend/package.json`/lockfile i `src/api/queryKeys.ts` (B13 dodaje
   klucz stats). B13 NIE dotyka `vite.config.ts`, `src/lib/offline/*` (B12)

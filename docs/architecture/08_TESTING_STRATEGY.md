@@ -40,7 +40,10 @@ w transakcji z rollbackiem; migracje aplikowane raz na sesję testową.
    plan krótszy niż okno tury.
 8. **Uprawnienia**: macierz §4.
 9. **Tokeny publiczne**: ważny/wygasły/odwołany/nieistniejący; brak PII;
-   rate limit; PATCH checkboxa. **Pokryte w BATCH_11**:
+   rate limit; PATCH checkboxa. **Zweryfikowane realnymi requestami
+   w REVIEW R3** (200/410/410/404/422, zero PII w odpowiedzi, 429 po 60
+   żądaniach na WSPÓLNYM liczniku GET+PATCH, `***` w obu logach). **Pokryte
+   w BATCH_11**:
    `tests/api/shopping/test_public_lists_api.py` (komplet, w tym asercja
    DOKŁADNEGO zbioru kluczy odpowiedzi i 429 po 60 żądaniach/min) oraz
    `tests/api/shopping/test_shopping_lists_api.py` (macierz uprawnień listy,
@@ -179,3 +182,18 @@ Cztery rzeczy, o których muszą wiedzieć kolejne batche:
 
 Zero known-failing testów na masterze. Test flaky = naprawiany albo usuwany
 świadomą decyzją w PROGRESS — nigdy retry-until-green.
+
+## 7. Bramka dryfu modeli (ustalenie REVIEW R3, 2026-08-22)
+
+`task migrations-check` bada WYŁĄCZNIE liczbę głów łańcucha, więc rozjazd
+między modelami SQLAlchemy a schematem migracji przez dwa batche żył cicho
+(`pantry_items.retail_product_id` bez `ForeignKey` w modelu; constraint dopięła
+migracja `0011`). Konsekwencja byłaby dotkliwa: pierwszy `--autogenerate`
+wygenerowałby `drop_constraint` na FK, którego nikt nie chciał usuwać.
+
+Od R3 bramką jest
+`tests/integration/test_migrations.py::test_modele_nie_dryfuja_od_schematu_po_migracjach`
+— po `upgrade head` porównuje `Base.metadata` ze schematem realnej bazy
+(`alembic.autogenerate.compare_metadata`) i wymaga PUSTEJ listy różnic. Test
+pomija encję testową `scoped_notes` (nie tworzą jej migracje produkcyjne).
+Odpowiednik na hoście: `uv run alembic check` w `backend/`.

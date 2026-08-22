@@ -21,10 +21,10 @@ commit wykonany). Kolumna „Blokery" = zależności + decyzje z 02_DECISIONS.
 | 09 RETAIL_PRODUCTS_AND_STORES | [x] | — | `batch(09)` na master (hash wpisać po push) |
 | 10 SHOPPING_ENGINE | [x] | — | `batch(10)` na master (hash wpisać po push) |
 | 11 SHOPPING_LISTS_AND_SHARING | [x] | — | `batch(11)` na master (hash wpisać po push) |
-| R3 REVIEW_SHOPPING | [ ] | 08–11 | |
-| 12 PWA_AND_OFFLINE | [ ] | 11, R3 | |
-| 13 STATISTICS | [ ] | 06, R3 | |
-| 14 IMPORT_EXPORT | [ ] | R3 | |
+| R3 REVIEW_SHOPPING | [x] | — | `batch(R3)` na master (hash wpisać po push) |
+| 12 PWA_AND_OFFLINE | [ ] | — (R3 PASS) | |
+| 13 STATISTICS | [ ] | — (R3 PASS) | |
+| 14 IMPORT_EXPORT | [ ] | — (R3 PASS) | |
 | 15 PDF_IMPORT_EXTRACTION | [ ] | 05 (zalecane po R3) | |
 | 16 PDF_IMPORT_REVIEW_AND_AI | [ ] | 15, 04 | |
 | R4 REVIEW_PRE_PRODUCTION | [ ] | 01–16 | |
@@ -40,6 +40,197 @@ zmiany dotykające przyszłych batchy trzeba wpisać do ich kart
 (00_MASTER_PLAN §8); dziennik to indeks, nie schowek.
 
 ---
+
+**2026-08-22 — REVIEW R3 (REVIEW_SHOPPING) — WERDYKT: PASS**
+
+**B12, B13 i B14 mogą startować (także równolegle).** Pion zakupowy jest zdrowy:
+silnik jest czysty i deterministyczny, opakowania/resztki/tury liczą się zgodnie
+z 02_DOMAIN §9, spiżarnia nie odejmuje niczego bez pytania, a **publiczna ścieżka
+przeszła pełny audyt 07_SECURITY §5 realnymi requestami na działającym stacku** —
+nie tylko testami. Audyt objął zakres od `0c7452c` (R2) do stanu roboczego:
+moduły `pantry`, `catalog` (retail/stores), `shopping` (engine + oba serwisy +
+router publiczny), frontend zakupów, listy i strony publicznej oraz suitę E2E.
+**Warunków blokujących NIE MA**; sześć ustaleń naprawionych w tym commicie, dwie
+decyzje właściciela (D18/D19) eskalowane, jedno odstępstwo świadomie przyjęte
+i dopisane do dokumentacji.
+
+**Silnik zakupowy — DETERMINIZM POTWIERDZONY.** `shopping/engine.py` importuje
+wyłącznie `decimal`, `datetime`, `dataclasses`, `enum`, `collections.abc`,
+`AppError`, `catalog/units.py` i enum `Perishability`: zero sesji, zero zegara,
+zero losowości. `float` nie występuje w torze obliczeń. Żaden zbiór (`set`) nie
+wychodzi na zewnątrz — służą wyłącznie testom przynależności, a każde sortowanie
+jest jawne i domknięte `id` (`_section_rank`, `_item_rank`, `sorted(demand)`).
+Odtworzenie z `params` sprawdzone DWOMA drogami: test
+`test_params_odtwarzaja_identyczne_wejscie_i_identyczny_preview` oraz realnie —
+`POST /shopping/generate` i dwa kolejne `GET /shopping/generations/{id}` dały
+odpowiedzi IDENTYCZNE BAJT W BAJT.
+
+**Arytmetyka opakowań sprawdzona na realnych danych** (seed demo, plan 24–30.08):
+240 g przy opakowaniu 1 kg → 1 szt., zostaje 760 g; 1250 ml przy 1 l → 2 szt.,
+zostaje 750 ml; 630 g przy 400 g → 2 szt., zostaje 170 g; 150 g przy 150 g →
+1 szt., **resztka dokładnie 0** (przypadek brzegowy „dokładna wielokrotność");
+7 szt. przy opakowaniu 10 szt. → 1 szt., zostaje 3 szt. Produkty bez wariantu
+sklepowego wyszły w gramach z ostrzeżeniem `missing_retail` i BEZ liczby
+opakowań — dokładnie jak chce 02_DOMAIN §9.3. Spiżarnia: 1000 g marchwi w domu
+pokryło 240 g w pierwszej turze i 120 g w drugiej (FIFO po dniach), wynik
+`needed = 0` i **nigdy poniżej zera**; pozycje z zerowym zapotrzebowaniem NIE
+weszły na finalną listę (13 → 12 i 9 → 8 pozycji). Preset tur „Niedziela/Środa"
+jest DANYMI (`PRESET_ROUNDS` zasiewa się przy pierwszym wejściu i od tej chwili
+jest edytowalny), a `perishability` rozstrzyga serwis (`override ?? kategoria`),
+nie silnik.
+
+**Audyt tokenów publicznych — KAŻDY punkt 07_SECURITY §5 zweryfikowany realnym
+requestem** (curl na `http://127.0.0.1:8000`, lista utworzona pełną drogą
+plan → generacja → finalizacja → udostępnienie):
+
+- token 43 znaki base64url, lookup po unique index, ZERO prefiksów i `LIKE`;
+- **odpowiedź publiczna bez PII**: dokładnie `{name, expires_at, items[]}`,
+  a pozycja `{id, label, amount, unit, category_name, checked, leftover_amount,
+  already_have, packages_count, package_size}` — skan odpowiedzi po `email`,
+  `owner`, `household`, `user_id`, `product_id`, `position`, `from_pantry`
+  nie trafił NICZEGO;
+- ważny token 200, **wygasły 410, odwołany 410, nieznany 404** z IDENTYCZNYM
+  komunikatem, token o złym kształcie 422 PRZED zapytaniem do bazy (próba
+  `' or 1=1--` kończy się na walidacji wzorca);
+- **rate limit potwierdzony**: 70 żądań GET dało 59×200 + 11×429, a PATCH po
+  wyczerpaniu limitu też 429 — licznik jest WSPÓLNY dla całej ścieżki, ścieżka
+  zalogowana pozostała nietknięta (200);
+- **maskowanie w logach potwierdzone GREPEM po realnym logu**: token nie
+  występuje w `docker logs` ani razu, a ścieżka wychodzi jako
+  `/api/v1/public/lists/***` w OBU warstwach (nasz `structlog` i access log
+  Uvicorna);
+- publiczny PATCH przyjmuje WYŁĄCZNIE `checked` (`already_have` i
+  `needed_amount` dostają 422 `extra_forbidden`), pozycja z innej listy tym
+  tokenem to 404, a powtórzone `{"checked": true}` zwraca 200 i **nie przesuwa
+  `checked_at`** — czyli PATCH jest idempotentny (kluczowe dla kolejki B12);
+- nagłówki bezpieczeństwa (CSP, nosniff, DENY, Referrer-Policy) wychodzą też na
+  ścieżce publicznej, a odpowiedź nie ustawia żadnego cookie.
+
+**Mobile UX i wydruk sprawdzone W PRZEGLĄDARCE (Chromium, 375–390 px), nie
+zadeklarowane.** Publiczna lista renderuje się bez sesji i poza `AppShell`:
+12 checkboxów **48×48 px** w wierszach 64 px, każdy z `aria-label`, nagłówki
+sekcji `position: sticky`, ZERO elementów interaktywnych mniejszych niż 44 px,
+brak poziomego przewijania przy 375 px. Wydruk (emulacja mediów `print` + PDF)
+na obu stronach: nawigacja ukryta, checkboxy zamienione na `☐`, kategorie jako
+nagłówki, zero cieni. Udostępnianie sprawdzone realnie w UI: link (67 znaków,
+absolutny), kopiowanie, odwołanie i **QR jako PNG data-URL 240 px generowany
+klientem**.
+
+**Sześć ustaleń NAPRAWIONYCH w tym commicie:**
+
+1. **U16 ZAMKNIĘTY — rejestr liczników referencji do rodziny.**
+   `households/service.py` dostał `register_household_reference_finder`
+   (wzorzec `register_product_reference_finder`), a liczniki zarejestrowały
+   `recipes`, `planning` (dni), `planning/templates` (szablony dnia/tygodnia
+   i cykle), `pantry` oraz `shopping` (tury, generacje, listy) — pięć finderów
+   pokrywających DZIEWIĘĆ tabel z `household_id ON DELETE RESTRICT`. ADMIN
+   dostaje teraz 409 z listą „Używane w:" z NAZWAMI (przepis, „Plan dnia
+   06.05.2030", szablon, pozycja spiżarni z nazwą produktu, tura, generacja
+   z zakresem dat, lista), przyciętą do `USED_IN_LIMIT`. Druga linia obrony
+   (`IntegrityError` → 409 z pustą listą) zostaje i od teraz znaczy dokładnie
+   jedno: „konsument bez licznika". Testy: `test_u16_*` w
+   `tests/api/test_admin_households.py`.
+2. **U17 ZAMKNIĘTY — pusty dzień planu sprząta się sam.**
+   `PlanningService.delete_meal` usuwa wiersz `plan_days`, jeśli został bez
+   posiłków, bez tytułu i z domyślną widocznością. To była NAJCZĘSTSZA przyczyna
+   409 z pustym `used_in`: dzień powstaje implicite przy pierwszym posiłku, a po
+   usunięciu wszystkich UI pokazuje „brak planu" — wiersz był niewidzialny, ale
+   dalej blokował rodzinę. Tytuł i `scope='household'` to jawne decyzje
+   użytkownika, więc taki dzień ZOSTAJE (i widać go w `used_in` z datą).
+   `DELETE /plan/days/{date}` świadomie NIE powstał — 04_API §2 dostał sekcję
+   „Cykl życia dnia planu" opisującą stan faktyczny zamiast skrótu „CRUD".
+3. **Dług z B10 zamknięty + NOWA BRAMKA.** `pantry_items.retail_product_id`
+   dostało `ForeignKey` w modelu (constraint dopięła migracja `0011` dwa batche
+   temu), więc `alembic check` jest czysty. Żeby to się nie powtórzyło,
+   `tests/integration/test_migrations.py` ma teraz
+   `test_modele_nie_dryfuja_od_schematu_po_migracjach` — porównuje
+   `Base.metadata` ze schematem po `upgrade head` (`compare_metadata`).
+   Sprawdzone jako CZERWONE przed naprawą: bez `ForeignKey` w modelu test
+   wykrywa „removed foreign key", czyli dokładnie to, co pierwszy
+   `--autogenerate` skasowałby po cichu.
+4. **`accept_to_pantry` jest teraz JEDNĄ transakcją.**
+   `PantryService.receive_purchase` NIE COMMITUJE (wzorzec
+   `AuditService.record`) — robi `flush`, a commit należy do wołającego.
+   Wcześniej commit szedł per pozycja, więc błąd w połowie listy zostawiał
+   spiżarnię w stanie pośrednim, a ponowienie akcji dolewało już przyjęte
+   pozycje DRUGI raz. Test regresyjny (`monkeypatch` wysadzający drugą
+   pozycję) sprawdzony jako czerwony przed naprawą.
+5. **Odhaczona pozycja „mam już w domu" NIE wchodzi do spiżarni.** Wiersz
+   oznaczony `already_have` jest na liście jako przypomnienie, a nie jako coś
+   do kupienia (02_DOMAIN §9.3 — „nic nie kupujemy") — odhaczenie go („tak, potwierdzam, że mam")
+   dokładało do spiżarni ilość, której nikt nie kupił. Teraz liczy się jako
+   `skipped`, a komunikat w UI POKAZUJE tę liczbę (wcześniej `skipped` nie
+   docierało do użytkownika w ogóle).
+6. **Wydruk był brązowo-szary, nie czarno-biały** (06_UIUX §6). `print.css`
+   wymuszał `color` tylko na `html, body`, a każdy tekst ma własną klasę
+   z tokens (`#2B2620`, `#6F675C`), więc dziedziczenie nie miało jak zadziałać.
+   Reguła obejmuje teraz `*` — sprawdzone emulacją mediów `print`: zero
+   elementów z kolorem innym niż czysta czerń.
+
+**Odstępstwo ŚWIADOMIE PRZYJĘTE (nie naprawiane):** status 404 (token nieznany)
+i 410 (wygasły/odwołany) różnią się, choć komunikat jest identyczny — kod
+odpowiedzi zdradza więc, czy token kiedykolwiek istniał. Przy entropii 256 bitów
+i limicie 60/min/IP ta wyrocznia jest bezużyteczna (trzeba najpierw wylosować
+istniejący token), a rozróżnienie ratuje diagnostykę właściciela listy. Frontend
+nie korzysta z różnicy — `publicList.ts` mapuje oba kody na jeden ekran.
+Dopisane do 07_SECURITY §5 jako punkt 8, żeby nikt tego nie „naprawiał" po cichu.
+
+**Decyzje ESKALOWANE (OPEN w 02_DECISIONS, review ich NIE zgaduje):**
+
+- **D18 — ręczne pozycje listy zakupowej.** Rekomendacja: TAK, ale dopiero
+  w batchu dotykającym tej strony (B12) i WYŁĄCZNIE jako pozycja z produktem
+  kanonicznym; pozycja „luźny tekst" wypada z sortowania sekcji (profil sklepu)
+  i z przyjęcia do spiżarni. Obejście na dziś: dopisać rzecz do planu
+  i wygenerować turę ponownie.
+- **D19 — znacznik „już przyjęte" na liście.** Po R3 akcja jest atomowa, ale
+  nadal POWTARZALNA; ochroną jest wyłącznie dialog. Rekomendacja: kolumna
+  `shopping_lists.received_at` w B12, bo dopiero offline czyni powtórkę
+  prawdopodobną (ponowienie żądania z kolejki po utracie odpowiedzi).
+
+**Plan B12–B16 — bramka OTWARTA, kolejność importera POTWIERDZONA.**
+Sekwencja zostaje **B12 ∥ B13 ∥ B14 → B15 → B16 → R4**. Wariant „B15 zaraz po
+R3" rozważony i odrzucony: B15 dokłada migrację stagingu, a dwie migracje
+w równoległych worktree łamią wymóg jednej głowy po merge'u; trzy batche PLAT
+są krótsze i nie wchodzą w moduł `recipes`. Warunek D2 („nie później niż po R3")
+czytamy jako **przed B17/B18** i to zostaje twarde. Kolizje plików w dozwolonej
+trójce sprawdzone PRZED dopuszczeniem: `frontend/package.json` + lockfile
+(wszystkie trzy), `src/api/queryKeys.ts` (B13 i B14), `backend/app/main.py`
+(tylko B14) oraz `docs/architecture/04_API_DESIGN.md` (B13 i B14) — wszystkie
+rozwiązywalne unią przy sekwencyjnym merge'u; żadnych kolizji w kodzie modułów
+(B12: shopping/offline, B13: planning/stats, B14: transfer). Karty B12–B16
+zaktualizowane ustaleniami (m.in. B12: idempotencja PATCH-a, WSPÓLNY limit
+60/min/IP dla kolejki, sekcje składane przez SERWER, D18/D19 do rozstrzygnięcia
+przed Stage 5; B14: `public_token` NIGDY w eksporcie, `params` czytane przez
+`load_input`, kolejność importu wymuszona przez FK).
+
+**Wyniki uruchomień (realne):** `task check` zielony na WEJŚCIU (exit 0:
+3 migrations-check / 303 unit / 229 int / 343 api / 296 vitest w 32 plikach /
+mypy 164 plików + vue-tsc / ruff / eslint / prettier / vite build) i po
+naprawach (**+6 testów integracyjnych** → 235 int, **+2 API** → 345 api).
+`alembic check`: „No new upgrade operations detected" (przed naprawą:
+`remove_fk` na `pantry_items`). E2E: **15/15 w dwóch kolejnych przebiegach**
+(1,5 min i 1,8 min). `task audit`: pip-audit „No known vulnerabilities found",
+`npm audit --audit-level=high` „found 0 vulnerabilities". `task secrets-scan`:
+„no leaks found" (21 commitów, 4,77 MB).
+
+**Co MUSZĄ wiedzieć kolejne batche:**
+
+1. **Nowa tabela ze `household_id` = nowy licznik referencji** w tym samym
+   batchu (`register_household_reference_finder`). Bez niego 409 przy usuwaniu
+   rodziny wraca z pustą listą i ADMIN nie wie, co blokuje.
+2. **Kolumna, której FK dopina PÓŹNIEJSZA migracja, musi dostać `ForeignKey`
+   w modelu w tym samym commicie co ta migracja.** Pilnuje tego bramka dryfu
+   w `task check`. Dotyczy wprost B15: `recipes.import_job_id` czeka na
+   `import_jobs`.
+3. **Metoda serwisu wołana w PĘTLI po jednej decyzji użytkownika nie commituje**
+   — `flush()` i commit u wołającego (wzorzec `AuditService.record`,
+   `PantryService.receive_purchase`).
+4. **Publiczny PATCH checkboxa jest idempotentny**, a limit 60/min/IP jest
+   WSPÓLNY dla GET i PATCH całej ścieżki publicznej — kolejka offline (B12) musi
+   traktować 429 jako stan przejściowy z backoffem, nie jako porażkę mutacji.
+5. **Kolejność sekcji listy liczy SERWER** — offline nie ma z czego jej
+   przeliczyć, więc zmiana sklepu nie może iść do kolejki bez informacji, że
+   porządek odświeży się po synchronizacji.
 
 **2026-08-22 — BATCH_11 (SHOPPING_LISTS_AND_SHARING): lista działa w sklepie i da się
 ją wysłać linkiem.** Weszły: `shopping/lists_service.py` (drugi serwis modułu —

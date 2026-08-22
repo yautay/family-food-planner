@@ -276,6 +276,13 @@ diffie przed commitem (krok 11).
   do checklisty B17 weryfikację, że klucz nie występuje w logach.
 - **B04/ADMIN**: rośnie kolejka weryfikacji UNVERIFIED — jeśli widok
   weryfikacji w Adminie jej nie udźwignie, follow-up w PROGRESS.
+- **Ustalenie REVIEW R3 (2026-08-22)**: kolejność B15 → B16 po B12/B13/B14
+  potwierdzona (uzasadnienie w karcie B15), z warunkiem twardym „przed
+  B17/B18" z D2. Przepisy wnoszone importerem dostają `household_id` przez
+  `ownership_for_create`, więc od razu wchodzą do rejestru liczników
+  referencji do rodziny (R3) — masowy import robi z rodziny encję
+  nieusuwalną i tak ma być, ale komunikat 409 pokaże wtedy pierwsze 20 nazw
+  (`USED_IN_LIMIT`), nie wszystkie.
 
 ## Implementation checklist
 

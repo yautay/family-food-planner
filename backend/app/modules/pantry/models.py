@@ -13,11 +13,14 @@ a tyle tego produktu". Stąd trzy decyzje widoczne w schemacie:
 3. **Produkt kanoniczny albo sklepowy** — CHECK pilnuje, że pozycja wskazuje
    przynajmniej jeden z nich.
 
-`retail_product_id` istnieje od tej migracji (wymóg planu), ale BEZ constraintu
-FK: tabela `retail_products` powstaje dopiero w BATCH_09, a kolumna musi już
-być, żeby CHECK z 03_DATABASE §7 dało się zapisać w całości. Constraint dopina
-batch mergowany jako drugi (karta B08, Implementation Notes pkt 1) — dokładnie
-tak, jak `recipes.import_job_id` czeka na `import_jobs` z B15.
+`retail_product_id` powstało w migracji `0010` BEZ constraintu FK (tabela
+`retail_products` doszła dopiero w BATCH_09) i constraint dopięła migracja
+`0011` — ale model o tym nie wiedział jeszcze przez dwa batche, więc `alembic
+check` widział „removed foreign key" i następny autogenerate SKASOWAŁBY ten
+constraint. Ustalenie REVIEW R3: kolumna, której FK dopina późniejsza migracja,
+musi dostać `ForeignKey` w modelu w TYM SAMYM commicie co migracja — inaczej
+dryf modelu żyje cicho, bo `task check` bada tylko liczbę głów, nie zgodność
+metadanych ze schematem.
 """
 
 from __future__ import annotations
@@ -58,8 +61,14 @@ class PantryItem(TimestampMixin, HouseholdScopedMixin, Base):
         nullable=True,
         index=True,
     )
-    #: Kolumna bez FK do czasu powstania `retail_products` (BATCH_09).
-    retail_product_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, index=True)
+    #: RESTRICT jak przy produkcie kanonicznym: wariant sklepowy leżący
+    #: w spiżarni nie znika (constraint dopięła migracja `0011`, B09).
+    retail_product_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        ForeignKey("retail_products.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
     amount: Mapped[Decimal] = mapped_column(Numeric(precision=10, scale=3), nullable=False)
     amount_unit: Mapped[AmountUnit] = mapped_column(AMOUNT_UNIT_ENUM, nullable=False)
     #: Opcjonalna — wiele produktów sypkich nie ma sensownej daty w domu.

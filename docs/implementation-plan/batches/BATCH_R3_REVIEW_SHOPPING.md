@@ -97,71 +97,71 @@ Review batch sam jest procesem przeglądowym — SKILL-REVIEW/SKILL-SECREV uruch
 
 ### Determinizm silnika (ADR-008)
 
-- [ ] `shopping/engine.py`: czysta funkcja — zero I/O/ORM/now()/random
+- [x] `shopping/engine.py`: czysta funkcja — zero I/O/ORM/now()/random
       (grep importów); wejście = plan+konfig, wyjście = preview struct
-- [ ] Ten sam input ⇒ identyczny output: snapshot testy istnieją;
+- [x] Ten sam input ⇒ identyczny output: snapshot testy istnieją;
       `shopping_generations.params` przechowuje pełne wejście generacji
       i pozwala odtworzyć preview (test regresyjny — wykonać)
-- [ ] Stabilne sortowanie pozycji (brak zależności od kolejności dict/set)
+- [x] Stabilne sortowanie pozycji (brak zależności od kolejności dict/set)
 
 ### Resztki i opakowania (08_TESTING §2.6)
 
-- [ ] `ceil(potrzeba/wielkość_opakowania)`; resztka = kupione − potrzeba;
+- [x] `ceil(potrzeba/wielkość_opakowania)`; resztka = kupione − potrzeba;
       resztka wyeksponowana w preview i na liście („Zostanie: 150 g")
-- [ ] Brak retail ⇒ pozycja w gramach (dozwolone) + podpowiedź w preview
-- [ ] Wiele wariantów opakowań: wybór domyślny = najmniejsza resztka,
+- [x] Brak retail ⇒ pozycja w gramach (dozwolone) + podpowiedź w preview
+- [x] Wiele wariantów opakowań: wybór domyślny = najmniejsza resztka,
       remis → mniejsze opakowanie (nazwane przypadki testowe istnieją)
-- [ ] Decimal w ilościach; agregacja wielu przepisów/dni → jeden produkt,
+- [x] Decimal w ilościach; agregacja wielu przepisów/dni → jeden produkt,
       jednostki mieszane (g+szt.+łyżka) poprawnie znormalizowane (§2.4)
 
 ### Spiżarnia w pipeline (§2.5)
 
-- [ ] Odejmowanie WYŁĄCZNIE po jawnym pytaniu „Uwzględnić stan domowy?";
+- [x] Odejmowanie WYŁĄCZNIE po jawnym pytaniu „Uwzględnić stan domowy?";
       preview pokazuje co odjęto (`from_pantry_amount`)
-- [ ] Nigdy poniżej zera; pozycje retail vs kanoniczne rozróżnione
-- [ ] Finalizacja listy NIE zmienia spiżarni automatycznie (02_DOMAIN §8)
+- [x] Nigdy poniżej zera; pozycje retail vs kanoniczne rozróżnione
+- [x] Finalizacja listy NIE zmienia spiżarni automatycznie (02_DOMAIN §8)
 
 ### Tury (§2.7)
 
-- [ ] Preset niedziela/środa seedowany jako konfiguracja (NIE hardcode);
+- [x] Preset niedziela/środa seedowany jako konfiguracja (NIE hardcode);
       trwałe na cały zakres + świeże na okno / świeże na resztę
-- [ ] `perishability` z kategorii + nadpisanie per produkt działa
-- [ ] Edge: plan krótszy niż okno tury — zdefiniowane, przetestowane
+- [x] `perishability` z kategorii + nadpisanie per produkt działa
+- [x] Edge: plan krótszy niż okno tury — zdefiniowane, przetestowane
 
 ### Tokeny publiczne — pełny audyt 07_SECURITY §5 (KRYTYCZNE)
 
-- [ ] Token `token_urlsafe(32)`, unique index, lookup tylko po pełnym tokenie
-- [ ] **Odpowiedź `/public/lists/{token}` bez PII**: tylko nazwa listy,
+- [x] Token `token_urlsafe(32)`, unique index, lookup tylko po pełnym tokenie
+- [x] **Odpowiedź `/public/lists/{token}` bez PII**: tylko nazwa listy,
       pozycje (label, ilość, kategoria, checked), expires_at — ZERO nazwisk,
       emaili, id userów/household (przeczytać serializer, wykonać request!)
-- [ ] Expiry (default 7 dni) + revoke → **410** z przyjaznym ekranem;
+- [x] Expiry (default 7 dni) + revoke → **410** z przyjaznym ekranem;
       nieistniejący token → 404/410 bez różnicowania informacji
-- [ ] **Rate limit 60/min/IP na `/public/*`** — test lub ręczna próba
-- [ ] **Maskowanie w logach**: ścieżka `/public/lists/***` — tokeny NIE
+- [x] **Rate limit 60/min/IP na `/public/*`** — test lub ręczna próba
+- [x] **Maskowanie w logach**: ścieżka `/public/lists/***` — tokeny NIE
       występują w logach (grep po realnym logu z requestu!)
-- [ ] Public PATCH checkboxa: wyłączony z CSRF, ale rate-limited;
+- [x] Public PATCH checkboxa: wyłączony z CSRF, ale rate-limited;
       pozwala TYLKO na check/uncheck (nic więcej — sprawdzić schema)
-- [ ] `/security-review` na całości zmian od R2 — OBOWIĄZKOWY, wynik w raporcie
+- [x] `/security-review` na całości zmian od R2 — OBOWIĄZKOWY, wynik w raporcie
 
 ### Mobile UX listy i print (06_UIUX §5–6)
 
-- [ ] Checkbox ~48 px, cele dotykowe ≥44 px; sekcje sticky per kategoria
+- [x] Checkbox ~48 px, cele dotykowe ≥44 px; sekcje sticky per kategoria
       w kolejności profilu sklepu; odhaczanie optimistic
-- [ ] Wariant print: czarno-biały, ☐, kategorie jako nagłówki, bez
+- [x] Wariant print: czarno-biały, ☐, kategorie jako nagłówki, bez
       nawigacji (sprawdzić realnie w przeglądarce)
-- [ ] QR/link/share działają; strona `/l/:token` renderuje się bez sesji
+- [x] QR/link/share działają; strona `/l/:token` renderuje się bez sesji
       POZA AppShell
 
 ### Spójność stanu checkboxów
 
-- [ ] `checked` + `checked_at` persystowane; równoległe odhaczanie
+- [x] `checked` + `checked_at` persystowane; równoległe odhaczanie
       (dwie karty/urządzenia) nie gubi stanu — zdefiniowana semantyka
       (last-write-wins per pozycja przygotowany pod ADR-009/B12)
-- [ ] Odhaczenie z publicznego linku i z aplikacji widzą ten sam stan
+- [x] Odhaczenie z publicznego linku i z aplikacji widzą ten sam stan
 
 ### Ustalenia odziedziczone z R2 (2026-08-21)
 
-- [ ] **U16 — puste `details.used_in` przy 409 usuwania rodziny.**
+- [x] **U16 — puste `details.used_in` przy 409 usuwania rodziny.**
       `households/service.py::delete_household` liczy referencje tylko dla
       `users` i `member_profiles`; encje ze scope (dziś `recipes`, `plan_days`,
       `day_templates`, `week_templates`, `week_cycles`, po B08–B11 także
@@ -175,7 +175,7 @@ Review batch sam jest procesem przeglądowym — SKILL-REVIEW/SKILL-SECREV uruch
       znaczyłoby robić to dwa razy. Ten batch zastaje pełny zbiór konsumentów —
       albo zakłada rejestr, albo świadomie przyjmuje ograniczenie z pisemnym
       uzasadnieniem i domyka U16.
-- [ ] **U17 — nie da się usunąć dnia planu.** `04_API §2` opisuje
+- [x] **U17 — nie da się usunąć dnia planu.** `04_API §2` opisuje
       `/plan/days/{date}` jako CRUD, a router ma tylko GET i PUT. Wiersz
       `plan_days` powstaje implicite przy pierwszym posiłku, trzyma
       `household_id` z FK RESTRICT i nie znika po usunięciu wszystkich
@@ -184,7 +184,7 @@ Review batch sam jest procesem przeglądowym — SKILL-REVIEW/SKILL-SECREV uruch
       razem z U16: albo `DELETE /plan/days/{date}` (usuwa dzień bez posiłków),
       albo automatyczne sprzątanie pustego dnia przy usunięciu ostatniego
       posiłku, albo świadoma decyzja „dni zostają" z policzeniem ich w `used_in`.
-- [ ] **U15 zamknięty w R2** (E2E 10/10 w dwóch kolejnych przebiegach,
+- [x] **U15 zamknięty w R2** (E2E 10/10 w dwóch kolejnych przebiegach,
       `task secrets-scan` czysty) — sprawdzić, czy nadal jest, i czy nowe specy
       B08–B11 trzymają się konwencji: własny prefiks nazw + `beforeAll`
       /`afterAll` z `cleanupE2eData` + daty z okna 2030+ (`frontend/e2e/cleanup.ts`).
@@ -193,13 +193,13 @@ Review batch sam jest procesem przeglądowym — SKILL-REVIEW/SKILL-SECREV uruch
 
 ### Plan B12–B16 — przegląd
 
-- [ ] B12 (offline): czy `label` na pozycjach wystarcza do renderu offline;
+- [x] B12 (offline): czy `label` na pozycjach wystarcza do renderu offline;
       czy PATCH checkboxa jest idempotentny (kolejka offline!); ustalenia
       do karty B12
-- [ ] B15/B16 (importer) po R3 — potwierdzić kolejność wobec D2 (treść
+- [x] B15/B16 (importer) po R3 — potwierdzić kolejność wobec D2 (treść
       wchodzi importerem, nie odkładać za B17/18); jeśli baza świeci
       pustkami, rozważyć podniesienie priorytetu B15 (zmiana planu z powodem)
-- [ ] B13–B14: zakresy aktualne wobec stanu repo
+- [x] B13–B14: zakresy aktualne wobec stanu repo
 
 ## Security
 
@@ -269,26 +269,156 @@ Review batch sam jest procesem przeglądowym — SKILL-REVIEW/SKILL-SECREV uruch
 
 ## Implementation checklist
 
-- [ ] PROGRESS (warunki R2!) + Completion notes B08–B11 przeczytane
-- [ ] `task check` zielony na wejściu
-- [ ] Determinizm silnika: snapshoty + odtworzenie z params
-- [ ] Resztki/opakowania/agregacja: przypadki §2.4–2.6 zweryfikowane
-- [ ] Spiżarnia: jawne pytanie, nigdy <0, brak auto-przyjęcia
-- [ ] Tury z presetem + edge'y §2.7
-- [ ] Tokeny publiczne: pełna checklista §5 realnymi requestami
-- [ ] `/security-review` + macierz uprawnień + audyt zależności
-- [ ] Mobile UX + print sprawdzone realnie
-- [ ] Karty B12–B16 przejrzane; kolejność importera potwierdzona
-- [ ] Werdykt + wpis dziennika w PROGRESS.md
+- [x] PROGRESS (warunki R2!) + Completion notes B08–B11 przeczytane
+- [x] `task check` zielony na wejściu
+- [x] Determinizm silnika: snapshoty + odtworzenie z params
+- [x] Resztki/opakowania/agregacja: przypadki §2.4–2.6 zweryfikowane
+- [x] Spiżarnia: jawne pytanie, nigdy <0, brak auto-przyjęcia
+- [x] Tury z presetem + edge'y §2.7
+- [x] Tokeny publiczne: pełna checklista §5 realnymi requestami
+- [x] `/security-review` + macierz uprawnień + audyt zależności
+- [x] Mobile UX + print sprawdzone realnie
+- [x] Karty B12–B16 przejrzane; kolejność importera potwierdzona
+- [x] Werdykt + wpis dziennika w PROGRESS.md
 
 ## Verification checklist
 
-- [ ] `task check` zielony po naprawach
-- [ ] Acceptance Criteria 1–8 odhaczone
-- [ ] Każde ustalenie: naprawione / follow-up (gdzie) / decyzja OPEN
-- [ ] Dokumentacja architektury zgodna ze stanem faktycznym
-- [ ] Commit `batch(R3): review ...`, `git status` czysty
+- [x] `task check` zielony po naprawach
+- [x] Acceptance Criteria 1–8 odhaczone
+- [x] Każde ustalenie: naprawione / follow-up (gdzie) / decyzja OPEN
+- [x] Dokumentacja architektury zgodna ze stanem faktycznym
+- [x] Commit `batch(R3): review ...`, `git status` czysty
 
 ## Completion notes
 
-(wypełnia agent wykonujący)
+**WERDYKT: PASS — B12, B13 i B14 mogą startować (także równolegle).**
+Wykonane 2026-08-22. Pełny werdykt z liczbami: dziennik `PROGRESS.md` (wpis na
+górze). Tutaj to, co karta wymaga wprost: wykonane / odstępstwa / decyzje /
+follow-upy / pytania.
+
+### Wykonane
+
+- **Rekonstrukcja stanu**: `task check` zielony na WEJŚCIU (exit 0), przeczytane
+  warunki R2 + Completion notes B08–B11 + statusy zależności (wszystkie `[x]`).
+- **Audyt silnika** (ADR-008): czystość potwierdzona gerpem importów (zero ORM
+  poza enumem `Perishability`, zero zegara, zero losowości, zero `float`
+  w torze), determinizm potwierdzony DWOMA drogami — testem odtworzenia
+  z `params` i realnie: `POST /generate` + dwa `GET /generations/{id}` bajt
+  w bajt identyczne. Opakowania, resztki, agregacja, tury i spiżarnia sprawdzone
+  na realnych danych seedu (liczby w PROGRESS), przypadki brzegowe §2.4–2.7
+  mają nazwane testy (`test_engine_packages.py`, `test_engine_rounds.py`,
+  `test_engine_pantry.py`, `test_engine_properties.py`).
+- **Audyt tokenów publicznych**: KAŻDY punkt 07_SECURITY §5 zweryfikowany
+  realnym requestem na działającym stacku (200/410/410/404/422, biała lista pól
+  bez PII, 429 po 60 żądaniach na WSPÓLNYM liczniku, `***` w obu warstwach
+  logów sprawdzone grepem po `docker logs`, PATCH tylko `checked`, cudza
+  pozycja 404, PATCH idempotentny).
+- **Audyt UX**: mobile 375 px i wydruk sprawdzone W PRZEGLĄDARCE (pomiary
+  DOM + PDF z emulacją mediów `print`), QR/link/odwołanie sprawdzone w realnym
+  UI. Wyniki i liczby w PROGRESS.
+- **Analiza planu B12–B16**: kolejność importera potwierdzona, kolizje plików
+  w trójce równoległej sprawdzone PRZED dopuszczeniem, karty B12–B16
+  zaktualizowane ustaleniami.
+- **Naprawy** (sześć, wszystkie z testem): rejestr liczników referencji do
+  rodziny (U16), sprzątanie pustego dnia planu (U17), `ForeignKey` na
+  `pantry_items.retail_product_id` + BRAMKA dryfu modeli w `task check`,
+  atomowe `accept_to_pantry`, „mam już w domu" nie wchodzi do spiżarni,
+  wydruk faktycznie czarno-biały.
+
+### Odstępstwa od karty
+
+1. **`/security-review` i `/code-review` uruchomione, ale ANALIZĘ WYKONAŁ
+   agent sesji, nie subagenty.** Oba skille żądają rozdzielenia pracy na
+   równoległe pod-zadania (`Agent`), a prompt sesji tego wprost zabrania
+   („Do not call the AgentTool unless the user requested it"). Zgodnie
+   z hierarchią 03_AI_SKILLS §1 (właściciel > skill) instrukcje skilla wykonane
+   zostały jednoprocesowo: pełne przejście po zakresie od R2 z checklistą
+   kategorii skilla. Wynik w sekcji „Wyniki review skilli" niżej.
+2. **U17 rozstrzygnięty trzecim wariantem, nie pierwszym z karty.** Karta
+   dawała trzy opcje (`DELETE /plan/days/{date}` / automatyczne sprzątanie /
+   „dni zostają" z policzeniem w `used_in`). Wybrane: **automatyczne sprzątanie
+   pustego dnia + policzenie pozostałych w `used_in`**. Uzasadnienie: nowy
+   endpoint bez UI nie rozwiązałby problemu użytkownika (nikt by go nie
+   zawołał), a przesłanka „04_API opisuje CRUD" okazała się skrótem w tabeli
+   mapy zasobów, nie kontraktem — doprecyzowane w 04_API §2.
+3. **Dwie naprawy poza literalną listą karty**, obie w audytowanym obszarze
+   i obie z testem: atomowość `accept_to_pantry` (karta kazała OCENIĆ
+   powtarzalność, ocena odsłoniła też brak transakcyjności) oraz „mam już
+   w domu" wchodzące do spiżarni po odhaczeniu. Zakres „drobne naprawy"
+   z sekcji Review master prompta.
+4. **`print.css` i `texts.ts` to zmiany frontendu w batchu review** — obie
+   jednolinijkowe konsekwencje ustaleń audytu UX (kolor wydruku, pokazanie
+   liczby pominiętych pozycji).
+
+### Decyzje podjęte w review
+
+- **404 vs 410 na ścieżce publicznej ZOSTAJE** (różne statusy, identyczny
+  komunikat). Uzasadnienie i granice dopisane do 07_SECURITY §5 pkt 8 — to nie
+  przeoczenie i nie wolno tego „naprawiać" po cichu.
+- **`DELETE /plan/days/{date}` nie powstanie**; cykl życia dnia planu opisany
+  w 04_API §2.
+- **Sprzątanie pustego dnia nie dotyczy dnia z tytułem ani ze scope
+  `household`** — jedno i drugie to jawna decyzja użytkownika.
+- **Kolejność B12 ∥ B13 ∥ B14 → B15 → B16 potwierdzona** (uzasadnienie
+  w 00_MASTER_PLAN §5 i karcie B15); warunek D2 czytany jako „przed B17/B18".
+
+### Follow-upy (z miejscem docelowym)
+
+- **D18 (ręczne pozycje listy)** i **D19 (znacznik „już przyjęte")** — OPEN
+  w 02_DECISIONS z rekomendacją; oba do rozstrzygnięcia PRZED Stage 5 karty
+  B12 (wpisane do jej sekcji Context).
+- **Kolejka offline vs limit 60/min/IP** i **sekcje składane przez serwer** —
+  ustalenia 2 i 3 w karcie B12; wymagają backoffu na 429 i decyzji, czy zmiana
+  sklepu wchodzi do kolejki.
+- **Wydruk częściowo odhaczonej listy** pokazuje wszystkie pozycje jako `☐`
+  (06_UIUX §6 mówi „checkboxy jako ☐", więc kod jest zgodny z dokumentem).
+  Obserwacja dla R4: kartka wydrukowana W TRAKCIE zakupów nie pokazuje, co już
+  kupione. Zmiana wymaga korekty 06_UIUX §6, nie samego komponentu.
+- **`Perishability` (enum domenowy) mieszka w `catalog/models.py`**, więc czysty
+  silnik importuje moduł ORM po samą wartość enumową. Zero wpływu na
+  determinizm, ale przeniesienie enumu do modułu bez SQLAlchemy byłoby
+  czystsze — kandydat na sprzątanie w R4 (dziś wymagałoby ruszenia migracji
+  i importów pół domeny, więc świadomie zostawione).
+- **`shopping_lists.expires_at` służy ZARAZEM za ważność listy i ważność
+  linku** (ADR-010 tak mówi), więc udostępnienie na 365 dni wydłuża życie samej
+  listy i wpływa na filtr `?status=expired`. Zachowanie zgodne z ADR —
+  obserwacja dla R4 przy przeglądzie retencji (D10).
+
+### Wyniki review skilli
+
+- **`/security-review` (SKILL-SECREV) na zakresie od R2: ZERO ustaleń HIGH
+  i MEDIUM.** Przejrzane wektory: (a) ścieżka publiczna bez sesji — autoryzacja
+  wyłącznie pełnym tokenem, brak `ScopedQuery` w metodach publicznych jest
+  zamierzony i bezpieczny, bo lookup idzie po unique index; (b) IDOR na
+  pozycjach listy — `_item_or_404` filtruje po `list_id`, sprawdzone realnym
+  requestem (pozycja innej listy = 404); (c) wyciek PII w serializerze —
+  `PublicListRead` jest jawną białą listą bez `from_attributes`, test
+  asercjonuje DOKŁADNY zbiór kluczy, realna odpowiedź przeskanowana; (d) SQL
+  injection — zero konkatenacji i zero `text()` z danymi użytkownika w torze
+  zapytań (szukajka trigramowa wiąże frazę parametrem), token odsiewany wzorcem
+  przed bazą; (e) XSS — zero `v-html`/`innerHTML` w `frontend/src`; (f) path
+  traversal w uploadach zdjęć wariantów sklepowych — jedyne wejście to
+  `core/uploads.py` (losowa nazwa, sniffing Pillow, re-encode), serving przez
+  endpoint z sesją; (g) obejście scope w `resolve` — decyzje walidowane wobec
+  `params` generacji (`UNKNOWN_PRODUCT_IN_DECISION`, wariant musi należeć do
+  swojego produktu); (h) CSRF — wyjątek dotyczy dokładnie prefiksu
+  `/api/v1/public/`, mutacja bez nagłówka to 403 (sprawdzone realnie na
+  `POST /shopping/lists/{id}/share`); (i) higiena logów — token nie wychodzi
+  w żadnej z dwóch warstw. Sklepy i warianty retail są edytowalne przez
+  KAŻDEGO zalogowanego świadomie (słownik globalny, 02_DOMAIN §3.1 pkt 3–4) —
+  to nie ustalenie. `task audit` i `task secrets-scan` czyste.
+- **`/code-review` (SKILL-REVIEW) na zakresie od R2 + własny diff review:
+  trzy ustalenia, wszystkie NAPRAWIONE w tym commicie** — (1) odhaczona pozycja
+  „mam już w domu" wchodziła do spiżarni jako zakup; (2) `receive_purchase`
+  commitowało per pozycja, więc przyjęcie listy nie było atomowe; (3) po
+  przejściu na `flush` pierwsza wersja poprawki zwracała encję z mapy
+  tożsamości, gubiąc SKALĘ kolumny NUMERIC (pułapka opisana w nocie 5 karty
+  B08) — przywrócone `_view()` z `populate_existing`. Do tego dwie korekty
+  higieniczne we własnym diffie: kolejność importów (ruff I001) i EN DASH
+  w literale (RUF001).
+
+### Pytania do właściciela
+
+**D18** (ręczne pozycje listy) i **D19** (znacznik „już przyjęte") — wpisane do
+02_DECISIONS jako OPEN z rekomendacją i uzasadnieniem. Żadna z nich nie blokuje
+startu B12/B13/B14; D18 i D19 trzeba rozstrzygnąć przed Stage 5 karty B12.

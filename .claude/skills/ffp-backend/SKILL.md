@@ -36,6 +36,14 @@ description: Kontrakt backendu Family Food Planner — wzorzec modułu FastAPI (
   `conflict_from_integrity_error`: kontrakt 409 z `details.used_in`. FK
   domenowe mają RESTRICT, więc `IntegrityError` z commita łapiesz jako drugą
   linię obrony — inaczej użytkownik dostanie 500 zamiast 409.
+  **Trzy rejestry liczników referencji** (wzorzec: moduł POSIADAJĄCY encję
+  rejestruje funkcję u modułu, którego encję trzyma):
+  `catalog.service.register_product_reference_finder`,
+  `recipes.service.register_recipe_reference_finder`,
+  `catalog.retail_service` / `stores_service` (warianty i sklepy) oraz
+  `households.service.register_household_reference_finder` (od REVIEW R3).
+  **Nowa tabela ze `household_id` albo z FK do encji słownikowej = nowy
+  licznik w TYM SAMYM batchu**, inaczej 409 wraca z pustą listą.
 - `app/core/schemas.py` — `DecimalString` dla KAŻDEGO pola NUMERIC w odpowiedzi.
 - `app/modules/catalog/` — `units.py` (jedyne konwersje ilości),
   `nutrition_adapter.py` (jedyne wejście silników do wartości, ADR-004),
@@ -102,6 +110,14 @@ nie ma.
 - Każdy nowy zasób MA test macierzy uprawnień (08_TESTING §4) — endpoint
   bez testu scope nie przechodzi DoD.
 
+## Transakcje
+
+- Serwis kończy operację JEDNYM commitem. Metoda wołana w PĘTLI po pozycjach
+  jednej decyzji użytkownika nie commituje sama — robi `flush()` i commit
+  zostawia wołającemu (wzorzec `AuditService.record`,
+  `PantryService.receive_purchase` po REVIEW R3). Commit per element zostawia
+  po błędzie stan pośredni, którego ponowienie akcji policzy DRUGI raz.
+
 ## Async
 
 - Route'y async; sesja DB też jest async (`AsyncSession`, ADR-015).
@@ -120,6 +136,12 @@ nie ma.
 - **Nowa tabela = wpis w DWÓCH miejscach**: `DB_TABLES` (conftest, TRUNCATE)
   i `EXPECTED_TABLES` (`tests/integration/test_migrations.py`); nowy typ
   enumowy dopisz do `EXPECTED_ENUM_TYPES` tam samo.
+- **Bramka dryfu modeli** (REVIEW R3):
+  `test_modele_nie_dryfuja_od_schematu_po_migracjach` porównuje `Base.metadata`
+  ze schematem po `upgrade head`. Kolumna, której FK dopina PÓŹNIEJSZA migracja
+  (wzorzec „batch mergowany jako drugi"), musi dostać `ForeignKey` w modelu
+  w tym samym commicie co ta migracja. Sprawdzenie na hoście: `uv run alembic
+  check` w `backend/`.
 - Testy integracyjne dostają `DATABASE_URL` = `TEST_DATABASE_URL`; baza dev
   jest nietykalna.
 - Testy nazywają scenariusz po polsku w docstringu.

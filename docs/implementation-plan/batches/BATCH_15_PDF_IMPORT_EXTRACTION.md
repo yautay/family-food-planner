@@ -276,6 +276,26 @@ diffie przed commitem (krok 11).
 - **R4**: przegląd jakości parsera (flaki testów korpusowych?) i decyzja
   o ewentualnym imporcie kolejnych formatów PDF (nowy audyt = nowy kontrakt).
 - Kategorie z §5.5 były seedem w B04 — różnice wyrównać (wpis w PROGRESS).
+- **Ustalenie REVIEW R3 (2026-08-22) — kolejność POTWIERDZONA, bez zmiany
+  planu.** B15 startuje po B12/B13/B14 (D2: „nie później niż po R3", nie
+  „natychmiast po R3”), bo trzy batche równoległe są krótsze i nie wchodzą
+  w moduł `recipes`, a odkładanie ich za importer zablokowałoby jedyną
+  dozwoloną równoległość planu (00_MASTER §5). **Warunek twardy: B15 i B16
+  wchodzą PRZED B17/B18** — baza ma dziś 15 produktów demo i zero przepisów
+  poza seedem, więc bez importera nie ma czego chronić w produkcji.
+  Podniesienie priorytetu B15 do równoległości z B12/B13 ODRZUCONE: B15
+  dokłada migrację stagingu i dotyka `recipes`, a B14 remapuje referencje
+  w payloadach — dwie migracje w równoległych worktree łamią zasadę „jedna
+  głowa po merge'u".
+- **Dwie bramki wykonawcze dołożone w R3**, które dotyczą każdej nowej tabeli
+  tego batcha: wpis licznika referencji do rodziny (jeśli tabela ma
+  `household_id` — `households.service.register_household_reference_finder`)
+  oraz `ForeignKey` W MODELU dla każdej kolumny, której constraint dopina
+  migracja (bramka dryfu `test_modele_nie_dryfuja_od_schematu_po_migracjach`).
+  Uwaga wprost dla tego batcha: `recipes.import_job_id` czeka na `import_jobs`
+  z B15 BEZ constraintu — migracja B15, która go dopina, MUSI w tym samym
+  commicie uzupełnić model `Recipe`, inaczej bramka dryfu zaświeci czerwono
+  (to dokładnie ten sam dług, który R3 domknął dla `pantry_items`).
 
 ## Implementation checklist
 
