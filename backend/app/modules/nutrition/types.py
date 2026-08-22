@@ -22,6 +22,7 @@ from app.modules.catalog.nutrition_adapter import ProductNutrition
 
 __all__ = [
     "DEFAULT_THRESHOLDS",
+    "GOAL_NUMERIC_FIELDS",
     "NUTRITION_NUMERIC_FIELDS",
     "NUTRITION_THRESHOLDS_KEY",
     "ZERO_VALUES",
@@ -41,6 +42,17 @@ NUTRITION_NUMERIC_FIELDS: tuple[str, ...] = (
     "fiber_g",
     "sugars_g",
     "glycemic_load",
+)
+
+
+#: Pola wyniku, które mają odpowiednik w celu użytkownika (`user_nutrition_goals`).
+#: Jedno źródło dla kafelków planu dnia i statusów statystyk (B13) — kolejność
+#: pól JEST kolejnością kafelków w UI.
+GOAL_NUMERIC_FIELDS: tuple[str, ...] = (
+    "kcal",
+    "protein_g",
+    "fat_g",
+    "carbs_g",
 )
 
 

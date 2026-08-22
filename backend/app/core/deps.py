@@ -27,6 +27,7 @@ from app.modules.households.service import HouseholdsService
 from app.modules.nutrition.service import GoalsService
 from app.modules.pantry.service import PantryService
 from app.modules.planning.service import PlanningService
+from app.modules.planning.stats_service import StatsService
 from app.modules.planning.templates_service import TemplatesService
 from app.modules.recipes.service import RecipesService
 from app.modules.shopping.lists_service import ShoppingListsService
@@ -94,6 +95,13 @@ def get_planning_service(
 ) -> PlanningService:
     """Serwis planu dnia: dni, posiłki, pozycje, rozkład rodzinny, kopiowanie."""
     return PlanningService(session)
+
+
+def get_stats_service(
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> StatsService:
+    """Serwis statystyk: agregaty dzienne z planu i celów (BATCH_13, tylko odczyt)."""
+    return StatsService(session)
 
 
 def get_templates_service(

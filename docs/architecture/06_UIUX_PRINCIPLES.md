@@ -83,6 +83,17 @@ przyciskową (mobile/dostępność).
    ważności; produkty bliskie przeterminowania wyróżnione.
 7. **Statystyki** — zakładki Kalorie/Makroskładniki; słupki stacked
    tydzień/zakres, linie celów; średnie dzienne vs cele.
+   Stan po BATCH_13: zakres jako presety **Tydzień / Miesiąc / Własny** (dwa
+   date-pickery, sufit 92 dni walidowany tak jak na serwerze); linia celu jest
+   **schodkowa** (cele historyczne — bez interpolacji), a dzień bez planu to
+   **luka** (przerywany obrys, „brak planu" w `aria-label`), nie zerowy słupek,
+   bo średnia dzieli się przez dni Z PLANEM. Zakładka makro dokłada legendę
+   składników i **średnią kroczącą (7 dni)** jako nakładkę w tej samej skali;
+   przy zakresie krótszym niż 7 dni w jej miejscu stoi zdanie wyjaśniające.
+   Podsumowanie to znane trio wartość/cel/delta + status słowny; przy dniu
+   z niepełnymi danymi dochodzi plakietka „Niepełne dane" z listą braków,
+   a zakres bez planu dostaje pusty stan z akcją „Przejdź do planu".
+   Wykresy ŁG świadomie NIE MA (ŁG jest w odpowiedzi API, ale nie w UI).
 8. **Edycja produktu** — formularz z kategorią, jednostkami, wartościami
    /100 g (+ IG), zdjęciem, datą ważności domyślną; sekcja przeliczników
    jednostek domowych. Stan po BATCH_09: dodatkowo sekcja **„Produkty

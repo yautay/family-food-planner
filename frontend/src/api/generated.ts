@@ -928,6 +928,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/stats/daily": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Agregaty dzienne zakresu: wartości, cel z dnia, statusy i średnie */
+        get: operations["daily_stats_api_v1_stats_daily_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/pantry": {
         parameters: {
             query?: never;
@@ -3448,6 +3465,103 @@ export interface components {
             items: components["schemas"]["ShoppingListSummaryRead"][];
             /** Total */
             total: number;
+        };
+        /**
+         * StatsAveragesRead
+         * @description Średnie dzienne zakresu — liczone WYŁĄCZNIE z dni z planem.
+         */
+        StatsAveragesRead: {
+            /** Kcal */
+            kcal: string;
+            /** Protein G */
+            protein_g: string;
+            /** Fat G */
+            fat_g: string;
+            /** Carbs G */
+            carbs_g: string;
+            /** Fiber G */
+            fiber_g: string;
+            /** Sugars G */
+            sugars_g: string;
+            /** Glycemic Load */
+            glycemic_load: string;
+            /** Complete */
+            complete: boolean;
+            /** Missing */
+            missing: string[];
+        };
+        /**
+         * StatsDailyResponse
+         * @description Odpowiedź `GET /stats/daily` (04_API §2).
+         */
+        StatsDailyResponse: {
+            /** Days */
+            days: components["schemas"]["StatsDayRead"][];
+            summary: components["schemas"]["StatsSummaryRead"];
+        };
+        /**
+         * StatsDayRead
+         * @description Jeden dzień zakresu. Brak planu to LUKA (`nutrition: null`), nie zero.
+         */
+        StatsDayRead: {
+            /**
+             * Day
+             * Format: date
+             */
+            day: string;
+            /** Has Plan */
+            has_plan: boolean;
+            nutrition: components["schemas"]["NutritionRead"] | null;
+            goal: components["schemas"]["StatsGoalRead"] | null;
+            status: components["schemas"]["StatsStatusRead"];
+        };
+        /**
+         * StatsGoalRead
+         * @description Cel obowiązujący W DANYM DNIU — cele są historyczne (02_DOMAIN §6).
+         *
+         *     `valid_from` jedzie do UI, bo linia celu na wykresie jest funkcją SCHODKOWĄ:
+         *     zmiana celu w środku zakresu ma być widoczna jako zmiana poziomu, a nie
+         *     wygładzona interpolacją.
+         */
+        StatsGoalRead: {
+            /** Kcal */
+            kcal: string;
+            /** Protein G */
+            protein_g: string | null;
+            /** Fat G */
+            fat_g: string | null;
+            /** Carbs G */
+            carbs_g: string | null;
+            /**
+             * Valid From
+             * Format: date
+             */
+            valid_from: string;
+        };
+        /**
+         * StatsStatusRead
+         * @description Statusy dnia per pole celu. `null` = brak celu albo brak planu.
+         *
+         *     Zbiór kluczy jest STAŁY (nie mapa `str -> status`), żeby wygenerowany typ
+         *     frontendu wiedział, jakie pola istnieją (05_FRONTEND §2).
+         */
+        StatsStatusRead: {
+            kcal: components["schemas"]["GoalStatus"] | null;
+            protein_g: components["schemas"]["GoalStatus"] | null;
+            fat_g: components["schemas"]["GoalStatus"] | null;
+            carbs_g: components["schemas"]["GoalStatus"] | null;
+        };
+        /**
+         * StatsSummaryRead
+         * @description Podsumowanie zakresu: średnie dzienne vs średnia celów dni z planem.
+         */
+        StatsSummaryRead: {
+            /** Days In Range */
+            days_in_range: number;
+            /** Days With Plan */
+            days_with_plan: number;
+            avg: components["schemas"]["StatsAveragesRead"] | null;
+            goal_progress: components["schemas"]["DayGoalProgressRead"];
         };
         /**
          * StoreCategoryOrderEntry
@@ -6915,6 +7029,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InstantiateResponse"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    daily_stats_api_v1_stats_daily_get: {
+        parameters: {
+            query: {
+                from: string;
+                to: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatsDailyResponse"];
                 };
             };
             /** @description Błąd */

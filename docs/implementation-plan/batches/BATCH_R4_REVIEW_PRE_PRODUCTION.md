@@ -92,6 +92,20 @@ Review batch sam jest procesem przeglądowym — SKILL-REVIEW/SKILL-SECREV uruch
       zakupowa, statystyki zakresu — tabela wyników w raporcie
 - [ ] Brak N+1 w żadnym z powyższych; indeksy używane (EXPLAIN wyrywkowo)
 
+### Spójność statystyk z planem dnia (ustalenie B13, 2026-08-22)
+
+- [ ] Ten sam dzień w `/plan-dnia` i w `/statystyki` pokazuje TE SAME
+      liczby (kcal do 1, makra do 0,1 g) — jedno źródło to silnik nutrition,
+      więc rozjazd znaczy, że któryś widok liczy po swojemu
+- [ ] Statusy w statystykach respektują progi z `users.ui_settings`
+      (D9, domyślnie 90–110%): zmiana progów w Ustawieniach zmienia status
+      w OBU widokach tak samo
+- [ ] Zmiana celu w środku zakresu: linia celu schodkowa, statusy dzienne
+      wg celu z dnia, `summary.goal_progress.*.target` = ŚREDNIA celów dni
+      z planem (nie „ostatni cel")
+- [ ] Dni bez planu pozostają lukami: `days_with_plan` jest dzielnikiem
+      średniej, a wykres nie rysuje dla nich słupka
+
 ### Backup logiczny i własność danych (moduł transfer)
 
 - [ ] Eksport → czysta instancja → import: odtwarza WSZYSTKO? (produkty,

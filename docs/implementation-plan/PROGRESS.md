@@ -23,7 +23,7 @@ commit wykonany). Kolumna „Blokery" = zależności + decyzje z 02_DECISIONS.
 | 11 SHOPPING_LISTS_AND_SHARING | [x] | — | `batch(11)` na master (hash wpisać po push) |
 | R3 REVIEW_SHOPPING | [x] | — | `batch(R3)` na master (hash wpisać po push) |
 | 12 PWA_AND_OFFLINE | [x] | — | `batch(12)` na master (hash wpisać po push) |
-| 13 STATISTICS | [ ] | — (R3 PASS) | |
+| 13 STATISTICS | [x] | — | `batch(13)` na master (hash wpisać po push) |
 | 14 IMPORT_EXPORT | [ ] | — (R3 PASS) | |
 | 15 PDF_IMPORT_EXTRACTION | [ ] | 05 (zalecane po R3) | |
 | 16 PDF_IMPORT_REVIEW_AND_AI | [ ] | 15, 04 | |
@@ -40,6 +40,61 @@ zmiany dotykające przyszłych batchy trzeba wpisać do ich kart
 (00_MASTER_PLAN §8); dziennik to indeks, nie schowek.
 
 ---
+
+**2026-08-22 — BATCH_13 (STATISTICS).** Jest strona `/statystyki` (widok 7):
+zakres **Tydzień / Miesiąc / Własny** (sufit 92 dni walidowany po obu stronach),
+zakładki **Kalorie** i **Makroskładniki**, słupki dni z **schodkową** linią celu,
+średnia krocząca 7 dni jako nakładka na słupkach makro oraz podsumowanie
+średnia/cel/delta/status. Dane liczy nowy, wyłącznie odczytowy endpoint
+`GET /api/v1/stats/daily?from=&to=` (moduł `planning`, serwis
+`stats_service.py`) — bez ani jednej kolumny cache w bazie (02_DOMAIN §13.2)
+i bez migracji (head nadal `0013` z B12).
+
+**Sześć rzeczy, o których muszą wiedzieć następne batche:**
+
+1. **`planning/stats_service.py` nie liczy nic sam.** Dni bierze przez
+   `PlanningService.list_days` (ten sam `ScopedQuery` i ta sama reguła
+   rozstrzygania dnia, co widok planu), cele przez `GoalsService.goals_of` +
+   `goal_for_day`, statusy przez `engine.goal_status`, a średnią przez
+   `aggregate` + `portion_nutrition` + `round_for_output`. Nowy widok liczący
+   cokolwiek żywieniowego reużywa tych wejść — drugiego zaokrąglania ani
+   drugiego filtra widoczności w tym pionie nie ma i nie ma powstać.
+2. **Kontrakt `/stats/daily`**: `days[]` ma element dla KAŻDEJ daty zakresu;
+   dzień bez planu to `has_plan: false`, `nutrition: null`, statusy `null`
+   (luka, nie zero). **Dzień istniejący, ale bez posiłków** (po R3 zostaje
+   tylko taki z tytułem) też liczy się jako brak planu. `summary.avg` jest
+   `null` przy zerze dni z planem, a `summary.goal_progress` używa
+   `DayGoalProgressRead`/`GoalMetricRead` — tego samego kształtu, co kafelki
+   planu dnia; `target` jest ŚREDNIĄ celów dni z planem, liczoną per pole.
+3. **`nutrition/types.py += GOAL_NUMERIC_FIELDS`** — jedno źródło listy pól,
+   które mają odpowiednik w celu użytkownika (`kcal`, `protein_g`, `fat_g`,
+   `carbs_g`). Nowe pole celu = wpis TUTAJ, nie czwarta lista w schematach.
+   (Dług: `planning/service.py::_GOAL_FIELDS` nadal ma własną kopię — scalić
+   przy R4.)
+4. **`BarChart` ma teraz DWA tryby celu**: `target` na całym wykresie = jedna
+   pozioma linia (tak używa go widok tygodnia z B07, bez zmian), `target` na
+   POJEDYNCZYM słupku = linia SCHODKOWA (dzień bez celu ją przerywa). Doszło
+   też `empty: true` (luka — przerywany obrys, dzień nie wchodzi do skali),
+   podmienialny `emptyText` i slot **`overlay`** udostępniający geometrię
+   (`width`, `height`, `scaleMax`).
+5. **`TrendLine` ma dwa tryby renderowania**: samodzielny (`<svg>` z własną
+   skalą) i nakładka (`frame` z geometrią rodzica ⇒ `<g>` bez własnego `<svg>`,
+   do slotu `overlay`). Wspólna skala jest warunkiem sensu wykresu; punkt
+   `null` PRZERYWA linię, a nie udaje zera.
+6. **`e2e/cleanup.ts` eksportuje teraz `csrfHeaders`** — spec statystyk seeduje
+   dane PRZEZ API (plan 3 dni + cel), bo klikanie planu sprawdzałoby plan, nie
+   statystyki. Cel żywieniowy należy do JEDNEGO konta E2E, więc spec ustawia
+   `valid_from` w oknie testowym (2031) i usuwa cel w `afterAll`; presety
+   „Tydzień"/„Miesiąc" liczą się od „dziś", więc dane z lat 2030+ oglądamy
+   zakresem WŁASNYM.
+
+Ustalenia propagowane do kart: **B14** (round-trip celów — eksport musi
+zachować CAŁĄ historię `user_nutrition_goals` z `valid_from`, inaczej statusy
+dni sprzed zmiany celu po cichu się przepiszą; plus `app/main.py` ma już wpis
+routera statystyk) i **R4** (nowa sekcja audytu „Spójność statystyk z planem
+dnia": te same liczby w obu widokach, progi z `ui_settings`, cel schodkowy,
+luki jako dzielnik). 02_DECISIONS bez zmian — batch nie miał bramki i nie
+potrzebował nowej decyzji.
 
 **2026-08-22 — BATCH_12 (PWA_AND_OFFLINE).** Aplikacja jest instalowalną PWA
 (manifest PL, komplet ikon PNG 192/512 `any`+`maskable`, `apple-touch-icon`,

@@ -2,12 +2,12 @@ import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 
 import AppShell from '@/layouts/AppShell.vue'
 import LoginPage from '@/pages/LoginPage.vue'
-import PlaceholderPage from '@/pages/PlaceholderPage.vue'
 import { useAuthStore } from '@/stores/auth'
 
 /**
- * Mapa tras wg 05_FRONTEND §3. Sekcje domenowe pokazują na razie
- * `PlaceholderPage` — kolejne batche podmieniają wyłącznie `component`.
+ * Mapa tras wg 05_FRONTEND §3. Batch domenowy podmieniał `component`
+ * istniejącego wpisu (nigdy nie dokładał pozycji nawigacji); od BATCH_13
+ * każda trasa ma już własną stronę, więc `PlaceholderPage` nie jest tu używany.
  *
  * `meta.public` = trasa LOGOWANIA (dostępna bez sesji, ale zalogowany jest z niej
  * odsyłany), `meta.anonymous` = trasa dostępna dla KAŻDEGO — zalogowanego też,
@@ -109,7 +109,7 @@ export const routes: RouteRecordRaw[] = [
       {
         path: 'statystyki',
         name: 'statystyki',
-        component: PlaceholderPage,
+        component: () => import('@/pages/StatystykiPage.vue'),
         meta: { title: 'Statystyki' },
       },
       {

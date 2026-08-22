@@ -63,6 +63,9 @@ U      /plan/items/{id}/fit-to-target      — PROPOZYCJA mnożnika (nic nie zap
 U      /plan/copy                          — {source, target(s), what: day|meal|block}
                                              block: {source_from, source_days,
                                              repeat_each, target_start} — model 2+2+2
+U      /stats/daily?from=&to=              — agregaty dzienne: wartości, cel
+                                             z dnia, statusy + średnie zakresu
+                                             (max 92 dni; nic nie cache'owane)
 U      /templates/days /templates/weeks    — CRUD + POST {id}/instantiate
 U      /cycles                             — CRUD + POST {id}/apply (rotacja A→B→C)
 U      /pantry                             — CRUD pozycji, filtr ważności
@@ -121,6 +124,27 @@ Dzień planu NIE jest zasobem tworzonym i usuwanym wprost:
   `household_id` z FK RESTRICT i blokował usunięcie rodziny (dług U17 z R2),
 - `DELETE /plan/days/{date}` świadomie **nie istnieje**: nie ma go co usuwać
   poza tytułem, a ten zdejmuje `PUT` z `title: null`.
+
+### Statystyki dzienne (`GET /stats/daily`, stan faktyczny BATCH_13)
+
+Endpoint jest w module `planning`, bo agregaty są POCHODNĄ planu i celów —
+w bazie nie ma i nie będzie ani jednej kolumny z wynikiem (niezmiennik
+02_DOMAIN §13.2). Kontrakt odpowiedzi:
+
+- `days[]` ma element dla KAŻDEJ daty zakresu. Dzień bez planu to **luka**:
+  `has_plan: false`, `nutrition: null`, wszystkie `status` na `null`. Zero kcal
+  byłoby inną informacją („zjadł nic") i zaniżałoby średnią.
+- **Dzień istniejący, ale bez posiłków** (po ustaleniu R3 zostaje w bazie tylko
+  dzień z tytułem) liczy się jako brak planu — nie ma z czego policzyć wartości.
+- `days[].goal` to cel z NAJWIĘKSZYM `valid_from <= day` razem z tą datą; UI
+  rysuje z tego funkcję schodkową i niczego nie interpoluje.
+- `summary.avg` to średnia dzienna z dni Z PLANEM (`days_with_plan` jako
+  dzielnik) albo `null`, gdy takich dni nie ma. `summary.goal_progress` używa
+  tego samego schematu `GoalMetricRead`, co kafelki planu dnia: `target` jest
+  ŚREDNIĄ celów dni z planem (cel mógł się zmienić w środku zakresu), liczoną
+  per pole tylko z dni, które cel tego pola miały.
+- Zakres: `from <= to`, maksimum **92 dni**; przekroczenie to 422
+  `validation_error`. Endpoint jest read-only, więc GET nie potrzebuje CSRF.
 
 ## 3. Zasady autoryzacji w API
 

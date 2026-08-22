@@ -16,12 +16,18 @@ odczycie pojedynczego szablonu (i przy eksporcie w B14).
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, status
 
-from app.core.deps import CurrentUser, get_planning_service, get_templates_service
+from app.core.deps import (
+    CurrentUser,
+    get_planning_service,
+    get_stats_service,
+    get_templates_service,
+)
 from app.core.scope import Scope
 from app.core.uploads import image_urls
 from app.modules.nutrition.schemas import GoalMetricRead, nutrition_read
@@ -50,13 +56,27 @@ from app.modules.planning.schemas import (
     PlanDayUpsertRequest,
     PlanItemRead,
     PlanServingSplitRead,
+    StatsAveragesRead,
+    StatsDailyResponse,
+    StatsDayRead,
+    StatsGoalRead,
+    StatsStatusRead,
+    StatsSummaryRead,
     TemplateListResponse,
     TemplateSummaryRead,
     WeekTemplatePayload,
     WeekTemplateReadFull,
     WeekTemplateWriteRequest,
 )
-from app.modules.planning.service import DayView, FitProposal, ItemView, MealView, PlanningService
+from app.modules.planning.service import (
+    DayView,
+    FitProposal,
+    GoalMetric,
+    ItemView,
+    MealView,
+    PlanningService,
+)
+from app.modules.planning.stats_service import DailyStats, DayStat, StatsService
 from app.modules.planning.templates_service import (
     CycleView,
     InstantiateResult,
@@ -67,6 +87,7 @@ from app.modules.planning.templates_service import (
 
 ServiceDep = Annotated[PlanningService, Depends(get_planning_service)]
 TemplatesDep = Annotated[TemplatesService, Depends(get_templates_service)]
+StatsDep = Annotated[StatsService, Depends(get_stats_service)]
 
 
 def _thumb_url(photo_path: str | None) -> str | None:
@@ -113,15 +134,6 @@ def _to_meal(view: MealView) -> MealRead:
 
 def _to_day(view: DayView) -> DayRead:
     entity = view.entity
-    progress = {
-        field: GoalMetricRead(
-            value=metric.value,
-            target=metric.target,
-            delta=metric.delta,
-            status=metric.status,
-        )
-        for field, metric in view.progress.items()
-    }
     return DayRead(
         id=None if entity is None else entity.id,
         day=view.day,
@@ -132,7 +144,7 @@ def _to_day(view: DayView) -> DayRead:
         owner_user_id=None if entity is None else entity.owner_user_id,
         meals=[_to_meal(meal) for meal in view.meals],
         nutrition=nutrition_read(view.nutrition),
-        goal_progress=DayGoalProgressRead(**progress),
+        goal_progress=_to_goal_progress(view.progress),
         goal_valid_from=None if view.goal is None else view.goal.valid_from,
         created_at=None if entity is None else entity.created_at,
         updated_at=None if entity is None else entity.updated_at,
@@ -304,6 +316,98 @@ def build_plan_router() -> APIRouter:
             else await service.copy(user=user, payload=payload)
         )
         return DaysResponse(items=[_to_day(view) for view in views], total=len(views))
+
+    return router
+
+
+# --- statystyki (BATCH_13) ----------------------------------------------------------
+
+
+def _to_goal_progress(progress: Mapping[str, GoalMetric]) -> DayGoalProgressRead:
+    """Słownik kafelków z serwisu → schemat czterech kafelków (jedno mapowanie)."""
+    return DayGoalProgressRead(
+        **{
+            field: GoalMetricRead(
+                value=metric.value,
+                target=metric.target,
+                delta=metric.delta,
+                status=metric.status,
+            )
+            for field, metric in progress.items()
+        }
+    )
+
+
+def _to_stats_day(stat: DayStat) -> StatsDayRead:
+    goal = stat.goal
+    return StatsDayRead(
+        day=stat.day,
+        has_plan=stat.has_plan,
+        # `None` zostaje `None`: dzień bez planu to luka, nie zerowe wartości.
+        nutrition=None if stat.nutrition is None else nutrition_read(stat.nutrition),
+        goal=(
+            None
+            if goal is None
+            else StatsGoalRead(
+                kcal=goal.kcal,
+                protein_g=goal.protein_g,
+                fat_g=goal.fat_g,
+                carbs_g=goal.carbs_g,
+                valid_from=goal.valid_from,
+            )
+        ),
+        status=StatsStatusRead(**stat.status),
+    )
+
+
+def _to_stats(stats: DailyStats) -> StatsDailyResponse:
+    summary = stats.summary
+    avg = summary.avg
+    return StatsDailyResponse(
+        days=[_to_stats_day(stat) for stat in stats.days],
+        summary=StatsSummaryRead(
+            days_in_range=summary.days_in_range,
+            days_with_plan=summary.days_with_plan,
+            avg=(
+                None
+                if avg is None
+                else StatsAveragesRead(
+                    kcal=avg.kcal,
+                    protein_g=avg.protein_g,
+                    fat_g=avg.fat_g,
+                    carbs_g=avg.carbs_g,
+                    fiber_g=avg.fiber_g,
+                    sugars_g=avg.sugars_g,
+                    glycemic_load=avg.glycemic_load,
+                    complete=avg.complete,
+                    missing=list(avg.missing),
+                )
+            ),
+            goal_progress=_to_goal_progress(summary.progress),
+        ),
+    )
+
+
+def build_stats_router() -> APIRouter:
+    """Router `/stats` — agregaty dzienne widoku Statystyki (04_API §2).
+
+    Wyłącznie odczyt: nic tu nie powstaje ani nie jest cache'owane w bazie
+    (niezmiennik 02_DOMAIN §13.2), więc router nie ma metod mutujących.
+    """
+    router = APIRouter(prefix="/stats", tags=["planning"])
+
+    @router.get(
+        "/daily",
+        response_model=StatsDailyResponse,
+        summary="Agregaty dzienne zakresu: wartości, cel z dnia, statusy i średnie",
+    )
+    async def daily_stats(
+        user: CurrentUser,
+        service: StatsDep,
+        date_from: Annotated[date, Query(alias="from")],
+        date_to: Annotated[date, Query(alias="to")],
+    ) -> StatsDailyResponse:
+        return _to_stats(await service.daily(user, date_from=date_from, date_to=date_to))
 
     return router
 

@@ -45,9 +45,12 @@ interface NamedRow {
  * Nagłówek CSRF przepisany z cookie zapisanego przez `auth.setup.ts`.
  *
  * Backend wymaga double-submit dla każdej mutacji (07_SECURITY §3), więc bez
- * tego nagłówka sprzątanie dostawałoby 403 i cicho nic nie robiło.
+ * tego nagłówka sprzątanie dostawałoby 403 i cicho nic nie robiło. Eksportowana,
+ * bo spec, który SEEDUJE dane przez API (statystyki), potrzebuje dokładnie tego
+ * samego nagłówka — dwie kopie tej funkcji rozjechałyby się przy pierwszej
+ * zmianie nazwy cookie.
  */
-async function csrfHeaders(request: APIRequestContext): Promise<Record<string, string>> {
+export async function csrfHeaders(request: APIRequestContext): Promise<Record<string, string>> {
   const state = await request.storageState()
   const token = state.cookies.find((cookie) => cookie.name === CSRF_COOKIE)?.value
   if (!token) {

@@ -378,6 +378,53 @@ export const goals = {
   thresholdsPreview: 'Podgląd: 1800 kcal przy celu 2000 kcal to',
 } as const
 
+/**
+ * Statystyki (widok 7, 06_UIUX §4.7).
+ *
+ * Komunikaty mówią, CZEGO nie ma, a nie tylko „brak danych": użytkownik ma
+ * wiedzieć, czy patrzy na pustą kartkę, czy na dane policzone z niepełnych
+ * wartości produktów.
+ */
+export const stats = {
+  title: 'Statystyki',
+  subtitle: 'Kalorie i makroskładniki dni z planu wobec Twoich celów.',
+  rangeLabel: 'Zakres',
+  presetWeek: 'Tydzień',
+  presetMonth: 'Miesiąc',
+  presetCustom: 'Własny',
+  rangeFrom: 'Od',
+  rangeTo: 'Do',
+  rangeReversed: 'Data „od" nie może być późniejsza niż data „do".',
+  rangeIncomplete: 'Podaj obie daty zakresu.',
+  rangeFix: 'Popraw zakres dat, żeby zobaczyć statystyki.',
+  rangeTooLong: (days: number) => `Zakres może obejmować maksymalnie ${days} dni.`,
+  rangeSummary: (from: string, to: string) => `${from} – ${to}`,
+  tabKcal: 'Kalorie',
+  tabMacros: 'Makroskładniki',
+  chartKcal: 'Kalorie dnia wobec celu',
+  chartMacros: 'Makroskładniki dnia (białko, tłuszcze, węglowodany)',
+  trendTitle: 'Średnia krocząca (7 dni)',
+  trendHint:
+    'Linia pokazuje średnią z siedmiu ostatnich dni z planem — wygładza pojedyncze odstępstwa.',
+  trendTooShort: 'Średnia krocząca pojawia się dla zakresu od 7 dni.',
+  summaryTitle: 'Średnia dzienna',
+  summaryDays: (withPlan: number, inRange: number) =>
+    `${withPlan} z ${inRange} dni ma plan — średnie liczymy tylko z nich.`,
+  noTarget: 'brak celu',
+  gapLegend: 'Dni bez planu są lukami — nie zaniżają średniej.',
+  incompleteBadge: 'Niepełne dane',
+  incompleteTooltip: (missing: string) =>
+    `Wartości liczone z dostępnych danych. Brakuje: ${missing}`,
+  emptyTitle: 'Brak zaplanowanych dni w tym zakresie',
+  emptyHint: 'Zaplanuj posiłki, żeby zobaczyć kalorie i makroskładniki.',
+  emptyAction: 'Przejdź do planu',
+  goalsMissing:
+    'Nie masz jeszcze celu żywieniowego. Ustaw go w ustawieniach, żeby widzieć statusy.',
+  macroProtein: 'Białko',
+  macroFat: 'Tłuszcze',
+  macroCarbs: 'Węglowodany',
+} as const
+
 export const productPicker = {
   label: 'Produkt',
   placeholder: 'Wpisz nazwę produktu…',

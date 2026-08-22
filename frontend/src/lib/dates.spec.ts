@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { addDays, startOfWeek, weekDayLabel } from './dates'
+import { addDays, endOfMonth, startOfMonth, startOfWeek, weekDayLabel } from './dates'
 
 /**
  * Daty planu są kalendarzowe, więc arytmetyka nie może zależeć od strefy
@@ -41,5 +41,22 @@ describe('weekDayLabel', () => {
     expect(weekDayLabel('2026-08-17')).toBe('pon')
     expect(weekDayLabel('2026-08-22')).toBe('sob')
     expect(weekDayLabel('2026-08-23')).toBe('nd')
+  })
+})
+
+describe('startOfMonth i endOfMonth', () => {
+  it('preset „Miesiąc" obejmuje cały miesiąc daty', () => {
+    expect(startOfMonth('2026-08-17')).toBe('2026-08-01')
+    expect(endOfMonth('2026-08-17')).toBe('2026-08-31')
+  })
+
+  it('zna krótkie miesiące i luty roku przestępnego', () => {
+    expect(endOfMonth('2026-04-10')).toBe('2026-04-30')
+    expect(endOfMonth('2026-02-10')).toBe('2026-02-28')
+    expect(endOfMonth('2028-02-01')).toBe('2028-02-29')
+  })
+
+  it('grudzień kończy się przed przejściem na nowy rok', () => {
+    expect(endOfMonth('2026-12-05')).toBe('2026-12-31')
   })
 })

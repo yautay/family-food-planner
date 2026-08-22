@@ -119,6 +119,128 @@ describe('BarChart', () => {
     )
   })
 
+  it('rysuje linię celu SCHODKOWO, gdy cel zmienia się w środku zakresu', () => {
+    // Cele są historyczne (02_DOMAIN §6): zmiana celu ma być widoczna jako
+    // zmiana poziomu linii, nie jako wygładzone przejście.
+    const wrapper = mount(BarChart, {
+      props: {
+        data: [
+          { ...day('pon', '1000'), target: '2000' },
+          { ...day('wt', '1000'), target: '2000' },
+          { ...day('sr', '1000'), target: '1000' },
+        ],
+      },
+    })
+
+    const levels = wrapper.get('[data-testid="bar-chart-target-step-0"]').attributes('data-levels')
+    // Skala to 2000 (najwyższy cel): cel 2000 → y=0, cel 1000 → y=50.
+    expect(levels).toBe('0,0,50')
+    // Wspólnej, poziomej linii celu wtedy nie ma — byłaby drugą, sprzeczną informacją.
+    expect(wrapper.find('[data-testid="bar-chart-target-line"]').exists()).toBe(false)
+  })
+
+  it('przerywa linię celu na dniu bez celu, zamiast ciągnąć ostatni poziom', () => {
+    const wrapper = mount(BarChart, {
+      props: {
+        data: [
+          { ...day('pon', '1000'), target: '2000' },
+          { ...day('wt', '1000'), target: null },
+          { ...day('sr', '1000'), target: '2000' },
+        ],
+      },
+    })
+
+    expect(wrapper.findAll('[data-testid^="bar-chart-target-step-"]')).toHaveLength(2)
+  })
+
+  it('dzień bez planu jest luką: obrys zamiast słupka, nie zerowa wartość', () => {
+    const wrapper = mount(BarChart, {
+      props: {
+        data: [day('pon', '2000'), { ...day('wt', '0'), empty: true }],
+      },
+    })
+
+    expect(wrapper.find('[data-testid="bar-chart-gap-wt"]').exists()).toBe(true)
+    // Segmentu wartości dla luki nie ma w ogóle — zero i „brak planu" to nie to samo.
+    expect(wrapper.find('[data-testid="bar-chart-bar-wt-kcal"]').exists()).toBe(false)
+    expect(wrapper.get('[role="img"]').attributes('aria-label')).toContain('wt brak planu')
+  })
+
+  it('luka nie wchodzi do skali i nie zmienia wysokości pozostałych słupków', () => {
+    const wrapper = mount(BarChart, {
+      props: { data: [day('pon', '2000'), { ...day('wt', '9999'), empty: true }] },
+    })
+
+    expect(wrapper.get('[data-testid="bar-chart-bar-pon-kcal"]').attributes('data-height')).toBe(
+      '100',
+    )
+  })
+
+  it('udostępnia slot nakładki w układzie współrzędnych słupków', () => {
+    // Na tym stoi wspólna skala trendu i słupków (B13) — bez geometrii ze slotu
+    // nakładka miałaby własną skalę i porównanie byłoby złudzeniem.
+    const wrapper = mount(BarChart, {
+      props: { data: [day('pon', '1000')], target: '2000' },
+      slots: {
+        overlay: `<template #overlay="{ width, height, scaleMax }">
+          <text data-testid="overlay-probe" :data-geometry="[width, height, scaleMax].join('/')" />
+        </template>`,
+      },
+    })
+
+    expect(wrapper.get('[data-testid="overlay-probe"]').attributes('data-geometry')).toBe(
+      '14/100/2000',
+    )
+  })
+
+  it('id słupka rozdziela dni o tej samej etykiecie (zakres dłuższy niż miesiąc)', () => {
+    // W zakresie 92-dniowym „05" wraca trzy razy; bez `id` powstałyby
+    // zduplikowane `data-testid` i strict mode Playwrighta by na nich padł.
+    const wrapper = mount(BarChart, {
+      props: {
+        data: [
+          { ...day('05', '1000'), id: '2026-05-05' },
+          { ...day('05', '2000'), id: '2026-06-05' },
+        ],
+      },
+    })
+
+    expect(
+      wrapper.get('[data-testid="bar-chart-bar-2026-05-05-kcal"]').attributes('data-height'),
+    ).toBe('50')
+    expect(
+      wrapper.get('[data-testid="bar-chart-bar-2026-06-05-kcal"]').attributes('data-height'),
+    ).toBe('100')
+  })
+
+  it('w trybie schodkowym aria-label podaje cel PRZY KAŻDYM dniu', () => {
+    // Wspólnej linii celu nie ma, więc bez tego czytnik ekranu nie usłyszałby
+    // celu w ogóle — a cel jest tu różny dla różnych dni.
+    const wrapper = mount(BarChart, {
+      props: {
+        data: [
+          { ...day('pon', '1800'), target: '2000', title: 'poniedziałek 17.08' },
+          { ...day('wt', '1900'), target: '2400' },
+        ],
+        unit: 'kcal',
+      },
+    })
+
+    const label = wrapper.get('[role="img"]').attributes('aria-label') ?? ''
+    expect(label).toContain('poniedziałek 17.08 1800 kcal (cel 2000 kcal)')
+    expect(label).toContain('wt 1900 kcal (cel 2400 kcal)')
+  })
+
+  it('komunikat pustego wykresu da się podmienić na tekst strony', () => {
+    const wrapper = mount(BarChart, {
+      props: { data: [day('pon', '0')], emptyText: 'Brak zaplanowanych dni w tym zakresie.' },
+    })
+
+    expect(wrapper.get('[data-testid="bar-chart-empty"]').text()).toBe(
+      'Brak zaplanowanych dni w tym zakresie.',
+    )
+  })
+
   it('wyróżnia wskazany dzień w etykietach', () => {
     const wrapper = mount(BarChart, {
       props: { data: [{ ...day('pon', '1000'), highlighted: true }, day('wt', '1000')] },

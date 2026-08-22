@@ -4229,6 +4229,59 @@
         }
       }
     },
+    "/api/v1/stats/daily": {
+      "get": {
+        "tags": [
+          "planning"
+        ],
+        "summary": "Agregaty dzienne zakresu: wartości, cel z dnia, statusy i średnie",
+        "operationId": "daily_stats_api_v1_stats_daily_get",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "From"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "To"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatsDailyResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/pantry": {
       "get": {
         "tags": [
@@ -11422,6 +11475,273 @@
           "total"
         ],
         "title": "ShoppingListsResponse"
+      },
+      "StatsAveragesRead": {
+        "properties": {
+          "kcal": {
+            "type": "string",
+            "title": "Kcal"
+          },
+          "protein_g": {
+            "type": "string",
+            "title": "Protein G"
+          },
+          "fat_g": {
+            "type": "string",
+            "title": "Fat G"
+          },
+          "carbs_g": {
+            "type": "string",
+            "title": "Carbs G"
+          },
+          "fiber_g": {
+            "type": "string",
+            "title": "Fiber G"
+          },
+          "sugars_g": {
+            "type": "string",
+            "title": "Sugars G"
+          },
+          "glycemic_load": {
+            "type": "string",
+            "title": "Glycemic Load"
+          },
+          "complete": {
+            "type": "boolean",
+            "title": "Complete"
+          },
+          "missing": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Missing"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kcal",
+          "protein_g",
+          "fat_g",
+          "carbs_g",
+          "fiber_g",
+          "sugars_g",
+          "glycemic_load",
+          "complete",
+          "missing"
+        ],
+        "title": "StatsAveragesRead",
+        "description": "Średnie dzienne zakresu — liczone WYŁĄCZNIE z dni z planem."
+      },
+      "StatsDailyResponse": {
+        "properties": {
+          "days": {
+            "items": {
+              "$ref": "#/components/schemas/StatsDayRead"
+            },
+            "type": "array",
+            "title": "Days"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/StatsSummaryRead"
+          }
+        },
+        "type": "object",
+        "required": [
+          "days",
+          "summary"
+        ],
+        "title": "StatsDailyResponse",
+        "description": "Odpowiedź `GET /stats/daily` (04_API §2)."
+      },
+      "StatsDayRead": {
+        "properties": {
+          "day": {
+            "type": "string",
+            "format": "date",
+            "title": "Day"
+          },
+          "has_plan": {
+            "type": "boolean",
+            "title": "Has Plan"
+          },
+          "nutrition": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NutritionRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "goal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StatsGoalRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/StatsStatusRead"
+          }
+        },
+        "type": "object",
+        "required": [
+          "day",
+          "has_plan",
+          "nutrition",
+          "goal",
+          "status"
+        ],
+        "title": "StatsDayRead",
+        "description": "Jeden dzień zakresu. Brak planu to LUKA (`nutrition: null`), nie zero."
+      },
+      "StatsGoalRead": {
+        "properties": {
+          "kcal": {
+            "type": "string",
+            "title": "Kcal"
+          },
+          "protein_g": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Protein G"
+          },
+          "fat_g": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fat G"
+          },
+          "carbs_g": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Carbs G"
+          },
+          "valid_from": {
+            "type": "string",
+            "format": "date",
+            "title": "Valid From"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kcal",
+          "protein_g",
+          "fat_g",
+          "carbs_g",
+          "valid_from"
+        ],
+        "title": "StatsGoalRead",
+        "description": "Cel obowiązujący W DANYM DNIU — cele są historyczne (02_DOMAIN §6).\n\n`valid_from` jedzie do UI, bo linia celu na wykresie jest funkcją SCHODKOWĄ:\nzmiana celu w środku zakresu ma być widoczna jako zmiana poziomu, a nie\nwygładzona interpolacją."
+      },
+      "StatsStatusRead": {
+        "properties": {
+          "kcal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GoalStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "protein_g": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GoalStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "fat_g": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GoalStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "carbs_g": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GoalStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "kcal",
+          "protein_g",
+          "fat_g",
+          "carbs_g"
+        ],
+        "title": "StatsStatusRead",
+        "description": "Statusy dnia per pole celu. `null` = brak celu albo brak planu.\n\nZbiór kluczy jest STAŁY (nie mapa `str -> status`), żeby wygenerowany typ\nfrontendu wiedział, jakie pola istnieją (05_FRONTEND §2)."
+      },
+      "StatsSummaryRead": {
+        "properties": {
+          "days_in_range": {
+            "type": "integer",
+            "title": "Days In Range"
+          },
+          "days_with_plan": {
+            "type": "integer",
+            "title": "Days With Plan"
+          },
+          "avg": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StatsAveragesRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "goal_progress": {
+            "$ref": "#/components/schemas/DayGoalProgressRead"
+          }
+        },
+        "type": "object",
+        "required": [
+          "days_in_range",
+          "days_with_plan",
+          "avg",
+          "goal_progress"
+        ],
+        "title": "StatsSummaryRead",
+        "description": "Podsumowanie zakresu: średnie dzienne vs średnia celów dni z planem."
       },
       "StoreCategoryOrderEntry": {
         "properties": {

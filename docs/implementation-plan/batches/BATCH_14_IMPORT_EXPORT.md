@@ -292,10 +292,21 @@ diffie przed commitem (krok 11).
      musi dołożyć też jej licznik.
 - **Kolizje równoległości (B12 ∥ B13 ∥ B14)**: wspólne pliki —
   `frontend/package.json`/lockfile, `src/api/queryKeys.ts`,
-  `backend/app/main.py` (rejestracja routera — B12/B13 nie dodają
-  routerów, więc realny konflikt mało prawdopodobny; przy merge unia).
-  B14 NIE dotyka `vite.config.ts`/`src/lib/offline/*` (B12) ani
-  `StatystykiPage`/charts (B13) ani modułów shopping/planning.
+  `backend/app/main.py` (rejestracja routera — **B13 JEDNAK dodał router**
+  `build_stats_router()` w `app/main.py`, a B12 nie; przy merge unia obu
+  wpisów), `docs/architecture/04_API_DESIGN.md` (B13 dopisał `/stats/daily`
+  do mapy zasobów i sekcję „Statystyki dzienne" — konflikt dokumentacyjny,
+  rozwiązywany unią). B14 NIE dotyka `vite.config.ts`/`src/lib/offline/*`
+  (B12) ani `StatystykiPage`/charts (B13) ani modułów shopping/planning.
+- **Round-trip celów a statystyki (ustalenie B13, 2026-08-22)**: `GET
+  /stats/daily` czyta cele przez `nutrition/service.goals_of` i wybiera cel
+  dnia po `valid_from`, więc po imporcie na CZYSTEJ bazie widok Statystyki
+  musi działać bez żadnej zmiany w B13 — pod warunkiem, że eksport zachowuje
+  **całą historię** `user_nutrition_goals` (nie tylko cel bieżący) razem
+  z datami `valid_from`. Utrata historii nie wysypie API, tylko po cichu
+  przepisze statusy dni sprzed zmiany celu — dlatego wart osobnej asercji
+  w teście round-trip (cel z dwiema datami ⇒ dwa różne cele dzienne po
+  imporcie).
 - **B15/B16 (importer PDF)**: encje stagingu (`import_jobs`, `staged_*`)
   NIE wchodzą do eksportu v1 (staging to nie dane domenowe); przepisy
   `source=pdf_import` eksportują się normalnie, ale `import_job_id`

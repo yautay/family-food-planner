@@ -76,6 +76,11 @@ export const queryKeys = {
   goals: {
     all: ['goals'] as const,
   },
+  stats: {
+    all: ['stats'] as const,
+    /** Zakres jest CZĘŚCIĄ klucza: zmiana presetu to refetch, nie filtr w pamięci. */
+    daily: (from: string, to: string) => ['stats', 'daily', from, to] as const,
+  },
   templates: {
     all: ['templates'] as const,
     days: ['templates', 'days'] as const,

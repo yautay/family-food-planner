@@ -39,6 +39,7 @@ from app.modules.pantry.router import build_pantry_router
 from app.modules.planning.router import (
     build_cycles_router,
     build_plan_router,
+    build_stats_router,
     build_templates_router,
 )
 from app.modules.recipes.router import build_recipes_router, build_tags_router
@@ -136,6 +137,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(build_plan_router(), prefix=API_V1_PREFIX)
     app.include_router(build_templates_router(), prefix=API_V1_PREFIX)
     app.include_router(build_cycles_router(), prefix=API_V1_PREFIX)
+    app.include_router(build_stats_router(), prefix=API_V1_PREFIX)
     app.include_router(build_pantry_router(), prefix=API_V1_PREFIX)
     app.include_router(build_shopping_router(), prefix=API_V1_PREFIX)
     app.include_router(build_shopping_lists_router(), prefix=API_V1_PREFIX)

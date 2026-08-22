@@ -38,7 +38,10 @@ odpowiedzi API nie piszemy.
 /zakupy/listy/:id     ListaZakupowPage    (widok 5; wariant print) — DOSTARCZONE
                         w B11: sekcje per kategoria wg profilu sklepu, checkboxy
                         48 px z optimistic update, udostępnianie, druk
-/statystyki           StatystykiPage      (widok 7)
+/statystyki           StatystykiPage      (widok 7) — DOSTARCZONE w B13:
+                        zakres tydzień/miesiąc/własny (max 92 dni), zakładki
+                        Kalorie/Makroskładniki, luki dni bez planu, średnia
+                        dzienna vs średnia celów ze statusem
 /ustawienia           UstawieniaPage      (cele, profile rodziny, sklepy, konto)
 /admin/*              AdminPage (użytkownicy, rodziny, weryfikacja produktów,
                       audit, import/eksport)
@@ -104,7 +107,19 @@ Stan faktyczny po BATCH_11 — trzy rzeczy, które wiążą kolejne trasy public
     (duży checkbox ≥44px), `LeftoverBadge` („Zostanie: 150 g").
   - `AmountInput` — ilość + jednostka, walidacja dziesiętna z przecinkiem.
 - Wykresy: `src/components/charts/*` — własne SVG (ADR-013): `BarChart`
-  (słupki tygodnia), `DonutChart` (makro), `TrendLine` (statystyki).
+  (słupki dni), `NutritionBar`, `DonutChart` (makro), `TrendLine` (statystyki).
+  Stan faktyczny po BATCH_13 — dwa kontrakty, na których stoi widok statystyk:
+  - `BarChart` przyjmuje cel dwojako: `target` na CAŁYM wykresie (jedna pozioma
+    linia) albo `target` na POJEDYNCZYM słupku, co przełącza wykres na linię
+    SCHODKOWĄ (cele są historyczne, więc zmiana celu w środku zakresu musi być
+    widoczna jako zmiana poziomu). Dzień bez planu podaje się jako
+    `empty: true` — komponent rysuje wtedy przerywany obrys i nie wlicza dnia do
+    skali, bo luka to nie zero. Slot `overlay` udostępnia geometrię wykresu
+    (`width`, `height`, `scaleMax`) nakładkom.
+  - `TrendLine` ma dwa tryby: samodzielny (`<svg>` z własną skalą) i nakładkę
+    (`frame` z geometrią rodzica ⇒ `<g>` bez własnego `<svg>`), używaną w slocie
+    `overlay`. Wspólna skala jest tu warunkiem sensu: dwie skale dałyby wykres,
+    który da się porównać tylko na oko. Punkt `null` PRZERYWA linię.
 
 ## 5. Formularze i walidacja
 

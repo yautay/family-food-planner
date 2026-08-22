@@ -55,6 +55,12 @@ __all__ = [
     "PlanItemRead",
     "PlanServingSplitInput",
     "PlanServingSplitRead",
+    "StatsAveragesRead",
+    "StatsDailyResponse",
+    "StatsDayRead",
+    "StatsGoalRead",
+    "StatsStatusRead",
+    "StatsSummaryRead",
     "TemplateItemPayload",
     "TemplateListResponse",
     "TemplateMealPayload",
@@ -256,6 +262,81 @@ class DaysResponse(BaseModel):
 
     items: list[DayRead]
     total: int
+
+
+# --- statystyki (BATCH_13) ----------------------------------------------------------
+
+
+class StatsGoalRead(BaseModel):
+    """Cel obowiązujący W DANYM DNIU — cele są historyczne (02_DOMAIN §6).
+
+    `valid_from` jedzie do UI, bo linia celu na wykresie jest funkcją SCHODKOWĄ:
+    zmiana celu w środku zakresu ma być widoczna jako zmiana poziomu, a nie
+    wygładzona interpolacją.
+    """
+
+    kcal: DecimalString
+    protein_g: DecimalString | None
+    fat_g: DecimalString | None
+    carbs_g: DecimalString | None
+    valid_from: date
+
+
+class StatsStatusRead(BaseModel):
+    """Statusy dnia per pole celu. `null` = brak celu albo brak planu.
+
+    Zbiór kluczy jest STAŁY (nie mapa `str -> status`), żeby wygenerowany typ
+    frontendu wiedział, jakie pola istnieją (05_FRONTEND §2).
+    """
+
+    kcal: GoalStatus | None
+    protein_g: GoalStatus | None
+    fat_g: GoalStatus | None
+    carbs_g: GoalStatus | None
+
+
+class StatsAveragesRead(BaseModel):
+    """Średnie dzienne zakresu — liczone WYŁĄCZNIE z dni z planem."""
+
+    kcal: DecimalString
+    protein_g: DecimalString
+    fat_g: DecimalString
+    carbs_g: DecimalString
+    fiber_g: DecimalString
+    sugars_g: DecimalString
+    glycemic_load: DecimalString
+    #: `false`, gdy w zakresie był dzień z niepełnymi danymi produktu.
+    complete: bool
+    missing: list[str]
+
+
+class StatsDayRead(BaseModel):
+    """Jeden dzień zakresu. Brak planu to LUKA (`nutrition: null`), nie zero."""
+
+    day: date
+    has_plan: bool
+    nutrition: NutritionRead | None
+    goal: StatsGoalRead | None
+    status: StatsStatusRead
+
+
+class StatsSummaryRead(BaseModel):
+    """Podsumowanie zakresu: średnie dzienne vs średnia celów dni z planem."""
+
+    days_in_range: int
+    #: Dzielnik średnich — dni bez planu nie zaniżają wyniku (karta B13).
+    days_with_plan: int
+    #: `null`, gdy w zakresie nie ma ani jednego dnia z planem.
+    avg: StatsAveragesRead | None
+    #: Kafelki wartość/cel/delta/status — ten sam kształt co w planie dnia.
+    goal_progress: DayGoalProgressRead
+
+
+class StatsDailyResponse(BaseModel):
+    """Odpowiedź `GET /stats/daily` (04_API §2)."""
+
+    days: list[StatsDayRead]
+    summary: StatsSummaryRead
 
 
 # --- akcje ---------------------------------------------------------------------------

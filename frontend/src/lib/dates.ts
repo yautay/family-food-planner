@@ -42,6 +42,24 @@ export function weekDayLabel(date: string): string {
   return WEEKDAYS[toUtc(date).getUTCDay()] ?? ''
 }
 
+/** Pierwszy dzień miesiąca, do którego należy data (preset „Miesiąc" statystyk). */
+export function startOfMonth(date: string): string {
+  const utc = toUtc(date)
+  return `${utc.getUTCFullYear()}-${`${utc.getUTCMonth() + 1}`.padStart(2, '0')}-01`
+}
+
+/**
+ * Ostatni dzień miesiąca, do którego należy data.
+ *
+ * Liczymy jako „dzień przed pierwszym dniem następnego miesiąca" — dzięki temu
+ * lata przestępne i luty nie wymagają żadnej tabeli długości miesięcy.
+ */
+export function endOfMonth(date: string): string {
+  const utc = toUtc(startOfMonth(date))
+  const nextMonth = new Date(Date.UTC(utc.getUTCFullYear(), utc.getUTCMonth() + 1, 1))
+  return addDays(nextMonth.toISOString().slice(0, 10), -1)
+}
+
 /** Różnica w pełnych dniach kalendarzowych (`to - from`); ujemna = `to` w przeszłości. */
 export function daysBetween(from: string, to: string): number {
   return Math.round((toUtc(to).getTime() - toUtc(from).getTime()) / MS_PER_DAY)
