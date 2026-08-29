@@ -31,6 +31,8 @@ class AuditEntity(StrEnum):
     #: Transfer nie ma własnej encji — wpis opisuje OPERACJĘ na zbiorze danych
     #: (02_DOMAIN §12: „eksport/import"), więc `entity_id` zostaje puste.
     TRANSFER = "transfer"
+    #: Import PDF (BATCH_15) — `entity_id` to id joba, bo job JEST encją.
+    IMPORT_JOB = "import_job"
 
 
 class AuditAction(StrEnum):
@@ -67,6 +69,11 @@ class AuditAction(StrEnum):
     # nigdy treści przenoszonych encji (07_SECURITY §8).
     TRANSFER_EXPORT = "transfer.export"
     TRANSFER_IMPORT = "transfer.import"
+
+    # Import PDF (BATCH_15). Payload niesie WYŁĄCZNIE status i liczby —
+    # nigdy treści jadłospisu ani nazw dań (07_SECURITY §8).
+    IMPORT_UPLOAD = "import_job.upload"
+    IMPORT_DELETE = "import_job.delete"
 
     CATEGORY_CREATE = "product_category.create"
     CATEGORY_UPDATE = "product_category.update"

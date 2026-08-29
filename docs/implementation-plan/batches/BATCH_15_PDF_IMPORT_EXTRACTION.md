@@ -310,32 +310,186 @@ diffie przed commitem (krok 11).
 
 ## Implementation checklist
 
-- [ ] Migracja stagingu (pełne ENUM-y) + up/down na kopii bazy
-- [ ] Upload: limit 25 MB, sniffing `%PDF`, losowa nazwa, sha256
-- [ ] Klasyfikacja stron (tytułowa/podsumowanie/list/dni/zakupy/wymienniki)
-- [ ] Maszyna stanów: nagłówki posiłków + makra → pdf_kcal/pdf_macros
-- [ ] Regex składnika: przecinek dziesiętny + tolerancja sklejonej instrukcji
-- [ ] Sekcje: Przepis / Komentarz / Przepis na N / Zjedz 1 z N / Produkty
-- [ ] Suma kontrolna dnia ±2 kcal → parse_warning przy rozjeździe
-- [ ] Issue multi_portion_suspect (>800 g bez oznaczenia, blocker)
-- [ ] Matching EXACT (wspólna normalizacja z B04) + parse_report JSONB
-- [ ] UI: upload + lista jobów + raport
-- [ ] Testy: unit regexy, korpus (96/642/178/24), anomalie §5.1, crosscheck
-      prototype.db (≥84/≥592), API, vitest, E2E
-- [ ] PROGRESS.md + aktualizacja Context karty B16
+- [x] Migracja stagingu (pełne ENUM-y) + up/down na kopii bazy — `0014`
+- [x] Upload: limit 25 MB, sniffing `%PDF`, losowa nazwa, sha256
+- [x] Klasyfikacja stron (tytułowa/podsumowanie/list/dni/zakupy/wymienniki)
+- [x] Maszyna stanów: nagłówki posiłków + makra → pdf_kcal/pdf_macros
+- [x] Regex składnika: przecinek dziesiętny + tolerancja sklejonej instrukcji
+- [x] Sekcje: Przepis / Komentarz / Przepis na N / Zjedz 1 z N / Produkty
+- [x] Suma kontrolna dnia ±2 kcal → parse_warning przy rozjeździe
+- [x] Issue multi_portion_suspect (>800 g bez oznaczenia, blocker) —
+      **liczone per POSIŁEK**, patrz Completion notes i errata 01_PDF_AUDIT §9.1
+- [x] Matching EXACT (wspólna normalizacja z B04) + parse_report JSONB
+- [x] UI: upload + lista jobów + raport
+- [x] Testy: unit regexy, korpus (96/642/178/24), anomalie §5.1, crosscheck
+      prototype.db (101 ≥ 84 / 629 ≥ 592), API, vitest, E2E
+- [x] PROGRESS.md + aktualizacja Context karty B16
 
 ## Verification checklist
 
-- [ ] `task check` zielony (unit+int+api+fe-test+typecheck+lint)
-- [ ] Testy korpusowe na 8 realnych plikach zielone (nie mocki!)
-- [ ] `alembic upgrade head` + `downgrade -1` + `upgrade head` przechodzi;
-      jedna głowa
-- [ ] Ręcznie: upload dieta.pdf → raport z liczbami zgodnymi z audytem
-- [ ] Asercja niezmiennika: zero nowych recipes/canonical_products po
-      uploadzie i parsowaniu
-- [ ] Acceptance Criteria 1–10 odhaczone z dowodem
-- [ ] Dokumentacja i PROGRESS.md zaktualizowane; commit `batch(15): …`
+- [x] `task check` zielony (unit+int+api+fe-test+typecheck+lint)
+- [x] Testy korpusowe na 8 realnych plikach zielone (nie mocki!) — 23 testy
+- [x] `alembic upgrade head` + `downgrade -1` + `upgrade head` przechodzi;
+      jedna głowa (`0014`)
+- [x] Ręcznie: upload dieta.pdf → raport z liczbami zgodnymi z audytem
+      (E2E `import-upload.spec.ts` robi to przez przeglądarkę)
+- [x] Asercja niezmiennika: zero nowych recipes/canonical_products po
+      uploadzie i parsowaniu (`test_parsowanie_nie_tworzy_zadnej_encji_domenowej`)
+- [x] Acceptance Criteria 1–10 odhaczone z dowodem (Completion notes)
+- [x] Dokumentacja i PROGRESS.md zaktualizowane; commit `batch(15): …`
 
 ## Completion notes
 
-(wypełnia agent wykonujący)
+Wykonane 2026-08-29. Parser powstał wprost z 01_PDF_AUDIT i **odtworzył wszystkie
+liczby z §1 co do jednej**: 24 dni, 96 posiłków, 642 wiersze składników,
+178 unikalnych nazw produktów, 24/24 sumy kontrolne w tolerancji ±2 kcal.
+
+### Wykonane
+
+- **Migracja `0014_importer_staging`** (`down_revision = 0013`, jedna głowa):
+  `import_jobs`, `staged_recipes`, `staged_ingredients`, `import_issues`
+  dokładnie wg 03_DATABASE §9, pięć typów enumowych **kompletnych od razu**
+  (także wartości używane dopiero w B16) i dopięcie FK
+  `recipes.import_job_id → import_jobs.id` (`SET NULL`) razem z `ForeignKey`
+  w modelu `Recipe` — bramka dryfu z R3 zielona.
+- **`importer/parser.py`** — czyste funkcje, zero I/O: klasyfikacja stron
+  (STANOWA — patrz errata §9.4), maszyna stanów dnia, regexy nagłówka
+  i składnika, sekcje tekstowe, sumy kontrolne, ustalenia (`findings`)
+  mapowane przez serwis na `import_issues`.
+- **`importer/matching.py`** — EXACT po `catalog.naming.normalize_name`
+  (ta sama funkcja, co klucz unikalności katalogu). Zero fuzzy, zero AI,
+  zero wywołań sieciowych.
+- **`importer/service.py`** — upload (limit 25 MB → 413, sniffing `%PDF` → 422,
+  losowa nazwa, sha256), parsowanie w `run_in_threadpool` pod
+  `asyncio.wait_for`, staging + issues + sugestie + `parse_report` w JEDNEJ
+  transakcji, usuwanie joba z plikiem, wpis w dzienniku (same liczby).
+- **`importer/router.py`** — `POST /import/pdf`, `GET /import/jobs`,
+  `GET /import/jobs/{id}`, `DELETE /import/jobs/{id}`. Endpointy review
+  świadomie NIE powstały (B16) i pilnuje tego test.
+- **Frontend** — `ImportPage.vue` (`/import` + pozycja nawigacji),
+  `api/pdfImport.ts`, `queryKeys.import.*`, teksty PL w `lib/texts.ts`.
+- **Bezpieczeństwo**: `import-pdf` dopisany do `core/uploads.PRIVATE_SUBDIRS`
+  — jadłospis nosi imię i nazwisko pacjenta, a `/uploads/*` sprawdza wyłącznie
+  sesję. Test API to asertuje (`test_plik_importu_nie_jest_serwowany_przez_uploads`).
+- Nowa zależność backendu: **pdfplumber 0.11.10**; nowa zmienna
+  `PDF_MAX_UPLOAD_MB=25` w `.env.example`.
+
+### Odstępstwa (świadome, z pomiarem)
+
+1. **Próg 800 g liczy się PER POSIŁEK, nie per danie** — wbrew Implementation
+   Notes tej karty („masa przepisu głównego, BEZ sekcji `Produkty`"), zgodnie
+   z tabelą 01_PDF_AUDIT §5.1 i z sekcjami Tests / Acceptance Criteria tej samej
+   karty. Powód jest mierzalny: wszystkie sześć mas z §5.1 odtwarza się wyłącznie
+   jako suma CAŁEGO posiłku razem z `Produkty` (3305 / 1017,5 / 827,5 / 946 /
+   1245,8 / 806,3). Rozstrzyga `dieta (7).pdf` KOLACJA: 806 g to dwa dania
+   (615,3 + 191) i żadne z nich nie przekracza progu samo — reguła per danie
+   dałaby 3 blockery zamiast wymaganych 4. Semantyka też się zgadza: `pdf_kcal`
+   opisuje POSIŁEK. Issue wisi na najcięższym daniu posiłku. Errata: §9.1.
+2. **7 wierszy składników nie jest parsowanych** (4 bez pary ilość×jednostka,
+   3 zawinięte między linie) — zgłaszane jako `parse_warning` z surową linią,
+   nie zgadywane. Doliczenie ich dałoby 649/180 zamiast wymaganych 642/178.
+   Errata §9.2, **decyzja D20 (OPEN)** rekomenduje rozszerzenie kontraktu w B16.
+3. **`day_label` = nazwa dnia z dokumentu** („Poniedziałek"), bez „indeksu
+   pliku" z §Backend karty: job = jeden plik, więc indeksem pliku JEST
+   `import_job_id`, a doklejanie go do etykiety dublowałoby tożsamość.
+4. **Sekcja `Produkty` nie ma znacznika w bazie.** Schemat §9 nie ma na to
+   kolumny, a karta zabrania wariacji — dodatki wchodzą jako zwykłe składniki
+   dania. Konsekwencja dla B16 (skalowanie porcji) opisana w jego karcie.
+5. **`ScopedQuery` NIE jest tu użyty** — `import_jobs` nie ma kolumn scope
+   (03_DATABASE §9). Widoczność egzekwuje jawny warunek właścicielski
+   w serwisie, wzorzec `nutrition/service.py` (cele żywieniowe), z wyjątkiem
+   ADMIN-a wg D16. Nie jest to „ręczny filtr scope", którego zabrania skill
+   `ffp-backend`: encja świadomie stoi poza wzorcem.
+6. **Nowa trasa + pozycja nawigacji** wbrew regule CLAUDE.md „batch podmienia
+   `component` istniejącej trasy": mapa 05_FRONTEND §3 powstawała przed audytem
+   PDF-ów i nie przewidywała ekranu importu. Karta §Frontend wymaga go wprost
+   (hierarchia: karta > CLAUDE.md). Dokument 05_FRONTEND §3 dostał ten wiersz.
+
+### Acceptance Criteria — dowody
+
+| # | Kryterium | Dowód |
+|---|---|---|
+| 1 | upload + parsowanie synchroniczne; błąd ⇒ `failed`, nie 500 | `test_upload_dieta_pdf_tworzy_job_ze_staginigiem`, `test_uszkodzony_pdf_daje_status_failed_a_nie_500` |
+| 2 | 96 posiłków / 642 składniki / 178 nazw / 24 sumy | `test_caly_korpus_parsuje_sie_do_liczb_z_audytu`, `test_wszystkie_sumy_dni_zgadzaja_sie_z_dokumentem` |
+| 3 | zakupy i wymienniki pominięte; list przewodni nie psuje | `test_lista_zakupow_i_wymienniki_sa_pominiete`, `test_list_przewodni_w_dieta_2_nie_generuje_posilkow_ani_bledu` |
+| 4 | dokładnie 4 blockery `multi_portion_suspect` | `test_multi_portion_suspect_unmarked` (z masami z §5.1) |
+| 5 | EXACT + `none`, zero AI | `test_skladnik_o_znanej_nazwie_dostaje_sugestie_exact`; `matching.py` nie ma ani jednego wywołania sieciowego |
+| 6 | `parse_report` z liczbami | `test_raport_liczy_strony_dni_i_sumy_kontrolne`, asercja pełnego raportu w teście API |
+| 7 | nic do encji domenowych | `test_parsowanie_nie_tworzy_zadnej_encji_domenowej` (liczniki przed/po) |
+| 8 | UI: upload, lista, raport | `ImportPage.spec.ts` (7 testów) + E2E `import-upload.spec.ts` |
+| 9 | ≥84 przepisy / ≥592 składniki | `test_parser_osiaga_kompletnosc_prototypu` — **101** i **629** (raportuje też różnicę produktów: 178 vs 181) |
+| 10 | migracja odwracalna, `task check` zielony | `test_upgrade_downgrade_upgrade_na_czystej_bazie` (head `0014`), wyniki niżej |
+
+### Follow-upy (poza zakresem, do rozważenia w B16/R4)
+
+- **U22** — sekcja `Produkty` bez znacznika w bazie: B16 skalujący porcje
+  będzie musiał dołożyć kolumnę albo świadomie skalować dodatki razem
+  z przepisem (3 przypadki w korpusie).
+- **U23** — 3 ze 103 nazw dań są ucięte przez zawijanie kolumn (errata §9.5).
+  Pełne nazwy stoją na stronie podsumowania PDF-a, której parser dziś tylko
+  klasyfikuje; wykorzystanie jej to osobna robota.
+- **U24** — `PDF_PARSE_TIMEOUT_S` przerywa ŻĄDANIE, nie wątek pdfplumbera
+  (CPU-bound kodu w Pythonie nie da się zabić z zewnątrz). Przy złośliwym
+  pliku wątek dobiega końca sam. Twardy limit wymagałby osobnego procesu —
+  temat na B17 (hardening), nie na ten batch.
+- **U25** — lista jobów nie ma paginacji w UI (sufit 50). Importów jest
+  z natury mało; przy wzroście dołożyć „pokaż starsze".
+- **U26 (naprawione doraźnie w tym batchu, przyczyna zostaje)** — testy
+  uruchamiane taskiem dziedziczą `UPLOADS_DIR=data/uploads` z `.env`
+  (`dotenv:` w Taskfile), a `tests/conftest.py` ustawia katalog tymczasowy
+  przez `setdefault`, więc go NIE nadpisuje. Pliki z testów lądują w
+  `backend/data/uploads/` — po B14 zostawał tam pusty katalog `transfer/`
+  (git go nie widzi), po B15 zaczął zostawać prawdziwy PDF z jadłospisem
+  pacjenta, gotowy do przypadkowego `git add`. Doraźnie: `backend/data/`
+  dopisane do `.gitignore`. Właściwa naprawa to przypisanie zamiast
+  `setdefault` w confteście — dotyka wszystkich modułów z uploadami, więc
+  zostaje jako osobna robota (kandydat na R4).
+
+### Pytania do właściciela
+
+- **D20 (OPEN, wpisana do 02_DECISIONS)** — czy rozszerzyć kontrakt
+  01_PDF_AUDIT §3.2 o dwa zmierzone warianty wiersza składnika. Rekomendacja:
+  TAK, w B16; skutkiem jest aktualizacja liczb w §1 audytu i w asercjach testów
+  korpusowych, dlatego nie robi tego batch. Batch B15 jest zamknięty niezależnie
+  od tej decyzji — dziś te wiersze są widoczne jako `parse_warning`.
+
+### Wyniki uruchomień (realne)
+
+`task check` zielony, exit 0: **3** migrations-check · **379** unit (33,9 s) ·
+**289** integration (4:17) · **398** api (21:47 — suita wgrywa i parsuje realne
+PDF-y) · **367** vitest w 39 plikach · mypy 190 plików · vue-tsc · ruff ·
+eslint · prettier · vite build. `task test-e2e`: **19/19** (18 testów + setup,
+1,3 min) na pełnym stacku z przebudowanym obrazem `app` (doszedł pdfplumber)
+i migracją `0014` na bazie dev. `alembic heads`: `0014` — jedna głowa.
+
+Nowe testy tego batcha: 25 unit (`test_pdf_parser.py`), 23 + 3 integration
+(`test_pdf_corpus.py`, `test_prototype_crosscheck.py`), 21 api
+(`test_import_api.py`), 7 vitest (`ImportPage.spec.ts`), 1 E2E
+(`import-upload.spec.ts`).
+
+### Ustalenia review (`/code-review`, poziom high) — wszystkie naprawione
+
+1. **`queryKeys.import.job(id)` był DZIECKIEM `queryKeys.import.jobs`** — ta sama
+   pułapka, którą plik opisuje dla `shopping.lists` (ustalenie B11):
+   `invalidateQueries` po uploadzie unieważniałby świeżo wstawiony do cache'u
+   raport i kazał pobierać go drugi raz. Prefiksy rozdzielone (`index`/`detail`).
+2. **`delete_job` kasował plik po ścieżce z bazy bez kontroli zasięgu.**
+   `file_path` pisze wyłącznie `_write_pdf`, więc w praktyce jest bezpieczna,
+   ale to jedyne miejsce w module wykonujące nieodwracalny `unlink`. Doszła
+   metoda `_safe_upload_path` + test regresji
+   `test_delete_nie_kasuje_pliku_spoza_katalogu_uploadow`.
+3. **Payload audytu czytał `job.status` PO `session.delete(job)`** — działa dziś,
+   ale jest kruche. Status i ścieżka odczytywane przed `delete()`.
+
+`/security-review` nie był wymagany — sekcja Skills karty wskazuje wyłącznie
+SKILL-REVIEW.
+
+### Skille
+
+- **SKILL-BE** (`.claude/skills/ffp-backend`) i **SKILL-CALC**
+  (`.claude/skills/ffp-domain-calc`) — narzędzie `Skill` nie wystawia w tym
+  środowisku skilli projektowych, więc zgodnie z 03_AI_SKILLS §6 pkt 5 treść
+  przeczytana wprost z plików w repo.
+- **SKILL-PDF** (`anthropic-skills:pdf`) — załadowany narzędziem `Skill`.
+- **SKILL-REVIEW** (`/code-review`) — uruchomiony na diffie przed commitem.
+

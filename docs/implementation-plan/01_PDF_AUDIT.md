@@ -213,3 +213,100 @@ Uwaga: instrukcja (prawa kolumna) wpleciona w wiersze składników;
    (prototyp zaimportował te same PDF-y: 84 przepisy, 592 składniki,
    181 produktów z wartościami USDA/OpenFoodFacts). Importer nowej aplikacji
    powinien osiągnąć co najmniej tę kompletność; różnice = materiał do testów.
+
+## 9. Errata z implementacji (BATCH_15, 2026-08-29)
+
+Parser powstał wprost z tego dokumentu i **odtworzył wszystkie liczby z §1**
+(24 dni, 96 posiłków, 642 wiersze składników, 178 nazw produktów, 24/24 sumy
+kontrolne). Poniżej wyłącznie to, czego audyt nie zapisał albo zapisał
+niedokładnie — każdy punkt z pomiarem na tym samym korpusie. **Kontrakt
+pozostaje wiążący**; zmiany kontraktu wymagają decyzji właściciela, nie
+„ulepszenia" parsera.
+
+### 9.1 Masa z tabeli §5.1 jest masą POSIŁKU, nie pojedynczego dania
+
+Tabela §5.1 podaje sześć mas. Wszystkie sześć odtwarza się co do zaokrąglenia
+dopiero wtedy, gdy sumować gramaturę **całego posiłku** (wszystkich jego dań)
+razem z sekcją `Produkty`:
+
+| Plik | Posiłek | §5.1 | Zmierzone (posiłek + `Produkty`) | Dań w posiłku |
+|---|---|---|---|---|
+| dieta.pdf | OBIAD | 3305 | 3305 | 1 |
+| dieta (5).pdf | OBIAD | 1018 | 1017,5 | 2 |
+| dieta (3).pdf | OBIAD | 828 | 827,5 | 1 |
+| dieta (5).pdf | ŚNIADANIE | 946 | 946 | 1 |
+| dieta (5).pdf | KOLACJA | 1246 | 1245,8 | 2 |
+| dieta (7).pdf | KOLACJA | 806 | 806,3 | **2** |
+
+Rozstrzygający jest ostatni wiersz: `dieta (7).pdf` KOLACJA to „Zupa krem
+z dyni" (615,3 g) + „Kanapka z wędliną" (191 g). **Żadne z dań nie przekracza
+progu 800 g samo**, więc reguła liczona per danie znalazłaby 3 nieoznaczone
+przypadki zamiast 4 i przeczyłaby §5.1.
+
+Jest to też jedyna spójna semantyka: `pdf_kcal` w dokumencie opisuje POSIŁEK,
+więc zdanie „składniki ważą 806 g, a posiłek ma 554 kcal" jest zdaniem
+o posiłku. Reguła importera brzmi zatem: **masa wszystkich dań posiłku razem
+z `Produkty` > 800 g i żadne danie posiłku nie niesie „Przepis na N porcji"
+⇒ issue `multi_portion_suspect` (blocker)**, wieszany na najcięższym daniu
+posiłku. Daje to dokładnie 6 posiłków ponad progiem: 2 oznaczone (bez issue)
+i 4 nieoznaczone (z issue).
+
+To **odstępstwo od Implementation Notes karty BATCH_15** („masa przepisu
+głównego, BEZ sekcji `Produkty`"), świadome i udokumentowane: karta w sekcjach
+Tests i Acceptance Criteria wymaga dokładnie czterech przypadków z masami
+z §5.1, a tych nie da się otrzymać inaczej.
+
+### 9.2 Siedem wierszy składników nie pasuje do wzorca §3.2
+
+§3.2 mówi „gramy są podane zawsze (642/642 wierszy)". To prawda o wierszach
+pasujących do podanego wzorca — ale w korpusie jest jeszcze **7 wierszy
+niosących gramaturę w innym układzie**, których audyt nie policzył:
+
+| Wariant | Przykład | Wystąpień |
+|---|---|---|
+| bez pary ilość×jednostka | `Cukinia, 200 g` | 4 |
+| zawinięty między dwie linie | `Czekolada ciemna (60-69% masy kakaowej), 2 x` + `Kostka (16 g)` | 3 |
+
+Pełna lista: `Passata, 150 g` (dieta 2), `Makaron pełnoziarnisty, 60 g`
+(dieta 2), `Kapusta włoska, 200 g` (dieta 3), `Kefir, 330 g` (dieta 4) oraz
+trzy wiersze „Czekolada ciemna" (dieta 4 ×2, dieta 7 ×1). Doliczenie ich dałoby
+**649 wierszy i 180 nazw produktów** zamiast 642 i 178.
+
+**BATCH_15 ich NIE parsuje.** Każdy taki wiersz zgłasza się jako issue
+`parse_warning` z surową linią, więc dane nie giną po cichu — widać je w review.
+Rozszerzenie kontraktu §3.2 o te dwa warianty jest **decyzją właściciela D20**
+(02_DECISIONS), nie zmianą do wykonania w batchu.
+
+Konsekwencja dla §8.6: parser widzi 178 nazw produktów wobec 181 w prototypie
+(prototyp czytał także te wiersze). Różnica **−3** jest w całości wyjaśniona
+powyższą listą.
+
+### 9.3 Warianty sekcji tekstowych spoza §3.3
+
+- **Odmiana liczebnika**: dokument pisze `Przepis na 7 porcji`, `Przepis na
+  2 porcje` i `Przepis na 1 porcję`. §3.3 podawał tylko pierwszą formę; parser
+  akceptuje wszystkie (`porcj\w*`).
+- **`Zjedz 2 porcję`** (dieta (7).pdf, KOLACJA poniedziałku, po `Przepis na
+  1 porcję`) — wariant spoza wzorca `Zjedz 1 z N porcji`. Parser rozpoznaje go
+  jako sekcję (żeby nie wpadł do instrukcji), ale **nie wnioskuje z niego
+  liczby porcji**: „zjedz 2 porcje przepisu jednoporcjowego" to informacja
+  o wielkości posiłku, a nie o mianowniku przepisu.
+- **`Produkty` występuje 3 razy**, nie raz: dieta.pdf (Ziemniak 225 g),
+  dieta (5).pdf (Ziemniak 150 g) i dieta (7).pdf (Pasta warzywna 60 g). §7
+  opisywał wyłącznie pierwszy przypadek.
+
+### 9.4 Lista zakupów potrafi zająć dwie strony, drugą bez nagłówka
+
+`dieta.pdf` (s. 8–9), `dieta (1)`, `dieta (5)` i `dieta (7)`: nagłówek
+„Lista zakupów" stoi tylko na PIERWSZEJ stronie sekcji. Klasyfikacja stron
+musi być więc stanowa — po napotkaniu nagłówka wszystkie kolejne strony należą
+do listy zakupów aż do „Wymienniki". Bez tego druga strona wyglądałaby na
+stronę dnia.
+
+### 9.5 Nazwa dania bywa ucięta przez zawijanie kolumn
+
+W 3 ze 103 dań tytuł zawija się między kolumnami i parser zapisuje jego pierwszą
+linię: „Pizza na tortilli z szynką, pomidorkami i", „Sałatka z pieczoną
+ciecierzycą i serem", „Kiełbasa z chrzanem i warzywami na". Pełne nazwy stoją
+na stronie podsumowania (§2.2). Poprawienie nazwy należy do review (BATCH_16) —
+parser nie zgaduje, gdzie kończy się tytuł, a gdzie zaczyna instrukcja.

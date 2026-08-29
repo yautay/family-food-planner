@@ -34,6 +34,7 @@ from app.modules.catalog.router import (
     build_stores_router,
 )
 from app.modules.households.router import build_admin_households_router, build_households_router
+from app.modules.importer.router import build_import_router
 from app.modules.nutrition.router import build_goals_router
 from app.modules.pantry.router import build_pantry_router
 from app.modules.planning.router import (
@@ -146,6 +147,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # jest zwolniony z CSRF (`CSRF_EXEMPT_PREFIXES`) i tylko on jest maskowany
     # w logach (`mask_path`). Limiter wstrzykujemy jak w `/auth` (ADR-010).
     app.include_router(build_public_lists_router(limiter), prefix=API_V1_PREFIX)
+    app.include_router(build_import_router(), prefix=API_V1_PREFIX)
     app.include_router(build_transfer_router(), prefix=API_V1_PREFIX)
     app.include_router(build_audit_router(), prefix=API_V1_PREFIX)
     # Uploady poza /api/v1 (01_ARCH §1) — endpoint z sesją, nie StaticFiles.

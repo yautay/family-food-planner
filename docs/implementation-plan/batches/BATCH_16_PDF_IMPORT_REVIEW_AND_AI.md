@@ -34,6 +34,45 @@ Batch zastaje (po B15 + B04):
   `recipes.import_job_id`. Audit serwis (B03/B04); `ANTHROPIC_API_KEY`
   w env (07_SECURITY §7) — może być pusty.
 
+**Stan faktyczny po BATCH_15 (2026-08-29) — przeczytaj przed Stage 1:**
+
+- **Ścieżki plików**: `backend/app/modules/importer/{models,parser,matching,
+  schemas,service,router}.py`; migracja `0014_importer_staging.py`; front:
+  `frontend/src/pages/ImportPage.vue`, `frontend/src/api/pdfImport.ts`
+  (nie `import.ts` — `import` to słowo kluczowe TS), klucze
+  `queryKeys.import.*`, trasa i pozycja nawigacji `import`.
+- **`multi_portion_suspect` wisi na POSIŁKU, nie na daniu** (errata
+  01_PDF_AUDIT §9.1): próg 800 g liczy się od masy wszystkich dań posiłku
+  razem z sekcją `Produkty`, a `staged_recipe_id` issue wskazuje NAJCIĘŻSZE
+  danie posiłku. Ekran review musi więc pytać o liczbę porcji w kontekście
+  posiłku (dwa dania jednej kolacji mogą dzielić jedno rozstrzygnięcie).
+  W korpusie: 4 blockery, dokładnie te z tabeli §5.1.
+- **Sekcja `Produkty` NIE jest oznaczona w bazie.** Schemat 03_DATABASE §9
+  nie ma na to kolumny, a B15 nie dokładał wariacji, więc dodatki
+  jednoporcjowe (Ziemniak do gołąbków) leżą w `staged_ingredients` jak zwykłe
+  składniki. **To ma znaczenie przy skalowaniu**: przepis „na 7 porcji"
+  dzieli się przez 7, a ten dodatek NIE. Jeśli B16 ma to rozróżniać, potrzebna
+  jest kolumna (np. `from_extras_section BOOL`) i migracja — decyzja należy do
+  B16, bo dopiero on skaluje. Przypadków w korpusie: 3 (dieta, dieta 5, dieta 7).
+- **7 wierszy składników nie jest sparsowanych** i wraca jako `parse_warning`
+  z surową linią (errata §9.2). **Decyzja D20 (OPEN) rekomenduje rozszerzenie
+  kontraktu §3.2 właśnie w B16** — jej przyjęcie zmienia liczby w §1 audytu
+  (649/180 zamiast 642/178) i asercje `tests/integration/test_pdf_corpus.py`.
+  Rozstrzygnij ją PRZED Stage 1, bo dotyczy kompletności importowanych przepisów.
+- **3 ze 103 nazw dań są ucięte** przez zawijanie kolumn (errata §9.5). Pełne
+  nazwy stoją na stronie podsumowania PDF-a; ekran review i tak pozwala nazwę
+  poprawić, ale warto o tym wiedzieć przy wykrywaniu duplikatów.
+- **Statusy**: B15 zostawia joby w `parsed`; `in_review` ustawia dopiero B16.
+  Usuwanie joba działa dla `uploaded`/`parsed`/`failed` (inaczej 409) —
+  `reject` z tego batcha musi więc przestawić status, a nie kasować przez
+  `DELETE /import/jobs/{id}`.
+- **Liczniki referencji już są**: `importer/service.py` rejestruje
+  `_staging_using_product` i `_staging_using_recipe`. Nowa tabela albo nowe FK
+  w B16 = nowy licznik w tym samym batchu (R3).
+- **Endpointy review NIE istnieją** i pilnuje tego test
+  `tests/api/test_import_api.py::test_endpointy_review_jeszcze_nie_istnieja` —
+  po dołożeniu ich w B16 ten test trzeba USUNĄĆ (nie osłabić).
+
 Wymagane lektury: **ADR-011**, 01_PDF_AUDIT §5 i §8, 03_DATABASE §9,
 02_DOMAIN §10 i §13.6, 04_API §2, 02_DECISIONS D5, 08_TESTING §2.10 i §3
 (E2E flow 4), 06_UIUX §3 (create-in-context, destrukcja bezpieczna).

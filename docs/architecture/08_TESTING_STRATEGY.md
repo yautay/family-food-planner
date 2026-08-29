@@ -52,7 +52,16 @@ w transakcji z rollbackiem; migracje aplikowane raz na sesję testową.
     (testy parsera na plikach, snapshoty wyników); anomalie z 01_PDF_AUDIT
     jako nazwane przypadki testowe; walidacja krzyżowa z
     `data/reference/prototype.db` (84 przepisy / 592 składniki — parser
-    musi osiągnąć ≥ tę kompletność).
+    musi osiągnąć ≥ tę kompletność). **Pokryte w BATCH_15**:
+    `tests/unit/test_pdf_parser.py` (regexy i maszyna stanów na wyciętych
+    tekstach), `tests/integration/test_pdf_corpus.py` (24 dni / 96 posiłków /
+    642 wiersze / 178 nazw / 24 sumy kontrolne + cztery nazwane anomalie §5.1),
+    `tests/integration/test_prototype_crosscheck.py` (101 ≥ 84 przepisy,
+    629 ≥ 592 składniki; różnice RAPORTOWANE w wyjściu testu, nie zamiatane)
+    oraz `tests/api/test_import_api.py` (sniffing, limit, anty-IDOR
+    i niezmiennik „zero encji domenowych"). Testy korpusowe są `integration`,
+    mimo że nie dotykają bazy: czytają dysk i uruchamiają pdfplumber, więc nie
+    mieszczą się w kontrakcie `unit` (§1).
 
 ## 3. E2E (Playwright) — utrzymywany mały i stabilny
 

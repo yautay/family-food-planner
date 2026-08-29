@@ -25,7 +25,7 @@ commit wykonany). Kolumna „Blokery" = zależności + decyzje z 02_DECISIONS.
 | 12 PWA_AND_OFFLINE | [x] | — | `batch(12)` na master (hash wpisać po push) |
 | 13 STATISTICS | [x] | — | `batch(13)` na master (hash wpisać po push) |
 | 14 IMPORT_EXPORT | [x] | — | `batch(14)` na master (hash wpisać po push) |
-| 15 PDF_IMPORT_EXTRACTION | [ ] | 05 (zalecane po R3) | |
+| 15 PDF_IMPORT_EXTRACTION | [x] | — | `batch(15)` na master (hash wpisać po push) |
 | 16 PDF_IMPORT_REVIEW_AND_AI | [ ] | 15, 04 | |
 | R4 REVIEW_PRE_PRODUCTION | [ ] | 01–16 | |
 | 17 PRODUCTION_HARDENING | [ ] | R4 | |
@@ -40,6 +40,71 @@ zmiany dotykające przyszłych batchy trzeba wpisać do ich kart
 (00_MASTER_PLAN §8); dziennik to indeks, nie schowek.
 
 ---
+
+**2026-08-29 — BATCH_15 (PDF_IMPORT_EXTRACTION).** Importer PDF ma pierwszą
+połowę: upload jadłospisu (25 MB, sniffing `%PDF`, losowa nazwa, sha256),
+**deterministyczny parser** wg wiążącego kontraktu 01_PDF_AUDIT, staging
+w czterech nowych tabelach (migracja `0014`, głowa `0014`), sugestie mapowania
+EXACT i raport odczytu w UI (`/import`). Parser **odtworzył wszystkie liczby
+z audytu §1 co do jednej**: 24 dni, 96 posiłków, 642 wiersze składników,
+178 nazw produktów, 24/24 sumy kontrolne. Walidacja krzyżowa z `prototype.db`:
+**101 przepisów ≥ 84** i **629 składników ≥ 592**. Joby kończą na `parsed` —
+review i zatwierdzanie to B16.
+
+**Sześć rzeczy, o których muszą wiedzieć następne batche:**
+
+1. **Próg wieloporcyjności (800 g) liczy się PER POSIŁEK, nie per danie** —
+   i to jest odstępstwo od Implementation Notes karty B15, popartе pomiarem
+   (errata 01_PDF_AUDIT **§9.1**). Wszystkie sześć mas z tabeli §5.1 odtwarza
+   się wyłącznie jako suma całego posiłku razem z sekcją `Produkty`; rozstrzyga
+   `dieta (7).pdf` KOLACJA = 806 g w DWÓCH daniach, z których żadne nie
+   przekracza progu samo. Reguła per danie dałaby 3 blockery zamiast 4.
+   Issue wisi na najcięższym daniu posiłku, więc ekran review w B16 pyta
+   o porcje w kontekście POSIŁKU.
+2. **Kontrakt 01_PDF_AUDIT dostał sekcję §9 „Errata z implementacji"** — pięć
+   punktów, każdy z pomiarem na tym samym korpusie. Najważniejszy poza §9.1:
+   **7 wierszy składników nie pasuje do wzorca §3.2** (`Cukinia, 200 g` i wiersze
+   zawinięte między dwie linie). Parser ich NIE zgaduje — zgłasza jako
+   `parse_warning` z surową linią. Rozszerzenie kontraktu to **decyzja D20
+   (OPEN, rekomendacja: TAK w B16)**; jej przyjęcie zmienia liczby w §1 audytu
+   (649/180) i asercje testów korpusowych.
+3. **Staging stoi POZA wzorcem scope i ma tak zostać.** `import_jobs` nie ma
+   `scope` ani `household_id` (03_DATABASE §9): jadłospis to dokument zdrowotny
+   jednej osoby, nie stan domowy. Widoczność egzekwuje jawny warunek
+   właścicielski w serwisie (wzorzec `nutrition/service.py`), ADMIN widzi
+   wszystko wg D16, cudzy job to 404. `ScopedQuery` tu nie pasuje i jego brak
+   NIE jest „ręcznym filtrem scope" z listy błędów review.
+4. **`recipes.import_job_id` ma wreszcie FK** (`SET NULL`, migracja `0014`) —
+   dług z `0006` domknięty razem z `ForeignKey` w modelu, więc bramka dryfu
+   z R3 świeci zielono. Wzorzec dla następnej kolumny czekającej na tabelę.
+5. **Nowy podkatalog uploadów `import-pdf` jest w `PRIVATE_SUBDIRS`.**
+   `/uploads/*` sprawdza WYŁĄCZNIE sesję, a jadłospis nosi imię i nazwisko
+   pacjenta na stronie tytułowej — każdy nowy katalog z cudzą prywatnością
+   dopisuje się tam w tym samym batchu (ustalenie review B14, teraz zastosowane).
+6. **Lista jobów NIE niesie `parse_report`** (`ImportJobSummary` ma tylko liczby
+   zbiorcze) — pełny raport dociąga `GET /import/jobs/{id}`. Złapało to dopiero
+   **E2E**: vitest z raportem wklejonym w mock listy przechodził przy zepsutej
+   stronie. Mocki frontendu muszą odwzorowywać PODZIAŁ odpowiedzi, nie wygodę
+   testu.
+
+**Wyniki uruchomień (realne):** `task check` zielony (exit 0) — 3 migrations-check
+/ **379 unit** / **289 int** / **398 api** / **367 vitest w 39 plikach** / mypy
+190 plików + vue-tsc / ruff / eslint / prettier / vite build. E2E: **19/19**
+(18 testów + setup, 1,3 min) na pełnym stacku z przebudowanym obrazem app
+(doszedł pdfplumber) i migracją `0014` na bazie dev. Testy korpusowe biegną na
+8 REALNYCH plikach z `data/source_pdfs/`, nie na mockach.
+
+**Review na diffie (`/code-review`):** ustalenia i sposób ich domknięcia
+w Completion notes karty. Nowe długi zapisane tamże: **U22** (sekcja `Produkty`
+bez znacznika w bazie — problem skalowania porcji w B16), **U23** (3 ze 103 nazw
+dań ucięte przez zawijanie kolumn), **U24** (`PDF_PARSE_TIMEOUT_S` przerywa
+żądanie, nie wątek — twardy limit to temat B17), **U25** (brak paginacji listy
+importów w UI) i **U26** — testy uruchamiane taskiem dziedziczą
+`UPLOADS_DIR` z `.env`, a conftest ustawia katalog tymczasowy przez
+`setdefault`, więc wgrane pliki lądują w `backend/data/uploads/`; po B14
+zostawał tam pusty katalog, po B15 prawdziwy PDF z jadłospisem. Doraźnie
+`backend/data/` w `.gitignore`. Karta **B16** dostała sekcję „Stan faktyczny po BATCH_15"
+z faktycznymi ścieżkami plików i sześcioma pułapkami.
 
 **2026-08-29 — BATCH_14 (IMPORT_EXPORT).** Dane należą do użytkownika: jest
 **format transfer v1** (ZIP z `export.json` + `photos/`), eksport własnych danych

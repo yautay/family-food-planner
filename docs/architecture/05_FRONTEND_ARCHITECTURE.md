@@ -42,6 +42,10 @@ odpowiedzi API nie piszemy.
                         zakres tydzień/miesiąc/własny (max 92 dni), zakładki
                         Kalorie/Makroskładniki, luki dni bez planu, średnia
                         dzienna vs średnia celów ze statusem
+/import               ImportPage — DOSTARCZONE w B15: upload jadłospisu PDF,
+                        lista importów ze statusami po polsku i podgląd raportu
+                        odczytu (liczby, sumy kontrolne dni, issues). Ekran
+                        review i zatwierdzanie dokłada B16
 /ustawienia           UstawieniaPage      (cele, profile rodziny, sklepy, konto)
 /admin/*              AdminPage (użytkownicy, rodziny, weryfikacja produktów,
                       audit, import/eksport) — od B14 istnieje `/admin/dane`

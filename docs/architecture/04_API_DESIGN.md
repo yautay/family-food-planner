@@ -92,10 +92,16 @@ P      /public/lists/{token}               — GET treść + PATCH check pozycji
                                              (`checked_at` jw.; rate limit,
                                              zero PII, 410 po expiry)
 
-U      /import/pdf                         — upload → job; GET status/raport
-U      /import/jobs/{id}/staged            — staged recipes+ingredients+issues
-U      /import/jobs/{id}/resolve           — mapowania/porcje/decyzje
-U      /import/jobs/{id}/approve|reject
+U      POST /import/pdf                    — upload PDF → job (multipart, 25 MB,
+                                             sniffing `%PDF`); parsowanie SYNCHRONICZNE,
+                                             odpowiedź 201 z `parse_report` — DOSTARCZONE w B15
+U      GET  /import/jobs                   — lista własnych importów (?limit&offset)
+U      GET  /import/jobs/{id}              — szczegóły + `parse_report`; cudzy job 404
+U      DELETE /import/jobs/{id}            — usuwa job, staging i plik (tylko
+                                             uploaded/parsed/failed; inaczej 409)
+U      /import/jobs/{id}/staged            — staged recipes+ingredients+issues (B16)
+U      /import/jobs/{id}/resolve           — mapowania/porcje/decyzje (B16)
+U      /import/jobs/{id}/approve|reject    — (B16)
 U      POST /transfer/export               — eksport własnych danych → ZIP
 A      POST /transfer/export?scope=instance — pełny eksport instancji → ZIP
 U/A    POST /transfer/import               — upload ZIP → raport DRY-RUN

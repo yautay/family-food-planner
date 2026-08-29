@@ -21,6 +21,10 @@ dependencies = [
     # python-multipart do przyjmowania multipart/form-data (upload zdjęcia).
     "pillow>=11.1",
     "python-multipart>=0.0.20",
+    # BATCH_15 (ADR-011): ekstrakcja tekstu z jadłospisów PDF. pdfplumber, nie
+    # pypdf — kontrakt 01_PDF_AUDIT został ZMIERZONY jego `extract_text()`,
+    # a inna biblioteka inaczej skleja kolumny i unieważniłaby regexy parsera.
+    "pdfplumber>=0.11",
 ]
 
 [dependency-groups]

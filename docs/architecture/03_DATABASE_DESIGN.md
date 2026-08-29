@@ -411,6 +411,29 @@ import_issues (id, import_job_id FK CASCADE, staged_recipe_id FK NULL,
 
 Zatwierdzenie joba dozwolone tylko bez nierozwiązanych issues `blocker`.
 
+Stan faktyczny po BATCH_15 (migracja `0014`) — cztery tabele powstały DOKŁADNIE
+wg powyższego schematu, plus rzeczy, których szkic nie precyzował:
+
+- **Typy enumowe są komplet od razu**: `import_job_status`,
+  `staged_recipe_resolution`, `import_match_kind`, `import_issue_kind`,
+  `import_issue_severity`. B15 zapisuje z nich wyłącznie `uploaded`/`parsed`/
+  `failed`, `exact`/`none` oraz `multi_portion_suspect`/`parse_warning` — reszta
+  czeka na B16, żeby ten batch nie musiał pisać migracji łamiącej.
+- **`ON DELETE`**: `staged_*` i `import_issues` kaskadują po jobie (kompozycja,
+  ADR-012); FK do encji domenowych (`canonical_products`, `recipes`) mają
+  RESTRICT, a liczniki referencji do listy „Używane w:" rejestruje
+  `importer/service.py` (`_staging_using_product`, `_staging_using_recipe`).
+- **`recipes.import_job_id` ma wreszcie FK** (`SET NULL`) — dopina go ta sama
+  migracja `0014`; usunięcie joba jest sprzątaniem procesu importu i nie ma
+  prawa zabrać przepisu, który już powstał.
+- **Staging NIE MA kolumn wzorca scope** i nie ma ich zyskać: job należy do
+  osoby, która wgrała plik (`owner_user_id`), bo jadłospis jest dokumentem
+  zdrowotnym pacjenta, a nie stanem domowym. Widoczność egzekwuje jawny warunek
+  właścicielski w serwisie (wzorzec `user_nutrition_goals`), z wyjątkiem ADMIN-a
+  zgodnym z D16.
+- **Staging nie wchodzi do eksportu transfer v1** (BATCH_14): to proces, nie
+  dane domenowe. W pliku eksportu `recipes.import_job_id` jest `null`.
+
 ## 10. Schemat — audit i transfer
 
 ```sql
@@ -429,6 +452,13 @@ Uploady (zdjęcia przepisów/produktów, PDF-y importu) na bind mount
 `/data/uploads` (ADR-002), ścieżki względne w DB, nazwy losowe
 (`uuid4().hex + rozszerzenie po sniffingu typu`), oryginalna nazwa tylko
 w metadanych. Miniatury generowane przy uploadzie (Pillow), obok oryginału.
+
+Podkatalogi z danymi JEDNEJ osoby są zamknięte dla endpointu `/uploads/*`
+(`core/uploads.PRIVATE_SUBDIRS`): `transfer` (paczki eksportu, B14) i
+`import-pdf` (wgrane jadłospisy, B15). Endpoint sprawdza wyłącznie sesję, więc
+bez tej bariery każdy zalogowany użytkownik, który poznałby ścieżkę, pobrałby
+cudzy dokument. PDF-y importu nie mają miniatur i nie są serwowane w ogóle —
+czyta je wyłącznie pdfplumber po stronie serwera.
 
 ## 12. Retencja i sprzątanie
 

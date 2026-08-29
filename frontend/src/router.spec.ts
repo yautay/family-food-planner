@@ -107,6 +107,10 @@ describe('mapa tras', () => {
       // własnej pozycji w nawigacji — pełny widok dostarcza B11.
       'zakupy-lista',
       'statystyki',
+      // Import jadłospisów PDF (B15): pierwsza NOWA sekcja od czasu spisania
+      // mapy 05_FRONTEND §3 — mapa powstawała przed audytem PDF-ów, więc
+      // dokument dostał ten wiersz razem z trasą i pozycją nawigacji.
+      'import',
       'ustawienia',
       'admin-users',
       'admin-households',

@@ -542,6 +542,57 @@ export const retail = {
   piecesInvalid: 'Sztuk w opakowaniu musi być liczbą całkowitą większą od zera.',
 } as const
 
+export const pdfImport = {
+  title: 'Import jadłospisu PDF',
+  subtitle:
+    'Wgraj PDF od dietetyczki. Odczytamy dni, posiłki i składniki — nic nie trafi do Twoich ' +
+    'przepisów, dopóki tego nie zatwierdzisz.',
+  dropzone: 'Przeciągnij plik tutaj albo kliknij, żeby wybrać',
+  dropzoneHint: 'Tylko PDF, maksymalnie 25 MB.',
+  choose: 'Wybierz plik',
+  uploading: 'Wgrywam i odczytuję…',
+  jobsTitle: 'Twoje importy',
+  emptyState:
+    'Nie masz jeszcze żadnych importów. Wgraj pierwszy jadłospis — pokażemy, co udało się ' +
+    'z niego odczytać, zanim cokolwiek zapiszemy.',
+  columnFile: 'Plik',
+  columnDate: 'Data',
+  columnStatus: 'Status',
+  columnNumbers: 'Odczytano',
+  showReport: 'Zobacz raport',
+  hideReport: 'Ukryj raport',
+  reportTitle: 'Raport odczytu',
+  reportDays: 'Dni',
+  reportMeals: 'Posiłki',
+  reportRecipes: 'Dania',
+  reportIngredients: 'Składniki',
+  reportPages: 'Strony',
+  reportPagesDetail: 'w tym pominięte (lista zakupów, wymienniki)',
+  reportMatched: 'Zmapowane produkty',
+  reportChecksums: 'Sumy kontrolne dni',
+  checksumOk: 'zgodna',
+  checksumMismatch: 'rozjazd',
+  issuesTitle: 'Do rozstrzygnięcia',
+  issuesBlockers: 'blokujące',
+  issuesWarnings: 'ostrzeżenia',
+  issuesNone: 'Nic nie wymaga decyzji.',
+  reviewSoon: 'Review i zatwierdzanie — wkrótce (kolejny etap).',
+  deleteAction: 'Usuń import',
+  deleteConfirm:
+    'Usunąć ten import? Znikną wszystkie odczytane dania i składniki oraz wgrany plik. ' +
+    'Twoje przepisy i produkty zostają bez zmian.',
+  fileTooLarge: 'Plik jest za duży — PDF może mieć najwyżej 25 MB.',
+  fileNotPdf: 'Wybierz plik PDF.',
+  status: {
+    uploaded: 'Wgrany',
+    parsed: 'Sparsowany',
+    in_review: 'W review',
+    approved: 'Zatwierdzony',
+    rejected: 'Odrzucony',
+    failed: 'Błąd',
+  },
+} as const
+
 export const adminVerification = {
   title: 'Weryfikacja produktów',
   subtitle:

@@ -114,9 +114,17 @@ class Recipe(TimestampMixin, ScopedMixin, Base):
         default=RecipeSource.MANUAL,
         server_default=RecipeSource.MANUAL.value,
     )
-    #: Kolumna bez FK: tabela `import_jobs` powstaje dopiero w B15 i dopiero
-    #: tamta migracja dopina constraint (uzasadnienie w karcie B05).
-    import_job_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    #: Job importu PDF, z którego powstał przepis (BATCH_16). FK dopina
+    #: migracja `0014` razem z tabelą `import_jobs` — do BATCH_15 kolumna
+    #: czekała bez constraintu (karta B05). SET NULL, nie RESTRICT: usunięcie
+    #: joba jest sprzątaniem procesu importu i nie ma prawa zabrać przepisu,
+    #: który już żyje własnym życiem w danych aplikacji.
+    import_job_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        ForeignKey("import_jobs.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     is_archived: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("false")
     )

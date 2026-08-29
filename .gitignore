@@ -27,6 +27,11 @@ playwright-report/
 # dane lokalne (dev)
 /uploads/
 /backups/
+# Testy uruchamiane taskiem dziedziczą UPLOADS_DIR z `.env` (`dotenv:`
+# w Taskfile), a `tests/conftest.py` używa `setdefault` — wgrane pliki lądują
+# więc w `backend/data/uploads/`. Nigdy w repo: to zdjęcia i JADŁOSPISY PDF
+# z danymi pacjenta (BATCH_15).
+backend/data/
 
 # IDE / OS
 .idea/

@@ -42,7 +42,10 @@ UPLOADS_URL_PREFIX = "/uploads"
 #: bariery każdy zalogowany użytkownik, który poznałby `import_id`, pobrałby
 #: cudzy eksport. Zdjęcia z importu (`transfer-import`) są zwykłymi zdjęciami
 #: i muszą pozostać serwowane — prywatny jest sam katalog paczek.
-PRIVATE_SUBDIRS = ("transfer",)
+#: `import-pdf` (BATCH_15) trzyma wgrane jadłospisy: dokument zdrowotny jednej
+#: osoby, z imieniem i nazwiskiem pacjenta na stronie tytułowej. Endpoint
+#: `/uploads/*` nie sprawdza właściciela pliku, więc katalog musi być zamknięty.
+PRIVATE_SUBDIRS = ("transfer", "import-pdf")
 
 #: Dłuższy bok miniatury; jakość JPEG dobrana wg proporcji rozmiar/wygląd.
 THUMBNAIL_MAX_PX = 512

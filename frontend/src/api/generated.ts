@@ -1247,6 +1247,58 @@ export interface paths {
         patch: operations["public_check_item_api_v1_public_lists__token__items__item_id__patch"];
         trace?: never;
     };
+    "/api/v1/import/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Wgranie jadłospisu PDF (multipart; 25 MB, sniffing, parsowanie) */
+        post: operations["upload_pdf_api_v1_import_pdf_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/import/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lista importów */
+        get: operations["list_jobs_api_v1_import_jobs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/import/jobs/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Szczegóły importu razem z raportem parsowania */
+        get: operations["get_job_api_v1_import_jobs__job_id__get"];
+        put?: never;
+        post?: never;
+        /** Usunięcie importu (kasuje staging i plik) */
+        delete: operations["delete_job_api_v1_import_jobs__job_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/transfer/export": {
         parameters: {
             query?: never;
@@ -1402,6 +1454,14 @@ export interface components {
             /**
              * File
              * @description Archiwum ZIP z eksportu
+             */
+            file: string;
+        };
+        /** Body_upload_pdf_api_v1_import_pdf_post */
+        Body_upload_pdf_api_v1_import_pdf_post: {
+            /**
+             * File
+             * @description Jadłospis PDF, maks. 25 MB
              */
             file: string;
         };
@@ -2094,6 +2154,96 @@ export interface components {
         ImportApplyRequest: {
             /** Decisions */
             decisions?: components["schemas"]["CollisionDecision"][];
+        };
+        /**
+         * ImportJobDetail
+         * @description Job razem z pełnym raportem parsowania (podgląd w UI).
+         */
+        ImportJobDetail: {
+            /** Id */
+            id: number;
+            /** Filename */
+            filename: string;
+            status: components["schemas"]["ImportJobStatus"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Error */
+            error?: string | null;
+            /** Days */
+            days?: number | null;
+            /** Meals */
+            meals?: number | null;
+            /** Staged Recipes */
+            staged_recipes?: number | null;
+            /** Ingredients */
+            ingredients?: number | null;
+            /** Blockers */
+            blockers?: number | null;
+            /** Warnings */
+            warnings?: number | null;
+            /** Parse Report */
+            parse_report?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /**
+         * ImportJobListResponse
+         * @description Lista jobów z paginacją — kształt jak w pozostałych zasobach (04_API §1).
+         */
+        ImportJobListResponse: {
+            /** Items */
+            items?: components["schemas"]["ImportJobSummary"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * ImportJobStatus
+         * @description Cykl życia joba (02_DOMAIN §10). B15 kończy na `PARSED` albo `FAILED`.
+         * @enum {string}
+         */
+        ImportJobStatus: "uploaded" | "parsed" | "in_review" | "approved" | "rejected" | "failed";
+        /**
+         * ImportJobSummary
+         * @description Job na liście: tyle, ile potrzeba do wiersza tabeli i plakietki statusu.
+         */
+        ImportJobSummary: {
+            /** Id */
+            id: number;
+            /** Filename */
+            filename: string;
+            status: components["schemas"]["ImportJobStatus"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Error */
+            error?: string | null;
+            /** Days */
+            days?: number | null;
+            /** Meals */
+            meals?: number | null;
+            /** Staged Recipes */
+            staged_recipes?: number | null;
+            /** Ingredients */
+            ingredients?: number | null;
+            /** Blockers */
+            blockers?: number | null;
+            /** Warnings */
+            warnings?: number | null;
         };
         /**
          * ImportSummary
@@ -7967,6 +8117,131 @@ export interface operations {
             };
             /** @description Link wygasł albo został odwołany */
             410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    upload_pdf_api_v1_import_pdf_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_pdf_api_v1_import_pdf_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportJobDetail"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_jobs_api_v1_import_jobs_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportJobListResponse"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_job_api_v1_import_jobs__job_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportJobDetail"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_job_api_v1_import_jobs__job_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };

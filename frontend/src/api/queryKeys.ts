@@ -147,6 +147,20 @@ export const queryKeys = {
   publicList: {
     detail: (token: string) => ['public-list', token] as const,
   },
+  /**
+   * Importy PDF (BATCH_15) — lista i szczegóły joba z raportem parsowania.
+   *
+   * `jobs` i `job` mają ROZŁĄCZNE prefiksy (`index` vs `detail`) z tego samego
+   * powodu, co listy zakupowe wyżej: klucz szczegółu `['import','jobs',id]`
+   * byłby DZIECKIEM klucza listy, więc `invalidateQueries` po uploadzie
+   * unieważniałby też świeżo wstawiony do cache'u raport i kazał pobierać go
+   * drugi raz.
+   */
+  import: {
+    all: ['import'] as const,
+    jobs: ['import', 'jobs', 'index'] as const,
+    job: (id: number) => ['import', 'jobs', 'detail', id] as const,
+  },
   adminUsers: {
     all: ['admin', 'users'] as const,
     list: (filters: AdminUsersFilters) => ['admin', 'users', 'list', filters] as const,

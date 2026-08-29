@@ -112,6 +112,16 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/pages/StatystykiPage.vue'),
         meta: { title: 'Statystyki' },
       },
+      // Import jadłospisów PDF (BATCH_15). Wyjątek od reguły „batch podmienia
+      // component istniejącej trasy": mapa 05_FRONTEND §3 nie przewidywała
+      // osobnego ekranu importu, bo powstawała przed audytem PDF-ów. Trasa
+      // i pozycja nawigacji wchodzą razem — karta B15 §Frontend.
+      {
+        path: 'import',
+        name: 'import',
+        component: () => import('@/pages/ImportPage.vue'),
+        meta: { title: 'Import PDF' },
+      },
       {
         path: 'ustawienia',
         name: 'ustawienia',

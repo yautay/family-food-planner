@@ -58,6 +58,12 @@ class Settings(BaseSettings):
     #: Odroid H2 nie ma pamięci na więcej, a paczkę i tak budujemy na dysku.
     transfer_max_zip_mb: int = 100
 
+    #: Limit wgrywanego jadłospisu PDF (importer, BATCH_15) w megabajtach —
+    #: 07_SECURITY §6. Plik większy kończy się 413, ZANIM pdfplumber cokolwiek
+    #: otworzy. 25 MB mieści każdy plik z korpusu z ogromnym zapasem
+    #: (największy ma ~1,5 MB) i zostawia margines na skany.
+    pdf_max_upload_mb: int = 25
+
 
 def _format_missing(exc: ValidationError) -> str:
     missing = sorted(

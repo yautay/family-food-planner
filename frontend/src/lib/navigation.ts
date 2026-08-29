@@ -16,6 +16,7 @@ import {
   ChartColumn,
   ChefHat,
   Carrot,
+  FileUp,
   Refrigerator,
   Settings,
   Shield,
@@ -51,6 +52,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { name: 'spizarnia', label: 'Spiżarnia', icon: Refrigerator },
   { name: 'zakupy', label: 'Zakupy', icon: ShoppingCart, primary: true },
   { name: 'statystyki', label: 'Statystyki', icon: ChartColumn },
+  { name: 'import', label: 'Import PDF', icon: FileUp },
   { name: 'ustawienia', label: 'Ustawienia', icon: Settings },
   {
     name: 'admin-users',

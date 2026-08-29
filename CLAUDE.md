@@ -242,6 +242,34 @@ Dołożone w BATCH_12 (też fundament):
   **Warunku `checked != item.checked` nie wolno ruszać** — na nim stoi
   idempotencja PATCH-a, bez której kolejka offline dublowałaby zapisy.
 
+Dołożone w BATCH_15 (też fundament):
+
+- `app/modules/importer/parser.py` — TRZECI czysty moduł obliczeniowy obok
+  silników (ADR-008): wejście = teksty stron z pdfplumber, wyjście = dataclassy.
+  Zero I/O, więc cały parser testuje się na wyciętych fragmentach. Kontrakt
+  struktury jest WIĄŻĄCY i mieszka w `docs/implementation-plan/01_PDF_AUDIT.md`
+  (razem z **erratą §9** dopisaną przez ten batch) — linia niepasująca do
+  kontraktu zostaje ZGŁOSZONA jako `parse_warning`, nigdy „dopasowana" innym
+  wzorcem. Nie dokładaj wzorców bez pomiaru i erraty.
+- `app/modules/importer/matching.py` — mapowanie EXACT po
+  `catalog.naming.normalize_name`. Ta sama funkcja, co klucz unikalności
+  katalogu: własna normalizacja w importerze produkuje duplikaty, których baza
+  nie przyjmie. Fuzzy i AI to B16 — B15 nie robi ANI JEDNEGO wywołania sieciowego.
+- **Staging stoi poza wzorcem scope.** `import_jobs` nie ma `scope` ani
+  `household_id` (03_DATABASE §9): jadłospis to dokument zdrowotny JEDNEJ osoby.
+  Widoczność egzekwuje jawny warunek właścicielski w serwisie (wzorzec
+  `nutrition/service.py`), ADMIN widzi wszystko wg D16, cudzy job to 404.
+- `core/uploads.PRIVATE_SUBDIRS += "import-pdf"` — endpoint `/uploads/*`
+  sprawdza wyłącznie sesję, więc każdy nowy podkatalog z cudzą prywatnością
+  dopisuje się tutaj.
+- **Parsowanie idzie w `run_in_threadpool` pod `asyncio.wait_for`**
+  (`PDF_PARSE_TIMEOUT_S`). Timeout przerywa ŻĄDANIE, nie wątek — CPU-bound kodu
+  w Pythonie nie da się zabić z zewnątrz. Błąd parsowania to status `failed`
+  z komunikatem po polsku, nigdy 500.
+- Nowa zależność backendu: **pdfplumber** (nie pypdf) — kontrakt 01_PDF_AUDIT
+  został zmierzony jego `extract_text()`, a inna biblioteka inaczej skleja
+  kolumny i unieważniłaby regexy.
+
 Testy: `tests/{unit,integration,api}/` (pakiet — z `__init__.py`), markery
 `unit`/`integration`/`api` (wymagane — bez markera test nie wejdzie do
 żadnego targetu), docstring po polsku opisujący scenariusz. Fixture'y
