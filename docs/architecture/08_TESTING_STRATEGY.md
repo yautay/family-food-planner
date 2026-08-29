@@ -61,7 +61,16 @@ w transakcji z rollbackiem; migracje aplikowane raz na sesję testową.
     oraz `tests/api/test_import_api.py` (sniffing, limit, anty-IDOR
     i niezmiennik „zero encji domenowych"). Testy korpusowe są `integration`,
     mimo że nie dotykają bazy: czytają dysk i uruchamiają pdfplumber, więc nie
-    mieszczą się w kontrakcie `unit` (§1).
+    mieszczą się w kontrakcie `unit` (§1). **Uzupełnione w BATCH_16**: liczby
+    korpusu urosły do **662 wierszy / 185 nazw** (decyzja D20 rozszerzyła
+    kontrakt §3.2 o dwa warianty wiersza), doszły `tests/unit/
+    {test_unit_weights_median,test_kcal_validation,test_approve_gate,
+    test_ai_parsing}.py`, `tests/integration/{test_import_review_flow,
+    test_import_approve,test_import_ai_assist}.py` (round-trip zatwierdzenia na
+    realnym `dieta.pdf`) i `tests/api/test_import_review_api.py`.
+    **Testy AI nie robią ANI JEDNEGO realnego wywołania**: mock siedzi na
+    `anthropic.AsyncAnthropic`, więc przechodzi się całą ścieżkę produkcyjną
+    (prompt → wymuszony schemat → walidacja → zapis), a nie samą dataclassę.
 
 ## 3. E2E (Playwright) — utrzymywany mały i stabilny
 
@@ -77,7 +86,13 @@ Core flows (rozbudowywane w batchach, które je dostarczają):
    (`browser.newContext()` — bez `storageState`), inaczej test przechodziłby
    także wtedy, gdy strona publiczna po cichu korzysta z cookies sesji.
 4. Import PDF: upload dieta.pdf → review (gołąbki 7 porcji!) → zatwierdzenie
-   → przepis widoczny.
+   → przepis widoczny. Dwa specy: `import-upload.spec.ts` (B15, do raportu
+   odczytu) i `import-review-flow.spec.ts` (B16, od review do przepisu
+   w katalogu). Ten drugi seeduje ROZSTRZYGNIĘCIA przez API — klikanie ośmiu
+   pickerów po kolei testowałoby cierpliwość Playwrighta, a nie aplikację —
+   i sprząta przepis oraz produkty po id z odpowiedzi. **Zatwierdzony job
+   zostaje**: `DELETE /import/jobs/{id}` świadomie nie przyjmuje statusów
+   rozstrzygniętych, a spec rozpoznaje swój job po różnicy id, nie po liście.
 Konwencje: selektory `data-testid`, bez sleepów (expect z timeoutem),
 seed przez API, nie przez UI.
 

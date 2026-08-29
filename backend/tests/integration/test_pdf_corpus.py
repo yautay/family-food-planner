@@ -49,11 +49,21 @@ EXPECTED_PAGE_COUNTS = {
     "dieta (7)": 10,
 }
 
-#: Sumy z §1 dla całego korpusu.
+#: Sumy z §1 dla całego korpusu — liczby wierszy i nazw obowiązują od decyzji
+#: D20 (kontrakt §3.2 objął dwa dodatkowe warianty wiersza składnika, BATCH_16).
 EXPECTED_DAYS = 24
 EXPECTED_MEALS = 96
-EXPECTED_INGREDIENT_ROWS = 642
-EXPECTED_PRODUCT_NAMES = 178
+EXPECTED_INGREDIENT_ROWS = 662
+EXPECTED_PRODUCT_NAMES = 185
+
+#: Produkty, których wiersze zawinęły się między dwie linie (errata §9.2).
+_WRAPPED_NAME_PREFIXES = (
+    "Czekolada ciemna",
+    "Mleczko kokosowe",
+    "Kakao",
+    "Kawa",
+    "Tuńczyk w wodzie",
+)
 
 
 @pytest.fixture(scope="session")
@@ -92,7 +102,7 @@ def test_korpus_ma_osiem_plikow_o_zmierzonej_liczbie_stron() -> None:
 
 
 def test_caly_korpus_parsuje_sie_do_liczb_z_audytu(corpus: dict[str, ParsedDocument]) -> None:
-    """24 dni, 96 posiłków, 642 wiersze składników, 178 nazw produktów (§1)."""
+    """24 dni, 96 posiłków, 662 wiersze składników, 185 nazw produktów (§1)."""
     days = sum(len(document.days) for document in corpus.values())
     meals = sum(len(document.meals) for document in corpus.values())
     ingredients = sum(
@@ -112,7 +122,7 @@ def test_caly_korpus_parsuje_sie_do_liczb_z_audytu(corpus: dict[str, ParsedDocum
 
 
 def test_kazdy_wiersz_skladnika_ma_gramature(corpus: dict[str, ParsedDocument]) -> None:
-    """§3.2: gramatura jest podana zawsze (642/642) i zawsze dodatnia."""
+    """§3.2: gramatura jest podana zawsze (662/662) i zawsze dodatnia."""
     grams = [
         item.grams
         for document in corpus.values()
@@ -195,6 +205,29 @@ def test_golabki_multi_portion_declared(corpus: dict[str, ParsedDocument]) -> No
     assert _suspects(corpus["dieta"]) == []
 
 
+def test_sekcja_produkty_jest_oznaczona_w_calym_korpusie(
+    corpus: dict[str, ParsedDocument],
+) -> None:
+    """Trzy wystąpienia sekcji `Produkty` (errata §9.3) i tylko one są oznaczone.
+
+    Znacznik decyduje o skalowaniu przy zatwierdzeniu importu (dług U22): dodatek
+    podany na JEDNĄ porcję nie może zostać podzielony przez `base_servings`.
+    """
+    extras = sorted(
+        (stem, item.raw_name, str(item.grams))
+        for stem, document in corpus.items()
+        for dish in document.dishes
+        for item in dish.ingredients
+        if item.from_extras_section
+    )
+
+    assert extras == [
+        ("dieta", "Ziemniak", "225"),
+        ("dieta (5)", "Ziemniak", "150"),
+        ("dieta (7)", "Pasta warzywna machewkowo-paprykowa", "60"),
+    ]
+
+
 def test_golabki_produkty_section(corpus: dict[str, ParsedDocument]) -> None:
     """§7: sekcja `Produkty` (Ziemniak 225 g) dołącza się do dania posiłku."""
     dish = _meal(corpus["dieta"], "Środa", "OBIAD").dishes[0]
@@ -256,13 +289,14 @@ def test_kcal_posilkow_z_anomalii_zgadza_sie_z_tabela_audytu(
 # --- ostrzeżenia parsera (errata §9) ---------------------------------------------
 
 
-def test_niesparsowane_wiersze_skladnikow_sa_zgloszone_a_nie_zgadniete(
+def test_zaden_wiersz_skladnika_nie_zostaje_niesparsowany(
     corpus: dict[str, ParsedDocument],
 ) -> None:
-    """Siedem wierszy spoza kontraktu §3.2 — errata §9, decyzja D20.
+    """Po decyzji D20 kontrakt §3.2 pokrywa CAŁY korpus — zero `parse_warning`.
 
-    Ten test jest DOWODEM pomiaru, na którym stoi errata: gdyby kontrakt
-    rozszerzono (albo parser zaczął zgadywać), liczba by się zmieniła.
+    Przed D20 zostawało tu siedem ostrzeżeń (errata §9.2). Test asertuje pustą
+    listę razem z treścią ostrzeżeń: gdyby parser zaczął gubić wiersze, komunikat
+    pokaże który, zamiast samego „0 != 1".
     """
     lines = sorted(
         finding.details["linia"]
@@ -271,14 +305,71 @@ def test_niesparsowane_wiersze_skladnikow_sa_zgloszone_a_nie_zgadniete(
         if finding.kind == "parse_warning"
     )
 
-    assert lines == [
-        "Czekolada ciemna (60-69% masy kakaowej), 1 x",
-        "Czekolada ciemna (60-69% masy kakaowej), 2 x",
-        "Czekolada ciemna (60-69% masy kakaowej), 2 x",
-        "Kapusta włoska, 200 g",
-        "Kefir, 330 g",
-        "Makaron pełnoziarnisty, 60 g",
-        "Passata, 150 g",
+    assert lines == []
+
+
+def test_wiersze_bez_pary_ilosc_jednostka_maja_gramature_i_puste_raw(
+    corpus: dict[str, ParsedDocument],
+) -> None:
+    """Wariant §3.2 `Cukinia, 200 g` (D20): gramatura jest, pary ilośćxjednostka nie ma.
+
+    Dziesięć wierszy w korpusie — cztery „czyste" i sześć z doklejonym urwkiem
+    prawej kolumny, którego stara miara (7 ostrzeżeń) nie widziała.
+    """
+    items = [
+        (stem, item)
+        for stem, document in corpus.items()
+        for dish in document.dishes
+        for item in dish.ingredients
+        if item.raw_qty is None
+    ]
+    rows = sorted((stem, item.raw_name, str(item.grams)) for stem, item in items)
+
+    # Para ilośćxjednostka jest niepodzielna: albo obie części, albo żadna.
+    assert [item.raw_unit for _, item in items] == [None] * len(items)
+    assert rows == [
+        ("dieta (2)", "Makaron pełnoziarnisty", "60"),
+        ("dieta (2)", "Makaron pełnoziarnisty", "60"),
+        ("dieta (2)", "Passata", "150"),
+        ("dieta (2)", "Pierś z indyka", "100"),
+        ("dieta (2)", "Ser camembert", "40"),
+        ("dieta (3)", "Kapusta włoska", "200"),
+        ("dieta (3)", "Mleko 2%", "120"),
+        ("dieta (3)", "Woda źródlana", "120"),
+        ("dieta (4)", "Kefir", "330"),
+        ("dieta (5)", "Cukinia", "200"),
+    ]
+
+
+def test_wiersze_zawiniete_miedzy_dwie_linie_odzyskuja_jednostke(
+    corpus: dict[str, ParsedDocument],
+) -> None:
+    """Drugi wariant D20: `…, 2 x` + `Kostka (16 g)` — jednostka bywa w obu liniach.
+
+    Dziesięć wierszy: jednostka stoi raz w drugiej linii (`Kostka`, `Opakowanie`),
+    raz w pierwszej (`Łyżka`, `Łyżeczka`, `Szklanka`) — czego stary pomiar
+    (3 ostrzeżenia o „Czekoladzie") również nie obejmował.
+    """
+    wrapped = sorted(
+        (stem, item.raw_name, str(item.raw_qty), item.raw_unit, str(item.grams))
+        for stem, document in corpus.items()
+        for dish in document.dishes
+        for item in dish.ingredients
+        if item.raw_name.startswith(_WRAPPED_NAME_PREFIXES)
+        and item.raw_unit in {"Kostka", "Opakowanie", "Łyżka", "Łyżeczka", "Szklanka"}
+    )
+
+    assert wrapped == [
+        ("dieta (1)", "Mleczko kokosowe (skondensowane)", "10", "Łyżka", "100"),
+        ("dieta (2)", "Czekolada ciemna (60-69% masy kakaowej)", "3", "Kostka", "24"),
+        ("dieta (3)", "Tuńczyk w wodzie (konserwowy)", "0.5", "Opakowanie", "85"),
+        ("dieta (4)", "Czekolada ciemna (60-69% masy kakaowej)", "2", "Kostka", "16"),
+        ("dieta (4)", "Kawa espresso (napar bez cukru)", "1", "Szklanka", "50"),
+        ("dieta (4)", "Mleczko kokosowe (skondensowane)", "5", "Łyżka", "50"),
+        ("dieta (6)", "Mleczko kokosowe (skondensowane)", "8", "Łyżka", "80"),
+        ("dieta (7)", "Czekolada ciemna (60-69% masy kakaowej)", "1", "Kostka", "8"),
+        ("dieta (7)", "Czekolada ciemna (60-69% masy kakaowej)", "2", "Kostka", "16"),
+        ("dieta (7)", "Kakao (proszek bez dodatku cukru)", "1", "Łyżeczka", "5"),
     ]
 
 

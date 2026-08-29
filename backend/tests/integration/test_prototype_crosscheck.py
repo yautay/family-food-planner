@@ -118,9 +118,11 @@ def test_liczba_produktow_jest_porownywalna_z_prototypem(
 ) -> None:
     """Różnica w liczbie produktów to MATERIAŁ, nie fail (§8.6, decyzja D2).
 
-    Prototyp miał 181 nazw, parser widzi 178. Trzy brakujące to wiersze spoza
-    kontraktu §3.2 (errata §9) — dlatego test raportuje różnicę zamiast ją
-    zamiatać, ale nie blokuje batcha: rozszerzenie kontraktu jest decyzją D20.
+    Prototyp miał 181 nazw. Po wdrożeniu D20 (BATCH_16 rozszerzył kontrakt §3.2
+    o dwa warianty wiersza składnika) parser widzi 185 — czyli więcej niż
+    prototyp, bo czyta też wiersze z doklejoną prawą kolumną. Różnica zostaje
+    RAPORTOWANA, nie zamieniona na asercję równości: obie liczby mierzą
+    kompletność w inny sposób i ich zrównanie byłoby przypadkiem, nie kontraktem.
     """
     names = {
         normalize_name(item.raw_name)

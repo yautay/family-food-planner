@@ -325,6 +325,27 @@ i anomalie: `docs/implementation-plan/01_PDF_AUDIT.md` (wiążący).
 Zatwierdzenie tworzy normalne Recipe/CanonicalProduct + wpis audit.
 Nic nie trafia do danych aplikacji bez review.
 
+Stan faktyczny po BATCH_16 (review i zatwierdzanie):
+
+- **Liczba porcji przepisu** = `resolved_servings` (decyzja człowieka) >
+  `declared_servings` (z dokumentu) > 1. Składniki jadłospisu są podane na
+  CAŁOŚĆ przepisu, więc to jest mianownik wszystkich wartości „per porcja".
+- **Sekcja `Produkty` jest wyjątkiem od tej reguły**: dodatek z niej jest
+  podany na JEDNĄ porcję, więc przy zapisie mnoży się go przez liczbę porcji
+  (kolumna `from_extras_section`, 03_DATABASE §9).
+- **Walidacja kcal jest PER POSIŁEK, nie per danie** — `pdf_kcal` opisuje
+  w dokumencie posiłek, a posiłek bywa dwudaniowy (01_PDF_AUDIT errata §9.1).
+  Rozjazd ponad 10% ⇒ issue `kcal_mismatch` (warning) z obiema wartościami;
+  produkty bez wartości odżywczych dają komunikat „nie można zweryfikować",
+  a nie fałszywy rozjazd.
+- **Zatwierdzenie uczy przeliczników jednostek DOMOWYCH** (`product_unit_weights`,
+  mediana z próbek `ilość x jednostka x gramy`). Etykieta „szt." jest z tego
+  wyłączona: mostkiem sztuka → gram jest `piece_weight_g` produktu (ADR-005),
+  którego wolno dotknąć wyłącznie ADMIN-owi (D15).
+- **Produkty zakładane importem powstają jako UNVERIFIED** (§4.9), a wpisy
+  przeliczników o innym źródle niż `pdf_import` są nietykalne — człowiek
+  wygrywa z pomiarem.
+
 ## 11. Transfer (eksport/import)
 
 - Eksport logiczny: JSON (wszystkie encje użytkownika/instancji, wersją

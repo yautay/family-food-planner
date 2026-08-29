@@ -65,6 +65,7 @@ from app.modules.recipes.models import (
     Recipe,
     RecipeIngredient,
     RecipeRating,
+    RecipeSource,
     Tag,
     recipe_tags,
 )
@@ -172,6 +173,22 @@ class RecipePortion:
     base_servings: int
     photo_path: str | None
     portion: NutritionValues
+
+
+@dataclass(frozen=True)
+class ImportedIngredient:
+    """Składnik wnoszony przez zatwierdzenie importu PDF (BATCH_16).
+
+    `grams` to gramatura z dokumentu — po ewentualnym przemnożeniu przez liczbę
+    porcji dla wierszy z sekcji `Produkty` (te są podane na porcję, a przepis
+    na całość). Para `display_*` jest tym, co widział człowiek („2 x Sztuka");
+    bywa pusta, bo dwa z trzech wariantów wiersza §3.2 jej nie niosą.
+    """
+
+    product_id: int
+    grams: Decimal
+    display_qty: Decimal | None = None
+    display_unit: str | None = None
 
 
 @dataclass(frozen=True)
@@ -329,6 +346,39 @@ class RecipesService:
 
     # --- zapis ------------------------------------------------------------------
 
+    async def owned_names(self, *, actor: User, limit: int) -> list[tuple[int, str]]:
+        """Pary `(id, nazwa)` WŁASNYCH, nieARCHIWALNYCH przepisów — lekki odczyt.
+
+        Wejście dla wykrywania duplikatów w review importu (BATCH_16): tam
+        potrzebne są SAME nazwy, a `list_recipes` liczyłoby dla każdego wiersza
+        wartości odżywcze i oceny.
+
+        **`owned_condition`, nie `visible_condition`** — świadomie, bo te nazwy
+        wychodzą POZA instancję, do Claude API. Widoczność daje ADMIN-owi
+        `true()` (D16), więc administrator klikający „Zaproponuj z AI" wysłałby
+        nazwy przepisów WSZYSTKICH rodzin, a decyzja D5 zezwala wyłącznie na
+        treść PDF-a i katalog. To ta sama granica, co przy eksporcie własnych
+        danych (BATCH_14) — przynależność, nie widoczność.
+        """
+        rows = (
+            await self._session.execute(
+                select(Recipe)
+                .where(_RECIPES.owned_condition(actor), Recipe.is_archived.is_(False))
+                .order_by(Recipe.name, Recipe.id)
+                .limit(limit)
+            )
+        ).scalars()
+        return [(recipe.id, recipe.name) for recipe in rows]
+
+    async def get_visible(self, recipe_id: int, *, actor: User) -> Recipe:
+        """Przepis widoczny dla użytkownika albo 404 — wejście dla innych modułów.
+
+        Publiczne, bo scalanie dania importu z istniejącym przepisem (BATCH_16)
+        musi sprawdzić `target_recipe_id` TĄ SAMĄ regułą widoczności, co reszta
+        modułu; własny filtr w cudzym serwisie byłby błędem review.
+        """
+        return await _RECIPES.get_or_404(self._session, recipe_id, actor)
+
     async def create_recipe(self, *, actor: User, payload: RecipePayload) -> RecipeDetailView:
         """Nowy przepis ze składnikami i tagami — jedna transakcja.
 
@@ -351,6 +401,70 @@ class RecipesService:
         await self._replace_tags(recipe.id, payload.tag_ids)
         await self._session.commit()
         return await self.recipe_detail(actor, recipe.id)
+
+    async def create_imported_recipe(
+        self,
+        *,
+        actor: User,
+        scope: Scope,
+        import_job_id: int,
+        name: str,
+        instructions: str,
+        base_servings: int,
+        ingredients: Sequence[ImportedIngredient],
+    ) -> Recipe:
+        """Przepis z zatwierdzonego importu PDF — BEZ commita (BATCH_16).
+
+        Osobne wejście, a nie `create_recipe`, z trzech powodów:
+
+        1. **Bez commita.** Zatwierdzenie joba tworzy kilkanaście przepisów,
+           produkty i próbki przeliczników w JEDNEJ transakcji (ADR-011:
+           „do danych aplikacji trafia wyłącznie stan APPROVED" — połowa
+           importu byłaby gorsza niż jego brak).
+        2. **Ilość wchodzi w GRAMACH z dokumentu**, bo gramatura z nawiasu jest
+           jedynym źródłem ilości przy imporcie (01_PDF_AUDIT §8.3) — a para
+           ilość x jednostka („2 x Sztuka") zostaje wyłącznie jako
+           `display_qty`/`display_unit`, czyli to, co widział człowiek.
+        3. `source`/`import_job_id` ustawia się tylko tutaj; ręczny endpoint
+           przepisów nie ma prawa ich podać.
+        """
+        recipe = Recipe(
+            name=name,
+            instructions=instructions,
+            base_servings=base_servings,
+            source=RecipeSource.PDF_IMPORT,
+            import_job_id=import_job_id,
+            **ScopedQuery.ownership_for_create(actor, scope),
+        )
+        self._session.add(recipe)
+        await self._session.flush()
+
+        products, measures = await self._measures_for({item.product_id for item in ingredients})
+        for position, item in enumerate(ingredients):
+            product = products[item.product_id]
+            try:
+                normalized = normalize_amount(item.grams, "g", measures[item.product_id])
+            except UnitConversionError as exc:
+                # Produkt liczony na 100 ml nie przyjmuje gramatury z PDF-a bez
+                # gęstości, której model nie ma (ADR-005). Zapis pada CAŁY —
+                # niezmiennik 02_DOMAIN §13.1 nie zna wyjątku „prawie się dało".
+                raise UnitConversionError(
+                    f"Składnik „{product.name}”: {exc.message}",
+                    details={"product_id": product.id, "unit": "g", **exc.details},
+                ) from exc
+            self._session.add(
+                RecipeIngredient(
+                    recipe_id=recipe.id,
+                    product_id=product.id,
+                    display_qty=item.display_qty,
+                    display_unit=item.display_unit,
+                    amount=normalized.amount,
+                    amount_unit=normalized.unit,
+                    position=position,
+                )
+            )
+        await self._session.flush()
+        return recipe
 
     async def update_recipe(
         self, recipe_id: int, *, actor: User, payload: RecipePayload
@@ -657,48 +771,12 @@ class RecipesService:
         if not inputs:
             return []
 
-        product_ids = {item.product_id for item in inputs}
-        products = {
-            product.id: product
-            for product in (
-                await self._session.execute(
-                    select(CanonicalProduct).where(CanonicalProduct.id.in_(product_ids))
-                )
-            )
-            .scalars()
-            .all()
-        }
-        missing_products = product_ids - products.keys()
-        if missing_products:
-            raise RecipeValidationError(
-                INGREDIENT_PRODUCT_NOT_FOUND,
-                details={"product_ids": sorted(missing_products)},
-            )
-
-        weights_by: dict[int, list[ProductUnitWeight]] = {pid: [] for pid in product_ids}
-        for weight in (
-            (
-                await self._session.execute(
-                    select(ProductUnitWeight).where(ProductUnitWeight.product_id.in_(product_ids))
-                )
-            )
-            .scalars()
-            .all()
-        ):
-            weights_by[weight.product_id].append(weight)
+        products, measures = await self._measures_for({item.product_id for item in inputs})
 
         ingredients: list[RecipeIngredient] = []
         for position, item in enumerate(inputs):
             product = products[item.product_id]
-            # `measure_for` przyjmuje dataclassy `UnitWeight`, nie wiersze ORM —
-            # przepakowanie jest obowiązkiem serwisu (ustalenie review R1).
-            measure = measure_for(
-                product,
-                [
-                    UnitWeight(unit_label=row.unit_label, grams_per_unit=row.grams_per_unit)
-                    for row in weights_by[product.id]
-                ],
-            )
+            measure = measures[product.id]
             try:
                 normalized = normalize_amount(item.quantity, item.unit, measure)
             except UnitConversionError as exc:
@@ -720,6 +798,48 @@ class RecipesService:
                 )
             )
         return ingredients
+
+    async def _measures_for(
+        self, product_ids: set[int]
+    ) -> tuple[dict[int, CanonicalProduct], dict[int, ProductMeasure]]:
+        """Produkty i ich miary (razem z przelicznikami) — dwa zapytania, bez N+1.
+
+        `measure_for` przyjmuje dataclassy `UnitWeight`, nie wiersze ORM —
+        przepakowanie jest obowiązkiem serwisu (ustalenie review R1).
+        """
+        products = {
+            product.id: product
+            for product in (
+                await self._session.execute(
+                    select(CanonicalProduct).where(CanonicalProduct.id.in_(product_ids))
+                )
+            )
+            .scalars()
+            .all()
+        }
+        missing_products = product_ids - products.keys()
+        if missing_products:
+            raise RecipeValidationError(
+                INGREDIENT_PRODUCT_NOT_FOUND,
+                details={"product_ids": sorted(missing_products)},
+            )
+
+        weights_by: dict[int, list[UnitWeight]] = {pid: [] for pid in product_ids}
+        for row in (
+            (
+                await self._session.execute(
+                    select(ProductUnitWeight).where(ProductUnitWeight.product_id.in_(product_ids))
+                )
+            )
+            .scalars()
+            .all()
+        ):
+            weights_by[row.product_id].append(
+                UnitWeight(unit_label=row.unit_label, grams_per_unit=row.grams_per_unit)
+            )
+
+        measures = {pid: measure_for(product, weights_by[pid]) for pid, product in products.items()}
+        return products, measures
 
     async def _replace_tags(self, recipe_id: int, tag_ids: Sequence[int]) -> None:
         """Podmień przypisania tagów kompletem; nieistniejący id tagu = 422, nie cichy skip.

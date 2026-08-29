@@ -64,6 +64,22 @@ class Settings(BaseSettings):
     #: (największy ma ~1,5 MB) i zostawia margines na skany.
     pdf_max_upload_mb: int = 25
 
+    #: Klucz Claude API dla AI-asysty review importu (BATCH_16, ADR-011, D5).
+    #: **Wolno go zostawić pustym** i to jest wspierany tryb pracy: importer
+    #: działa wtedy w pełni deterministycznie, a `POST /import/jobs/{id}/ai-suggest`
+    #: odpowiada 503 z komunikatem po polsku. Klucz żyje WYŁĄCZNIE po stronie
+    #: serwera — nie wychodzi w żadnej odpowiedzi API ani do logów (07_SECURITY §7).
+    anthropic_api_key: str = ""
+    #: Model używany przez asystę. Konfigurowalny, bo ADR-011 tak każe („model
+    #: konfigurowany w env") — wymiana modelu nie może wymagać zmiany kodu.
+    anthropic_model: str = "claude-opus-5"
+    #: Sufit tokenów jednej odpowiedzi. Propozycje mapowań to lista kilkudziesięciu
+    #: krótkich obiektów, więc 4k wystarcza z zapasem, a limit chroni budżet.
+    anthropic_max_tokens: int = 4096
+    #: Twardy limit czasu jednego wywołania. Review ma odpowiadać albo szybko,
+    #: albo z komunikatem — nie wisieć na cudzej infrastrukturze.
+    anthropic_timeout_s: float = 45.0
+
 
 def _format_missing(exc: ValidationError) -> str:
     missing = sorted(

@@ -135,6 +135,19 @@ class GoneError(AppError):
     code = "gone"
 
 
+class ServiceUnavailableError(AppError):
+    """503 — funkcja istnieje, ale ta instancja jej nie ma włączonej (BATCH_16).
+
+    Pierwszy konsument: AI-asysta importu PDF. Brak `ANTHROPIC_API_KEY` to
+    świadomie wspierany tryb pracy (ADR-011), a nie awaria ani błąd żądania —
+    stąd 503 z komunikatem, co użytkownik może zrobić zamiast tego, a nie 404
+    (endpoint istnieje) ani 500 (nic się nie zepsuło).
+    """
+
+    status_code = 503
+    code = "service_unavailable"
+
+
 def error_response(
     status_code: int,
     code: str,

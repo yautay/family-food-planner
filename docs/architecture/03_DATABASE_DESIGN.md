@@ -399,8 +399,9 @@ staged_recipes (id, import_job_id FK CASCADE, name, day_label, meal_label,
        resolution ENUM(create,merge_into_existing,skip) NULL,
        target_recipe_id FK NULL, resolved_servings INT NULL)
 staged_ingredients (id, staged_recipe_id FK CASCADE, raw_name, raw_qty,
-       raw_unit, grams NUMERIC(10,3),
+       raw_unit, grams NUMERIC(10,3), from_extras_section BOOL DEFAULT false,
        suggested_product_id FK NULL, match_kind ENUM(exact,fuzzy,ai,none),
+       confidence NUMERIC(3,2) NULL CHECK 0..1,
        confirmed_product_id FK NULL, create_new_product BOOL DEFAULT false)
 import_issues (id, import_job_id FK CASCADE, staged_recipe_id FK NULL,
        kind ENUM(multi_portion_suspect,kcal_mismatch,unmapped_product,
@@ -433,6 +434,27 @@ wg powyższego schematu, plus rzeczy, których szkic nie precyzował:
   zgodnym z D16.
 - **Staging nie wchodzi do eksportu transfer v1** (BATCH_14): to proces, nie
   dane domenowe. W pliku eksportu `recipes.import_job_id` jest `null`.
+
+Dołożone w BATCH_16 (migracja `0015`) — dwie kolumny `staged_ingredients`,
+obie wymuszone przez dokumenty nadrzędne, nie przez wygodę implementacji:
+
+- **`confidence NUMERIC(3,2) NULL`** (CHECK 0..1) — 02_DOMAIN §10 wymienia
+  `confidence` jako część StagedIngredient, a ADR-011 wymaga, żeby wynik AI
+  zawsze niósł `match_kind=ai` **razem z pewnością**. Szkic wyżej ją pominął.
+  `NULL` dla dopasowania EXACT i dla braku propozycji: pewność ma sens wyłącznie
+  tam, gdzie ktoś zgadywał.
+- **`from_extras_section BOOL NOT NULL DEFAULT false`** — dług U22 z BATCH_15.
+  Sekcja `Produkty` (01_PDF_AUDIT §3.3/§7) to dodatek podany NA JEDNĄ PORCJĘ,
+  podczas gdy reszta wiersza przepisu jest na całość. Zatwierdzenie przepisu
+  wieloporcjowego mnoży te ilości przez `base_servings`, żeby po podzieleniu
+  wróciły do gramatury z dokumentu; bez znacznika ziemniaki do gołąbków
+  skurczyłyby się z 225 g do 32 g na porcję — po cichu.
+
+Stan po zatwierdzeniu (BATCH_16): `import_jobs.status = approved`, a CAŁY
+staging zostaje. `pdf_kcal`/`pdf_macros` są metadanymi walidacyjnymi (ADR-011)
+— bez nich nie da się już nigdy sprawdzić, czy import był wierny dokumentowi.
+Odrzucenie (`rejected`) kasuje `staged_*` i `import_issues` razem z plikiem
+PDF, ale zostawia wiersz joba jako ślad decyzji.
 
 ## 10. Schemat — audit i transfer
 

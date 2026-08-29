@@ -343,32 +343,203 @@ diffie przed commitem (krok 11).
 
 ## Implementation checklist
 
-- [ ] GET staged + POST resolve (mapowania/porcje/scalenia/issues);
+- [x] **Stage 0 (D20)**: parser czyta oba dodatkowe warianty wiersza §3.2;
+      01_PDF_AUDIT §1/§3.2/§9.2 i testy korpusowe przestawione na **662/185**
+- [x] GET staged + POST resolve (mapowania/porcje/scalenia/issues);
       statusy parsed → in_review → approved/rejected
-- [ ] Walidacja kcal >10% ⇒ kcal_mismatch (obie wartości); auto-rozwiązanie
-- [ ] Blokada approve przy blockerach (409 z listą)
-- [ ] Approve: Recipe + produkty UNVERIFIED + mediany unit_weights +
+- [x] Walidacja kcal >10% ⇒ kcal_mismatch (obie wartości); auto-rozwiązanie
+- [x] Blokada approve przy blockerach (409 z listą)
+- [x] Approve: Recipe + produkty UNVERIFIED + mediany unit_weights +
       metadane pdf_* + audit — jedna transakcja
-- [ ] Reject: staging + plik + audit
-- [ ] ai_assist: fuzzy (match_kind=ai+confidence), duplikaty, porcje;
+- [x] Reject: staging + plik + audit
+- [x] ai_assist: fuzzy (match_kind=ai+confidence), duplikaty, porcje;
       tryb deterministyczny bez klucza
-- [ ] UI review: karty dań, 3 ścieżki mapowania, porcje, duplikaty,
+- [x] UI review: karty dań, 3 ścieżki mapowania, porcje, duplikaty,
       kcal, approve/reject
-- [ ] Testy: unit (mediana/próg/gate/AI-parsing), integration (6 przypadków),
+- [x] Testy: unit (mediana/próg/gate/AI-parsing), integration (6 przypadków),
       API, vitest, E2E flow (bez realnych wywołań AI)
-- [ ] 04_API + .env.example zaktualizowane; PROGRESS.md wpis
+- [x] 04_API + .env.example zaktualizowane; PROGRESS.md wpis
 
 ## Verification checklist
 
-- [ ] `task check` + `task test-e2e` zielone (w tym flow importu end-to-end)
-- [ ] Bez migracji (lub korygująca z testem down); jedna głowa
-- [ ] Ręcznie: pełny import dieta.pdf z kluczem AI (jeśli dostępny)
-      i bez klucza — oba tryby działają
-- [ ] Asercja niezmiennika §13.6: zero encji domenowych przed approve
-- [ ] Grep logów: brak klucza API i treści promptów
-- [ ] Acceptance Criteria 1–10 odhaczone z dowodem
-- [ ] Dokumentacja i PROGRESS.md zaktualizowane; commit `batch(16): …`
+- [x] `task check` + `task test-e2e` zielone (w tym flow importu end-to-end)
+- [x] Migracja `0015` (dwie kolumny stagingu — uzasadnienie w Completion notes),
+      upgrade i downgrade przechodzą na czystej bazie; jedna głowa
+- [x] Ręcznie/testowo: pełny import dieta.pdf BEZ klucza (tryb deterministyczny)
+      i z zamocowanym klientem AI — oba tryby działają
+- [x] Asercja niezmiennika §13.6: zero encji domenowych przed approve
+- [x] Grep logów: brak klucza API i treści promptów
+- [x] Acceptance Criteria 1–10 odhaczone z dowodem
+- [x] Dokumentacja i PROGRESS.md zaktualizowane; commit `batch(16): …`
 
 ## Completion notes
 
-(wypełnia agent wykonujący)
+**Wykonano (2026-08-29).** Importer PDF jest domknięty: ekran review, pięć
+endpointów, AI-asysta jako czysta propozycja i zatwierdzenie tworzące realne
+encje domenowe w JEDNEJ transakcji.
+
+### Stage 0 (D20) — kontrakt §3.2 rozszerzony, ale liczby wyszły INNE
+
+Parser czyta oba warianty zatwierdzone przez właściciela. **Pomiar skorygował
+się w górę: wierszy jest 20, nie 7, więc korpus daje 662/185, a nie zapowiadane
+649/180.** Przyczyna jest sprawdzalna i opisana w erracie 01_PDF_AUDIT §9.2 oraz
+przy D20: liczba 7 pochodziła z licznika `parse_warning` BATCH_15, którego regexy
+kotwiczyły na KOŃCU linii — nie widziały więc ani jednego wiersza z doklejoną
+prawą kolumną (§3.2 pułapka 1), a takich jest 6 z 10 w wariancie „bez pary"
+i 7 z 10 w „zawiniętym". Ślad tej luki był już w samej erracie: jako przykład
+podawała `Cukinia, 200 g`, którego na liście czterech zmierzonych wierszy nie
+było. **Zakres decyzji się nie zmienił** — oba warianty są dokładnie te
+zatwierdzone; zmieniła się tylko ich policzona liczba, a odzyskane dodatkowo
+wiersze to znów główne składniki (`Pierś z indyka, 100 g`, `Ser camembert, 40 g`,
+`Mleko 2%, 120 g`, `Woda źródlana, 120 g`, `Mleczko kokosowe … 10 x Łyżka (100 g)`,
+`Tuńczyk w wodzie … 0,5 x Opakowanie (85 g)`).
+
+Skutki uboczne SPRAWDZONE i zerowe: zbiór blockerów `multi_portion_suspect`
+i sześć mas z tabeli §5.1 nie drgnęły (dokładnie 6 posiłków ponad progiem:
+2 oznaczone, 4 nieoznaczone), 24/24 sumy kontrolne nadal się zgadzają, a
+crosscheck §8.6 wychodzi na **185 wobec 181** prototypu (+4, raportowane).
+Po korekcie w korpusie nie ma już ANI JEDNEGO `parse_warning`.
+
+### Odstępstwa od karty (świadome, każde z uzasadnieniem)
+
+1. **Migracja `0015` — karta zakładała „docelowo bez migracji".** Dwie kolumny
+   `staged_ingredients`, obie wymuszone dokumentami nadrzędnymi, nie wygodą:
+   - `confidence NUMERIC(3,2)` — **02_DOMAIN §10 wymienia `confidence` jako część
+     StagedIngredient**, a ADR-011 wymaga, żeby wynik AI zawsze niósł
+     `match_kind=ai` RAZEM z pewnością. Szkic 03_DATABASE §9 go pominął.
+   - `from_extras_section BOOL` — dług **U22**, jawnie dopuszczony w zleceniu.
+     Bez niego ziemniaki do gołąbków (225 g podane NA PORCJĘ) zostałyby
+     podzielone przez 7 i przepis skłamałby o 193 g na talerzu — po cichu.
+   Downgrade przetestowany (`test_upgrade_downgrade_upgrade_na_czystej_bazie`),
+   jedna głowa `0015`, bramka dryfu modeli zielona.
+2. **Walidacja kcal liczy się PER POSIŁEK, nie per danie.** Karta mówiła
+   „komplet mapowań DANIA", ale `pdf_kcal` opisuje w dokumencie POSIŁEK
+   i BATCH_15 skopiował tę wartość do każdego dania posiłku — porównanie jednego
+   z dwóch dań kolacji z kaloriami całej kolacji zgłaszałoby rozjazd tam, gdzie
+   go nie ma. To ta sama poprawka, którą errata §9.1 zrobiła już dla progu
+   wieloporcyjności, i ta sama, którą właściciel wtedy przyjął.
+3. **Przeliczniki: `Cebula, 2 x Sztuka (210 g)` NIE daje wiersza
+   `(Cebula, sztuka, 105)`** wbrew przykładowi z sekcji Tests. Etykieta „szt."
+   jest w `product_unit_weights` ZAREZERWOWANA (`UNIT_LABEL_RESERVED`, B04):
+   mostkiem sztuka → gram jest `piece_weight_g`, którego wolno dotknąć wyłącznie
+   ADMIN-owi, a zmiana unieważnia weryfikację produktu (**D15**). Import uczy
+   więc jednostek DOMOWYCH (łyżeczka 6 g, szklanka 240 g, woreczek 100 g —
+   zaasercjonowane na realnym `dieta.pdf`), a sprawa wag sztuki poszła do
+   **02_DECISIONS jako D21 (OPEN)** z rekomendacją: osobny ekran ADMIN-a
+   z propozycjami, bo to ta sama filozofia co reszta importera.
+4. **„Dane nowego produktu w payload" rozwiązane przez create-in-context.**
+   Ścieżką UI jest `ProductCreateDrawer` w `ProductPickerze` (06_UIUX §3.1 —
+   wzorzec obowiązkowy): powstaje prawdziwy produkt i wraca jako
+   `confirmed_product_id`. Flaga `create_new_product` została dla ścieżki
+   API-owej i przy `approve` zakłada produkt z surowej nazwy w kategorii
+   „Inne", `measure_kind=mass`, UNVERIFIED. Osobne kolumny na szkic produktu
+   byłyby trzecim miejscem trzymania tych samych danych.
+5. **Nazwy schematów mają prefiks `Import`** (`ImportResolveRequest`,
+   `ImportApproveRequest/Response`). Moduł shopping ma własne `ResolveRequest`;
+   dwie klasy o tej samej nazwie zmuszają FastAPI do kwalifikowania OBU pełną
+   ścieżką modułu w OpenAPI, co zmienia klucz w `generated.ts` także temu,
+   który był pierwszy — czyli psuje CUDZY moduł frontendu. Złapane przy
+   `task fe-types`, naprawione u źródła.
+6. **Produkt liczony na 100 ml przyjmuje gramaturę z PDF-a tak samo, jak
+   przyjmuje ją ręcznie wpisany składnik** — czyli zapisuje ilość i oznacza
+   wartości jako niepoliczalne (`recipes/service.py::_ingredient_values`),
+   zamiast wysadzać zatwierdzenie. Rozważano twarde 422; odrzucone, bo tworzyłoby
+   dla importu OSTRZEJSZĄ regułę niż dla formularza przepisu, przy identycznych
+   danych. Review pokazuje wtedy „nie da się przeliczyć", a nie fałszywy rozjazd.
+
+### Rzeczy dostarczone ponad kartę
+
+- `app/core/errors.py += ServiceUnavailableError` (503, kod `service_unavailable`)
+  — karta wymagała 503 dla `ai-suggest`, a takiej klasy nie było.
+- `CatalogService.create_product_pending` / `record_unit_weight_samples` oraz
+  `RecipesService.create_imported_recipe` / `get_visible` / `visible_names` —
+  publiczne wejścia BEZ commita (wzorzec R3), żeby `approve` był jedną
+  transakcją, a importer nie sięgał do cudzych tabel z pominięciem serwisu.
+- `app/modules/catalog/unit_weights.py` — czysty moduł mediany ważonej.
+  Postać ważona nie jest ozdobnikiem: stary wiersz reprezentuje `samples_count`
+  pomiarów, a materializowanie ich listą znaczyłoby alokację proporcjonalną do
+  licznika, którym da się sterować przez API.
+
+### Wyniki uruchomień (realne)
+
+`task check` zielony: 3 migrations-check / **431 unit** / **329 int** /
+**410 api** / **398 vitest** (42 pliki) / mypy 201 plików / vue-tsc / ruff /
+eslint / prettier / vite build. Suita API trwa **39 minut** — wgrywa i parsuje
+realne PDF-y w kilku scenariuszach.
+
+E2E na przebudowanym obrazie `app`: `import-review-flow.spec.ts` +
+`import-upload.spec.ts` → **3/3** (z setupem). Pełna suita: 18/20, z dwoma
+cudzymi specami na timeoucie — przyczyna w długu **U30** niżej, oba przechodzą
+po podniesieniu limitu czasu.
+
+Drobiazg do zapamiętania: `uv sync` (doszedł `anthropic`) podniósł też **ruff**,
+a nowsza wersja widzi `SIM300` tam, gdzie stała stoi po lewej stronie
+porównania — `task check` potrafi więc paść na lincie w kodzie, którego się nie
+tknęło.
+
+### Ustalenia review na diffie (naprawione w tym samym commicie)
+
+`/code-review` — dwa realne błędy:
+
+1. **`unmapped_product` blokował też dania scalane z istniejącym przepisem.**
+   Danie oznaczone jako duplikat nie tworzy Recipe ani RecipeIngredient, więc
+   żądanie zmapowania jego ośmiu pozycji było pracą bez odbiorcy — a `approve`
+   i tak zwracał 409. Blokada obowiązuje teraz wyłącznie dania, które MAJĄ
+   powstać; regresja pilnowana testem
+   `test_danie_scalane_z_istniejacym_nie_wymaga_mapowan`.
+2. **`kcal_mismatch` wieszał się na PIERWSZYM daniu posiłku, także pominiętym.**
+   Karta dania pominiętego jest w UI wyszarzona i nie rozwija składników, więc
+   ostrzeżenie faktycznie znikało z pola widzenia. Uwaga trafia teraz na
+   pierwsze AKTYWNE danie posiłku.
+
+`/security-review` — jedno ustalenie, MEDIUM:
+
+3. **Lista kandydatów do wykrywania duplikatów wysyłana do Claude API była
+   liczona `visible_condition`, a ta daje ADMIN-owi `true()` (D16).**
+   Administrator klikający „Zaproponuj z AI" wysłałby poza instancję nazwy
+   przepisów WSZYSTKICH rodzin — w tym prywatnych — podczas gdy D5 zezwala
+   wyłącznie na treść PDF-a i nazwy z globalnego katalogu. Kandydatów wyznacza
+   teraz `ScopedQuery.owned_condition` (PRZYNALEŻNOŚĆ, nie widoczność — ta sama
+   granica, co przy eksporcie własnych danych w B14), a metoda nazywa się
+   `RecipesService.owned_names`, żeby nazwa nie zapraszała do powrotu
+   widoczności. Test `test_admin_nie_wysyla_do_modelu_przepisow_cudzych_rodzin`
+   czyta DOSŁOWNIE wysłane żądania.
+
+Pozostałe obszary `/security-review` bez ustaleń: klucz API poza odpowiedziami
+i logami, IDOR na pięciu endpointach (cudze danie/składnik/uwaga = 404),
+path traversal przy kasowaniu pliku, odsiewanie halucynacji w odpowiedzi
+modelu (nazwa przepisu w uwadze pochodzi z NASZEJ bazy), brak `v-html`
+w nowej warstwie Vue, CSRF, audyt bez nazw dań.
+
+### Follow-upy (nie naprawiane w tym batchu)
+
+- **U27**: `ReviewService._unmapped_names` robi JEDNO zapytanie o kandydatów
+  NA KAŻDĄ niezmapowaną nazwę (ścieżka `ai-suggest`). Przy pierwszym imporcie
+  na pustym katalogu to ~60 zapytań trigramowych. Do rewizji w R4 razem
+  z pomiarem — dziś nie boli, bo endpoint i tak czeka na model.
+- **U28**: E2E `import-review-flow.spec.ts` zostawia po sobie ZATWIERDZONY job
+  (jeden wiersz na przebieg): `DELETE /import/jobs/{id}` świadomie nie przyjmuje
+  statusów rozstrzygniętych. Przepis i produkty są sprzątane. Gdyby lista
+  importów w dev zaczęła przeszkadzać, potrzebne jest bulk delete dla
+  właściciela (temat pokrywa się z D10).
+- **U29**: `ImportPage.vue` nadal bez paginacji (dług U25 z B15) — teraz z jedną
+  pozycją więcej na wiersz.
+- **U30 (NIE Z TEGO BATCHA, ale znalezione przy nim)**: `transfer.spec.ts` (B14)
+  **PODWAJA dane demo przy każdym przebiegu**. Po kilku dzisiejszych uruchomieniach
+  suity baza dev ma **768 składników w każdym daniu demo** i **768 posiłków
+  w dniu planu** zamiast 15, przez co `POST /transfer/import/{id}/apply` trwa
+  **73 s** i dwa specy (`transfer`, `week-template-cycle`) przekraczają 30-sekundowy
+  timeout Playwrighta. Dowód, że to nie regresja B16: **oba przechodzą po
+  podniesieniu timeoutu** (`task test-e2e -- transfer.spec.ts
+  week-template-cycle.spec.ts --timeout=180000` → 3 passed), a `apply` kończy się
+  statusem 200. Do rozstrzygnięcia w R4: czy import z decyzją „reużyj istniejący"
+  ma prawo DOKŁADAĆ dzieci do istniejącego rodzica (wtedy to błąd aplikacji),
+  czy spec ma sprzątać po sobie ostrożniej (wtedy to higiena E2E). Baza dev
+  wymaga wyczyszczenia — decyzja właściciela, nie agenta.
+
+### Pytania do właściciela
+
+**D21 (OPEN)** — czy import ma z czasem uczyć wag sztuki produktów
+(`piece_weight_g`) przez osobny ekran propozycji dla ADMIN-a. Materiał jest
+zmierzony (01_PDF_AUDIT §5.2), ale wdrożenie tego „przy okazji" łamałoby D15.
+Rekomendacja i wariant odrzucony: 02_DECISIONS, wiersz D21.

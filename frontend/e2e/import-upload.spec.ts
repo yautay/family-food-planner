@@ -76,8 +76,9 @@ test('import PDF: wgranie jadłospisu daje job „Sparsowany" i raport odczytu',
   await expect(report.getByTestId('import-report-checksums').locator('li')).toHaveCount(3)
   await expect(report.getByTestId('import-report-checksums')).not.toContainText('rozjazd')
 
-  // Zakres B15 kończy się na odczycie — strona ma to mówić wprost.
-  await expect(report).toContainText('Review i zatwierdzanie — wkrótce')
+  // Od BATCH_16 sparsowany job prowadzi WPROST do ekranu review — wejście
+  // musi być widoczne na liście, inaczej upload kończyłby się ślepym zaułkiem.
+  await expect(job.getByTestId('import-job-review')).toBeVisible()
 
   const after = await request.get(`${API}/import/jobs`)
   const fresh = ((await after.json()) as { items: { id: number }[] }).items.filter(

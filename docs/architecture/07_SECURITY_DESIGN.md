@@ -168,6 +168,16 @@ Wyłącznie env (pydantic-settings): `DATABASE_URL`, `SECRET_KEY` (sesje/CSRF),
 `.env.example` z placeholderami. W prod: plik env na hoście `chmod 600`
 lub docker secrets. Klucz API Anthropic używany wyłącznie server-side.
 
+Stan faktyczny `ANTHROPIC_API_KEY` (BATCH_16): pole `Settings.anthropic_api_key`
+z **pustą wartością domyślną** — i to jest wspierany tryb pracy, nie brak
+konfiguracji. Instancja bez klucza prowadzi import w całości deterministycznie,
+a `POST /import/jobs/{id}/ai-suggest` odpowiada 503 (ADR-011). Klucz nie
+pojawia się w ŻADNEJ odpowiedzi API (`GET .../staged` niesie wyłącznie flagę
+`ai_available: bool`) ani w logach: `ai_assist._ask` loguje sam fakt
+niepowodzenia, bez treści promptu, bez odpowiedzi i bez wyjątku SDK, który
+potrafi nieść nagłówki żądania. Towarzyszą mu `ANTHROPIC_MODEL`,
+`ANTHROPIC_MAX_TOKENS` i `ANTHROPIC_TIMEOUT_S` — te sekretami nie są.
+
 Skan repo: `task secrets-scan` (gitleaks w kontenerze). Konfiguracja
 `.gitleaks.toml` (od review R2, 2026-08-21) zachowuje WSZYSTKIE domyślne
 reguły (`useDefault = true`) i wycisza wyłącznie dwa literały haseł testowych

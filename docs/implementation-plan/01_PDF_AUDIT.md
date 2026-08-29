@@ -21,8 +21,10 @@ nie hipotetyczne. Każda liczba poniżej została zmierzona na realnych plikach.
 | dieta (6).pdf | 8 | 2000 | Pon/Wt/Śr | 1997, 2025, 1962 |
 | dieta (7).pdf | 10 | 2000 | Pon/Wt/Śr | 2044, 2054, 2095 |
 
-Łącznie: **24 dni · 96 posiłków · 642 wiersze składników · 178 unikalnych
-nazw produktów**.
+Łącznie: **24 dni · 96 posiłków · 662 wiersze składników · 185 unikalnych
+nazw produktów** (liczby obowiązujące od decyzji **D20**, wdrożonej w
+BATCH_16 — kontrakt §3.2 objął wtedy dwa dodatkowe warianty wiersza; audyt
+z 2026-08-16 liczył 642/178, patrz errata §9.2).
 
 Każdy PDF nosi nagłówek „Tydzień 1" — **numer tygodnia jest bez znaczenia**,
 to 8 niezależnych bloków 3-dniowych. `dieta (2).pdf` ma zamiast podsumowania
@@ -58,14 +60,24 @@ bezwymiarowy. **Mikroelementów brak w całym materiale.**
 
 ### 3.2 Wiersz składnika
 
+Trzy warianty (drugi i trzeci dołożyła decyzja **D20**, wdrożenie BATCH_16):
+
 ```
-Nazwa produktu, ILOŚĆ x Jednostka (GRAMY g)
+A.  Nazwa produktu, ILOŚĆ x Jednostka (GRAMY g)      — 642 wiersze
+B.  Nazwa produktu, GRAMY g                          — 10 wierszy
+C.  Nazwa produktu, ILOŚĆ x  ⏎  Jednostka (GRAMY g)  — 10 wierszy
 ```
 
-Przykłady: `Cebula, 0,3 x Sztuka (31,5 g)`, `Przecier pomidorowy, 6 x Łyżka (90 g)`.
+Przykłady: `Cebula, 0,3 x Sztuka (31,5 g)`, `Przecier pomidorowy, 6 x Łyżka (90 g)`
+(A); `Cukinia, 200 g` (B); `Czekolada ciemna (60-69% masy kakaowej), 2 x` +
+`Kostka (16 g)` (C). W wariancie C jednostka bywa w PIERWSZEJ linii
+(`…, 1 x Łyżeczka` + `(5 g)`) — rozstrzyga ją zamknięta lista jednostek niżej.
 
 - Separator dziesiętny: **przecinek**.
-- **Gramy są podane zawsze** (642/642 wierszy) — to gramatura jest źródłem
+- W wariancie B pary ilość × jednostka NIE MA i parser jej nie zgaduje
+  (`raw_qty`/`raw_unit` puste); w wariancie C zapisuje ją tylko wtedy, gdy
+  jednoznacznie rozpoznał jednostkę — para jest niepodzielna.
+- **Gramy są podane zawsze** (662/662 wierszy) — to gramatura jest źródłem
   prawdy dla importu; para ilość×jednostka to informacja prezentacyjna
   i materiał do nauki przeliczników per produkt.
 - Jednostki występujące w materiale: Sztuka, Opakowanie, Łyżka, Łyżeczka,
@@ -216,9 +228,11 @@ Uwaga: instrukcja (prawa kolumna) wpleciona w wiersze składników;
 
 ## 9. Errata z implementacji (BATCH_15, 2026-08-29)
 
-Parser powstał wprost z tego dokumentu i **odtworzył wszystkie liczby z §1**
-(24 dni, 96 posiłków, 642 wiersze składników, 178 nazw produktów, 24/24 sumy
-kontrolne). Poniżej wyłącznie to, czego audyt nie zapisał albo zapisał
+Parser powstał wprost z tego dokumentu i **odtworzył wszystkie ówczesne liczby
+z §1** (24 dni, 96 posiłków, 642 wiersze składników, 178 nazw produktów, 24/24
+sumy kontrolne). BATCH_16 wdrożył decyzję D20 i liczby wierszy/nazw w §1 są od
+tej pory inne (662/185) — pozostałe wciąż aktualne. Poniżej wyłącznie to,
+czego audyt nie zapisał albo zapisał
 niedokładnie — każdy punkt z pomiarem na tym samym korpusie. **Kontrakt
 pozostaje wiążący**; zmiany kontraktu wymagają decyzji właściciela, nie
 „ulepszenia" parsera.
@@ -256,34 +270,44 @@ głównego, BEZ sekcji `Produkty`"), świadome i udokumentowane: karta w sekcjac
 Tests i Acceptance Criteria wymaga dokładnie czterech przypadków z masami
 z §5.1, a tych nie da się otrzymać inaczej.
 
-### 9.2 Siedem wierszy składników nie pasuje do wzorca §3.2
+### 9.2 Dwadzieścia wierszy składników poza pierwotnym wzorcem §3.2
 
-§3.2 mówi „gramy są podane zawsze (642/642 wierszy)". To prawda o wierszach
-pasujących do podanego wzorca — ale w korpusie jest jeszcze **7 wierszy
-niosących gramaturę w innym układzie**, których audyt nie policzył:
+Audyt z 2026-08-16 mówił „gramy są podane zawsze (642/642 wierszy)". To była
+prawda o wierszach pasujących do JEDNEGO podanego wzorca — w korpusie jest
+jeszcze **20 wierszy niosących gramaturę w innym układzie**:
 
 | Wariant | Przykład | Wystąpień |
 |---|---|---|
-| bez pary ilość×jednostka | `Cukinia, 200 g` | 4 |
-| zawinięty między dwie linie | `Czekolada ciemna (60-69% masy kakaowej), 2 x` + `Kostka (16 g)` | 3 |
+| B — bez pary ilość×jednostka | `Cukinia, 200 g` | 10 |
+| C — zawinięty między dwie linie | `Czekolada ciemna (60-69% masy kakaowej), 2 x` + `Kostka (16 g)` | 10 |
 
-Pełna lista: `Passata, 150 g` (dieta 2), `Makaron pełnoziarnisty, 60 g`
-(dieta 2), `Kapusta włoska, 200 g` (dieta 3), `Kefir, 330 g` (dieta 4) oraz
-trzy wiersze „Czekolada ciemna" (dieta 4 ×2, dieta 7 ×1). Doliczenie ich dałoby
-**649 wierszy i 180 nazw produktów** zamiast 642 i 178.
+**Wdrożenie D20 w BATCH_16 (2026-08-29) skorygowało pomiar w górę.** Karta
+decyzji zapowiadała 7 wierszy (→ 649/180); realizacja zmierzyła **20** (→ **662
+wiersze i 185 nazw produktów**). Rozbieżność ma jedną, sprawdzalną przyczynę:
+liczba 7 pochodziła z licznika ostrzeżeń `parse_warning` BATCH_15, a jego regexy
+kotwiczyły na końcu linii — nie widziały więc ani jednego wiersza, do którego
+pdfplumber dokleił prawą kolumnę (§3.2 pułapka 1). Takich jest 6 z 10 w wariancie
+B i 7 z 10 w wariancie C. Sam audyt nosił już ślad tej luki: jako przykład
+wariantu B podawał `Cukinia, 200 g`, którego na liście czterech „zmierzonych"
+wierszy nie było, bo niesie doklejone `wymieszać z serem i pokrojonym pomidorem.`.
 
-**BATCH_15 ich NIE parsuje.** Każdy taki wiersz zgłasza się jako issue
-`parse_warning` z surową linią, więc dane nie giną po cichu — widać je w review.
+Zakres decyzji się przez to NIE zmienił — oba warianty są dokładnie te, które
+zatwierdził właściciel; zmieniła się tylko ich policzona liczba. Wiersze
+odzyskane dodatkowo to m.in. `Pierś z indyka, 100 g`, `Ser camembert, 40 g`,
+`Mleko 2%, 120 g`, `Woda źródlana, 120 g` (B) oraz `Mleczko kokosowe
+(skondensowane), 10 x Łyżka` + `(100 g)`, `Tuńczyk w wodzie (konserwowy), 0,5 x`
++ `Opakowanie (85 g)`, `Kawa espresso (napar bez cukru), 1 x Szklanka` + `(50 g)`
+(C) — a więc znowu główne składniki dań, nie dodatki.
 
-**Decyzja D20 (ZATWIERDZONA 2026-08-29): kontrakt §3.2 ZOSTAJE ROZSZERZONY
-o oba warianty — wykonuje to BATCH_16.** Do tego czasu obowiązuje stan opisany
-wyżej. Przy wdrożeniu rosną liczby w §1: **649 wierszy składników i 180 nazw
-produktów** zamiast 642 i 178 — tę sekcję i tabelę §1 trzeba wtedy zaktualizować
-razem z asercjami `tests/integration/test_pdf_corpus.py`.
+**Reguła „nie zgaduj" obowiązuje bez zmian**: wiersz zawinięty, którego druga
+połowa nie przyszła albo nie niesie rozpoznanej jednostki z §3.2, nadal zostaje
+zgłoszony jako `parse_warning` z surową linią. Po wdrożeniu D20 w korpusie nie ma
+już ani jednego takiego wiersza (asercja
+`test_zaden_wiersz_skladnika_nie_zostaje_niesparsowany`).
 
-Konsekwencja dla §8.6: parser widzi 178 nazw produktów wobec 181 w prototypie
-(prototyp czytał także te wiersze). Różnica **−3** jest w całości wyjaśniona
-powyższą listą i zniknie po wdrożeniu D20 w B16.
+Konsekwencja dla §8.6: parser widzi **185** nazw produktów wobec 181
+w prototypie (różnica **+4**), więc próg kompletności z §8.6 jest spełniony
+z zapasem. Test nadal RAPORTUJE różnicę, zamiast asertować równość.
 
 ### 9.3 Warianty sekcji tekstowych spoza §3.3
 

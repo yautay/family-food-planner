@@ -25,6 +25,10 @@ dependencies = [
     # pypdf — kontrakt 01_PDF_AUDIT został ZMIERZONY jego `extract_text()`,
     # a inna biblioteka inaczej skleja kolumny i unieważniłaby regexy parsera.
     "pdfplumber>=0.11",
+    # BATCH_16 (ADR-011, D5): AI-asysta review importu — WYŁĄCZNIE propozycje.
+    # Zależność jest OPCJONALNA w sensie działania: bez `ANTHROPIC_API_KEY`
+    # importer pracuje w trybie czysto deterministycznym i nie tworzy klienta.
+    "anthropic>=0.40",
 ]
 
 [dependency-groups]

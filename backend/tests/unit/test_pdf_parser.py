@@ -90,18 +90,74 @@ def test_instrukcja_bez_spacji_po_nawiasie_tez_sie_odkleja() -> None:
     assert dish.instructions.startswith("mozzarellą.")
 
 
-def test_linia_wygladajaca_na_skladnik_ale_niezgodna_z_kontraktem_daje_ostrzezenie() -> None:
-    """`Cukinia, 200 g` nie pasuje do §3.2 — parser NIE zgaduje, tylko zgłasza.
+def test_skladnik_bez_pary_ilosc_jednostka_jest_parsowany() -> None:
+    """`Cukinia, 200 g` wchodzi do kontraktu §3.2 decyzją właściciela D20.
 
-    Errata 01_PDF_AUDIT §9: takich wierszy jest w korpusie 7. Rozszerzenie
-    kontraktu o ten wzorzec to decyzja właściciela (D20), nie „ulepszenie" parsera.
+    Gramatura jest jedynym źródłem ilości (§8.3), więc wiersz bez pary
+    ilość x jednostka niesie komplet potrzebnych danych — para zostaje pusta.
     """
-    document = parse_document([f"Środa\n{_MEAL_HEADER}\nOmlet Przepis\nCukinia, 200 g"])
+    document = parse_document(
+        [f"Środa\n{_MEAL_HEADER}\nOmlet Przepis\nCukinia, 200 g\n{_DAY_TOTAL}"]
+    )
+    ingredient = document.dishes[0].ingredients[0]
+
+    assert ingredient.raw_name == "Cukinia"
+    assert ingredient.grams == Decimal("200")
+    assert ingredient.raw_qty is None
+    assert ingredient.raw_unit is None
+    assert document.findings == ()
+
+
+def test_skladnik_bez_pary_toleruje_doklejona_prawa_kolumne() -> None:
+    """Ten sam wariant z urwkiem instrukcji — sześć takich wierszy w korpusie."""
+    line = "Cukinia, 200 g wymieszać z serem i pokrojonym pomidorem."
+    document = parse_document([f"Środa\n{_MEAL_HEADER}\nOmlet Przepis\n{line}\n{_DAY_TOTAL}"])
+    dish = document.dishes[0]
+
+    assert dish.ingredients[0].raw_name == "Cukinia"
+    assert dish.ingredients[0].grams == Decimal("200")
+    assert dish.instructions == "wymieszać z serem i pokrojonym pomidorem."
+
+
+@pytest.mark.parametrize(
+    ("head", "tail", "unit", "grams"),
+    [
+        # Jednostka w DRUGIEJ linii (`Kostka`) — najczęstszy wariant w korpusie.
+        ("Czekolada ciemna (60-69% masy kakaowej), 2 x", "Kostka (16 g)", "Kostka", "16"),
+        # …i w PIERWSZEJ, gdy zawinął się sam nawias z gramaturą.
+        ("Kakao (proszek bez dodatku cukru), 1 x Łyżeczka", "(5 g)", "Łyżeczka", "5"),
+    ],
+)
+def test_skladnik_zawiniety_miedzy_dwie_linie_sklada_sie_z_powrotem(
+    head: str, tail: str, unit: str, grams: str
+) -> None:
+    """Drugi wariant dołożony przez D20: `…, N x` + `Jednostka (GRAMY g)`."""
+    document = parse_document(
+        [f"Środa\n{_MEAL_HEADER}\nDeser Przepis\n{head}\n{tail}\n{_DAY_TOTAL}"]
+    )
+    ingredient = document.dishes[0].ingredients[0]
+
+    assert ingredient.raw_qty is not None
+    assert ingredient.raw_unit == unit
+    assert ingredient.grams == Decimal(grams)
+    assert document.findings == ()
+
+
+def test_linia_wygladajaca_na_skladnik_ale_niezgodna_z_kontraktem_daje_ostrzezenie() -> None:
+    """Wiersz zawinięty, którego druga połowa nie przyszła — parser NIE zgaduje.
+
+    D20 rozszerzyła kontrakt §3.2 o dwa warianty, ale nie zniosła reguły:
+    linia spoza kontraktu zostaje ZGŁOSZONA z surową treścią, a nie dopasowana
+    innym wzorcem.
+    """
+    document = parse_document(
+        [f"Środa\n{_MEAL_HEADER}\nDeser Przepis\nCzekolada ciemna, 2 x\n{_DAY_TOTAL}"]
+    )
 
     assert document.dishes[0].ingredients == []
     warning = next(f for f in document.findings if f.kind == "parse_warning")
     assert warning.severity == "warning"
-    assert warning.details["linia"] == "Cukinia, 200 g"
+    assert warning.details["linia"] == "Czekolada ciemna, 2 x"
 
 
 def test_zwykla_linia_instrukcji_nie_jest_ostrzezeniem() -> None:

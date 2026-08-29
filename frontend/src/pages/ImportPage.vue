@@ -98,7 +98,17 @@ const openReport = computed<ParseReport | null>(() => parseReportOf(openJob.data
 
 /** Raport ma wyłącznie job, który przeszedł parsowanie — reszta nie ma czego pokazać. */
 function hasReport(job: ImportJobSummary): boolean {
-  return job.status === 'parsed'
+  return job.status === 'parsed' || job.status === 'in_review'
+}
+
+/** Review ma sens, dopóki job czeka na decyzje (karta B16 §Frontend). */
+function canReview(job: ImportJobSummary): boolean {
+  return job.status === 'parsed' || job.status === 'in_review'
+}
+
+/** Job rozstrzygnięty — pokazujemy to wprost, zamiast zostawiać samą plakietkę. */
+function isSettled(job: ImportJobSummary): boolean {
+  return job.status === 'approved' || job.status === 'rejected'
 }
 
 function statusLabel(status: ImportJobStatus): string {
@@ -198,7 +208,7 @@ function toggleReport(id: number): void {
     <Card class="rounded-xl">
       <CardHeader>
         <CardTitle>{{ texts.jobsTitle }}</CardTitle>
-        <CardDescription>{{ texts.reviewSoon }}</CardDescription>
+        <CardDescription>{{ texts.reviewHint }}</CardDescription>
       </CardHeader>
 
       <CardContent class="grid gap-3">
@@ -243,6 +253,14 @@ function toggleReport(id: number): void {
           </p>
 
           <div class="flex flex-wrap gap-2">
+            <Button v-if="canReview(job)" as-child class="min-h-11">
+              <RouterLink
+                :to="{ name: 'import-review', params: { id: job.id } }"
+                data-testid="import-job-review"
+              >
+                {{ texts.openReview }}
+              </RouterLink>
+            </Button>
             <Button
               v-if="hasReport(job)"
               type="button"
@@ -350,9 +368,15 @@ function toggleReport(id: number): void {
             >
               <li v-for="warning in openReport!.warnings" :key="warning">{{ warning }}</li>
             </ul>
-
-            <p class="text-muted-foreground text-xs">{{ texts.reviewSoon }}</p>
           </div>
+
+          <p
+            v-if="isSettled(job)"
+            class="text-muted-foreground text-sm"
+            data-testid="import-job-settled"
+          >
+            {{ texts.resolvedInfo }}
+          </p>
         </article>
       </CardContent>
     </Card>

@@ -160,6 +160,7 @@ export const queryKeys = {
     all: ['import'] as const,
     jobs: ['import', 'jobs', 'index'] as const,
     job: (id: number) => ['import', 'jobs', 'detail', id] as const,
+    staged: (id: number) => ['import', 'jobs', 'staged', id] as const,
   },
   adminUsers: {
     all: ['admin', 'users'] as const,

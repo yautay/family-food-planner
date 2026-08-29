@@ -26,7 +26,7 @@ commit wykonany). Kolumna „Blokery" = zależności + decyzje z 02_DECISIONS.
 | 13 STATISTICS | [x] | — | `batch(13)` na master (hash wpisać po push) |
 | 14 IMPORT_EXPORT | [x] | — | `batch(14)` na master (hash wpisać po push) |
 | 15 PDF_IMPORT_EXTRACTION | [x] | — | `batch(15)` na master (hash wpisać po push) |
-| 16 PDF_IMPORT_REVIEW_AND_AI | [ ] | 15, 04 | |
+| 16 PDF_IMPORT_REVIEW_AND_AI | [x] | — | `batch(16)` na master (hash wpisać po push) |
 | R4 REVIEW_PRE_PRODUCTION | [ ] | 01–16 | |
 | 17 PRODUCTION_HARDENING | [ ] | R4 | |
 | 18 PRODUCTION_DEPLOYMENT_AND_OPERATIONS | [ ] | 17; **D6, D7** | |
@@ -40,6 +40,86 @@ zmiany dotykające przyszłych batchy trzeba wpisać do ich kart
 (00_MASTER_PLAN §8); dziennik to indeks, nie schowek.
 
 ---
+
+**2026-08-29 — BATCH_16 (PDF_IMPORT_REVIEW_AND_AI).** Importer PDF jest domknięty:
+ekran review (`/import/jobs/:id/review`), pięć endpointów (`staged`, `resolve`,
+`ai-suggest`, `approve`, `reject`), AI-asysta jako czysta propozycja i
+zatwierdzenie tworzące realne Recipe + produkty UNVERIFIED + mediany
+`product_unit_weights` + audyt — wszystko w JEDNEJ transakcji. Round-trip
+przechodzi na realnym `dieta.pdf`: gołąbki → przepis `base_servings=7`,
+`source=pdf_import`, kalorie porcji zgodne z jadłospisem w granicach progu 10%.
+
+**Sześć rzeczy, o których muszą wiedzieć następne batche:**
+
+1. **D20 wdrożona, ale liczby korpusu wyszły INNE niż zapowiadała decyzja:
+   662 wiersze / 185 nazw, nie 649/180.** Wierszy spoza pierwotnego wzorca §3.2
+   jest **20, nie 7**. Powód jest sprawdzalny: liczbę 7 wzięto z licznika
+   `parse_warning` BATCH_15, którego regexy kotwiczyły na KOŃCU linii, więc nie
+   widziały ani jednego wiersza z doklejoną prawą kolumną (§3.2 pułapka 1) —
+   a takich jest 6 z 10 w wariancie „bez pary" i 7 z 10 w „zawiniętym". Ślad
+   luki był w samej erracie: przykładem wariantu była `Cukinia, 200 g`, której
+   na liście czterech „zmierzonych" wierszy nie było. Zakres decyzji BEZ zmian,
+   skorygował się wyłącznie POMIAR; skutki uboczne sprawdzone i zerowe (zbiór
+   blockerów `multi_portion_suspect`, sześć mas z §5.1 i 24/24 sumy kontrolne
+   bez ruchu). Zaktualizowane: **01_PDF_AUDIT §1/§3.2/§9/§9.2**, D20, testy
+   korpusowe i crosscheck (185 vs 181 prototypu, **+4**).
+2. **Migracja `0015` — karta mówiła „docelowo bez migracji", a jednak jest**,
+   i obie kolumny wymuszają dokumenty nadrzędne, nie wygoda:
+   `staged_ingredients.confidence` (02_DOMAIN §10 i ADR-011 wymagają pewności
+   przy propozycji AI; szkic 03_DATABASE §9 ją pominął) oraz
+   `from_extras_section` (dług **U22**). Bez tej drugiej ziemniaki do gołąbków
+   — 225 g podane NA PORCJĘ — zostałyby podzielone przez 7. Głowa: `0015`.
+3. **Walidacja kcal liczy się PER POSIŁEK, nie per danie** — to samo odstępstwo
+   i to samo uzasadnienie, co errata §9.1 dla progu wieloporcyjności: `pdf_kcal`
+   opisuje posiłek, a posiłek bywa dwudaniowy. Kto będzie czytał `meal` z
+   odpowiedzi `staged`, dostaje liczby POSIŁKU, nie dania.
+4. **Import NIE uczy wag sztuki** (`piece_weight_g`), choć karta podawała
+   `Cebula → 105 g` jako przykład. Etykieta „szt." jest w `product_unit_weights`
+   zarezerwowana (B04), a `piece_weight_g` zmienia wyłącznie ADMIN i zmiana
+   unieważnia weryfikację (**D15**). Uczą się jednostki DOMOWE (łyżeczka,
+   szklanka, woreczek). Sprawa poszła do 02_DECISIONS jako **D21 (OPEN)**.
+5. **Nazwa schematu Pydantic jest częścią kontraktu frontendu.** Dwa moduły
+   z klasą `ResolveRequest` zmuszają FastAPI do kwalifikowania OBU pełną ścieżką
+   modułu w OpenAPI — i psują `generated.ts` temu modułowi, który był pierwszy.
+   Stąd prefiksy `ImportResolveRequest`/`ImportApproveRequest`. **Nowy schemat
+   o generycznej nazwie: sprawdź `grep app__modules__ frontend/src/api/generated.ts`
+   po `task fe-types`** — ma być zero trafień.
+6. **Nowa zależność backendu: `anthropic`** (SDK). Obraz `app` wymaga przebudowy
+   przed E2E. Klucz `ANTHROPIC_API_KEY` może być PUSTY i to jest wspierany tryb
+   pracy (ADR-011): `ai-suggest` odpowiada wtedy 503, UI chowa przyciski AI,
+   a cała reszta importu działa bez zmian — E2E leci właśnie w tym trybie.
+
+**Wyniki uruchomień (realne):** `task check` zielony (exit 0) — 3 migrations-check
+/ **431 unit** / **329 int** / **410 api** / **398 vitest w 42 plikach** / mypy
+201 plików + vue-tsc / ruff / eslint / prettier / vite build. Suita API trwa teraz
+**39 minut**, bo wgrywa i parsuje realne PDF-y w kilku scenariuszach — planować to,
+nie przerywać. E2E: **flow importu przechodzi** (`import-review-flow.spec.ts`
+i `import-upload.spec.ts`, 3/3 z setupem) na przebudowanym obrazie `app`
+(doszedł `anthropic`) i migracji `0015` na bazie dev.
+
+**Uwaga do następnego przebiegu E2E**: pełna suita dała 18/20 — `transfer` i
+`week-template-cycle` łapią 30-sekundowy timeout, ale **przechodzą po podniesieniu
+go do 180 s**. Przyczyna jest po stronie DANYCH, nie kodu: dług **U30** niżej.
+
+**Review na diffie:** `/code-review` — dwa realne błędy naprawione
+(`unmapped_product` blokował dania SCALANE, które nie wnoszą swoich składników
+nigdzie; `kcal_mismatch` przypinał się do dania POMINIĘTEGO, czyli do karty
+wyszarzonej w UI). `/security-review` — jedno ustalenie MEDIUM, naprawione:
+lista kandydatów wysyłana do Claude API szła przez `visible_condition`, a ta
+daje ADMIN-owi `true()` (**D16**) — administrator wysłałby poza instancję nazwy
+przepisów WSZYSTKICH rodzin, wbrew D5. Kandydatów wyznacza teraz
+`owned_condition` (`RecipesService.owned_names`), z testem czytającym dosłownie
+wysłane żądania. Wszystkie trzy mają testy regresyjne.
+
+Nowe długi: **U27** (N+1 zapytań o kandydatów w `ai-suggest`), **U28** (E2E
+zostawia zatwierdzony job — statusy rozstrzygnięte są nieusuwalne z założenia),
+**U29** (lista importów bez paginacji) i **U30 — NIE Z TEGO BATCHA**:
+`transfer.spec.ts` (B14) podwaja dane demo przy KAŻDYM przebiegu (768 składników
+na danie, 768 posiłków na dzień w bazie dev), przez co `transfer/import/apply`
+trwa 73 s i dwa cudze specy łapią timeout. Oba przechodzą po podniesieniu
+timeoutu — to spowolnienie, nie regresja. Do rozstrzygnięcia w R4; baza dev
+wymaga wyczyszczenia.
+
 
 **2026-08-29 — DECYZJA D20 (właściciel): kontrakt PDF §3.2 zostaje rozszerzony.**
 Właściciel zatwierdził rekomendację z BATCH_15: parser ma czytać dwa warianty

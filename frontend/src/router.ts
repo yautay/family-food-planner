@@ -122,6 +122,15 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/pages/ImportPage.vue'),
         meta: { title: 'Import PDF' },
       },
+      // Review pojedynczego importu (BATCH_16). Osobna TRASA, ale ta sama
+      // pozycja nawigacji: review jest krokiem w środku importu, nie działem
+      // aplikacji — dokładanie go do menu rozmyłoby wejście z listy jobów.
+      {
+        path: 'import/jobs/:id/review',
+        name: 'import-review',
+        component: () => import('@/pages/ImportReviewPage.vue'),
+        meta: { title: 'Review importu' },
+      },
       {
         path: 'ustawienia',
         name: 'ustawienia',

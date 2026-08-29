@@ -3,8 +3,11 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { createMemoryHistory, createRouter } from 'vue-router'
+
 import ImportPage from './ImportPage.vue'
 import type { ImportJobDetail, ImportJobSummary } from '@/api/pdfImport'
+import { routes } from '@/router'
 
 /**
  * Strona importu niczego nie liczy — testujemy to, co robi z odpowiedziami
@@ -78,7 +81,13 @@ function detail(parseReport: unknown = report()): ImportJobDetail {
 }
 
 async function mountPage() {
-  const wrapper = mount(ImportPage, { global: { plugins: [VueQueryPlugin] } })
+  // Router jest realny (pamięciowy), bo strona ma teraz LINK do review —
+  // `RouterLinkStub` nie sprawdziłby, że powstaje prawdziwe `<a href>` (R2).
+  const router = createRouter({ history: createMemoryHistory(), routes })
+  await router.push('/import')
+  await router.isReady()
+
+  const wrapper = mount(ImportPage, { global: { plugins: [VueQueryPlugin, router] } })
   await flushPromises()
   return wrapper
 }
@@ -178,10 +187,23 @@ describe('ImportPage', () => {
     expect(wrapper.find('[data-testid="import-report-checksums"]').text()).toContain('rozjazd')
   })
 
-  it('mówi wprost, że review przychodzi w kolejnym etapie', async () => {
+  it('sparsowany job prowadzi do ekranu review (BATCH_16)', async () => {
     importApi.listJobs.mockResolvedValue({ items: [summary()], total: 1 })
     const wrapper = await mountPage()
 
-    expect(wrapper.text()).toContain('Review i zatwierdzanie — wkrótce')
+    // Przycisk nawigujący MUSI być linkiem — `as-child` + `RouterLink`
+    // (ustalenie review R2; `as="router-link"` renderuje nieznany tag).
+    const link = wrapper.find('[data-testid="import-job-review"]')
+    expect(link.exists()).toBe(true)
+    expect(link.element.tagName.toLowerCase()).toBe('a')
+    expect(link.attributes('href')).toBe('/import/jobs/1/review')
+  })
+
+  it('rozstrzygnięty job nie prowadzi już do review, tylko mówi, że jest po decyzji', async () => {
+    importApi.listJobs.mockResolvedValue({ items: [summary({ status: 'approved' })], total: 1 })
+    const wrapper = await mountPage()
+
+    expect(wrapper.find('[data-testid="import-job-review"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="import-job-settled"]').text()).toContain('rozstrzygnięty')
   })
 })

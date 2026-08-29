@@ -111,6 +111,9 @@ describe('mapa tras', () => {
       // mapy 05_FRONTEND §3 — mapa powstawała przed audytem PDF-ów, więc
       // dokument dostał ten wiersz razem z trasą i pozycją nawigacji.
       'import',
+      // Review pojedynczego importu (B16) jest PODSTRONĄ importu — osobna
+      // trasa, ale ta sama pozycja nawigacji (05_FRONTEND §3).
+      'import-review',
       'ustawienia',
       'admin-users',
       'admin-households',

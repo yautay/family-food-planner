@@ -5573,6 +5573,236 @@
         }
       }
     },
+    "/api/v1/import/jobs/{job_id}/staged": {
+      "get": {
+        "tags": [
+          "import"
+        ],
+        "summary": "Stan review importu: dania, składniki, uwagi i blokady",
+        "operationId": "staged_api_v1_import_jobs__job_id__staged_get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StagedJobResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/import/jobs/{job_id}/resolve": {
+      "post": {
+        "tags": [
+          "import"
+        ],
+        "summary": "Zapis decyzji review (mapowania, porcje, scalenia, uwagi)",
+        "operationId": "resolve_api_v1_import_jobs__job_id__resolve_post",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportResolveRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StagedJobResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/import/jobs/{job_id}/ai-suggest": {
+      "post": {
+        "tags": [
+          "import"
+        ],
+        "summary": "Propozycje AI: mapowania, duplikaty, podpowiedź porcji (503 bez klucza)",
+        "operationId": "ai_suggest_api_v1_import_jobs__job_id__ai_suggest_post",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StagedJobResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/import/jobs/{job_id}/approve": {
+      "post": {
+        "tags": [
+          "import"
+        ],
+        "summary": "Zatwierdzenie importu — tworzy przepisy, produkty i przeliczniki",
+        "operationId": "approve_api_v1_import_jobs__job_id__approve_post",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportApproveRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportApproveResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/import/jobs/{job_id}/reject": {
+      "post": {
+        "tags": [
+          "import"
+        ],
+        "summary": "Odrzucenie importu — kasuje staging i plik PDF",
+        "operationId": "reject_api_v1_import_jobs__job_id__reject_post",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportJobDetail"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/transfer/export": {
       "post": {
         "tags": [
@@ -5894,6 +6124,40 @@
         ],
         "title": "AmountUnit",
         "description": "Oś, na której ilość jest przechowywana (03_DATABASE §5: `ENUM(g,ml,piece)`)."
+      },
+      "ApproveBlockerRead": {
+        "properties": {
+          "staged_recipe_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Staged Recipe Id"
+          },
+          "recipe_name": {
+            "type": "string",
+            "title": "Recipe Name",
+            "default": ""
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ImportIssueKind"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "title": "ApproveBlockerRead",
+        "description": "Jedna blokada zatwierdzenia — ten sam kształt, co w `details` odpowiedzi 409."
       },
       "AuditEntryRead": {
         "properties": {
@@ -7562,6 +7826,142 @@
         "title": "ImportApplyRequest",
         "description": "Body `apply`: wyłącznie decyzje kolizyjne (reszta jest w odłożonej paczce)."
       },
+      "ImportApproveRequest": {
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/Scope",
+            "default": "household"
+          }
+        },
+        "type": "object",
+        "title": "ImportApproveRequest",
+        "description": "Zatwierdzenie importu. Scope wybiera się RAZ dla całego joba, nie per danie."
+      },
+      "ImportApproveResponse": {
+        "properties": {
+          "job": {
+            "$ref": "#/components/schemas/ImportJobDetail"
+          },
+          "created_recipe_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Created Recipe Ids"
+          },
+          "created_product_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Created Product Ids"
+          },
+          "merged_count": {
+            "type": "integer",
+            "title": "Merged Count"
+          },
+          "skipped_count": {
+            "type": "integer",
+            "title": "Skipped Count"
+          },
+          "unit_weight_rows": {
+            "type": "integer",
+            "title": "Unit Weight Rows"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job",
+          "merged_count",
+          "skipped_count",
+          "unit_weight_rows"
+        ],
+        "title": "ImportApproveResponse",
+        "description": "Podsumowanie zatwierdzenia — liczby do ekranu „gotowe\"."
+      },
+      "ImportIssueKind": {
+        "type": "string",
+        "enum": [
+          "multi_portion_suspect",
+          "kcal_mismatch",
+          "unmapped_product",
+          "unit_conflict",
+          "duplicate_recipe",
+          "parse_warning"
+        ],
+        "title": "ImportIssueKind",
+        "description": "Rodzaje rzeczy do rozstrzygnięcia (03_DATABASE §9 — komplet od razu)."
+      },
+      "ImportIssueRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "staged_recipe_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Staged Recipe Id"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ImportIssueKind"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/ImportIssueSeverity"
+          },
+          "details": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Details"
+          },
+          "resolution": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolution"
+          },
+          "resolved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "severity"
+        ],
+        "title": "ImportIssueRead",
+        "description": "Uwaga do rozstrzygnięcia albo do wiadomości."
+      },
+      "ImportIssueSeverity": {
+        "type": "string",
+        "enum": [
+          "blocker",
+          "warning"
+        ],
+        "title": "ImportIssueSeverity",
+        "description": "`BLOCKER` blokuje zatwierdzenie joba (ADR-011), `WARNING` tylko informuje."
+      },
       "ImportJobDetail": {
         "properties": {
           "id": {
@@ -7831,6 +8231,34 @@
         ],
         "title": "ImportJobSummary",
         "description": "Job na liście: tyle, ile potrzeba do wiersza tabeli i plakietki statusu."
+      },
+      "ImportResolveRequest": {
+        "properties": {
+          "recipes": {
+            "items": {
+              "$ref": "#/components/schemas/ResolveRecipeRequest"
+            },
+            "type": "array",
+            "title": "Recipes"
+          },
+          "ingredients": {
+            "items": {
+              "$ref": "#/components/schemas/ResolveIngredientRequest"
+            },
+            "type": "array",
+            "title": "Ingredients"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/ResolveIssueRequest"
+            },
+            "type": "array",
+            "title": "Issues"
+          }
+        },
+        "type": "object",
+        "title": "ImportResolveRequest",
+        "description": "Paczka decyzji jednego zapisu review (wszystkie sekcje opcjonalne).\n\nNazwa ma prefiks `Import`, bo moduł shopping ma własne `ResolveRequest`\n(rozstrzyganie niejasności podglądu zakupów). Dwa schematy o tej samej\nnazwie zmuszają FastAPI do kwalifikowania OBU pełną ścieżką modułu\nw OpenAPI, co zmienia klucz w `generated.ts` także temu, który był\npierwszy — czyli psuje CUDZY moduł frontendu."
       },
       "ImportSummary": {
         "properties": {
@@ -8260,6 +8688,17 @@
         "title": "LoginRequest",
         "description": "Dane logowania. Hasło bez dolnego limitu — złe dane to 401, nie 422."
       },
+      "MatchKind": {
+        "type": "string",
+        "enum": [
+          "exact",
+          "fuzzy",
+          "ai",
+          "none"
+        ],
+        "title": "MatchKind",
+        "description": "Skąd wzięła się propozycja produktu dla surowej nazwy (ADR-011).\n\nB15 zapisuje wyłącznie `EXACT` i `NONE` — `FUZZY` i `AI` to B16, i to\nzawsze jako PROPOZYCJA wymagająca zatwierdzenia w review."
+      },
       "MealCreateRequest": {
         "properties": {
           "name": {
@@ -8305,6 +8744,51 @@
         ],
         "title": "MealCreateRequest",
         "description": "Nowy posiłek dnia — nazwa własna (02_DOMAIN §7), opcjonalny cel kcal."
+      },
+      "MealNutritionRead": {
+        "properties": {
+          "computed_kcal": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Computed Kcal"
+          },
+          "pdf_kcal": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pdf Kcal"
+          },
+          "delta_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delta Pct"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "MealNutritionRead",
+        "description": "Kalorie POSIŁKU: wyliczone przez silnik obok podanych w jadłospisie.\n\nWartości są per POSIŁEK, nie per danie — `pdf_kcal` w dokumencie opisuje\nposiłek, a posiłek bywa dwudaniowy (01_PDF_AUDIT §3.1, errata §9.1)."
       },
       "MealRead": {
         "properties": {
@@ -11046,6 +11530,123 @@
         "title": "RecipeSummary",
         "description": "Przepis na liście (widok 2): karta z kcal/porcję, oceną i tagami."
       },
+      "ResolveIngredientRequest": {
+        "properties": {
+          "ingredient_id": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Ingredient Id"
+          },
+          "confirmed_product_id": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed Product Id"
+          },
+          "create_new_product": {
+            "type": "boolean",
+            "title": "Create New Product",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "ingredient_id"
+        ],
+        "title": "ResolveIngredientRequest",
+        "description": "Decyzja o mapowaniu jednego składnika.\n\n`confirmed_product_id` i `create_new_product` wykluczają się: wskazanie\nproduktu wygrywa, bo jest konkretniejsze niż „załóż coś nowego\"."
+      },
+      "ResolveIssueRequest": {
+        "properties": {
+          "issue_id": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Issue Id"
+          },
+          "resolution": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Resolution"
+          }
+        },
+        "type": "object",
+        "required": [
+          "issue_id",
+          "resolution"
+        ],
+        "title": "ResolveIssueRequest",
+        "description": "Ręczne zamknięcie uwagi z krótkim uzasadnieniem."
+      },
+      "ResolveRecipeRequest": {
+        "properties": {
+          "staged_recipe_id": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Staged Recipe Id"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "resolution": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StagedRecipeResolution"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "target_recipe_id": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Recipe Id"
+          },
+          "resolved_servings": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 100.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved Servings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "staged_recipe_id"
+        ],
+        "title": "ResolveRecipeRequest",
+        "description": "Decyzje o jednym daniu: nazwa, porcje, co z nim zrobić."
+      },
       "ResolveRequest": {
         "properties": {
           "already_have": {
@@ -12268,6 +12869,282 @@
           "total"
         ],
         "title": "ShoppingListsResponse"
+      },
+      "StagedIngredientRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "raw_name": {
+            "type": "string",
+            "title": "Raw Name"
+          },
+          "raw_qty": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Raw Qty"
+          },
+          "raw_unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Raw Unit"
+          },
+          "grams": {
+            "type": "string",
+            "title": "Grams"
+          },
+          "from_extras_section": {
+            "type": "boolean",
+            "title": "From Extras Section"
+          },
+          "match_kind": {
+            "$ref": "#/components/schemas/MatchKind"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "suggested_product_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggested Product Id"
+          },
+          "suggested_product_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggested Product Name"
+          },
+          "confirmed_product_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed Product Id"
+          },
+          "confirmed_product_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed Product Name"
+          },
+          "create_new_product": {
+            "type": "boolean",
+            "title": "Create New Product"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "raw_name",
+          "grams",
+          "from_extras_section",
+          "match_kind",
+          "create_new_product"
+        ],
+        "title": "StagedIngredientRead",
+        "description": "Wiersz składnika w review: surowe dane z PDF + stan mapowania."
+      },
+      "StagedJobResponse": {
+        "properties": {
+          "job": {
+            "$ref": "#/components/schemas/ImportJobDetail"
+          },
+          "recipes": {
+            "items": {
+              "$ref": "#/components/schemas/StagedRecipeRead"
+            },
+            "type": "array",
+            "title": "Recipes"
+          },
+          "job_issues": {
+            "items": {
+              "$ref": "#/components/schemas/ImportIssueRead"
+            },
+            "type": "array",
+            "title": "Job Issues"
+          },
+          "blockers": {
+            "items": {
+              "$ref": "#/components/schemas/ApproveBlockerRead"
+            },
+            "type": "array",
+            "title": "Blockers"
+          },
+          "ai_available": {
+            "type": "boolean",
+            "title": "Ai Available"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job",
+          "ai_available"
+        ],
+        "title": "StagedJobResponse",
+        "description": "Kompletny stan review jednego importu."
+      },
+      "StagedRecipeRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "day_label": {
+            "type": "string",
+            "title": "Day Label"
+          },
+          "meal_label": {
+            "type": "string",
+            "title": "Meal Label"
+          },
+          "instructions": {
+            "type": "string",
+            "title": "Instructions"
+          },
+          "comment": {
+            "type": "string",
+            "title": "Comment"
+          },
+          "declared_servings": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Declared Servings"
+          },
+          "resolved_servings": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved Servings"
+          },
+          "resolution": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StagedRecipeResolution"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "target_recipe_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Recipe Id"
+          },
+          "pdf_macros": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pdf Macros"
+          },
+          "meal": {
+            "$ref": "#/components/schemas/MealNutritionRead"
+          },
+          "ingredients": {
+            "items": {
+              "$ref": "#/components/schemas/StagedIngredientRead"
+            },
+            "type": "array",
+            "title": "Ingredients"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/ImportIssueRead"
+            },
+            "type": "array",
+            "title": "Issues"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "day_label",
+          "meal_label",
+          "instructions",
+          "comment",
+          "meal"
+        ],
+        "title": "StagedRecipeRead",
+        "description": "Jedno danie ze stagingu — karta w ekranie review."
+      },
+      "StagedRecipeResolution": {
+        "type": "string",
+        "enum": [
+          "create",
+          "merge_into_existing",
+          "skip"
+        ],
+        "title": "StagedRecipeResolution",
+        "description": "Decyzja człowieka o daniu ze stagingu — wypełnia WYŁĄCZNIE B16."
       },
       "StatsAveragesRead": {
         "properties": {

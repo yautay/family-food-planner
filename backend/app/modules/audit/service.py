@@ -74,6 +74,10 @@ class AuditAction(StrEnum):
     # nigdy treści jadłospisu ani nazw dań (07_SECURITY §8).
     IMPORT_UPLOAD = "import_job.upload"
     IMPORT_DELETE = "import_job.delete"
+    # Review importu (BATCH_16). `approve` niesie liczby utworzonych encji,
+    # `reject` liczbę skasowanych dań stagingu — nadal ani jednej nazwy dania.
+    IMPORT_APPROVE = "import_job.approve"
+    IMPORT_REJECT = "import_job.reject"
 
     CATEGORY_CREATE = "product_category.create"
     CATEGORY_UPDATE = "product_category.update"

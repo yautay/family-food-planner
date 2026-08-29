@@ -99,9 +99,16 @@ U      GET  /import/jobs                   — lista własnych importów (?limit
 U      GET  /import/jobs/{id}              — szczegóły + `parse_report`; cudzy job 404
 U      DELETE /import/jobs/{id}            — usuwa job, staging i plik (tylko
                                              uploaded/parsed/failed; inaczej 409)
-U      /import/jobs/{id}/staged            — staged recipes+ingredients+issues (B16)
-U      /import/jobs/{id}/resolve           — mapowania/porcje/decyzje (B16)
-U      /import/jobs/{id}/approve|reject    — (B16)
+U      GET  /import/jobs/{id}/staged       — stan review: dania, składniki, uwagi,
+                                             blokady, `ai_available` — DOSTARCZONE w B16
+U      POST /import/jobs/{id}/resolve      — decyzje review (mapowania, porcje,
+                                             scalenia, zamknięcie uwag); pierwsze
+                                             wywołanie przestawia job na `in_review`
+U      POST /import/jobs/{id}/ai-suggest   — propozycje AI; 503 bez klucza API,
+                                             limit 10/min (ADR-011, D5)
+U      POST /import/jobs/{id}/approve      — tworzy przepisy/produkty/przeliczniki;
+                                             409 z `details.blockers` przy blokadach
+U      POST /import/jobs/{id}/reject       — kasuje staging i plik, job → `rejected`
 U      POST /transfer/export               — eksport własnych danych → ZIP
 A      POST /transfer/export?scope=instance — pełny eksport instancji → ZIP
 U/A    POST /transfer/import               — upload ZIP → raport DRY-RUN
@@ -115,6 +122,37 @@ UNVERIFIED); edycja wartości odżywczych i statusu weryfikacji: ADMIN.
 **Fizyczne usunięcie produktu kanonicznego: wyłącznie ADMIN** (D13) i tylko
 gdy produkt jest nieużywany — inaczej 409 z `details.used_in`. USER dostaje 403
 z podpowiedzią archiwizacji. Mutacje `/categories`: ADMIN; odczyt: każdy.
+
+### Review importu PDF (stan faktyczny, BATCH_16)
+
+Pięć endpointów wyżej obsługuje JEDEN ekran i mają wspólne własności, których
+mapa nie mieści:
+
+1. **`resolve` i `staged` zwracają TEN SAM kształt** (`StagedJobResponse`):
+   job, dania ze składnikami i uwagami, uwagi całego pliku, lista blokad
+   i flaga `ai_available`. Dzięki temu każda decyzja to jedno żądanie, po
+   którym UI ma komplet stanu — bez dociągania i bez liczenia czegokolwiek
+   po swojej stronie.
+2. **`blockers` w odpowiedzi to dokładnie to, co `approve` odesłałby w 409.**
+   Jedna lista, dwa miejsca użycia — nieczynny przycisk nie może obiecywać
+   czegoś innego niż serwer.
+3. **Kalorie są PER POSIŁEK** (`recipes[].meal`): `pdf_kcal` w jadłospisie
+   opisuje posiłek, a posiłek bywa dwudaniowy (01_PDF_AUDIT §3.1, errata §9.1).
+   Pole `reason` niesie powód, dla którego wyliczenie nie było możliwe
+   (brak mapowań, produkty bez wartości) — zamiast fałszywego rozjazdu.
+4. **`ai-suggest` jest idempotentne i nieinwazyjne**: nadpisuje wyłącznie
+   propozycje (`suggested_product_id`, `match_kind`, `confidence`) składników
+   BEZ potwierdzenia. Mapowanie zatwierdzone przez człowieka jest nietykalne
+   (ADR-011). Brak `ANTHROPIC_API_KEY` ⇒ **503** z kodem `service_unavailable`
+   i komunikatem po polsku — to wspierany tryb pracy, nie awaria.
+5. **Statusy rozstrzygnięte zamykają ścieżkę**: `resolve`/`ai-suggest`/
+   `approve`/`reject` na jobie `approved` albo `rejected` dają **409**.
+   `GET /staged` działa dalej — zatwierdzony staging zostaje jako metadane
+   walidacyjne (03_DATABASE §12).
+
+Scope przepisów wybiera się RAZ dla całego joba (`POST /approve` z polem
+`scope`), nie per danie — piętnaście selectów na jednym ekranie nie dodałoby
+niczego poza klikaniem.
 
 ### Cykl życia dnia planu (stan faktyczny, ustalenie REVIEW R3)
 

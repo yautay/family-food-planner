@@ -332,6 +332,7 @@ class ImporterService:
                                 raw_qty=item.raw_qty,
                                 raw_unit=item.raw_unit,
                                 grams=item.grams,
+                                from_extras_section=item.from_extras_section,
                                 suggested_product_id=product_id,
                                 match_kind=(
                                     MatchKind.NONE if product_id is None else MatchKind.EXACT

@@ -6,9 +6,13 @@ dataclassy. Dzięki temu cały parser testuje się na wyciętych fragmentach tek
 
 Kontrakt struktury jest WIĄŻĄCY i pochodzi z pomiaru na realnym korpusie:
 `docs/implementation-plan/01_PDF_AUDIT.md` (8 plików, 24 dni, 96 posiłków,
-642 wiersze składników, 178 nazw produktów). Ten moduł nie „ulepsza" regexów
-na zapas: linia, która nie pasuje do kontraktu, zostaje ZGŁOSZONA
-(`parse_warning`), a nie po cichu dopasowana innym wzorcem.
+662 wiersze składników, 185 nazw produktów — liczby po wdrożeniu decyzji D20).
+Ten moduł nie „ulepsza" regexów na zapas: linia, która nie pasuje do kontraktu,
+zostaje ZGŁOSZONA (`parse_warning`), a nie po cichu dopasowana innym wzorcem.
+Kontrakt §3.2 ma TRZY warianty wiersza składnika — pełny (`INGREDIENT_RE`),
+bez pary ilość x jednostka (`INGREDIENT_GRAMS_ONLY_RE`) i zawinięty między dwie
+linie (`INGREDIENT_WRAPPED_HEAD_RE` + `INGREDIENT_WRAPPED_TAIL_RE`); dwa ostatnie
+weszły decyzją właściciela D20, nie z inicjatywy parsera.
 
 Trzy pułapki ekstrakcji, które kształtują ten kod (§3.2, §5.4, §2.5):
 
@@ -36,7 +40,11 @@ from typing import Any
 __all__ = [
     "DAY_TOTAL_RE",
     "DISH_TITLE_RE",
+    "INGREDIENT_GRAMS_ONLY_RE",
     "INGREDIENT_RE",
+    "INGREDIENT_WRAPPED_HEAD_RE",
+    "INGREDIENT_WRAPPED_TAIL_RE",
+    "KNOWN_UNITS",
     "MEAL_HEADER_RE",
     "MEAL_ORDER",
     "MULTI_PORTION_THRESHOLD_G",
@@ -88,14 +96,52 @@ _EAT_OTHER_RE = re.compile(r"^Zjedz\s+.*porcj\w*\s*$")
 #: Stopka strony (`3/10`) — nigdy treść.
 _FOOTER_RE = re.compile(r"^\d+\s*/\s*\d+$")
 
-#: Linia WYGLĄDAJĄCA na składnik, która nie pasuje do kontraktu §3.2. Służy
-#: WYŁĄCZNIE do zgłaszania `parse_warning` — nie do parsowania (patrz errata
-#: 01_PDF_AUDIT §9: 7 takich wierszy w korpusie, decyzja D20).
+#: Wariant §3.2 BEZ pary ilość x jednostka: `Cukinia, 200 g` (+ ewentualny urwek
+#: prawej kolumny doklejony przez pdfplumber). Wchodzi do kontraktu decyzją D20.
+#: Ujemne spojrzenie w przód odcina dwa fałszywe trafienia: literę (`120 gramów`)
+#: i nawias zamykający gramaturę z pełnego wzorca (`… (31,5 g)`), który obsługuje
+#: `INGREDIENT_RE`.
+INGREDIENT_GRAMS_ONLY_RE = re.compile(
+    rf"^(?P<name>.+?),\s*(?P<grams>{_NUM})\s*g(?![\w)])(?P<rest>.*)$"
+)
+
+#: Wariant §3.2 ZAWINIĘTY między dwie linie — pierwsza połowa (`…, 2 x`, czasem
+#: z doklejoną jednostką albo urwkiem instrukcji), decyzja D20.
+INGREDIENT_WRAPPED_HEAD_RE = re.compile(rf"^(?P<name>.+?),\s*(?P<qty>{_NUM})\s*x(?P<tail>.*)$")
+#: …i druga połowa (`Kostka (16 g)` albo samo `(100 g)`), z ewentualnym urwkiem
+#: prawej kolumny po nawiasie.
+INGREDIENT_WRAPPED_TAIL_RE = re.compile(
+    rf"^(?P<unit>[^\s(]+)?\s*\((?P<grams>{_NUM})\s*g\)(?P<rest>.*)$"
+)
+
+#: Jednostki domowe WYSTĘPUJĄCE W MATERIALE (§3.2). Zamknięta lista jest tu
+#: narzędziem rozstrzygania, a nie zgadywania: przy wierszu zawiniętym trzeba
+#: wiedzieć, czy `Kostka` z drugiej linii to jednostka, czy początek instrukcji.
+KNOWN_UNITS = frozenset(
+    {
+        "sztuka",
+        "opakowanie",
+        "łyżka",
+        "łyżeczka",
+        "plaster",
+        "szklanka",
+        "garść",
+        "ząbek",
+        "szczypta",
+        "porcja",
+        "kromka",
+        "liść",
+        "woreczek",
+        "gałka",
+        "kostka",
+    }
+)
+
+#: Linia WYGLĄDAJĄCA na składnik, która nie pasuje do ŻADNEGO wariantu §3.2.
+#: Służy wyłącznie do zgłaszania `parse_warning` — nigdy do parsowania.
 _INGREDIENT_SHAPED_RE = re.compile(
     rf"^(?P<name>.+?),\s*(?:{_NUM}\s*x\s*\S*\s*|)\(?\s*(?P<grams>{_NUM})\s*g\)?\s*$"
 )
-#: Urwana pierwsza połowa zawiniętego wiersza składnika (`…, 2 x` / `Kostka (16 g)`).
-_INGREDIENT_WRAPPED_HEAD_RE = re.compile(rf"^(?P<name>.+?),\s*{_NUM}\s*x\s*$")
 
 #: Nagłówki stron, po których klasyfikacja przechodzi w tryb „pomijamy resztę".
 _SHOPPING_LIST_HEADING = "Lista zakupów"
@@ -164,12 +210,24 @@ def parse_decimal(raw: str) -> Decimal:
 
 @dataclass(frozen=True)
 class ParsedIngredient:
-    """Jeden wiersz składnika. `grams` to jedyne źródło ilości (§8.3)."""
+    """Jeden wiersz składnika. `grams` to jedyne źródło ilości (§8.3).
+
+    Para `raw_qty`/`raw_unit` jest OPCJONALNA od decyzji D20: wariant
+    `Cukinia, 200 g` nie niesie jej wcale, a w wierszu zawiniętym bywa
+    nieczytelna. Pole albo ma obie części, albo żadnej — sama liczba bez
+    jednostki nie mówi nic ani człowiekowi w review, ani próbce
+    `product_unit_weights` (B16).
+    """
 
     raw_name: str
-    raw_qty: Decimal
-    raw_unit: str
+    raw_qty: Decimal | None
+    raw_unit: str | None
     grams: Decimal
+    #: Czy wiersz pochodzi z sekcji `Produkty` (§3.3/§7): dodatek do posiłku
+    #: podany NA JEDNĄ PORCJĘ, podczas gdy reszta przepisu jest na całość.
+    #: Bez tego rozróżnienia skalowanie przepisu wieloporcjowego w review
+    #: podzieliłoby ziemniaki do gołąbków przez 7 (dług U22 z BATCH_15).
+    from_extras_section: bool = False
 
 
 @dataclass
@@ -328,6 +386,20 @@ def classify_pages(pages: Sequence[str]) -> tuple[PageKind, ...]:
     return tuple(kinds)
 
 
+@dataclass(frozen=True)
+class _WrappedHead:
+    """Pierwsza połowa wiersza składnika zawiniętego między dwie linie (D20)."""
+
+    name: str
+    qty: Decimal
+    #: Wszystko po `N x` — bywa jednostką (`Łyżka Zblenduj kawę…`), bywa urwkiem
+    #: prawej kolumny doklejonym bez spacji (`3 xpółtłusty`).
+    tail: str
+    #: Surowa linia — jedyna rzecz, którą warto pokazać człowiekowi, gdy wiersza
+    #: nie udało się domknąć.
+    line: str
+
+
 class _DocumentBuilder:
     """Maszyna stanów stron dni (§2.3): dzień → posiłek → danie → składniki.
 
@@ -346,6 +418,13 @@ class _DocumentBuilder:
         self._dish: ParsedDish | None = None
         self._buffer: list[str] = []
         self._in_comment = False
+        #: Czy jesteśmy w sekcji `Produkty` bieżącego dania (§3.3) — patrz
+        #: `ParsedIngredient.from_extras_section`.
+        self._in_extras = False
+        #: Pierwsza połowa wiersza zawiniętego między dwie linie (D20). Trzymamy
+        #: ją DOKŁADNIE jedną linię: druga połowa albo przyjdzie zaraz, albo
+        #: wiersz zostaje zgłoszony jako `parse_warning` — nie szukamy jej dalej.
+        self._pending_wrapped: _WrappedHead | None = None
 
     # --- pomocnicze -----------------------------------------------------------
 
@@ -398,6 +477,7 @@ class _DocumentBuilder:
         self._meal = None
         self._dish = None
         self._in_comment = False
+        self._in_extras = False
 
     def _start_meal(self, match: re.Match[str]) -> None:
         self._flush_buffer()
@@ -419,6 +499,7 @@ class _DocumentBuilder:
         self._day.meals.append(self._meal)
         self._dish = None
         self._in_comment = False
+        self._in_extras = False
 
     def _start_dish(self, name: str, declared_servings: int | None) -> None:
         self._flush_buffer()
@@ -427,6 +508,7 @@ class _DocumentBuilder:
         self._dish = ParsedDish(name=name, declared_servings=declared_servings)
         self._meal.dishes.append(self._dish)
         self._in_comment = False
+        self._in_extras = False
 
     def _ensure_dish(self) -> ParsedDish | None:
         """Danie bez rozpoznanego tytułu (np. urwana kolumna) i tak musi istnieć."""
@@ -446,11 +528,18 @@ class _DocumentBuilder:
         self._meal = None
         self._dish = None
         self._in_comment = False
+        self._in_extras = False
 
     # --- pętla główna ---------------------------------------------------------
 
     def feed(self, line: str) -> None:
         """Jedna linia strony dnia."""
+        pending, self._pending_wrapped = self._pending_wrapped, None
+        if pending is not None:
+            if self._complete_wrapped(pending, line):
+                return
+            self._abandon_wrapped(pending)
+
         stripped = line.strip()
         if not stripped or _FOOTER_RE.match(stripped):
             return
@@ -481,9 +570,11 @@ class _DocumentBuilder:
 
         if stripped == _SECTION_PRODUCTS:
             # Dodatkowe składniki POZA przepisem wieloporcjowym (§3.3/§7) —
-            # trafiają do tego samego dania, bo są wliczone w jego makro.
+            # trafiają do tego samego dania, bo są wliczone w jego makro, ale
+            # są podane NA PORCJĘ i muszą zostać oznaczone (dług U22).
             self._flush_buffer()
             self._in_comment = False
+            self._in_extras = True
             return
 
         eaten = _EAT_ONE_OF_RE.match(stripped)
@@ -501,28 +592,106 @@ class _DocumentBuilder:
             self._start_dish(title.group("name").strip(), int(servings) if servings else None)
             return
 
+        # Dwa warianty wiersza składnika dołożone do kontraktu §3.2 decyzją D20.
+        # Stoją NA KOŃCU rozpoznawania celowo: mają zbierać wyłącznie to, co
+        # wcześniejsze wzorce odrzuciły, a nie odbierać im linii.
+        if self._meal is not None:
+            wrapped = INGREDIENT_WRAPPED_HEAD_RE.match(stripped)
+            if wrapped:
+                self._pending_wrapped = _WrappedHead(
+                    name=wrapped.group("name").strip(),
+                    qty=parse_decimal(wrapped.group("qty")),
+                    tail=wrapped.group("tail"),
+                    line=stripped,
+                )
+                return
+
+            grams_only = INGREDIENT_GRAMS_ONLY_RE.match(stripped)
+            if grams_only:
+                self._add_ingredient_row(
+                    name=grams_only.group("name"),
+                    qty=None,
+                    unit=None,
+                    grams=parse_decimal(grams_only.group("grams")),
+                    rest=grams_only.group("rest"),
+                )
+                return
+
         if self._is_unparsed_ingredient(line):
             self._warn("Linia wygląda na składnik, ale nie pasuje do formatu z §3.2", line)
             return
 
         self._buffer.append(stripped)
 
+    # --- wiersz zawinięty między dwie linie (D20) -----------------------------
+
+    def _complete_wrapped(self, head: _WrappedHead, line: str) -> bool:
+        """Domknij wiersz zawinięty drugą połową; `False` = to nie ta linia."""
+        tail = INGREDIENT_WRAPPED_TAIL_RE.match(line.strip())
+        if tail is None:
+            return False
+        tail_unit = tail.group("unit")
+        if tail_unit is not None and tail_unit.lower() not in KNOWN_UNITS:
+            # Nawias z gramaturą poprzedzony czymś, co NIE jest jednostką z §3.2,
+            # to przypadek, którego kontrakt nie opisuje — nie zgadujemy.
+            return False
+
+        unit = tail_unit or _leading_known_unit(head.tail)
+        self._add_ingredient_row(
+            name=head.name,
+            qty=head.qty if unit is not None else None,
+            unit=unit,
+            grams=parse_decimal(tail.group("grams")),
+            rest=tail.group("rest"),
+        )
+        # Urwek prawej kolumny z PIERWSZEJ linii (poza jednostką) też jest tekstem
+        # instrukcji — bez tego ginąłby razem z rozpoznaniem wiersza.
+        head_rest = head.tail.strip()
+        if unit is not None and head_rest.lower().startswith(unit.lower()):
+            head_rest = head_rest[len(unit) :].strip()
+        if head_rest:
+            self._buffer.append(head_rest)
+        return True
+
+    def _abandon_wrapped(self, head: _WrappedHead) -> None:
+        """Druga połowa nie przyszła — zgłoś surową linię, niczego nie zgaduj."""
+        self._warn("Linia wygląda na składnik, ale nie pasuje do formatu z §3.2", head.line)
+
     def _add_ingredient(self, match: re.Match[str]) -> None:
+        self._add_ingredient_row(
+            name=match.group("name"),
+            qty=parse_decimal(match.group("qty")),
+            unit=match.group("unit").strip(),
+            grams=parse_decimal(match.group("grams")),
+            rest=match.group("rest"),
+        )
+
+    def _add_ingredient_row(
+        self,
+        *,
+        name: str,
+        qty: Decimal | None,
+        unit: str | None,
+        grams: Decimal,
+        rest: str,
+    ) -> None:
+        """Jedno wejście dla wszystkich trzech wariantów wiersza składnika (§3.2)."""
         dish = self._ensure_dish()
         if dish is None:
             return
         dish.ingredients.append(
             ParsedIngredient(
-                raw_name=match.group("name").strip(),
-                raw_qty=parse_decimal(match.group("qty")),
-                raw_unit=match.group("unit").strip(),
-                grams=parse_decimal(match.group("grams")),
+                raw_name=name.strip(),
+                raw_qty=qty,
+                raw_unit=unit,
+                grams=grams,
+                from_extras_section=self._in_extras,
             )
         )
-        rest = match.group("rest").strip()
-        if rest:
+        trailing = rest.strip()
+        if trailing:
             # Prawa kolumna doklejona do wiersza składnika — do bufora instrukcji.
-            self._buffer.append(rest)
+            self._buffer.append(trailing)
 
     def _confirm_servings(self, servings: int, *, line: str) -> None:
         """`Zjedz 1 z N porcji` potwierdza N; rozjazd z nagłówkiem to ostrzeżenie."""
@@ -546,14 +715,24 @@ class _DocumentBuilder:
         """
         if self._meal is None:
             return False
-        stripped = line.strip()
-        return bool(
-            _INGREDIENT_SHAPED_RE.match(stripped) or _INGREDIENT_WRAPPED_HEAD_RE.match(stripped)
-        )
+        return bool(_INGREDIENT_SHAPED_RE.match(line.strip()))
 
     def finish(self) -> None:
         """Domknij bufory po ostatniej linii dokumentu."""
+        if self._pending_wrapped is not None:
+            self._abandon_wrapped(self._pending_wrapped)
+            self._pending_wrapped = None
         self._flush_buffer()
+
+
+def _leading_known_unit(text: str) -> str | None:
+    """Pierwszy token tekstu, o ile jest jednostką z §3.2; inaczej `None`.
+
+    Używane wyłącznie przy wierszu zawiniętym: `…, 1 x Szklanka Zblenduj kawę…`
+    niesie jednostkę w pierwszej linii, a gramaturę w drugiej.
+    """
+    token = text.strip().split(" ", 1)[0] if text.strip() else ""
+    return token if token.lower() in KNOWN_UNITS else None
 
 
 def _checksums(days: Iterable[ParsedDay]) -> tuple[list[DayChecksum], list[Finding]]:

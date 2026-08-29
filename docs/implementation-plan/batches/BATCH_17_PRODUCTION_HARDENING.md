@@ -29,6 +29,13 @@ Konkrety z B01 do wykorzystania/uzupełnienia:
 - `/api/v1/health` zwraca wyłącznie `{status, version}`. Rozszerzenie
   o zgodność head↔DB i status `degraded` (09_DEPLOYMENT §2) to zadanie
   tego batcha — B01 świadomie tego nie robił (health bez dostępu do DB).
+- **Nowe z BATCH_16 — `ANTHROPIC_API_KEY`** (07_SECURITY §7). Trzy rzeczy
+  do checklisty tego batcha: (1) plik env na prod ma `chmod 600` (klucz jest
+  płatny, a jego wyciek to cudzy rachunek); (2) **grep logów prod pod kątem
+  klucza i treści promptów** — kod loguje wyłącznie fakt niepowodzenia
+  wywołania, ale to trzeba potwierdzić na realnym logu, nie na kodzie;
+  (3) pusty klucz jest POPRAWNĄ konfiguracją produkcyjną — healthcheck ani
+  start aplikacji nie mają z tego powodu zgłaszać `degraded`.
 - Nagłówki bezpieczeństwa i CSP (07_SECURITY §3) **są już wpięte** —
   dostarczył je BATCH_02 (`app/core/middleware.py`, `SecurityHeadersMiddleware`,
   test API sprawdza wartości). Ten batch je PRZEGLĄDA, nie tworzy od zera:

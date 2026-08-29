@@ -475,18 +475,6 @@ async def test_zatwierdzonego_joba_nie_da_sie_usunac(
     assert response.status_code == 409
 
 
-async def test_endpointy_review_jeszcze_nie_istnieja(
-    db_client: AsyncClient, db_session: AsyncSession
-) -> None:
-    """Zakres B15 kończy się na `parsed` — `resolve`/`approve` dostarcza B16."""
-    user = await create_user(db_session, email="zakres@example.com")
-    await login(db_client, user.email)
-
-    for path in ("staged", "resolve", "approve", "reject"):
-        response = await db_client.post(f"{IMPORT_JOBS}/1/{path}", headers=csrf_headers(db_client))
-        assert response.status_code == 404, f"/{path} nie powinien istnieć w BATCH_15"
-
-
 async def test_plik_importu_nie_jest_serwowany_przez_uploads(
     db_client: AsyncClient, db_session: AsyncSession
 ) -> None:

@@ -78,7 +78,11 @@ Review batch sam jest procesem przeglądowym — SKILL-REVIEW/SKILL-SECREV uruch
       `git ls-files` + grep po wzorcach (key, secret, password, token,
       BEGIN PRIVATE, sk-ant) po całym repo, także testach i docs
 - [ ] `ANTHROPIC_API_KEY` wyłącznie server-side (grep frontendu);
-      klucz nieobecny w logach i odpowiedziach API
+      klucz nieobecny w logach i odpowiedziach API. **Stan po B16**: front
+      dostaje wyłącznie `ai_available: bool`, a granica danych wysyłanych do
+      modelu (D5) ma JEDNO miejsce w kodzie — `importer/ai_assist.py`,
+      funkcje `build_*_prompt`. Przejrzeć je wzrokiem: to tam wchodziłby
+      przypadkowy wyciek e-maila albo nazwy rodziny
 - [ ] Tokeny publiczne: ponowna szybka weryfikacja §5 (PII, rate limit,
       maskowanie) — regresje od R3
 - [ ] Sesje/CSRF/rate-limit: testy nadal realne; macierz uprawnień §4
@@ -216,6 +220,15 @@ drobne (inaczej: batch naprawczy P1).
 - [ ] `pip-audit` + `npm audit` bez HIGH
 - [ ] Pomiary wydajności wykonane (tabela)
 - [ ] Round-trip eksport→import wykonany i porównany
+- [ ] **Kolejka UNVERIFIED po imporcie 8 PDF-ów** (Cross-Batch Impact B16):
+      przejrzeć widok weryfikacji ADMIN-a przy ~180 produktach z importu —
+      czy da się nim pracować, czy potrzebuje filtrów/sortowania. Praca
+      uzupełniania wartości należy do właściciela, ale użyteczność ekranu
+      jest ustaleniem review
+- [ ] **Przeliczniki jednostek nauczone importem** (`product_unit_weights`,
+      `source='pdf_import'`): wyrywkowo sprawdzić 5 median wobec
+      01_PDF_AUDIT §5.2 — mediana z próbek ma być bliżej prawdy niż
+      pojedynczy pomiar, a nie dalej
 - [ ] AC batchy 01–16 zweryfikowane wyrywkowo (min. 2 per batch)
 - [ ] Dług zebrany i spriorytetyzowany (P1/P2/P3)
 - [ ] Architektura + ADR + skill + CLAUDE.md zaktualizowane

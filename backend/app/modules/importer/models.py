@@ -32,6 +32,7 @@ from typing import Any
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    CheckConstraint,
     DateTime,
     Enum,
     ForeignKey,
@@ -222,6 +223,12 @@ class StagedIngredient(TimestampMixin, Base):
     """Surowy wiersz składnika: dokładnie to, co stało w PDF, plus propozycja."""
 
     __tablename__ = "staged_ingredients"
+    __table_args__ = (
+        CheckConstraint(
+            "confidence IS NULL OR (confidence >= 0 AND confidence <= 1)",
+            name="confidence_range",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
     staged_recipe_id: Mapped[int] = mapped_column(
@@ -237,6 +244,13 @@ class StagedIngredient(TimestampMixin, Base):
     raw_unit: Mapped[str | None] = mapped_column(Text, nullable=True)
     #: Gramatura z nawiasu — JEDYNE źródło ilości przy imporcie (01_PDF_AUDIT §8.3).
     grams: Mapped[Decimal] = mapped_column(Numeric(precision=10, scale=3), nullable=False)
+    #: Wiersz z sekcji `Produkty` (§3.3/§7) — dodatek podany NA JEDNĄ PORCJĘ,
+    #: podczas gdy reszta przepisu jest na całość. Zatwierdzenie MUSI go
+    #: przemnożyć przez liczbę porcji, inaczej ziemniaki do gołąbków skurczą się
+    #: siedmiokrotnie (dług U22 z B15, migracja `0015`).
+    from_extras_section: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
     suggested_product_id: Mapped[int | None] = mapped_column(
         BigInteger,
         ForeignKey("canonical_products.id", ondelete="RESTRICT"),
@@ -249,6 +263,10 @@ class StagedIngredient(TimestampMixin, Base):
         default=MatchKind.NONE,
         server_default=MatchKind.NONE.value,
     )
+    #: Pewność propozycji AI z przedziału [0, 1] (ADR-011, 02_DOMAIN §10).
+    #: `NULL` dla dopasowania EXACT i dla braku propozycji — pewność ma sens
+    #: wyłącznie tam, gdzie ktoś zgadywał. Kolumna z migracji `0015`.
+    confidence: Mapped[Decimal | None] = mapped_column(Numeric(precision=3, scale=2), nullable=True)
     #: Poniżej: wypełnia B16 (zatwierdzenie mapowania w review).
     confirmed_product_id: Mapped[int | None] = mapped_column(
         BigInteger,
