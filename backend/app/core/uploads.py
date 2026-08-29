@@ -36,6 +36,14 @@ MAX_IMAGE_BYTES = 10 * 1024 * 1024
 #: Ścieżki w bazie są WZGLĘDNE, a URL powstaje wyłącznie tutaj — dzięki temu
 #: żaden moduł nie skleja go po swojemu i nie wystawi ścieżki z dysku.
 UPLOADS_URL_PREFIX = "/uploads"
+#: Podkatalogi uploadów, których endpoint `/uploads/*` NIE serwuje.
+#: `transfer` trzyma paczki eksportu/importu — KOMPLET danych jednego konta.
+#: `/uploads/{path}` sprawdza wyłącznie sesję (jak dla zdjęć), więc bez tej
+#: bariery każdy zalogowany użytkownik, który poznałby `import_id`, pobrałby
+#: cudzy eksport. Zdjęcia z importu (`transfer-import`) są zwykłymi zdjęciami
+#: i muszą pozostać serwowane — prywatny jest sam katalog paczek.
+PRIVATE_SUBDIRS = ("transfer",)
+
 #: Dłuższy bok miniatury; jakość JPEG dobrana wg proporcji rozmiar/wygląd.
 THUMBNAIL_MAX_PX = 512
 JPEG_QUALITY = 85
@@ -142,6 +150,8 @@ def resolve_upload_path(path: str, *, uploads_root: Path) -> Path:
     """
     candidate = PurePosixPath(path.replace("\\", "/"))
     if candidate.is_absolute() or ".." in candidate.parts:
+        raise NotFoundError(FILE_NOT_FOUND_MESSAGE)
+    if candidate.parts and candidate.parts[0] in PRIVATE_SUBDIRS:
         raise NotFoundError(FILE_NOT_FOUND_MESSAGE)
 
     root = uploads_root.resolve()

@@ -11,6 +11,7 @@
 import {
   BadgeCheck,
   CalendarDays,
+  DatabaseBackup,
   CalendarRange,
   ChartColumn,
   ChefHat,
@@ -69,6 +70,13 @@ export const NAV_ITEMS: readonly NavItem[] = [
     name: 'admin-verification',
     label: 'Weryfikacja',
     icon: BadgeCheck,
+    adminOnly: true,
+    group: ADMIN_GROUP,
+  },
+  {
+    name: 'admin-transfer',
+    label: 'Dane',
+    icon: DatabaseBackup,
     adminOnly: true,
     group: ADMIN_GROUP,
   },

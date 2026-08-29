@@ -96,9 +96,10 @@ U      /import/pdf                         — upload → job; GET status/raport
 U      /import/jobs/{id}/staged            — staged recipes+ingredients+issues
 U      /import/jobs/{id}/resolve           — mapowania/porcje/decyzje
 U      /import/jobs/{id}/approve|reject
-U      /transfer/export                    — eksport własnych danych (JSON/ZIP)
-A      /transfer/export?scope=instance     — pełny eksport instancji
-A      /transfer/import                    — import z dry-run
+U      POST /transfer/export               — eksport własnych danych → ZIP
+A      POST /transfer/export?scope=instance — pełny eksport instancji → ZIP
+U/A    POST /transfer/import               — upload ZIP → raport DRY-RUN
+U/A    POST /transfer/import/{id}/apply    — zastosowanie z decyzjami kolizji
 A      /audit                              — przegląd dziennika
 GET    /health                             — bez auth: {status, version}
 ```
@@ -145,6 +146,85 @@ w bazie nie ma i nie będzie ani jednej kolumny z wynikiem (niezmiennik
   per pole tylko z dni, które cel tego pola miały.
 - Zakres: `from <= to`, maksimum **92 dni**; przekroczenie to 422
   `validation_error`. Endpoint jest read-only, więc GET nie potrzebuje CSRF.
+
+### Format eksportu transfer v1 (stan faktyczny BATCH_14)
+
+Plik eksportu to **ZIP** z dwoma rodzajami wpisów — i niczym więcej (każdy inny
+wpis import odrzuca, 07_SECURITY §6):
+
+- `export.json` — nagłówek + sekcje danych,
+- `photos/<ścieżka względna z bazy>` — zdjęcia przepisów i wariantów sklepowych.
+  Miniatur NIE ma: import re-enkoduje oryginał tym samym pipeline'em, co upload,
+  i generuje je od nowa.
+
+Nagłówek: `{schema_version: 1, app_version, exported_at, scope: "user"|"instance"}`.
+Niezgodna `schema_version` to **422** z komunikatem po polsku („Plik pochodzi
+z nowszej lub innej wersji aplikacji…"), nigdy 500. Migracji formatu między
+wersjami nie ma, dopóki istnieje tylko `v1`.
+
+`data` to sekcje per tabela w **STAŁEJ KOLEJNOŚCI** (`transfer/schemas.py::SECTION_ORDER`),
+która jest jednocześnie kolejnością importu — wymuszają ją FK z RESTRICT
+(ustalenie REVIEW R3): słowniki → produkty kanoniczne → sklepy → warianty retail
+→ konta i rodziny (tylko `instance`) → profile i cele → przepisy → plan →
+szablony i cykle → spiżarnia → tury → generacje → listy → dziennik (tylko
+`instance`). Test `test_referencje_wskazuja_sekcje_wczesniejsza_w_kolejnosci`
+pilnuje, że żadna referencja nie wskazuje sekcji wchodzącej PÓŹNIEJ.
+
+Trzy reguły treści:
+
+1. **ID w pliku to referencje WEWNĘTRZNE.** Import nigdy ich nie wstawia — buduje
+   mapę stary→nowy. Referencja bez pokrycia w tym samym pliku przerywa import
+   (422), bo surowy identyfikator wskazałby w nowej bazie przypadkową encję.
+2. **Liczby są stringami dziesiętnymi** (§1, ADR-008). Dotyczy też payloadów
+   szablonów, które są JSONB — float po drodze zmieniłby ilości w przepisach.
+3. **Referencje wewnątrz payloadów szablonów** (`recipe_id`, `product_id`,
+   `member_profile_id`) i `week_cycles.template_ids` remapuje import, bo baza
+   ich nie pilnuje. Pozycja, której nie da się przemapować, WYPADA z payloadu
+   razem z ostrzeżeniem w raporcie.
+
+**Czego w pliku nie ma i nie będzie**: `users.password_hash` (plik eksportu nie
+może być materiałem do credential stuffingu — po imporcie instancji ADMIN nadaje
+hasła przez `PATCH /admin/users/{id}`), `sessions`, `shopping_lists.public_token`
+i `token_revoked` (żywy token dostępu bez logowania, ADR-010 — lista wraca bez
+linku i udostępnia się ją ponownie), `created_at`/`updated_at` poza
+`audit_entries`, `recipes.import_job_id` (job importu PDF nie jest przenoszony).
+
+**Zakres `user`** obejmuje encje NALEŻĄCE do konta (`ScopedQuery.owned_condition`
+— przynależność, nie widoczność, więc ADMIN nie dostaje tu całej instancji) plus
+te wiersze słowników globalnych, do których się odwołują. Plik jest przez to
+samowystarczalny, ale nie jest kopią katalogu instancji. Oceny przepisów wychodzą
+wyłącznie WŁASNE — cudza ocena jest opinią konkretnej osoby i po imporcie nie ma
+komu jej przypisać. `shopping_generations` wchodzą tylko w stanie `final` albo
+`discarded`: `params` to wersjonowane WEJŚCIE silnika (przenoszone DOSŁOWNIE,
+ustalenie R3), a generacja `preview` jest szkicem, którego finalizacja po
+imporcie tworzyłaby pozycje z identyfikatorami instancji źródłowej.
+`user_nutrition_goals` wychodzą w CAŁEJ historii razem z `valid_from` — bez tego
+`/stats/daily` po cichu przepisałby statusy dni sprzed zmiany celu (ustalenie B13).
+
+**DRY-RUN (`POST /transfer/import`)** zapisuje paczkę w scratchu (`uploads/transfer`,
+sprzątanym po `apply` i po 24 h) i zwraca `{import_id, to_create: {sekcja: liczba},
+collisions: [{entity, source_id, name, existing_id, existing_name, default}],
+warnings, photos}` — **bez ani jednego zapisu w bazie**, także bez wpisu
+w dzienniku. Kolizje wykrywane są po kluczu naturalnym: `normalized_name`
+(produkty), `name` (kategorie, sklepy, tagi, rodziny), `code` (składniki
+odżywcze), `email` (konta) oraz `name` w obrębie encji NALEŻĄCYCH do
+importującego (przepisy, szablony). Kolizja e-maila i kodu składnika nie ma
+wariantu „kopia" — import zawsze reużywa istniejącego wiersza i ostrzega.
+
+**APPLY (`POST /transfer/import/{import_id}/apply`)** przyjmuje `{decisions:
+[{entity, source_id, action}]}` (`use_existing` domyślnie, `create_copy` tworzy
+kopię z sufiksem „(import)" i spójnym `normalized_name`) i wykonuje CAŁOŚĆ
+w jednej transakcji: błąd w środku to zero zmian w bazie, a zdjęcia zapisane po
+drodze są kasowane ręcznie. Paczka należy do konta, które ją wgrało — cudzy
+`import_id` daje **404**, identycznie jak nieistniejący. Import zostawia wpis
+`transfer.import` w dzienniku (liczby i decyzje, nigdy treść encji).
+
+Dwa zachowania przy powtórnym imporcie WŁASNEGO pliku na to samo konto:
+`plan_days` **scala się** z istniejącym dniem po `UNIQUE(owner_user_id, day)`
+(posiłki dopisują się jak przy instancjacji szablonu, B07), a wiersze niosące
+FAKT o encji nadrzędnej (`product_unit_weights`, `product_nutrient_values`,
+`recipe_ratings`, `user_nutrition_goals`) wchodzą `ON CONFLICT DO NOTHING`.
+Pozostałe konflikty UNIQUE kończą się **409** z instrukcją, nie 500.
 
 ## 3. Zasady autoryzacji w API
 

@@ -26,6 +26,17 @@ Batch zastaje (po B05, zalecane po R3):
 - Korpus testowy: `data/source_pdfs/` — 8 plików (`dieta.pdf`,
   `dieta (1).pdf` … `dieta (7).pdf`); referencja `data/reference/prototype.db`.
 - Mapa API rezerwuje `U /import/pdf`, `GET /import/jobs/...` (04_API §2).
+- **Format transfer v1 ISTNIEJE (BATCH_14, 04_API „Format eksportu transfer v1")**
+  — konsekwencje dla tego batcha: (a) encje stagingu (`import_jobs`,
+  `staged_recipes`, `staged_ingredients`, `import_issues`) **NIE wchodzą** do
+  eksportu v1 (staging to proces, nie dane domenowe), (b) przepisy
+  `source=pdf_import` eksportują się normalnie, ale `recipes.import_job_id`
+  w pliku jest `null` (job nie jest przenoszony) — to stan faktyczny, nie do
+  „naprawienia" w B15, (c) **każda NOWA encja domenowa wymaga rozszerzenia
+  serializera** (`transfer/serializer.py::SECTIONS` + `SECTION_ORDER`), a decyzję,
+  czy staging kiedykolwiek ma tam wejść, podejmuje R4. (d) Migracja B15 dopina FK
+  `recipes.import_job_id → import_jobs.id`; ta kolumna MUSI dostać `ForeignKey`
+  w modelu w tym samym commicie (bramka dryfu modeli z R3).
 
 Wymagane lektury (OBOWIĄZKOWO przed kodem): **01_PDF_AUDIT w całości —
 to wiążący kontrakt tego batcha**; ADR-011; 03_DATABASE §9 (schemat

@@ -1247,6 +1247,57 @@ export interface paths {
         patch: operations["public_check_item_api_v1_public_lists__token__items__item_id__patch"];
         trace?: never;
     };
+    "/api/v1/transfer/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Eksport danych do archiwum ZIP */
+        post: operations["export_api_v1_transfer_export_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/transfer/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Wgranie archiwum i raport DRY-RUN (nic nie zapisuje) */
+        post: operations["dry_run_api_v1_transfer_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/transfer/import/{import_id}/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Zastosowanie importu z decyzjami dla kolizji */
+        post: operations["apply_api_v1_transfer_import__import_id__apply_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/audit": {
         parameters: {
             query?: never;
@@ -1346,6 +1397,14 @@ export interface components {
             /** Total */
             total: number;
         };
+        /** Body_dry_run_api_v1_transfer_import_post */
+        Body_dry_run_api_v1_transfer_import_post: {
+            /**
+             * File
+             * @description Archiwum ZIP z eksportu
+             */
+            file: string;
+        };
         /** Body_upload_photo_api_v1_recipes__recipe_id__photo_post */
         Body_upload_photo_api_v1_recipes__recipe_id__photo_post: {
             /**
@@ -1410,6 +1469,41 @@ export interface components {
             /** Position */
             position?: number | null;
             perishability?: components["schemas"]["Perishability"] | null;
+        };
+        /**
+         * CollisionAction
+         * @description Decyzja użytkownika dla kolizji nazw przy imporcie.
+         * @enum {string}
+         */
+        CollisionAction: "use_existing" | "create_copy";
+        /**
+         * CollisionDecision
+         * @description Decyzja per kolizja. Pominięta kolizja dostaje `default` z raportu.
+         */
+        CollisionDecision: {
+            /** Entity */
+            entity: string;
+            /** Source Id */
+            source_id: number;
+            action: components["schemas"]["CollisionAction"];
+        };
+        /**
+         * CollisionRead
+         * @description Jedna kolizja nazwy: co w pliku, co już jest w bazie, co zrobimy domyślnie.
+         */
+        CollisionRead: {
+            /** Entity */
+            entity: string;
+            /** Source Id */
+            source_id: number;
+            /** Name */
+            name: string;
+            /** Existing Id */
+            existing_id: number;
+            /** Existing Name */
+            existing_name: string;
+            /** @default use_existing */
+            default: components["schemas"]["CollisionAction"];
         };
         /**
          * CurrentUser
@@ -1624,6 +1718,31 @@ export interface components {
             items: components["schemas"]["DayRead"][];
             /** Total */
             total: number;
+        };
+        /**
+         * DryRunReport
+         * @description Co powstanie i co koliduje — ZANIM cokolwiek dotknie bazy (AC 3).
+         */
+        DryRunReport: {
+            /** Import Id */
+            import_id: string;
+            /** Schema Version */
+            schema_version: number;
+            scope: components["schemas"]["TransferScope"];
+            /** Exported At */
+            exported_at: string;
+            /** App Version */
+            app_version: string;
+            /** To Create */
+            to_create: {
+                [key: string]: number;
+            };
+            /** Collisions */
+            collisions: components["schemas"]["CollisionRead"][];
+            /** Warnings */
+            warnings: string[];
+            /** Photos */
+            photos: number;
         };
         /**
          * ErrorBody
@@ -1967,6 +2086,32 @@ export interface components {
         HouseholdUpdateRequest: {
             /** Name */
             name?: string | null;
+        };
+        /**
+         * ImportApplyRequest
+         * @description Body `apply`: wyłącznie decyzje kolizyjne (reszta jest w odłożonej paczce).
+         */
+        ImportApplyRequest: {
+            /** Decisions */
+            decisions?: components["schemas"]["CollisionDecision"][];
+        };
+        /**
+         * ImportSummary
+         * @description Podsumowanie zastosowania: ile czego powstało (AC 4 i 5).
+         */
+        ImportSummary: {
+            /** Created */
+            created: {
+                [key: string]: number;
+            };
+            /** Reused */
+            reused: {
+                [key: string]: number;
+            };
+            /** Photos Imported */
+            photos_imported: number;
+            /** Warnings */
+            warnings: string[];
         };
         /**
          * InstantiateDayRequest
@@ -3823,6 +3968,12 @@ export interface components {
              */
             updated_at: string;
         };
+        /**
+         * TransferScope
+         * @description Zakres eksportu: dane jednego użytkownika albo cała instancja.
+         * @enum {string}
+         */
+        TransferScope: "user" | "instance";
         /**
          * UiSettingsPatchRequest
          * @description Częściowa zmiana ustawień UI zalogowanego użytkownika (04_API §2).
@@ -7820,6 +7971,106 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    export_api_v1_transfer_export_post: {
+        parameters: {
+            query?: {
+                /** @description Zakres eksportu */
+                scope?: components["schemas"]["TransferScope"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Archiwum eksportu */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/zip": unknown;
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    dry_run_api_v1_transfer_import_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_dry_run_api_v1_transfer_import_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DryRunReport"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    apply_api_v1_transfer_import__import_id__apply_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                import_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportApplyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportSummary"];
+                };
             };
             /** @description Błąd */
             default: {

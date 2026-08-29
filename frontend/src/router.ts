@@ -136,6 +136,14 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/pages/admin/AdminWeryfikacjaPage.vue'),
         meta: { title: 'Weryfikacja', admin: true },
       },
+      // Dane instancji (BATCH_14) — podsekcja administracji zapowiedziana
+      // w 05_FRONTEND §3 („/admin/* → AdminPage: … import/eksport").
+      {
+        path: 'admin/dane',
+        name: 'admin-transfer',
+        component: () => import('@/pages/admin/AdminDanePage.vue'),
+        meta: { title: 'Dane', admin: true },
+      },
     ],
   },
   // Publiczny link listy (ADR-010): POZA `AppShell` i poza guardem sesji.

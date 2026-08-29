@@ -318,29 +318,198 @@ diffie przed commitem (krok 11).
 
 ## Implementation checklist
 
-- [ ] Format v1: schematy + stała kolejność sekcji
-- [ ] Eksport U (scope user+household, słowniki referencjonowane) → ZIP
-- [ ] Eksport A (instancja, users bez haseł)
-- [ ] Import DRY-RUN: walidacja wersji, kolizje po normalized_name, raport
-- [ ] Import APPLY: transakcja, mapa ID, decyzje kolizji, zdjęcia, audit
-- [ ] Zabezpieczenia ZIP: limit, sniffing, zip-bomba, path traversal
-- [ ] UI: Ustawienia + Admin + `TransferImportDialog` (3 kroki)
-- [ ] Testy: unit, round-trip, kolizje, wersja, rollback, duży ZIP, API
-- [ ] E2E eksport→import
-- [ ] 04_API (sekcja formatu) + 07_SECURITY (limit) zaktualizowane
-- [ ] PROGRESS.md wpis + edycja karty B15 (Cross-Batch Impact)
+- [x] Format v1: schematy + stała kolejność sekcji
+- [x] Eksport U (scope user+household, słowniki referencjonowane) → ZIP
+- [x] Eksport A (instancja, users bez haseł)
+- [x] Import DRY-RUN: walidacja wersji, kolizje po normalized_name, raport
+- [x] Import APPLY: transakcja, mapa ID, decyzje kolizji, zdjęcia, audit
+- [x] Zabezpieczenia ZIP: limit, sniffing, zip-bomba, path traversal
+- [x] UI: Ustawienia + Admin + `TransferImportDialog` (3 kroki)
+- [x] Testy: unit, round-trip, kolizje, wersja, rollback, duży ZIP, API
+- [x] E2E eksport→import
+- [x] 04_API (sekcja formatu) + 07_SECURITY (limit) zaktualizowane
+- [x] PROGRESS.md wpis + edycja karty B15 (Cross-Batch Impact)
 
 ## Verification checklist
 
-- [ ] `task check` zielony (unit+int+api+fe-test+typecheck+lint)
-- [ ] `task test-e2e` zielony
-- [ ] Brak migracji (potwierdzić `alembic heads` = 1 głowa po merge)
-- [ ] Ręcznie: eksport własnych danych → import na koncie testowym →
-      dane widoczne, kolizje rozstrzygalne
-- [ ] Dry-run nie zostawia śladów w DB (sprawdzone testem + ręcznie)
-- [ ] Acceptance Criteria 1–9 odhaczone z dowodem
-- [ ] Dokumentacja zaktualizowana; commit `batch(14): …`
+- [x] `task check` zielony (unit+int+api+fe-test+typecheck+lint)
+- [x] `task test-e2e` zielony
+- [x] Brak migracji (`task db-heads` = `0013`, jedna głowa — bez zmian)
+- [x] Ręcznie: eksport własnych danych → import tego pliku → raport kolizji →
+      apply → kopia widoczna (wykonane przez spec E2E `transfer.spec.ts`,
+      który klika dokładnie tę ścieżkę w UI)
+- [x] Dry-run nie zostawia śladów w DB (asercja na licznikach tabel
+      w `tests/api/test_transfer_api.py::test_dry_run_nie_zostawia_sladu_w_bazie`)
+- [x] Acceptance Criteria 1–9 odhaczone z dowodem (patrz Completion notes)
+- [x] Dokumentacja zaktualizowana; commit `batch(14): …`
 
 ## Completion notes
 
-(wypełnia agent wykonujący)
+**Wykonane.** Moduł `backend/app/modules/transfer/` (schemas / serializer /
+importer / service / router) dostarcza format **transfer v1**: ZIP z `export.json`
+(nagłówek + 30 sekcji w stałej kolejności) i katalogiem `photos/`. Eksport
+użytkownika bierze encje NALEŻĄCE do konta plus dokładnie te wiersze słowników
+globalnych, do których się odwołują; eksport instancji (ADMIN) dokłada
+`households`, `users` (bez hasła) i `audit_entries`. Import ma dwa kroki:
+`POST /transfer/import` (walidacja archiwum + raport DRY-RUN, ZERO zapisów
+w bazie) i `POST /transfer/import/{id}/apply` (jedna transakcja, mapa
+stary→nowy ID, decyzje kolizji, zdjęcia przez `core/uploads.save_image`, wpis
+`transfer.import` w dzienniku). UI: sekcja „Twoje dane" w `/ustawienia`, nowa
+strona `/admin/dane` (instancja) i wspólny `TransferImportDialog` (3 kroki).
+Migracji brak — head nadal `0013`.
+
+**Dowody Acceptance Criteria.**
+
+1. ZIP z `export.json` (`schema_version: 1`) i zdjęciami, czytelny standardowym
+   `zipfile` — `tests/api/test_transfer_api.py::test_uzytkownik_eksportuje_swoje_dane`
+   oraz round-trip (asercja na wpisach `photos/…` w `namelist()`).
+2. Eksport instancji z kontami bez haseł —
+   `test_admin_eksportuje_instancje_i_dostaje_zip` (asercja `"password_hash"`
+   nieobecne w CAŁYM dokumencie).
+3. DRY-RUN przed zapisem — `test_dry_run_nie_zostawia_sladu_w_bazie` (liczniki
+   `canonical_products`, `recipes`, `audit_entries` bez zmian) + vitest
+   `TransferImportDialog` (`apply` nie leci przed potwierdzeniem).
+4. Decyzja per kolizja — `test_use_existing_nie_duplikuje_produktu`,
+   `test_create_copy_tworzy_kopie_z_sufiksem`, vitest (obie ścieżki decyzji).
+5. Jedna transakcja — `test_uszkodzona_referencja_cofa_caly_import`.
+6. Round-trip na CZYSTEJ bazie —
+   `tests/integration/test_transfer_roundtrip.py::test_round_trip_odtwarza_dane_na_czystej_bazie`
+   (pełny przekrój domeny: katalog, retail ze zdjęciem, przepis ze zdjęciem,
+   plan z rozkładem porcji, szablony + cykl, spiżarnia, lista zakupowa, DWA cele
+   z różnymi `valid_from`).
+7. Niezgodna wersja — 422 po polsku
+   (`test_plik_z_inna_wersja_konczy_sie_422_i_zerem_zapisow` + wariant HTTP dla
+   pliku, który nie jest ZIP-em).
+8. Audit — `test_apply_tworzy_dane_i_wpis_w_dzienniku` (payload ma liczby
+   i decyzje, NIE ma nazw przenoszonych encji).
+9. Format udokumentowany — `04_API_DESIGN.md`, sekcja „Format eksportu
+   transfer v1".
+
+**Odstępstwa i decyzje wykonawcze (wszystkie w granicach karty).**
+
+1. **`shopping_generations` eksportujemy tylko w stanie `final`/`discarded`.**
+   Implementation Notes każą przenieść `params`, a ustalenie R3 dopuszcza
+   „dosłownie albo wcale". Generacja `preview` jest jedynym stanem EDYTOWALNYM
+   (`_editable_generation`), a jej `params` wskazują żywe pozycje planu instancji
+   źródłowej — po imporcie jej finalizacja tworzyłaby pozycje list
+   z identyfikatorami produktów z cudzej bazy. Historia (`final`/`discarded`)
+   jest wyłącznie przeliczana do podglądu, więc przenosi się bezpiecznie.
+   `params` idą DOSŁOWNIE, bez przepisywania kluczy. Konsekwencja:
+   `shopping_lists.generation_id` bez pokrycia w pliku wychodzi jako `null`
+   (kolumna jest NULL-owalna, treść listy zostaje kompletna).
+2. **`ScopedQuery.owned_condition` / `select_owned` (nowe w `app/core/scope.py`).**
+   „Eksportuj MOJE dane" to przynależność, nie widoczność — `visible_condition`
+   zwraca ADMIN-owi `true()` (D16), więc administrator klikający ten przycisk
+   dostałby plik z encjami wszystkich rodzin w instancji. Dokładnie tę granicę
+   ma już spiżarnia (`HouseholdScopedQuery.household_condition`), więc
+   `ScopedQuery` dostał bliźniaczą metodę zamiast ręcznego filtra w serwisie
+   (CLAUDE.md §4). `visible_condition` deleguje teraz do niej, więc zachowanie
+   dla nie-ADMIN-a jest bit w bit to samo.
+3. **Oceny przepisów: eksportujemy WYŁĄCZNIE własne** (rekomendacja karty).
+   Cudza ocena jest opinią konkretnej osoby; po imporcie nie ma komu jej
+   przypisać, a przepisanie jej na importującego byłoby sfałszowaniem danych.
+4. **Scalanie `plan_days` przy powtórnym imporcie własnego pliku.** `plan_days`
+   ma `UNIQUE(owner_user_id, day)`, więc import własnego eksportu na to samo
+   konto (pierwsza rzecz, którą robi użytkownik: „czy mój backup się wczytuje?")
+   trafiał w konflikt na pierwszym dniu. Wiersz **scala się** z istniejącym,
+   a posiłki dopisują się do niego — dokładnie tak, jak instancjacja szablonu
+   (`PlanningService.append_day_payload`, B07). Analogicznie wiersze niosące FAKT
+   o rodzicu (`product_unit_weights`, `product_nutrient_values`, `recipe_ratings`,
+   `user_nutrition_goals`) wchodzą `ON CONFLICT DO NOTHING`. Pozostałe konflikty
+   UNIQUE dają **409** z instrukcją, nigdy 500.
+5. **Martwa referencja w payloadzie szablonu USUWA pozycję** (z ostrzeżeniem),
+   zamiast zostawić surowe id. Zostawienie go trafiłoby w nowej bazie w losowy
+   przepis o tym numerze — cicha podmiana treści jest gorsza niż brak pozycji.
+   Cykl gubi martwy wpis `template_ids`, a cykl bez żadnego żywego szablonu jest
+   pomijany (R2: cykl z jednym martwym id jest niesprawny CAŁY).
+6. **`audit_entries.entity_id` NIE jest remapowane** przy imporcie instancji —
+   to historyczny ślad po encji, której w nowej bazie może już nie być;
+   remapowanie kłamałoby o tym, czego wpis dotyczył.
+7. **`frontend/src/api/queryKeys.ts` NIE został zmieniony** (karta wymieniała go
+   w Expected files). Transfer nie ma ani jednego zapytania odczytowego: raport
+   i podsumowanie to wyniki MUTACJI, a paczka po `apply` przestaje istnieć, więc
+   klucz zapytania nie miałby czego identyfikować. Po imporcie dialog woła
+   `invalidateQueries()` bez klucza — import dotyka niemal każdej encji, a lista
+   kluczy „po jednym" byłaby listą do zapomnienia przy następnym batchu.
+8. **Pliki poza listą Expected files**: `frontend/src/lib/download.ts` (zapis
+   bloba na dysk — wydzielone, żeby strony dały się testować bez DOM-u i żeby
+   `revokeObjectURL` było w jednym miejscu) oraz
+   `frontend/src/pages/admin/AdminDanePage.vue` razem z trasą `admin/dane`
+   i pozycją nawigacji „Dane". Karta mówi „AdminPage", a takiej pojedynczej
+   strony w repo nie ma — 05_FRONTEND §3 zapowiada `/admin/*` z import/eksportem,
+   a `navigation.ts` wprost dopuszcza dokładanie podsekcji administracji.
+   Zaktualizowana została asercja `src/router.spec.ts` (nowa trasa w komplecie
+   sekcji) — to zmiana STANU OCZEKIWANEGO, nie osłabienie testu.
+9. **Eksport jest POST-em**, mimo że nie zmienia danych domenowych: buduje plik,
+   zostawia wpis w dzienniku i nie ma prawa dać się wywołać z `<img src>`.
+   Odpowiedź to `FileResponse` + `BackgroundTask` kasujący plik po wysyłce.
+10. **Konwencja nazw w E2E**: encje specu transferu nazywają się
+    `E2E transfer …` (prefiks NA POCZĄTKU). Pierwsza wersja specu użyła
+    `Zupa E2E transfer`, czego `cleanupE2eData` (`byPrefix`) nie sprząta —
+    i pozostałość natychmiast wywróciła `week-template-cycle.spec.ts`
+    (trigramowa szukajka znalazła cudzy przepis, więc inline create zniknął —
+    dokładnie dług U15 z review R2). To jest wiążące dla kolejnych specow.
+
+**Ustalenia review na diffie (SKILL-REVIEW + SKILL-SECREV) — cztery naprawione,
+jedno odnotowane.**
+
+1. **`/code-review` + `/security-review` (HIGH): paczki transferu leżały
+   w drzewie serwowanym przez `GET /uploads/*`.** Ten endpoint sprawdza WYŁĄCZNIE
+   sesję (nie właściciela pliku), więc dowolny zalogowany użytkownik, który
+   poznałby `import_id`, pobrałby `uploads/transfer/<id>.zip` — czyli KOMPLET
+   danych cudzego konta. Naprawione: `app/core/uploads.py` ma teraz
+   `PRIVATE_SUBDIRS = ("transfer",)`, a `resolve_upload_path` odrzuca te ścieżki
+   identycznym 404 jak plik nieistniejący. Zdjęcia importu (`transfer-import/`)
+   pozostają serwowane. Test: `test_katalog_paczek_transferu_nie_jest_serwowany`.
+2. **`/code-review` (HIGH): eksport tworzył plik, który jego własny import
+   odrzucał.** Pozycja planu może wskazywać przepis, którego `select_owned` już
+   nie zwraca (członek rodziny przestawił swój przepis na `private` PO tym, jak
+   trafił do cudzego planu — FK RESTRICT trzyma pozycję przy życiu). Taka
+   referencja nie miała pokrycia w sekcji `recipes`, więc import padał 422,
+   a wyeksportowanie cudzego prywatnego przepisu byłoby wyciekiem. Naprawione:
+   pozycja wypada z pliku razem ze swoim rozkładem porcji. Test:
+   `test_pozycja_planu_z_niewidocznym_przepisem_nie_psuje_pliku`.
+3. **`/code-review` (MED): argon2 liczony na pętli zdarzeń.** `hash_password` dla
+   kont z importu instancji szedł synchronicznie w `async def` — 60 kont to ~3 s
+   zablokowanego procesu. Naprawione: `await run_in_threadpool(hash_password, …)`,
+   jak w `accounts/service.py` (ADR-015).
+4. **`/code-review` (MED): `downloadExport` omijał handler 401 i zegar serwera.**
+   Eksport pobiera ZIP-a własnym `fetch` (bo `apiFetch` czyta JSON), więc wygasła
+   sesja nie odsyłała na `/login`. Naprawione: `client.ts` eksportuje
+   `observeResponse(response)` (zegar serwera + 401) i wołają je OBIE ścieżki.
+5. **`/code-review` (LOW): zdjęcie obecne w archiwum, ale nieczytelne, ginęło bez
+   śladu** — dry-run ostrzega tylko o zdjęciach BRAKUJĄCYCH. Naprawione: `apply`
+   dokłada ostrzeżenie „Nie udało się wczytać zdjęcia …".
+
+`/security-review` poza pkt 1 nie zgłosił ustaleń: nazwy kolumn przy zapisie
+pochodzą wyłącznie ze stałych `SECTIONS` (plik nie wstrzyknie kolumny),
+`sections_for(document.scope)` odsiewa sekcje `users`/`households`/`audit_entries`
+z pliku użytkownika (brak eskalacji), a `IdMap` w imporcie użytkownika ma puste
+mapy kont i rodzin, więc każda referencja właścicielska spada na konto
+importującego (brak zapisu w cudzej rodzinie). Uwaga procesowa: skill
+`/security-review` każe rozdzielić analizę na podzadania agentowe — konfiguracja
+tej sesji zabrania używania narzędzia Agent bez prośby właściciela, więc analiza
+została wykonana inline, w pełnym zakresie diffu.
+
+**Follow-upy (poza zakresem tego batcha).**
+
+- **U18 — import selektywny** („tylko przepisy", „tylko plan") jest w Out of
+  Scope karty; format i mapa ID są na niego gotowe (wystarczy filtr sekcji),
+  ale decyzja o UI należy do R4.
+- **U19 — brak komendy CLI do eksportu/importu.** Restore awaryjny wymaga dziś
+  działającej aplikacji i sesji ADMIN-a. B18 ćwiczy restore z `pg_dump`, więc
+  to nie jest bloker, ale komenda offline („odtwórz z pliku na świeżej
+  instalacji") byłaby tańsza niż logowanie się do na wpół wstałej instancji.
+  Kandydat na B17/B18.
+- **U20 — scratch importu sprząta się leniwie** (przy każdym dry-runie kasujemy
+  paczki starsze niż 24 h). Instancja, na której nikt nie importuje, trzyma
+  nieużytą paczkę bezterminowo. Job okresowy to temat B18 (tam jest już
+  sprzątanie sesji).
+- **U21 — `analyze` liczy `to_create` optymistycznie** dla sekcji wstawianych
+  `ON CONFLICT DO NOTHING` (np. oceny przepisów): raport może pokazać 1, a
+  podsumowanie policzy ten wiersz jako „użyto istniejącego". Różnica nie
+  wprowadza w błąd co do skutków, ale dokładne liczenie wymagałoby odpytania
+  bazy per wiersz w DRY-RUNIE.
+
+**Pytania do właściciela: brak.** Batch nie miał bramki decyzyjnej i żadne
+z powyższych odstępstw nie zmienia decyzji zapisanej w `02_DECISIONS.md`.

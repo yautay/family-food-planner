@@ -44,7 +44,9 @@ odpowiedzi API nie piszemy.
                         dzienna vs średnia celów ze statusem
 /ustawienia           UstawieniaPage      (cele, profile rodziny, sklepy, konto)
 /admin/*              AdminPage (użytkownicy, rodziny, weryfikacja produktów,
-                      audit, import/eksport)
+                      audit, import/eksport) — od B14 istnieje `/admin/dane`
+                      (AdminDanePage: eksport i import CAŁEJ instancji);
+                      sekcja „Twoje dane" użytkownika mieszka w /ustawienia
 /login
 /l/:token             PublicznaListaPage  — POZA shellem aplikacji, bez auth
 ```

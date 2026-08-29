@@ -28,6 +28,9 @@ class AuditEntity(StrEnum):
     MEMBER_PROFILE = "member_profile"
     PRODUCT = "product"
     PRODUCT_CATEGORY = "product_category"
+    #: Transfer nie ma własnej encji — wpis opisuje OPERACJĘ na zbiorze danych
+    #: (02_DOMAIN §12: „eksport/import"), więc `entity_id` zostaje puste.
+    TRANSFER = "transfer"
 
 
 class AuditAction(StrEnum):
@@ -59,6 +62,11 @@ class AuditAction(StrEnum):
     PRODUCT_UNIT_WEIGHT_CREATE = "product_unit_weight.create"
     PRODUCT_UNIT_WEIGHT_UPDATE = "product_unit_weight.update"
     PRODUCT_UNIT_WEIGHT_DELETE = "product_unit_weight.delete"
+
+    # Transfer danych (BATCH_14). Payload niesie WYŁĄCZNIE liczby i decyzje —
+    # nigdy treści przenoszonych encji (07_SECURITY §8).
+    TRANSFER_EXPORT = "transfer.export"
+    TRANSFER_IMPORT = "transfer.import"
 
     CATEGORY_CREATE = "product_category.create"
     CATEGORY_UPDATE = "product_category.update"

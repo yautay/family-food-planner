@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * Ustawienia użytkownika (`/ustawienia`): „Moja rodzina", „Cele żywieniowe",
- * „Sklepy" (BATCH_09) i „Progi statusów" (D9).
+ * „Sklepy" (BATCH_09), „Progi statusów" (D9) i „Twoje dane" (BATCH_14).
  *
  * Stan serwera trzyma TanStack Query (ADR-007): komponent nie kopiuje rodziny,
  * profili ani celów do własnych ref-ów. Do Pinia należy wyłącznie sesja.
@@ -31,14 +31,22 @@ import {
 } from '@/api/households'
 import { queryKeys } from '@/api/queryKeys'
 import SklepySection from '@/components/domain/SklepySection.vue'
+import TransferImportDialog from '@/components/domain/TransferImportDialog.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { isValidDecimal, normalizeDecimalInput, toDecimalInput } from '@/lib/decimal'
 import { formatDecimal } from '@/lib/format'
 import { statusFor, statusLabel, statusToken } from '@/lib/nutrition'
+import { downloadExport } from '@/api/transfer'
+import { saveBlob } from '@/lib/download'
 import { useAuthStore } from '@/stores/auth'
-import { common, goals as goalTexts, household as texts } from '@/lib/texts'
+import {
+  common,
+  goals as goalTexts,
+  household as texts,
+  transfer as transferTexts,
+} from '@/lib/texts'
 
 const MULTIPLIER_RULES = { decimalPlaces: 2, positive: true }
 const KCAL_RULES = { decimalPlaces: 0, positive: true }
@@ -243,6 +251,24 @@ const thresholdsValid = computed(() => {
 const previewStatus = computed(() =>
   thresholdsValid.value ? statusFor(1800, 2000, parsedThresholds.value) : null,
 )
+
+// --- Twoje dane: eksport i import (BATCH_14, 02_DOMAIN §11) ---------------------
+
+const transferOpen = ref(false)
+const transferError = ref<string | null>(null)
+const exportedFilename = ref<string | null>(null)
+
+const exportData = useMutation({
+  mutationFn: () => downloadExport('user'),
+  onSuccess: (file) => {
+    transferError.value = null
+    exportedFilename.value = file.filename
+    saveBlob(file.blob, file.filename)
+  },
+  onError: (error: unknown) => {
+    transferError.value = error instanceof ApiError ? error.message : common.unexpectedError
+  },
+})
 
 const saveThresholds = useMutation({
   mutationFn: () => updateThresholds(parsedThresholds.value),
@@ -593,6 +619,55 @@ const saveThresholds = useMutation({
 
     <!-- Sklepy i profile kolejności kategorii (BATCH_09) — sekcja własnego komponentu. -->
     <SklepySection />
+
+    <!-- Twoje dane (BATCH_14): eksport logiczny i import z raportem dry-run. -->
+    <Card class="rounded-xl">
+      <CardHeader>
+        <CardTitle>{{ transferTexts.sectionTitle }}</CardTitle>
+        <CardDescription>{{ transferTexts.sectionSubtitle }}</CardDescription>
+      </CardHeader>
+
+      <CardContent class="grid gap-3">
+        <p
+          v-if="transferError"
+          class="text-destructive text-sm"
+          role="alert"
+          data-testid="transfer-error"
+        >
+          {{ transferError }}
+        </p>
+
+        <div class="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            class="min-h-11"
+            :disabled="exportData.isPending.value"
+            data-testid="transfer-export"
+            @click="exportData.mutate()"
+          >
+            {{
+              exportData.isPending.value ? transferTexts.exportPending : transferTexts.exportButton
+            }}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            class="min-h-11"
+            data-testid="transfer-import-open"
+            @click="transferOpen = !transferOpen"
+          >
+            {{ transferTexts.importButton }}
+          </Button>
+        </div>
+
+        <p class="text-muted-foreground text-xs">{{ transferTexts.exportHint }}</p>
+        <p v-if="exportedFilename" class="text-sm" data-testid="transfer-export-done">
+          {{ transferTexts.exportDone(exportedFilename) }}
+        </p>
+
+        <TransferImportDialog :open="transferOpen" @close="transferOpen = false" />
+      </CardContent>
+    </Card>
 
     <!-- Progi statusów żywieniowych (D9: domyślnie 90–110% celu). -->
     <Card class="rounded-xl">

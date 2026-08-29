@@ -111,6 +111,9 @@ describe('mapa tras', () => {
       'admin-users',
       'admin-households',
       'admin-verification',
+      // Dane instancji (B14): eksport/import logiczny — podsekcja administracji
+      // zapowiedziana w 05_FRONTEND §3, nie nowa gałąź aplikacji.
+      'admin-transfer',
     ])
   })
 

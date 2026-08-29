@@ -52,6 +52,12 @@ class Settings(BaseSettings):
     #: względna liczy się od katalogu roboczego procesu (w kontenerze: /app).
     uploads_dir: str = "data/uploads"
 
+    #: Limit paczki transferu (eksport/import logiczny, BATCH_14) w megabajtach —
+    #: 07_SECURITY §6. Plik większy kończy się 413, ZANIM `zipfile` cokolwiek
+    #: rozpakuje. Domyślne 100 MB mieści instancję rodzinną razem ze zdjęciami;
+    #: Odroid H2 nie ma pamięci na więcej, a paczkę i tak budujemy na dysku.
+    transfer_max_zip_mb: int = 100
+
 
 def _format_missing(exc: ValidationError) -> str:
     missing = sorted(

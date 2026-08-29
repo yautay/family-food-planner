@@ -140,19 +140,31 @@ Dziewięć szczegółów wykonawczych, które trzeba utrzymać:
 
 ## 6. Uploady
 
-Dotyczy zdjęć (przepisy/produkty) i PDF-ów importu:
-- limity: obraz ≤ 10 MB, PDF ≤ 25 MB; MIME sniffing po treści (Pillow
-  verify / nagłówek %PDF), nie po rozszerzeniu;
+Dotyczy zdjęć (przepisy/produkty), PDF-ów importu i **paczek transferu**
+(eksport/import logiczny, BATCH_14):
+- limity: obraz ≤ 10 MB, PDF ≤ 25 MB, **paczka transferu ≤ 100 MB**
+  (`TRANSFER_MAX_ZIP_MB`, konfigurowalne per instalacja); MIME sniffing po
+  treści (Pillow verify / nagłówek %PDF / sygnatura `PK`), nie po
+  rozszerzeniu;
 - zapis pod losową nazwą na bind mount, poza web-rootem; serwowanie przez
   endpoint z autoryzacją (nie StaticFiles bez auth);
 - obrazy re-enkodowane przez Pillow (strip EXIF, usunięcie payloadów),
   miniatury generowane; PDF nigdy nie jest renderowany server-side poza
-  pdfplumber (parsing w try/except z limitem czasu).
+  pdfplumber (parsing w try/except z limitem czasu);
+- **archiwum transferu** (BATCH_14, `transfer/importer.py`) przechodzi kontrolę
+  w tej kolejności: limit rozmiaru PRZED otwarciem → sygnatura ZIP → lista
+  wpisów (dozwolone WYŁĄCZNIE `export.json` i `photos/<nazwa>`; ścieżka
+  absolutna, `..`, backslash i litera dysku odrzucają archiwum) → sumaryczny
+  rozmiar po dekompresji i liczba wpisów liczone Z NAGŁÓWKÓW (zip-bomba pada
+  przed rozpakowaniem czegokolwiek). Zdjęcia z archiwum idą przez ten sam
+  `core/uploads.save_image`, co zwykły upload — dostają nowe, losowe nazwy
+  i są re-enkodowane. **Plik eksportu nigdy nie niesie `password_hash` ani
+  `shopping_lists.public_token`** (04_API, sekcja formatu).
 
 ## 7. Sekrety i konfiguracja
 
 Wyłącznie env (pydantic-settings): `DATABASE_URL`, `SECRET_KEY` (sesje/CSRF),
-`ANTHROPIC_API_KEY` (importer). `.env` w .gitignore od pierwszego commita;
+`ANTHROPIC_API_KEY` (importer), `TRANSFER_MAX_ZIP_MB` (limit paczki transferu, §6). `.env` w .gitignore od pierwszego commita;
 `.env.example` z placeholderami. W prod: plik env na hoście `chmod 600`
 lub docker secrets. Klucz API Anthropic używany wyłącznie server-side.
 

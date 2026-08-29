@@ -171,13 +171,15 @@ class ScopedQuery[ScopedT: ScopedMixin]:
 
     # --- odczyt ---------------------------------------------------------------
 
-    def visible_condition(self, user: User) -> ColumnElement[bool]:
-        """Warunek „widoczne dla mnie" z 03_DATABASE §4."""
-        if user.role is UserRole.ADMIN:
-            # ADMIN widzi wszystko (02_DOMAIN §2); mutacje i tak przechodzą
-            # przez `assert_can_manage`, więc to nie jest obejście reguł.
-            return true()
+    def owned_condition(self, user: User) -> ColumnElement[bool]:
+        """Warunek „to są MOJE dane" — BEZ wyjątku dla ADMIN-a (03_DATABASE §4).
 
+        To nie jest widoczność, tylko PRZYNALEŻNOŚĆ — dokładnie ta sama granica,
+        co `HouseholdScopedQuery.household_condition` dla spiżarni. Konsument:
+        eksport własnych danych (BATCH_14). Gdyby liczył go `visible_condition`,
+        ADMIN klikający „Eksportuj moje dane" dostałby plik z encjami wszystkich
+        rodzin w instancji — od tego jest osobny wariant `scope=instance`.
+        """
         own = self._model.owner_user_id == user.id
         if user.household_id is None:
             # Bez tego warunku `household_id = NULL` dopasowałoby cudze wiersze
@@ -191,9 +193,21 @@ class ScopedQuery[ScopedT: ScopedMixin]:
             ),
         )
 
+    def visible_condition(self, user: User) -> ColumnElement[bool]:
+        """Warunek „widoczne dla mnie" z 03_DATABASE §4."""
+        if user.role is UserRole.ADMIN:
+            # ADMIN widzi wszystko (02_DOMAIN §2); mutacje i tak przechodzą
+            # przez `assert_can_manage`, więc to nie jest obejście reguł.
+            return true()
+        return self.owned_condition(user)
+
     def select_visible(self, user: User) -> Select[tuple[ScopedT]]:
         """`SELECT` ograniczony do encji widocznych dla użytkownika."""
         return select(self._model).where(self.visible_condition(user))
+
+    def select_owned(self, user: User) -> Select[tuple[ScopedT]]:
+        """`SELECT` ograniczony do encji NALEŻĄCYCH do użytkownika (patrz `owned_condition`)."""
+        return select(self._model).where(self.owned_condition(user))
 
     async def get_or_404(self, session: AsyncSession, entity_id: int, user: User) -> ScopedT:
         """Encja po id — cudza albo nieistniejąca kończy się identycznym 404."""

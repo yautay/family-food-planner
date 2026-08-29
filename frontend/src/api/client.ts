@@ -50,6 +50,19 @@ export function setUnauthorizedHandler(handler: UnauthorizedHandler | undefined)
   unauthorizedHandler = handler
 }
 
+/**
+ * Efekty uboczne, które MUSI wykonać każda odpowiedź backendu — także ta spoza
+ * `apiFetch` (eksport transferu pobiera ZIP-a własnym `fetch`, bo `apiFetch`
+ * czyta JSON). Bez tego wygasła sesja na takiej ścieżce nie odsyłałaby na
+ * `/login`, a kolejka offline nie znałaby zegara serwera (ADR-009).
+ */
+export function observeResponse(response: Response): void {
+  recordServerDate(response.headers.get('Date'))
+  if (response.status === 401) {
+    unauthorizedHandler?.()
+  }
+}
+
 export interface ApiErrorBody {
   code: string
   message: string
@@ -180,11 +193,7 @@ export async function apiFetch<T>(path: string, options: ApiRequestOptions = {})
   // bo LWW ma rozstrzygać, KTO odhaczył później, a nie czyj telefon się spieszy
   // (ADR-009). Czytamy z KAŻDEJ odpowiedzi, także błędnej — nagłówek jest tam
   // tak samo dobry, a im świeższe przesunięcie, tym lepiej.
-  recordServerDate(response.headers.get('Date'))
-
-  if (response.status === 401) {
-    unauthorizedHandler?.()
-  }
+  observeResponse(response)
 
   if (!response.ok) {
     throw await toApiError(response)

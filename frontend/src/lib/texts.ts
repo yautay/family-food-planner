@@ -754,3 +754,100 @@ export const offline = {
   storeNeedsNetwork: 'Zmiana sklepu wymaga połączenia — kolejność sekcji układa serwer.',
   acceptNeedsNetwork: 'Przyjęcie zakupów do spiżarni wymaga połączenia.',
 } as const
+
+/**
+ * Transfer danych (BATCH_14, 02_DOMAIN §11).
+ *
+ * Teksty mówią wprost, CO SIĘ STANIE: eksport to plik na dysk użytkownika,
+ * a import pokazuje raport ZANIM cokolwiek zapisze. Bez tego „Importuj"
+ * brzmiałoby jak nieodwracalna operacja i nikt by go nie kliknął.
+ */
+export const transfer = {
+  sectionTitle: 'Twoje dane',
+  sectionSubtitle:
+    'Dane należą do Ciebie. Wyeksportuj je do pliku ZIP albo wczytaj z wcześniejszego eksportu.',
+  instanceTitle: 'Instancja',
+  instanceSubtitle:
+    'Eksport i import całej instancji: konta, rodziny i wszystkie dane. Hasła nigdy nie opuszczają bazy.',
+
+  exportButton: 'Eksportuj moje dane',
+  exportInstanceButton: 'Eksportuj całą instancję',
+  exportPending: 'Przygotowuję plik…',
+  exportHint: 'Plik zawiera dane i zdjęcia. Trzymaj go w bezpiecznym miejscu.',
+  exportDone: (filename: string) => `Pobrano plik ${filename}.`,
+
+  importButton: 'Importuj z pliku',
+  importInstanceButton: 'Importuj instancję',
+  importTitle: 'Import danych',
+  importInstanceTitle: 'Import instancji',
+  fileLabel: 'Plik eksportu (.zip)',
+  fileHint: 'Wybierz plik ZIP pobrany wcześniej z tej aplikacji.',
+  analyze: 'Sprawdź plik',
+  analyzing: 'Sprawdzam plik…',
+
+  reportTitle: 'Co powstanie po imporcie',
+  reportSubtitle: 'Nic jeszcze nie zostało zapisane — to tylko podgląd.',
+  reportEmpty: 'Ten plik nie zawiera niczego nowego do dodania.',
+  reportFrom: (version: string, date: string) =>
+    `Plik z wersji ${version}, wyeksportowany ${date}.`,
+  columnEntity: 'Dane',
+  columnNew: 'Nowe',
+  photos: (count: number) => `Zdjęcia w pliku: ${count}`,
+
+  collisionsTitle: 'Nazwy, które już masz',
+  collisionsSubtitle: 'Zdecyduj dla każdej pozycji, czy użyć istniejącej, czy dodać kopię.',
+  useExisting: 'Użyj istniejącego',
+  createCopy: 'Utwórz kopię',
+  collisionAria: (name: string) => `Decyzja dla: ${name}`,
+
+  warningsTitle: 'Uwagi',
+  confirm: 'Zaimportuj',
+  applying: 'Importuję…',
+  back: 'Wróć',
+  close: 'Zamknij',
+
+  summaryTitle: 'Import zakończony',
+  summaryCreated: 'Dodano',
+  summaryReused: 'Użyto istniejących',
+  summaryPhotos: (count: number) => `Zdjęcia: ${count}`,
+  summaryNothing: 'Nic nie zostało dodane.',
+} as const
+
+/** Nazwy sekcji formatu transferu po polsku — klucz techniczny nic nie mówi. */
+export const transferSections: Record<string, string> = {
+  product_categories: 'Kategorie produktów',
+  nutrients: 'Składniki odżywcze',
+  tags: 'Tagi',
+  stores: 'Sklepy',
+  store_category_order: 'Kolejność kategorii w sklepach',
+  canonical_products: 'Produkty',
+  product_unit_weights: 'Przeliczniki jednostek',
+  product_nutrient_values: 'Wartości odżywcze',
+  retail_products: 'Produkty sklepowe',
+  households: 'Rodziny',
+  users: 'Konta',
+  member_profiles: 'Profile członków',
+  user_nutrition_goals: 'Cele żywieniowe',
+  recipes: 'Przepisy',
+  recipe_ingredients: 'Składniki przepisów',
+  recipe_tags: 'Tagi przepisów',
+  recipe_ratings: 'Oceny przepisów',
+  plan_days: 'Dni planu',
+  plan_meals: 'Posiłki',
+  plan_meal_items: 'Pozycje posiłków',
+  plan_item_servings: 'Rozkład porcji',
+  day_templates: 'Szablony dnia',
+  week_templates: 'Szablony tygodnia',
+  week_cycles: 'Cykle tygodni',
+  pantry_items: 'Spiżarnia',
+  shopping_round_configs: 'Tury zakupowe',
+  shopping_generations: 'Generacje zakupów',
+  shopping_lists: 'Listy zakupowe',
+  shopping_list_items: 'Pozycje list zakupowych',
+  audit_entries: 'Dziennik operacji',
+}
+
+/** Etykieta sekcji: polska nazwa albo — dla nieznanej — klucz techniczny. */
+export function transferSectionLabel(name: string): string {
+  return transferSections[name] ?? name
+}

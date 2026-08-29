@@ -24,7 +24,7 @@ commit wykonany). Kolumna „Blokery" = zależności + decyzje z 02_DECISIONS.
 | R3 REVIEW_SHOPPING | [x] | — | `batch(R3)` na master (hash wpisać po push) |
 | 12 PWA_AND_OFFLINE | [x] | — | `batch(12)` na master (hash wpisać po push) |
 | 13 STATISTICS | [x] | — | `batch(13)` na master (hash wpisać po push) |
-| 14 IMPORT_EXPORT | [ ] | — (R3 PASS) | |
+| 14 IMPORT_EXPORT | [x] | — | `batch(14)` na master (hash wpisać po push) |
 | 15 PDF_IMPORT_EXTRACTION | [ ] | 05 (zalecane po R3) | |
 | 16 PDF_IMPORT_REVIEW_AND_AI | [ ] | 15, 04 | |
 | R4 REVIEW_PRE_PRODUCTION | [ ] | 01–16 | |
@@ -40,6 +40,77 @@ zmiany dotykające przyszłych batchy trzeba wpisać do ich kart
 (00_MASTER_PLAN §8); dziennik to indeks, nie schowek.
 
 ---
+
+**2026-08-29 — BATCH_14 (IMPORT_EXPORT).** Dane należą do użytkownika: jest
+**format transfer v1** (ZIP z `export.json` + `photos/`), eksport własnych danych
+i całej instancji (ADMIN), a import ma dwa kroki — raport **DRY-RUN**, który nie
+zapisuje ani jednego wiersza, i `apply` w JEDNEJ transakcji z decyzją per kolizja
+(„użyj istniejącego" / „utwórz kopię"). UI: sekcja „Twoje dane" w Ustawieniach,
+nowa strona `/admin/dane` i wspólny `TransferImportDialog`. **Bez migracji** —
+head nadal `0013`.
+
+**Siedem rzeczy, o których muszą wiedzieć następne batche:**
+
+1. **`transfer/serializer.py::SECTIONS` + `schemas.py::SECTION_ORDER` to JEDNA
+   definicja formatu dla obu stron transferu.** Nowa tabela domenowa = nowy wpis
+   w `SECTIONS` **i** w `SECTION_ORDER`, inaczej po prostu nie da się jej
+   wyeksportować (i nikt tego nie zauważy, bo eksport nie krzyczy o brakach).
+   Test `test_referencje_wskazuja_sekcje_wczesniejsza_w_kolejnosci` pilnuje, że
+   każda referencja wskazuje sekcję wchodzącą WCZEŚNIEJ — FK z RESTRICT nie
+   wybaczają innej kolejności (ustalenie R3).
+2. **`ScopedQuery.owned_condition` / `select_owned` (`app/core/scope.py`)** —
+   bliźniak `HouseholdScopedQuery.household_condition`: „to są MOJE dane", BEZ
+   wyjątku dla ADMIN-a. `visible_condition` deleguje teraz do tej metody, więc
+   zachowanie dla nie-ADMIN-a jest niezmienione. Każdy przyszły widok, który
+   znaczy „moje", a nie „wolno mi zobaczyć" (eksport, rozliczenia, cokolwiek per
+   konto), używa `select_owned`, a nie `select_visible`.
+3. **Czego eksport NIE niesie i nie ma nieść**: `users.password_hash`,
+   `sessions`, `shopping_lists.public_token`/`token_revoked` (żywy token bez
+   logowania w pliku, który ląduje w mailu — ADR-010), `created_at`/`updated_at`
+   poza `audit_entries`, `recipes.import_job_id`. Pilnuje tego unit test
+   `test_zadna_sekcja_nie_niesie_hasla_ani_tokenu` na tabeli `SECTIONS`.
+4. **`shopping_generations` wychodzą tylko w stanie `final`/`discarded`**, a ich
+   `params` przenoszą się DOSŁOWNIE (wersjonowane wejście silnika, R3). Generacja
+   `preview` jest jedynym stanem edytowalnym, więc po imporcie jej finalizacja
+   tworzyłaby pozycje list z identyfikatorami cudzej bazy.
+5. **Powtórny import własnego pliku na to samo konto działa**: `plan_days`
+   scalają się po `UNIQUE(owner_user_id, day)` (posiłki dopisują się do
+   istniejącego dnia, jak przy instancjacji szablonu z B07), a wiersze niosące
+   FAKT o rodzicu (przeliczniki, wartości odżywcze, oceny, cele na datę) wchodzą
+   `ON CONFLICT DO NOTHING`. Nowa tabela z UNIQUE, do której import może trafić
+   dwa razy, MUSI zadeklarować `merge_key` albo `idempotent` — inaczej użytkownik
+   dostanie 409 na całym imporcie.
+6. **Limit paczki transferu to nowa zmienna `TRANSFER_MAX_ZIP_MB`** (domyślnie
+   100, `.env.example` + 07_SECURITY §6/§7). Archiwum przechodzi kontrolę
+   w kolejności: limit rozmiaru → sygnatura ZIP → biała lista wpisów
+   (`export.json` i `photos/…`, żadnych `..`, ścieżek absolutnych ani
+   backslashy) → rozmiar po dekompresji z NAGŁÓWKÓW (zip-bomba pada przed
+   rozpakowaniem). Zdjęcia z archiwum idą przez `core/uploads.save_image`, więc
+   dostają nowe nazwy i są re-enkodowane.
+7. **E2E: prefiks nazwy musi być NA POCZĄTKU** (`E2E <obszar> …`).
+   `cleanupE2eData` dopasowuje encje przez `byPrefix`, więc nazwa w rodzaju
+   „Zupa E2E transfer" przeżywa sprzątanie — i natychmiast wywraca kolejny spec,
+   bo trigramowa szukajka przepisów znajduje cudzą pozostałość i ukrywa inline
+   create (dług U15 z review R2, złapane realnym failem w tym batchu).
+
+**Review na diffie (`/code-review` + `/security-review`) zgłosił pięć ustaleń,
+wszystkie naprawione w tym samym commicie** — szczegóły w Completion notes karty.
+Dwa warto znać poza tym batchem: (a) **`GET /uploads/*` sprawdza wyłącznie sesję,
+nie właściciela pliku**, więc katalog uploadów NIE jest miejscem na dane jednego
+konta — stąd `core/uploads.py::PRIVATE_SUBDIRS`, do którego dopisuje się każdy
+nowy podkatalog trzymający cudzą prywatność; (b) **`hash_password` musi iść przez
+`run_in_threadpool`** także w pętli po wierszach, nie tylko w `accounts/service.py`.
+
+Ustalenia propagowane do kart: **B15** (staging PDF nie wchodzi do eksportu v1;
+`recipes.import_job_id` w pliku jest `null`; nowa encja domenowa = rozszerzenie
+serializera; FK do `import_jobs` musi wejść do modelu w tym samym commicie co
+migracja) i **B18** (transfer logiczny jako DRUGA ścieżka restore obok
+`pg_dump` — do przećwiczenia w procedurze; plik eksportu nie ma haseł i jest
+danymi osobowymi jak backup). 02_DECISIONS bez zmian — batch nie miał bramki
+i nie potrzebował nowej decyzji. Cztery długi zapisane w Completion notes karty:
+**U18** (import selektywny), **U19** (brak komendy CLI restore), **U20**
+(leniwe sprzątanie scratcha importu), **U21** (`to_create` liczone
+optymistycznie dla sekcji `ON CONFLICT DO NOTHING`).
 
 **2026-08-22 — BATCH_13 (STATISTICS).** Jest strona `/statystyki` (widok 7):
 zakres **Tydzień / Miesiąc / Własny** (sufit 92 dni walidowany po obu stronach),

@@ -55,6 +55,15 @@ wdrożeniu, wykonywane na PRAWDZIWEJ domenie, nie na localhoście:
 - ADR-002 (bind mounts, migracje w update), ADR-014 (jeden kontener app).
 - `docs/architecture/05_FRONTEND_ARCHITECTURE.md` §6 (PWA — acceptance).
 
+- **Ścieżka awaryjna obok `pg_dump` (BATCH_14)**: istnieje eksport LOGICZNY
+  (`POST /transfer/export` → ZIP z `export.json` + zdjęcia) i import z raportem
+  dry-run. Procedura restore ma go ĆWICZYĆ jako drugą drogę odzyskania danych —
+  backup fizyczny odtwarza instancję, transfer odtwarza DANE na czystej bazie
+  (i tylko on działa, gdy zmieni się wersja PostgreSQL). Uwaga operacyjna:
+  plik eksportu NIE zawiera haseł, więc po imporcie instancji hasła nadaje ADMIN
+  (`task create-admin` + `PATCH /admin/users/{id}`), a paczka transferu jest
+  danymi osobowymi jak backup — ten sam reżim przechowywania.
+
 ## Stages
 
 1. **compose.prod.yml** (09 §1): serwisy `app` (obraz tagowany, port

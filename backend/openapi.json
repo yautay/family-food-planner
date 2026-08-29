@@ -5401,6 +5401,139 @@
         }
       }
     },
+    "/api/v1/transfer/export": {
+      "post": {
+        "tags": [
+          "transfer"
+        ],
+        "summary": "Eksport danych do archiwum ZIP",
+        "operationId": "export_api_v1_transfer_export_post",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/TransferScope",
+              "description": "Zakres eksportu",
+              "default": "user"
+            },
+            "description": "Zakres eksportu"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Archiwum eksportu",
+            "content": {
+              "application/zip": {}
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/transfer/import": {
+      "post": {
+        "tags": [
+          "transfer"
+        ],
+        "summary": "Wgranie archiwum i raport DRY-RUN (nic nie zapisuje)",
+        "operationId": "dry_run_api_v1_transfer_import_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_dry_run_api_v1_transfer_import_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DryRunReport"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/transfer/import/{import_id}/apply": {
+      "post": {
+        "tags": [
+          "transfer"
+        ],
+        "summary": "Zastosowanie importu z decyzjami dla kolizji",
+        "operationId": "apply_api_v1_transfer_import__import_id__apply_post",
+        "parameters": [
+          {
+            "name": "import_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Import Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportApplyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportSummary"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/audit": {
       "get": {
         "tags": [
@@ -5672,6 +5805,21 @@
         "title": "AuditListResponse",
         "description": "Lista wpisów z paginacją (04_API §1)."
       },
+      "Body_dry_run_api_v1_transfer_import_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "description": "Archiwum ZIP z eksportu"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_dry_run_api_v1_transfer_import_post"
+      },
       "Body_upload_photo_api_v1_recipes__recipe_id__photo_post": {
         "properties": {
           "file": {
@@ -5821,6 +5969,78 @@
         "type": "object",
         "title": "CategoryUpdateRequest",
         "description": "Częściowa edycja kategorii; pole pominięte zostaje bez zmian."
+      },
+      "CollisionAction": {
+        "type": "string",
+        "enum": [
+          "use_existing",
+          "create_copy"
+        ],
+        "title": "CollisionAction",
+        "description": "Decyzja użytkownika dla kolizji nazw przy imporcie."
+      },
+      "CollisionDecision": {
+        "properties": {
+          "entity": {
+            "type": "string",
+            "title": "Entity"
+          },
+          "source_id": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Source Id"
+          },
+          "action": {
+            "$ref": "#/components/schemas/CollisionAction"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "entity",
+          "source_id",
+          "action"
+        ],
+        "title": "CollisionDecision",
+        "description": "Decyzja per kolizja. Pominięta kolizja dostaje `default` z raportu."
+      },
+      "CollisionRead": {
+        "properties": {
+          "entity": {
+            "type": "string",
+            "title": "Entity"
+          },
+          "source_id": {
+            "type": "integer",
+            "title": "Source Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "existing_id": {
+            "type": "integer",
+            "title": "Existing Id"
+          },
+          "existing_name": {
+            "type": "string",
+            "title": "Existing Name"
+          },
+          "default": {
+            "$ref": "#/components/schemas/CollisionAction",
+            "default": "use_existing"
+          }
+        },
+        "type": "object",
+        "required": [
+          "entity",
+          "source_id",
+          "name",
+          "existing_id",
+          "existing_name"
+        ],
+        "title": "CollisionRead",
+        "description": "Jedna kolizja nazwy: co w pliku, co już jest w bazie, co zrobimy domyślnie."
       },
       "CurrentUser": {
         "properties": {
@@ -6343,6 +6563,68 @@
         ],
         "title": "DaysResponse",
         "description": "Dni z zakresu `from`-`to`. Zwracane są WYŁĄCZNIE dni istniejące w bazie."
+      },
+      "DryRunReport": {
+        "properties": {
+          "import_id": {
+            "type": "string",
+            "title": "Import Id"
+          },
+          "schema_version": {
+            "type": "integer",
+            "title": "Schema Version"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/TransferScope"
+          },
+          "exported_at": {
+            "type": "string",
+            "title": "Exported At"
+          },
+          "app_version": {
+            "type": "string",
+            "title": "App Version"
+          },
+          "to_create": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "To Create"
+          },
+          "collisions": {
+            "items": {
+              "$ref": "#/components/schemas/CollisionRead"
+            },
+            "type": "array",
+            "title": "Collisions"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          },
+          "photos": {
+            "type": "integer",
+            "title": "Photos"
+          }
+        },
+        "type": "object",
+        "required": [
+          "import_id",
+          "schema_version",
+          "scope",
+          "exported_at",
+          "app_version",
+          "to_create",
+          "collisions",
+          "warnings",
+          "photos"
+        ],
+        "title": "DryRunReport",
+        "description": "Co powstanie i co koliduje — ZANIM cokolwiek dotknie bazy (AC 3)."
       },
       "ErrorBody": {
         "properties": {
@@ -7076,6 +7358,60 @@
         "type": "object",
         "title": "HouseholdUpdateRequest",
         "description": "Zmiana nazwy rodziny."
+      },
+      "ImportApplyRequest": {
+        "properties": {
+          "decisions": {
+            "items": {
+              "$ref": "#/components/schemas/CollisionDecision"
+            },
+            "type": "array",
+            "maxItems": 5000,
+            "title": "Decisions"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ImportApplyRequest",
+        "description": "Body `apply`: wyłącznie decyzje kolizyjne (reszta jest w odłożonej paczce)."
+      },
+      "ImportSummary": {
+        "properties": {
+          "created": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Created"
+          },
+          "reused": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Reused"
+          },
+          "photos_imported": {
+            "type": "integer",
+            "title": "Photos Imported"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "created",
+          "reused",
+          "photos_imported",
+          "warnings"
+        ],
+        "title": "ImportSummary",
+        "description": "Podsumowanie zastosowania: ile czego powstało (AC 4 i 5)."
       },
       "InstantiateDayRequest": {
         "properties": {
@@ -12380,6 +12716,15 @@
         ],
         "title": "TemplateSummaryRead",
         "description": "Szablon na liście — bez payloadu (lista szablonów nie jest eksportem)."
+      },
+      "TransferScope": {
+        "type": "string",
+        "enum": [
+          "user",
+          "instance"
+        ],
+        "title": "TransferScope",
+        "description": "Zakres eksportu: dane jednego użytkownika albo cała instancja."
       },
       "UiSettingsPatchRequest": {
         "properties": {

@@ -32,6 +32,7 @@ from app.modules.planning.templates_service import TemplatesService
 from app.modules.recipes.service import RecipesService
 from app.modules.shopping.lists_service import ShoppingListsService
 from app.modules.shopping.service import ShoppingService
+from app.modules.transfer.service import TransferService
 
 
 def get_accounts_service(
@@ -123,6 +124,18 @@ def get_shopping_lists_service(
 ) -> ShoppingListsService:
     """Serwis gotowych list zakupowych: odhaczanie, sklep, udostępnianie (BATCH_11)."""
     return ShoppingListsService(session)
+
+
+def get_transfer_service(
+    session: Annotated[AsyncSession, Depends(get_session)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> TransferService:
+    """Serwis eksportu/importu logicznego (BATCH_14) — zna katalog uploadów i limit paczki."""
+    return TransferService(
+        session,
+        uploads_dir=settings.uploads_dir,
+        max_zip_mb=settings.transfer_max_zip_mb,
+    )
 
 
 def get_audit_service(
