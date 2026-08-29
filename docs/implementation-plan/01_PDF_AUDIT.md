@@ -274,12 +274,16 @@ trzy wiersze „Czekolada ciemna" (dieta 4 ×2, dieta 7 ×1). Doliczenie ich da�
 
 **BATCH_15 ich NIE parsuje.** Każdy taki wiersz zgłasza się jako issue
 `parse_warning` z surową linią, więc dane nie giną po cichu — widać je w review.
-Rozszerzenie kontraktu §3.2 o te dwa warianty jest **decyzją właściciela D20**
-(02_DECISIONS), nie zmianą do wykonania w batchu.
+
+**Decyzja D20 (ZATWIERDZONA 2026-08-29): kontrakt §3.2 ZOSTAJE ROZSZERZONY
+o oba warianty — wykonuje to BATCH_16.** Do tego czasu obowiązuje stan opisany
+wyżej. Przy wdrożeniu rosną liczby w §1: **649 wierszy składników i 180 nazw
+produktów** zamiast 642 i 178 — tę sekcję i tabelę §1 trzeba wtedy zaktualizować
+razem z asercjami `tests/integration/test_pdf_corpus.py`.
 
 Konsekwencja dla §8.6: parser widzi 178 nazw produktów wobec 181 w prototypie
 (prototyp czytał także te wiersze). Różnica **−3** jest w całości wyjaśniona
-powyższą listą.
+powyższą listą i zniknie po wdrożeniu D20 w B16.
 
 ### 9.3 Warianty sekcji tekstowych spoza §3.3
 

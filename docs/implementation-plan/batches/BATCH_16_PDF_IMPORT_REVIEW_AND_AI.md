@@ -55,10 +55,12 @@ Batch zastaje (po B15 + B04):
   jest kolumna (np. `from_extras_section BOOL`) i migracja — decyzja należy do
   B16, bo dopiero on skaluje. Przypadków w korpusie: 3 (dieta, dieta 5, dieta 7).
 - **7 wierszy składników nie jest sparsowanych** i wraca jako `parse_warning`
-  z surową linią (errata §9.2). **Decyzja D20 (OPEN) rekomenduje rozszerzenie
-  kontraktu §3.2 właśnie w B16** — jej przyjęcie zmienia liczby w §1 audytu
-  (649/180 zamiast 642/178) i asercje `tests/integration/test_pdf_corpus.py`.
-  Rozstrzygnij ją PRZED Stage 1, bo dotyczy kompletności importowanych przepisów.
+  z surową linią (errata §9.2). **Decyzja D20 ZATWIERDZONA 2026-08-29: rozszerzyć
+  kontrakt §3.2 o oba warianty — TO JEST ROBOTA TEGO BATCHA** (patrz Stage 0
+  niżej). Nie jest to „ulepszenie parsera na zapas": właściciel rozstrzygnął,
+  a bez tego przepisy z importu byłyby po cichu uboższe o główne składniki
+  (`Kapusta włoska, 200 g`, `Makaron pełnoziarnisty, 60 g`, `Kefir, 330 g`,
+  `Passata, 150 g`, 3× czekolada).
 - **3 ze 103 nazw dań są ucięte** przez zawijanie kolumn (errata §9.5). Pełne
   nazwy stoją na stronie podsumowania PDF-a; ekran review i tak pozwala nazwę
   poprawić, ale warto o tym wiedzieć przy wykrywaniu duplikatów.
@@ -79,6 +81,22 @@ Wymagane lektury: **ADR-011**, 01_PDF_AUDIT §5 i §8, 03_DATABASE §9,
 
 ## Stages
 
+0. **Rozszerzenie kontraktu §3.2 (decyzja D20, ZATWIERDZONA 2026-08-29)** —
+   parser czyta dwa dodatkowe warianty wiersza składnika: bez pary
+   ilość + jednostka (`Cukinia, 200 g` → `raw_qty`/`raw_unit` puste, `grams`
+   z liczby) i zawinięty między dwie linie (`…, 2 x` + `Kostka (16 g)`).
+   Robić PRZED resztą batcha: zmienia dane wejściowe każdego kolejnego etapu.
+   Cztery rzeczy do wykonania razem ze zmianą parsera, inaczej bramka padnie:
+   (a) **01_PDF_AUDIT §1 i §9.2** — liczby rosną na **649 wierszy / 180 nazw**;
+   (b) `tests/integration/test_pdf_corpus.py` — `EXPECTED_INGREDIENT_ROWS`,
+   `EXPECTED_PRODUCT_NAMES` i `test_niesparsowane_wiersze_skladnikow_sa_
+   zgloszone_a_nie_zgadniete` PRZESTAWIĆ na nowe liczby (nie osłabiać);
+   (c) `tests/unit/test_pdf_parser.py::test_linia_wygladajaca_na_skladnik_ale_
+   niezgodna_z_kontraktem_daje_ostrzezenie` opisuje zachowanie, które ta decyzja
+   zmienia — przepisać z „ostrzega" na „parsuje", zostawiając ostrzeżenie dla
+   linii, które NADAL nie pasują do kontraktu;
+   (d) crosscheck §8.6 zbliży się do 181 nazw prototypu — różnicę raportować
+   jak dotąd, nie zamieniać na twardą asercję równości.
 1. **Endpoint staged + resolve** — `GET /import/jobs/{id}/staged`,
    `POST .../resolve` (mapowania, porcje, scalanie); status `in_review`.
 2. **Walidacja kcal** — wyliczone silnikiem vs `pdf_kcal`; rozjazd >10%

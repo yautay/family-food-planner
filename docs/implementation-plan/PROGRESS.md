@@ -41,6 +41,20 @@ zmiany dotykające przyszłych batchy trzeba wpisać do ich kart
 
 ---
 
+**2026-08-29 — DECYZJA D20 (właściciel): kontrakt PDF §3.2 zostaje rozszerzony.**
+Właściciel zatwierdził rekomendację z BATCH_15: parser ma czytać dwa warianty
+wiersza składnika, których dziś nie czyta — bez pary ilość + jednostka
+(`Cukinia, 200 g`) i zawinięty między dwie linie (`…, 2 x` + `Kostka (16 g)`).
+**Wykonanie należy do BATCH_16 i wchodzi tam jako Stage 0** (przed resztą, bo
+zmienia dane wejściowe każdego kolejnego etapu). Cena zmiany, którą trzeba
+zapłacić w tym samym commicie: **01_PDF_AUDIT §1 i §9.2 rosną z 642/178 na
+649/180**, asercje `tests/integration/test_pdf_corpus.py` przestawiają się na
+nowe liczby (nie osłabiają), unit test o ostrzeżeniu opisuje odtąd parsowanie,
+a crosscheck §8.6 zbliża się do 181 nazw prototypu i nadal RAPORTUJE różnicę
+zamiast asercji równości. Zachowanie wydanego B15 bez zmian — te 7 wierszy jest
+tam widoczne jako `parse_warning`. Zaktualizowane: 02_DECISIONS (D20 przeniesiona
+do zatwierdzonych), 01_PDF_AUDIT §9.2, karty B15 i B16.
+
 **2026-08-29 — BATCH_15 (PDF_IMPORT_EXTRACTION).** Importer PDF ma pierwszą
 połowę: upload jadłospisu (25 MB, sniffing `%PDF`, losowa nazwa, sha256),
 **deterministyczny parser** wg wiążącego kontraktu 01_PDF_AUDIT, staging
@@ -65,9 +79,9 @@ review i zatwierdzanie to B16.
    punktów, każdy z pomiarem na tym samym korpusie. Najważniejszy poza §9.1:
    **7 wierszy składników nie pasuje do wzorca §3.2** (`Cukinia, 200 g` i wiersze
    zawinięte między dwie linie). Parser ich NIE zgaduje — zgłasza jako
-   `parse_warning` z surową linią. Rozszerzenie kontraktu to **decyzja D20
-   (OPEN, rekomendacja: TAK w B16)**; jej przyjęcie zmienia liczby w §1 audytu
-   (649/180) i asercje testów korpusowych.
+   `parse_warning` z surową linią. Rozszerzenie kontraktu to **decyzja D20 —
+   ZATWIERDZONA 2026-08-29 (TAK, wykonanie w B16)**; zmienia liczby w §1 audytu
+   na 649/180 i asercje testów korpusowych. B16 ma to jako **Stage 0**.
 3. **Staging stoi POZA wzorcem scope i ma tak zostać.** `import_jobs` nie ma
    `scope` ani `household_id` (03_DATABASE §9): jadłospis to dokument zdrowotny
    jednej osoby, nie stan domowy. Widoczność egzekwuje jawny warunek

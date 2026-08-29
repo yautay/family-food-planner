@@ -445,13 +445,15 @@ liczby z §1 co do jednej**: 24 dni, 96 posiłków, 642 wiersze składników,
   `setdefault` w confteście — dotyka wszystkich modułów z uploadami, więc
   zostaje jako osobna robota (kandydat na R4).
 
-### Pytania do właściciela
+### Pytania do właściciela — rozstrzygnięte
 
-- **D20 (OPEN, wpisana do 02_DECISIONS)** — czy rozszerzyć kontrakt
-  01_PDF_AUDIT §3.2 o dwa zmierzone warianty wiersza składnika. Rekomendacja:
-  TAK, w B16; skutkiem jest aktualizacja liczb w §1 audytu i w asercjach testów
-  korpusowych, dlatego nie robi tego batch. Batch B15 jest zamknięty niezależnie
-  od tej decyzji — dziś te wiersze są widoczne jako `parse_warning`.
+- **D20 — ZATWIERDZONA 2026-08-29 zgodnie z rekomendacją: TAK, rozszerzyć
+  kontrakt 01_PDF_AUDIT §3.2 o oba warianty, wykonanie w BATCH_16.**
+  Zachowanie B15 zostaje bez zmian (te 7 wierszy jest widoczne jako
+  `parse_warning`) — batch był zamknięty i zacommitowany przed rozstrzygnięciem.
+  B16 dostał to jako **Stage 0** razem z listą czterech rzeczy do zaktualizowania
+  (liczby w §1 audytu na 649/180, asercje testów korpusowych, przepisanie unit
+  testu o ostrzeżeniu, tolerancja różnicy w crosschecku §8.6).
 
 ### Wyniki uruchomień (realne)
 
