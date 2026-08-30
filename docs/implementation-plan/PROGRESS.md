@@ -97,9 +97,15 @@ nie przerywać. E2E: **flow importu przechodzi** (`import-review-flow.spec.ts`
 i `import-upload.spec.ts`, 3/3 z setupem) na przebudowanym obrazie `app`
 (doszedł `anthropic`) i migracji `0015` na bazie dev.
 
-**Uwaga do następnego przebiegu E2E**: pełna suita dała 18/20 — `transfer` i
-`week-template-cycle` łapią 30-sekundowy timeout, ale **przechodzą po podniesieniu
-go do 180 s**. Przyczyna jest po stronie DANYCH, nie kodu: dług **U30** niżej.
+**Po resecie bazy dev (30.08.2026)** pełna suita idzie 18/20 — oba specy
+importu przechodzą w KAŻDYM przebiegu, a `transfer` zszedł z timeoutu do
+**8,6 s**. Pozostałe pojedyncze faile są NIEPOWTARZALNE (za każdym razem inny
+spec, każdy przechodzi w izolacji i w kolejnym przebiegu) i dotyczą obszarów
+spoza tego batcha — to znana kruchość suity dzielącej jedną bazę dev
+(08_TESTING §3.1). Trzeci przebieg pod obciążeniem maszyny (równolegle wstał
+kontener innego projektu) rozlał się na 8 timeoutów i **nie jest miarodajny** —
+czas suity urósł z 3,6 do 10 minut przy zdrowym stacku (`/health` 34 ms,
+zero 5xx).
 
 **Review na diffie:** `/code-review` — dwa realne błędy naprawione
 (`unmapped_product` blokował dania SCALANE, które nie wnoszą swoich składników
@@ -113,12 +119,15 @@ wysłane żądania. Wszystkie trzy mają testy regresyjne.
 
 Nowe długi: **U27** (N+1 zapytań o kandydatów w `ai-suggest`), **U28** (E2E
 zostawia zatwierdzony job — statusy rozstrzygnięte są nieusuwalne z założenia),
-**U29** (lista importów bez paginacji) i **U30 — NIE Z TEGO BATCHA**:
-`transfer.spec.ts` (B14) podwaja dane demo przy KAŻDYM przebiegu (768 składników
-na danie, 768 posiłków na dzień w bazie dev), przez co `transfer/import/apply`
-trwa 73 s i dwa cudze specy łapią timeout. Oba przechodzą po podniesieniu
-timeoutu — to spowolnienie, nie regresja. Do rozstrzygnięcia w R4; baza dev
-wymaga wyczyszczenia.
+**U29** (lista importów bez paginacji) i **U30 — NIE Z TEGO BATCHA, ROZSTRZYGNIĘTE
+decyzją D22 (30.08.2026)**: import transferu reużywający rodzica wstawiał jego
+dzieci OD NOWA (sekcje `plan_meals`/`recipe_ingredients` nie mają klucza
+naturalnego), więc `transfer.spec.ts` podwajał dane demo przy każdym przebiegu —
+1536 składników w daniu zamiast 3, `transfer/import/apply` w 73 s i timeout
+na dwóch cudzych specach. Właściciel rozstrzygnął: **reużyty rodzic zostaje
+nietknięty, dzieci pomijamy**; naprawa w R4. Baza dev zresetowana 30.08.2026
+(downgrade base → upgrade head → seed demo → create-admin) — po resecie
+`transfer.spec.ts` przechodzi w 8,6 s.
 
 
 **2026-08-29 — DECYZJA D20 (właściciel): kontrakt PDF §3.2 zostaje rozszerzony.**

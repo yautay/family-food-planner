@@ -524,18 +524,21 @@ w nowej warstwie Vue, CSRF, audyt bez nazw dań.
   właściciela (temat pokrywa się z D10).
 - **U29**: `ImportPage.vue` nadal bez paginacji (dług U25 z B15) — teraz z jedną
   pozycją więcej na wiersz.
-- **U30 (NIE Z TEGO BATCHA, ale znalezione przy nim)**: `transfer.spec.ts` (B14)
-  **PODWAJA dane demo przy każdym przebiegu**. Po kilku dzisiejszych uruchomieniach
-  suity baza dev ma **768 składników w każdym daniu demo** i **768 posiłków
-  w dniu planu** zamiast 15, przez co `POST /transfer/import/{id}/apply` trwa
-  **73 s** i dwa specy (`transfer`, `week-template-cycle`) przekraczają 30-sekundowy
-  timeout Playwrighta. Dowód, że to nie regresja B16: **oba przechodzą po
-  podniesieniu timeoutu** (`task test-e2e -- transfer.spec.ts
-  week-template-cycle.spec.ts --timeout=180000` → 3 passed), a `apply` kończy się
-  statusem 200. Do rozstrzygnięcia w R4: czy import z decyzją „reużyj istniejący"
-  ma prawo DOKŁADAĆ dzieci do istniejącego rodzica (wtedy to błąd aplikacji),
-  czy spec ma sprzątać po sobie ostrożniej (wtedy to higiena E2E). Baza dev
-  wymaga wyczyszczenia — decyzja właściciela, nie agenta.
+- **U30 (NIE Z TEGO BATCHA, ale znalezione przy nim) — ROZSTRZYGNIĘTE decyzją D22
+  30.08.2026**: `transfer.spec.ts` (B14) **PODWAJAŁ dane demo przy każdym
+  przebiegu**, bo import reużywający rodzica (`USE_EXISTING` / `merge_key`)
+  wstawiał jego dzieci od nowa — sekcje `plan_meals`, `recipe_ingredients`
+  i `plan_meal_items` nie mają klucza naturalnego. Efekt był wykładniczy
+  i zmierzony: **1536 składników w daniu demo zamiast 3** (`recipe_ingredients`
+  7680 wierszy przy 15 unikatach treści), przez co `POST
+  /transfer/import/{id}/apply` trwał **73 s** i wywracał na timeoucie dwa specy
+  niezwiązane z B16. **Właściciel rozstrzygnął (D22): reużyty rodzic ma zostać
+  nietknięty — dzieci pomijamy.** Naprawa w `transfer/service.py::_import_row`
+  należy do R4, razem z testem „drugi import tego samego pliku nie zmienia
+  liczby wierszy". Bazę dev zresetowano 30.08.2026 (`alembic downgrade base` →
+  `upgrade head` → `scripts.seed_demo` → `app.cli create-admin`) i po resecie
+  ten sam `transfer.spec.ts` przechodzi w **8,6 s** i **9,3 s** zamiast łapać
+  timeout.
 
 ### Pytania do właściciela
 
@@ -543,3 +546,6 @@ w nowej warstwie Vue, CSRF, audyt bez nazw dań.
 (`piece_weight_g`) przez osobny ekran propozycji dla ADMIN-a. Materiał jest
 zmierzony (01_PDF_AUDIT §5.2), ale wdrożenie tego „przy okazji" łamałoby D15.
 Rekomendacja i wariant odrzucony: 02_DECISIONS, wiersz D21.
+
+**D22 — ZATWIERDZONA 30.08.2026** (import transferu POMIJA dzieci reużytego
+rodzica). Wykonanie należy do R4; pytanie zamknięte.
