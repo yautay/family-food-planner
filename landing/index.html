@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Paśnik — już wkrótce</title>
+<meta name="description" content="Tu wkrótce zamieszka Paśnik — rodzinne planowanie posiłków, przepisy, wartości odżywcze i listy zakupów." />
+<meta name="robots" content="noindex, nofollow" />
+<meta name="theme-color" content="#faf6ef" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23e07a2f'/%3E%3Cpath d='M6 15h20a10 10 0 0 1-20 0z' fill='%23fff'/%3E%3Cpath d='M16 13c0-3 2.4-5.4 5.4-5.4C21.4 10.6 19 13 16 13z' fill='%23fff'/%3E%3C/svg%3E" />
+<style>
+  /* Paleta = tokens aplikacji (docs/architecture/06_UIUX §1).
+     Strona jest samodzielna: zero zewnętrznych zasobów, zero JS. */
+  :root {
+    --background: #faf6ef;
+    --foreground: #2b2620;
+    --card: #ffffff;
+    --primary: #e07a2f;
+    --primary-hover: #c96a26;
+    --secondary: #3f7a5e;
+    --muted: #ede5d8;
+    --muted-foreground: #6f675c;
+    --border: #ede5d8;
+    --warning: #d9a441;
+    --radius-lg: 0.5rem;
+    --radius-xl: 0.75rem;
+    color-scheme: light;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body { height: 100%; }
+
+  body {
+    margin: 0;
+    background: var(--background);
+    color: var(--foreground);
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.55;
+    display: flex;
+    flex-direction: column;
+    min-height: 100dvh;
+    overflow-x: hidden;
+  }
+
+  /* Ciepłe plamy w tle — akcent, nie dekoracja sama dla siebie. */
+  .glow {
+    position: fixed;
+    border-radius: 9999px;
+    filter: blur(90px);
+    opacity: 0.5;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .glow--primary   { width: 34rem; height: 34rem; top: -13rem; right: -11rem; background: #f3c79a; }
+  .glow--secondary { width: 28rem; height: 28rem; bottom: -13rem; left: -11rem; background: #b9d3c5; }
+
+  main {
+    position: relative;
+    z-index: 1;
+    flex: 1;
+    width: 100%;
+    max-width: 45rem;
+    margin: 0 auto;
+    padding: 3rem 1.25rem 2rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2rem;
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 0.875rem;
+  }
+
+  .brand__mark {
+    width: 3.25rem;
+    height: 3.25rem;
+    border-radius: var(--radius-xl);
+    background: linear-gradient(140deg, var(--primary), var(--primary-hover));
+    display: grid;
+    place-items: center;
+    box-shadow: 0 6px 20px rgba(224, 122, 47, 0.28);
+    flex: none;
+  }
+
+  .brand__name {
+    margin: 0;
+    font-size: 2rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+
+  .brand__kicker {
+    margin: 0.1rem 0 0;
+    font-size: 0.875rem;
+    color: var(--muted-foreground);
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.375rem 0.875rem;
+    border-radius: 9999px;
+    background: var(--muted);
+    border: 1px solid var(--border);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--muted-foreground);
+  }
+
+  .badge__dot {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 9999px;
+    background: var(--warning);
+    animation: pulse 2.4s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%      { opacity: 0.4; transform: scale(0.8); }
+  }
+
+  h2 {
+    margin: 0.875rem 0 0;
+    font-size: clamp(1.8rem, 5.4vw, 2.85rem);
+    font-weight: 600;
+    letter-spacing: -0.025em;
+    line-height: 1.14;
+  }
+
+  h2 em {
+    font-style: normal;
+    color: var(--primary);
+  }
+
+  .lede {
+    margin: 0.875rem 0 0;
+    font-size: 1.0625rem;
+    color: var(--muted-foreground);
+    max-width: 34rem;
+  }
+
+  .features {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+    gap: 0.75rem;
+  }
+
+  .feature {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 1rem;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    box-shadow: 0 1px 2px rgba(43, 38, 32, 0.05);
+  }
+
+  .feature__icon {
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: var(--radius-lg);
+    background: #f6efe4;
+    color: var(--primary);
+    display: grid;
+    place-items: center;
+    flex: none;
+  }
+
+  .feature--herb .feature__icon { background: #e8f0eb; color: var(--secondary); }
+
+  .feature__title {
+    display: block;
+    font-weight: 600;
+    font-size: 0.9375rem;
+  }
+
+  .feature__desc {
+    display: block;
+    font-size: 0.8125rem;
+    color: var(--muted-foreground);
+  }
+
+  .note {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    margin: 0;
+    padding: 1rem 1.125rem;
+    border-radius: var(--radius-xl);
+    background: rgba(63, 122, 94, 0.08);
+    border: 1px solid rgba(63, 122, 94, 0.18);
+    font-size: 0.9375rem;
+    color: #2f5c47;
+  }
+
+  .note svg { flex: none; margin-top: 0.15rem; }
+
+  footer {
+    position: relative;
+    z-index: 1;
+    padding: 1.5rem 1.25rem 2rem;
+    text-align: center;
+    font-size: 0.8125rem;
+    color: var(--muted-foreground);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .badge__dot { animation: none; }
+  }
+</style>
+</head>
+<body>
+  <div class="glow glow--primary" aria-hidden="true"></div>
+  <div class="glow glow--secondary" aria-hidden="true"></div>
+
+  <main>
+    <header class="brand">
+      <span class="brand__mark" aria-hidden="true">
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#ffffff"
+             stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3.5 12h17a8.5 8.5 0 0 1-17 0z" fill="#ffffff" stroke="none" />
+          <path d="M2.5 12h19" />
+          <path d="M7.5 21h9" />
+          <path d="M12 9.5c0-2.6 2.1-4.7 4.7-4.7C16.7 7.4 14.6 9.5 12 9.5z" fill="#ffffff" stroke="none" />
+          <path d="M12 9.5V7" />
+        </svg>
+      </span>
+      <div>
+        <h1 class="brand__name">Paśnik</h1>
+        <p class="brand__kicker">Rodzinne planowanie posiłków</p>
+      </div>
+    </header>
+
+    <div>
+      <span class="badge"><span class="badge__dot" aria-hidden="true"></span>Trwają ostatnie prace</span>
+      <h2>Tu już niedługo<br />zamieszka <em>Paśnik</em>.</h2>
+      <p class="lede">
+        Plan tygodnia, przepisy z wartościami odżywczymi, spiżarnia i listy
+        zakupów, które same układają się pod kolejność półek w sklepie.
+        Adres jest już nasz — zaraz wprowadzamy tu aplikację.
+      </p>
+    </div>
+
+    <ul class="features">
+      <li class="feature">
+        <span class="feature__icon" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="4" width="18" height="18" rx="2" />
+            <path d="M16 2v4M8 2v4M3 10h18" />
+          </svg>
+        </span>
+        <span>
+          <span class="feature__title">Plan dnia i tygodnia</span>
+          <span class="feature__desc">Kalorie, makro i cele dla każdego domownika.</span>
+        </span>
+      </li>
+
+      <li class="feature feature--herb">
+        <span class="feature__icon" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 2v7a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2V2" />
+            <path d="M6.5 11v11" />
+            <path d="M18.5 2a4 4 0 0 0-3 3.9V13h3" />
+            <path d="M18.5 2v20" />
+          </svg>
+        </span>
+        <span>
+          <span class="feature__title">Przepisy i porcje</span>
+          <span class="feature__desc">Skalowanie na całą rodzinę jednym suwakiem.</span>
+        </span>
+      </li>
+
+      <li class="feature">
+        <span class="feature__icon" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="9" cy="20" r="1.4" />
+            <circle cx="18" cy="20" r="1.4" />
+            <path d="M2 3h2.2l2.5 11.6a2 2 0 0 0 2 1.6h8.6a2 2 0 0 0 1.95-1.55L21 7H5.2" />
+          </svg>
+        </span>
+        <span>
+          <span class="feature__title">Listy zakupów</span>
+          <span class="feature__desc">Ułożone pod sklep, działają też bez zasięgu.</span>
+        </span>
+      </li>
+
+      <li class="feature feature--herb">
+        <span class="feature__icon" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="5" y="2" width="14" height="20" rx="2" />
+            <path d="M5 10h14" />
+            <path d="M9 6v1.5M9 14v1.5" />
+          </svg>
+        </span>
+        <span>
+          <span class="feature__title">Spiżarnia</span>
+          <span class="feature__desc">Wiesz, co masz w domu, zanim ruszysz po zakupy.</span>
+        </span>
+      </li>
+    </ul>
+
+    <p class="note">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 16v-4M12 8h.01" />
+      </svg>
+      <span>Aplikacja prywatna — dostęp wyłącznie dla domowników. Jeśli czekasz na konto, odezwiemy się, gdy Paśnik ruszy.</span>
+    </p>
+  </main>
+
+  <footer>Paśnik · 2026</footer>
+</body>
+</html>
