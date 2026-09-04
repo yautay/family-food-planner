@@ -48,7 +48,7 @@ async function wipeDatabase(): Promise<void> {
   // Otwarte połączenie blokuje usunięcie bazy — najpierw je zamykamy.
   await resetOfflineDb()
   await new Promise<void>((resolve) => {
-    const request = indexedDB.deleteDatabase('ffp-offline')
+    const request = indexedDB.deleteDatabase('pasnik-offline')
     request.onsuccess = () => resolve()
     request.onerror = () => resolve()
     request.onblocked = () => resolve()

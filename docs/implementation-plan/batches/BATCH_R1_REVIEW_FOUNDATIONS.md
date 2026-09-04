@@ -14,7 +14,7 @@ blokujące musi zostać zgłoszone i rozstrzygnięte PRZED zleceniem B05.**
 ## Context
 
 Po B01–B04 istnieją: monorepo (backend FastAPI + frontend Vue 3, Taskfile,
-compose.dev, CLAUDE.md, cztery project skille `ffp-*`), auth (sesje server-side,
+compose.dev, CLAUDE.md, cztery project skille `pasnik-*`), auth (sesje server-side,
 CSRF, rate limit, `create-admin`), households + scope (`ScopedQuery`,
 fundament audit logu), katalog (produkty kanoniczne, jednostki, kategorie,
 `ProductPicker` z create-in-context). Ten batch pierwszy raz ogląda je
@@ -189,7 +189,7 @@ wg dziennika `PROGRESS.md`, wpis R1).
       uruchomione w tej sesji: `check`, `test-be`, `test-int`, `test-unit`,
       `db-heads`, `fe-types`, `audit`, `secrets-scan` (padł na braku Dockera)
 - [x] CLAUDE.md zgodny z rzeczywistością repo (komendy, zakazy, wskaźniki);
-      project skille `.claude/skills/ffp-{backend,frontend,domain-calc,security}`
+      project skille `.claude/skills/pasnik-{backend,frontend,domain-calc,security}`
       nadążają za wzorcami (ScopedQuery, Decimal, adapter wartości,
       Query/Pinia) — zaktualizować w commicie review, jeśli nie
       → **U4** (CLAUDE.md) i **U7** (wszystkie cztery skille), naprawione
@@ -221,7 +221,7 @@ wg dziennika `PROGRESS.md`, wpis R1).
    warunkami** (lista) / **BLOKADA** (co musi się stać przed B05).
 5. Karty B05–B07 przejrzane; korekty planu (jeśli są) wprowadzone
    do 00_MASTER_PLAN + kart z powodem w PROGRESS.
-6. Project skille `ffp-*` i CLAUDE.md aktualne wobec stanu repo.
+6. Project skille `pasnik-*` i CLAUDE.md aktualne wobec stanu repo.
 7. Commit `batch(R1): review ...` wykonany, `git status` czysty.
 
 ## Out of Scope
@@ -235,7 +235,7 @@ wg dziennika `PROGRESS.md`, wpis R1).
 
 - `docs/implementation-plan/PROGRESS.md` — werdykt + wpis dziennika.
 - Ewentualnie: drobne naprawy w `backend/**`, `frontend/**`; aktualizacje
-  `CLAUDE.md`, `.claude/skills/ffp-*/SKILL.md`, kart
+  `CLAUDE.md`, `.claude/skills/pasnik-*/SKILL.md`, kart
   `BATCH_05…07`, dokumentów `docs/architecture/**`, `00_MASTER_PLAN.md`.
 
 ## Implementation Notes
@@ -268,7 +268,7 @@ wg dziennika `PROGRESS.md`, wpis R1).
 - [x] Karty B05–B07 przejrzane i zaktualizowane (+ B17 jako miejsce docelowe
       trzech follow-upów)
 - [x] Drobne naprawy wykonane; follow-upy rozpisane do miejsc docelowych
-- [x] Project skille `ffp-*` + CLAUDE.md zaktualizowane
+- [x] Project skille `pasnik-*` + CLAUDE.md zaktualizowane
 - [x] Werdykt + wpis dziennika w PROGRESS.md
 
 ## Verification checklist

@@ -5,11 +5,11 @@ import pluginVue from 'eslint-plugin-vue'
 
 export default defineConfigWithVueTs(
   {
-    name: 'ffp/files',
+    name: 'pasnik/files',
     files: ['**/*.{ts,mts,tsx,vue}'],
   },
   {
-    name: 'ffp/ignores',
+    name: 'pasnik/ignores',
     ignores: [
       'dist/**',
       'dev-dist/**',
@@ -24,9 +24,9 @@ export default defineConfigWithVueTs(
   pluginVue.configs['flat/recommended'],
   vueTsConfigs.recommended,
   {
-    name: 'ffp/rules',
+    name: 'pasnik/rules',
     rules: {
-      // ADR-007 / skill ffp-frontend: brak `any` bez uzasadnienia w komentarzu.
+      // ADR-007 / skill pasnik-frontend: brak `any` bez uzasadnienia w komentarzu.
       '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/consistent-type-imports': ['error', { prefer: 'type-imports' }],
       // Nazwy komponentów: shadcn-vue generuje jednowyrazowe (Button, Card…).
@@ -36,7 +36,7 @@ export default defineConfigWithVueTs(
   {
     // Kod generowany przez shadcn-vue: modyfikujemy go przez tokens, nie przez
     // przepisywanie propsów (ADR-007) — reguły stylistyczne tu nie pomagają.
-    name: 'ffp/shadcn-generated',
+    name: 'pasnik/shadcn-generated',
     files: ['src/components/ui/**/*.vue'],
     rules: {
       'vue/require-default-prop': 'off',

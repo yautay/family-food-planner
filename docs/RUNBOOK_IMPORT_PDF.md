@@ -15,18 +15,18 @@ numer portu w dwóch linijkach — nie przepisuj całych wartości, bo w
 
 ```
 POSTGRES_PORT=5434
-DATABASE_URL=postgresql+psycopg://…@127.0.0.1:5434/ffp
+DATABASE_URL=postgresql+psycopg://…@127.0.0.1:5434/pasnik
 ```
 
 **Pułapka**: bez tej poprawki `task dev` zderzy się o port, a narzędzia
 uruchamiane z hosta (`task create-admin`, `task db-seed-demo`,
 `task db-migrate`) połączą się z CUDZĄ bazą i padną na
-`password authentication failed for user "ffp"`. Komunikat nie mówi nic
+`password authentication failed for user "pasnik"`. Komunikat nie mówi nic
 o porcie, więc łatwo szukać w złym miejscu.
 
 Alternatywa bez ruszania `.env`: `POSTGRES_PORT=5434 task dev` — ale wtedy
 narzędzia hosta i tak trafiają w 5432 i operacje na bazie trzeba robić przez
-`docker exec ffp-dev-app-1 …`.
+`docker exec pasnik-dev-app-1 …`.
 
 ## 2. Podnieś stack
 
@@ -163,11 +163,11 @@ Zostawia schemat i seed demo. Operacje idą przez kontener, bo baza dev słucha
 na 5434.
 
 ```bash
-docker exec ffp-dev-app-1 alembic downgrade base
-docker exec ffp-dev-app-1 alembic upgrade head
-docker exec ffp-dev-app-1 python -m scripts.seed_demo   # produkty i sklepy
+docker exec pasnik-dev-app-1 alembic downgrade base
+docker exec pasnik-dev-app-1 alembic upgrade head
+docker exec pasnik-dev-app-1 python -m scripts.seed_demo   # produkty i sklepy
 task create-admin                                       # konto musi wrócić…
-docker exec ffp-dev-app-1 python -m scripts.seed_demo   # …bo przepisy potrzebują właściciela
+docker exec pasnik-dev-app-1 python -m scripts.seed_demo   # …bo przepisy potrzebują właściciela
 ```
 
 Seed uruchamia się **dwa razy** celowo: produkty i sklepy nie mają właściciela

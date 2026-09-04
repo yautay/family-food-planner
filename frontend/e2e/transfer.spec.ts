@@ -73,7 +73,7 @@ test('transfer: eksport moich danych, import tego pliku, kolizje i podsumowanie'
     page.waitForEvent('download'),
     page.getByTestId('transfer-export').click(),
   ])
-  expect(download.suggestedFilename()).toContain('ffp-export-')
+  expect(download.suggestedFilename()).toContain('pasnik-export-')
   const archivePath = await download.path()
   expect(archivePath, 'Playwright musi mieć plik na dysku, żeby go odesłać').toBeTruthy()
   await expect(page.getByTestId('transfer-export-done')).toBeVisible()

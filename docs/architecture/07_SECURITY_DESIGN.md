@@ -186,7 +186,7 @@ reguły (`useDefault = true`) i wycisza wyłącznie dwa literały haseł testowy
 Bez tego skan zwracał 14 trafień, wszystkie na te dwa literały, i kończył się
 kodem 1 na czystym repo, czyli przestawał być użyteczną bramką. Hasła testowe
 nie otwierają żadnego środowiska: konta powstają komendą `task create-admin`
-(prompt albo `FFP_ADMIN_*`), a w repozytorium nie ma działającego hasła (§2).
+(prompt albo `PASNIK_ADMIN_*`), a w repozytorium nie ma działającego hasła (§2).
 
 ## 8. Logowanie i błędy
 

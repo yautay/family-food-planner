@@ -1,6 +1,6 @@
 ---
-name: ffp-backend
-description: Kontrakt backendu Family Food Planner — wzorzec modułu FastAPI (router→service→models), SQLAlchemy 2.0 typed, Alembic, Pydantic v2, ScopedQuery, pytest. Ładuj przed pracą nad plikami w backend/**.
+name: pasnik-backend
+description: Kontrakt backendu Paśnika — wzorzec modułu FastAPI (router→service→models), SQLAlchemy 2.0 typed, Alembic, Pydantic v2, ScopedQuery, pytest. Ładuj przed pracą nad plikami w backend/**.
 ---
 
 <!-- verified: 2026-08-16 (REVIEW R1 — uzgodnione z kodem po B01–B04)
@@ -9,7 +9,7 @@ description: Kontrakt backendu Family Food Planner — wzorzec modułu FastAPI (
             · argon2-cffi 25 · slowapi 0.1.10 · PG 17 · uv
      hierarchia: ADR i docs/architecture NADRZĘDNE wobec tego skilla -->
 
-# FFP — kontrakt backendu
+# Paśnik — kontrakt backendu
 
 ## Fundament z BATCH_01–04 (istnieje, nie pisz tego od nowa)
 
@@ -30,7 +30,7 @@ description: Kontrakt backendu Family Food Planner — wzorzec modułu FastAPI (
   `require_admin` (+ fabryki serwisów). Router nie czyta cookie sam.
 - `app/core/{security,cookies,middleware}.py` — argon2id, tokeny, TTL sesji,
   atrybuty cookies, CSRF double-submit i nagłówki bezpieczeństwa. Szczegóły:
-  skill `ffp-security`.
+  skill `pasnik-security`.
 - `app/core/scope.py` — `ScopedMixin` + `ScopedQuery` (patrz §Autoryzacja).
 - `app/core/deletion.py` — `UsedInRef`, `assert_deletable`,
   `conflict_from_integrity_error`: kontrakt 409 z `details.used_in`. FK
@@ -64,7 +64,7 @@ nie ma.
 - Moduł→moduł WYŁĄCZNIE przez service (import modeli dozwolony do JOIN-ów,
   logika biznesowa — nie).
 - Silniki obliczeń (`nutrition/engine.py`, `shopping/engine.py`): czyste
-  funkcje bez I/O — reguły w skillu `ffp-domain-calc`.
+  funkcje bez I/O — reguły w skillu `pasnik-domain-calc`.
 
 ## SQLAlchemy 2.0 — styl obowiązkowy
 
@@ -153,4 +153,4 @@ nie ma.
 - Wyłącznie env przez pydantic-settings (`core/config.py`); nowa zmienna =
   wpis w `.env.example` w tym samym commicie.
 - structlog: request id + user id (nie email); NIGDY tokenów/haseł w logach
-  (`/public/lists/***` maskowane). Szczegóły wrażliwe: skill `ffp-security`.
+  (`/public/lists/***` maskowane). Szczegóły wrażliwe: skill `pasnik-security`.

@@ -12,7 +12,7 @@ import { ref, watch } from 'vue'
 
 export type PantryViewMode = 'grid' | 'list'
 
-const STORAGE_KEY = 'ffp.pantry.view'
+const STORAGE_KEY = 'pasnik.pantry.view'
 
 function readStored(): PantryViewMode {
   if (typeof localStorage === 'undefined') {

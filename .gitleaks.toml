@@ -5,7 +5,7 @@
 #
 # Dlaczego to nie jest sekret: `haslo-testowe-2026` nie otwiera żadnego
 # środowiska. Konta powstają komendą `task create-admin` (hasło z promptu albo
-# ze zmiennych `FFP_ADMIN_*`), a w repozytorium nie ma i nie może być
+# ze zmiennych `PASNIK_ADMIN_*`), a w repozytorium nie ma i nie może być
 # działającego hasła (07_SECURITY §2). Ten literał żyje wyłącznie w fabrykach
 # testowych (`backend/tests/factories.py`) i w testach frontendu, które
 # asercjonują payload logowania — reguła `generic-api-key` łapie go po entropii.

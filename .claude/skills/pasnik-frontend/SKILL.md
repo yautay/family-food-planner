@@ -1,6 +1,6 @@
 ---
-name: ffp-frontend
-description: Kontrakt frontendu Family Food Planner — Vue 3 script setup + TS strict, TanStack Query vs Pinia, shadcn-vue, tokens Tailwind, wzorce UX (create-in-context, mobile-first, PL-only). Ładuj przed pracą nad plikami w frontend/src/**.
+name: pasnik-frontend
+description: Kontrakt frontendu Paśnika — Vue 3 script setup + TS strict, TanStack Query vs Pinia, shadcn-vue, tokens Tailwind, wzorce UX (create-in-context, mobile-first, PL-only). Ładuj przed pracą nad plikami w frontend/src/**.
 ---
 
 <!-- verified: 2026-08-21 (REVIEW R2 — uzgodnione z kodem po B05–B07)
@@ -9,7 +9,7 @@ description: Kontrakt frontendu Family Food Planner — Vue 3 script setup + TS 
             · Playwright 1.62 · vite-plugin-pwa 1.3 · @lucide/vue · zod 3
      hierarchia: ADR i docs/architecture NADRZĘDNE wobec tego skilla -->
 
-# FFP — kontrakt frontendu
+# Paśnik — kontrakt frontendu
 
 ## Co już stoi (BATCH_01–07)
 

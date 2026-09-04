@@ -152,7 +152,7 @@ async def test_uzytkownik_eksportuje_swoje_dane(
     response = await db_client.post(EXPORT, headers=csrf_headers(db_client))
 
     assert response.status_code == 200
-    assert "ffp-export-" in response.headers["content-disposition"]
+    assert "pasnik-export-" in response.headers["content-disposition"]
     with zipfile.ZipFile(BytesIO(response.content)) as archive:
         document = json.loads(archive.read(DATA_ENTRY_NAME))
     assert document["schema_version"] == 1

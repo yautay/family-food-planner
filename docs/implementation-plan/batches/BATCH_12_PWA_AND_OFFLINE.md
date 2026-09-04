@@ -216,7 +216,8 @@ przycinane do `now()` serwera (ochrona przed rozjechanym zegarem klienta).
   Dzięki znacznikowi ta akcja MOŻE wejść do kolejki offline; bez niego musiałaby
   być offline zablokowana.
 - `vite.config.ts` + vite-plugin-pwa: manifest — `name`/`short_name` PL
-  („Family Food Planner" / „FFP"), `lang: "pl"`, `display: "standalone"`,
+  („Paśnik" — `name` i `short_name` są takie same, nazwa mieści się na ekranie
+  domowym), `lang: "pl"`, `display: "standalone"`,
   `theme_color: "#E07A2F"`, `background_color: "#FAF6EF"` (tokens 06_UIUX
   §1), ikony 192/512 + maskable + apple-touch-icon (splash iOS z ikony);
   pliki w `frontend/public/icons/`.
@@ -484,7 +485,7 @@ diffie przed commitem (krok 11).
 
 **PWA (etap 2):** komplet ikon PNG 192/512 w wariantach `any` i `maskable`
 plus `apple-touch-icon` (`frontend/public/icons/`, wygenerowane Pillow
-z geometrii placeholderów SVG z B01), manifest PL ze `short_name: FFP`,
+z geometrii placeholderów SVG z B01), manifest PL ze `short_name: Paśnik`,
 Workbox z `NetworkFirst` dla `/api/*` (`networkTimeoutSeconds: 3`)
 i `CacheFirst` dla `/uploads/*`, `navigateFallbackDenylist` rozszerzony
 o `/uploads/`, `devOptions.enabled: false`, prompt aktualizacji zamiast cichej
@@ -631,7 +632,7 @@ snapshot nie utrwala stanu, którego użytkownik już nie widzi na ekranie.
    czasu, bo `checked_at` opisuje wyłącznie checkbox.
 3. **Cache Storage trzyma odpowiedzi API zalogowanego użytkownika** (to cel
    `NetworkFirst`). Odpowiedzi z `Set-Cookie` są wykluczone, ale wylogowanie
-   nie czyści cache'u SW. Do rozważenia w **B17**: `caches.delete('ffp-api')`
+   nie czyści cache'u SW. Do rozważenia w **B17**: `caches.delete('pasnik-api')`
    przy wylogowaniu. Ryzyko jest lokalne (to samo urządzenie, ta sama
    przeglądarka), więc nie blokuje tego batcha.
 

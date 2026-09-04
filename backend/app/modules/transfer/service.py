@@ -120,7 +120,7 @@ IMPORT_PHOTO_SUBDIR = "transfer-import"
 #: Po tylu godzinach nieużyta paczka dry-runu jest kasowana (karta B14 §Backend).
 SCRATCH_TTL = timedelta(hours=24)
 
-EXPORT_FILENAME = "ffp-export-{day}.zip"
+EXPORT_FILENAME = "pasnik-export-{day}.zip"
 
 INSTANCE_REQUIRES_ADMIN = "Eksport całej instancji wymaga uprawnień administratora."
 NOTHING_TO_IMPORT = "Plik nie zawiera żadnych danych do zaimportowania."

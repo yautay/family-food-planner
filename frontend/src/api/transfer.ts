@@ -28,7 +28,7 @@ export type ImportSummary = components['schemas']['ImportSummary']
 
 /** Nazwa pliku, gdy serwer nie poda `Content-Disposition` (np. stary proxy). */
 function fallbackFilename(): string {
-  return `ffp-export-${new Date().toISOString().slice(0, 10)}.zip`
+  return `pasnik-export-${new Date().toISOString().slice(0, 10)}.zip`
 }
 
 /** `attachment; filename="x.zip"` → `x.zip`; brak nagłówka → nazwa zastępcza. */

@@ -1,6 +1,6 @@
 ---
-name: ffp-domain-calc
-description: Reguły logiki obliczeniowej Family Food Planner — Decimal end-to-end, normalizacja jednostek, wzory nutrition (kcal/makro/IG→ŁG), determinizm silnika zakupowego, zaokrąglenia, property-based testy. Ładuj przy każdym batchu liczącym ilości lub wartości.
+name: pasnik-domain-calc
+description: Reguły logiki obliczeniowej Paśnika — Decimal end-to-end, normalizacja jednostek, wzory nutrition (kcal/makro/IG→ŁG), determinizm silnika zakupowego, zaokrąglenia, property-based testy. Ładuj przy każdym batchu liczącym ilości lub wartości.
 ---
 
 <!-- verified: 2026-08-21 (BATCH_10 — uzgodnione z kodem po B05–B10:
@@ -11,7 +11,7 @@ description: Reguły logiki obliczeniowej Family Food Planner — Decimal end-to
      źródła nadrzędne: ADR-004, ADR-005, ADR-008, 02_DOMAIN §6 i §9, 08_TESTING §2
      uruchamianie testów: `task test-unit` (silniki nie dotykają bazy) -->
 
-# FFP — kontrakt obliczeń domenowych
+# Paśnik — kontrakt obliczeń domenowych
 
 ## Arytmetyka (ADR-008) — zero tolerancji
 
@@ -108,5 +108,5 @@ węglow. przyswajalne   = max(carbs − fiber, 0)
   dokładna wielokrotność opakowania (resztka 0).
 - Snapshot testy silnika zakupowego na seedzie demo
   (`tests/unit/shopping/snapshots/demo_week_preview.json`, regeneracja przez
-  `FFP_UPDATE_SNAPSHOTS=1`) — zmiana snapshotu wymaga uzasadnienia
+  `PASNIK_UPDATE_SNAPSHOTS=1`) — zmiana snapshotu wymaga uzasadnienia
   w Completion notes.

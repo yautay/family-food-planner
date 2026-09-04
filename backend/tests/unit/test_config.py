@@ -13,12 +13,12 @@ pytestmark = pytest.mark.unit
 
 def test_czyta_wymagane_zmienne_ze_srodowiska(monkeypatch: pytest.MonkeyPatch) -> None:
     """DATABASE_URL i SECRET_KEY pochodzą wyłącznie ze środowiska."""
-    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@localhost:5432/ffp")
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@localhost:5432/pasnik")
     monkeypatch.setenv("SECRET_KEY", "sekret-z-env")
 
     settings = load_settings()
 
-    assert settings.database_url == "postgresql+psycopg://u:p@localhost:5432/ffp"
+    assert settings.database_url == "postgresql+psycopg://u:p@localhost:5432/pasnik"
     assert settings.secret_key == "sekret-z-env"
 
 
@@ -27,7 +27,7 @@ def test_ma_bezpieczne_wartosci_domyslne(monkeypatch: pytest.MonkeyPatch, tmp_pa
     # Katalog bez .env i czyste środowisko — inaczej test sprawdzałby zawartość
     # lokalnego pliku, a nie wartości domyślne w kodzie.
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@localhost:5432/ffp")
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@localhost:5432/pasnik")
     monkeypatch.setenv("SECRET_KEY", "sekret")
     monkeypatch.delenv("APP_ENV", raising=False)
     monkeypatch.delenv("APP_VERSION", raising=False)
@@ -61,7 +61,7 @@ def test_brak_wymaganych_zmiennych_wybucha_czytelnie(
 def test_odrzuca_nieznane_srodowisko(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """APP_ENV spoza dev/test/prod to błąd konfiguracji, nie cicha akceptacja."""
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@localhost:5432/ffp")
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@localhost:5432/pasnik")
     monkeypatch.setenv("SECRET_KEY", "sekret")
     monkeypatch.setenv("APP_ENV", "produkcja")
 

@@ -25,7 +25,7 @@ from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatc
 TOKEN_BYTES = 32
 
 #: Cookie z id sesji — HttpOnly, nieczytelne dla JS.
-SESSION_COOKIE_NAME = "ffp_session"
+SESSION_COOKIE_NAME = "pasnik_session"
 #: Cookie CSRF — celowo BEZ HttpOnly: frontend musi je przepisać do nagłówka.
 CSRF_COOKIE_NAME = "csrf_token"
 CSRF_HEADER_NAME = "X-CSRF-Token"

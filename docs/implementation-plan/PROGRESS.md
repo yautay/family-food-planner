@@ -41,6 +41,48 @@ zmiany dotykające przyszłych batchy trzeba wpisać do ich kart
 
 ---
 
+**2026-09-04 — DECYZJA D23 (właściciel): aplikacja nazywa się „Paśnik".**
+Rewizja D1, wykonana od razu i w pełnym zakresie — razem z identyfikatorami
+technicznymi. Nazwa wyświetlana to `Paśnik`, slug techniczny `pasnik` (bez
+diakrytyku, bo trafia do nazw paczek, bazy, kontenerów i cache'ów).
+
+**Cztery rzeczy, o których muszą wiedzieć następne batche:**
+
+1. **Katalogi skilli nazywają się teraz `.claude/skills/pasnik-*`** (`git mv`),
+   a mapa ID→skill w **03_AI_SKILLS §3** wskazuje nowe ścieżki. Karty batchy
+   odwołują się do ID (SKILL-BE, SKILL-FE…), więc same nie wymagały zmian —
+   poza czterema odwołaniami do skilla `ffp-framework`, który NIGDY nie istniał
+   (dług **U7** z R1). Wskazywały nieistniejącą ścieżkę w kartach B17, R2, R3
+   i R4; poprawione na realne `pasnik-*`.
+2. **Projekt compose to `pasnik-dev`, użytkownik i baza PG to `pasnik`.**
+   Nowy projekt = NOWE WOLUMENY, więc baza dev wstała pusta i została
+   odtworzona (`alembic upgrade head` → `create-admin` → `seed_demo`). Stare
+   wolumeny `ffp-dev_pgdata` i `ffp-dev_node_modules` zostały na dysku jako
+   osierocone — do usunięcia ręcznie, gdy nie będą już potrzebne jako kopia.
+   Kontenery to `pasnik-dev-app-1`, `pasnik-dev-db-1` itd.: **komendy
+   `docker exec` z runbooka i starszych wpisów dziennika mają stare nazwy.**
+3. **Zmienne środowiskowe: `PASNIK_ADMIN_*`** (było `FFP_ADMIN_*`) i
+   `PASNIK_UPDATE_SNAPSHOTS` (aktualizacja snapshotu silnika zakupowego).
+   `.env.example` zaktualizowany; lokalny `.env` też — razem z portem 5434
+   z kroku 1 runbooka, więc `task dev` wstaje bez override'u.
+4. **Identyfikatory po stronie klienta zmieniły wartości**: cookie sesji
+   `pasnik_session`, IndexedDB `pasnik-offline`, localStorage
+   `pasnik.pantry.view`, cache'y SW `pasnik-api`/`pasnik-uploads`, nazwa
+   eksportu `pasnik-export-`. Skutek: istniejące sesje są wylogowane, a
+   ewentualna kolejka offline w przeglądarce porzucona. Na etapie
+   przedprodukcyjnym bez znaczenia — po wdrożeniu taka zmiana wymagałaby
+   migracji, nie samego renamingu. Import transferu NIE waliduje nazwy pliku,
+   więc stare eksporty `ffp-export-*.zip` pozostają importowalne.
+
+**Czego świadomie NIE ruszono**, żeby nie falsyfikować zapisu: treści **D1**,
+całego tego dziennika oraz katalogu repozytorium `C:\dev\family-food-planner`
+(zmiana ścieżki to operacja na dysku, nie w repo) i URL-a starego archiwum
+w 01_PDF_AUDIT. Reguła na przyszłość jest w D23: aktualizujemy wszystko, co
+czytelnik może dziś WYKONAĆ albo na czym stoi kontrakt; dziennik i treść
+zatwierdzonych decyzji zostają. **Dlatego wpisy poniżej mówią `ffp_session`
+i `ffp-dev` — i tak ma być: wtedy tak się nazywały.**
+
+
 **2026-08-29 — BATCH_16 (PDF_IMPORT_REVIEW_AND_AI).** Importer PDF jest domknięty:
 ekran review (`/import/jobs/:id/review`), pięć endpointów (`staged`, `resolve`,
 `ai-suggest`, `approve`, `reject`), AI-asysta jako czysta propozycja i

@@ -17,7 +17,7 @@ właścicielowi operować systemem bez tej sesji.
 Po B17 istnieją: obraz prod tagowany wersją git, skrypty backup/restore
 (przećwiczone na compose testowym), healthcheck rozszerzony, konfiguracja
 w pełni przez env. NIE istnieją: compose.prod.yml, vhost proxy, katalogi
-`/srv/ffp/*` na Odroidzie, OPERATIONS.md. Ten batch częściowo pracuje na
+`/srv/pasnik/*` na Odroidzie, OPERATIONS.md. Ten batch częściowo pracuje na
 REALNYM hoście właściciela — kroki wykonywane na Odroidzie wymagają jego
 udziału/dostępu; agent przygotowuje komplet i prowadzi procedurę.
 
@@ -34,7 +34,7 @@ Wymagane lektury przed startem:
   w całości** (topologia, migracje jawne, backup, update/rollback,
   środowiska, obserwowalność).
 - `docs/architecture/07_SECURITY_DESIGN.md` §3 (HSTS na proxy), §7
-  (ffp.env chmod 600), §9 (db bez portów hosta).
+  (pasnik.env chmod 600), §9 (db bez portów hosta).
 - `docs/implementation-plan/02_DECISIONS.md` — treść zatwierdzonych D6/D7
   (+ D10 retencja, rekomendacja z R4).
 - Karta `BATCH_17` (Completion notes — faktyczne nazwy skryptów/targetów).
@@ -67,20 +67,20 @@ wdrożeniu, wykonywane na PRAWDZIWEJ domenie, nie na localhoście:
 ## Stages
 
 1. **compose.prod.yml** (09 §1): serwisy `app` (obraz tagowany, port
-   `127.0.0.1:8080:8000`, `env_file: /srv/ffp/env/ffp.env`,
+   `127.0.0.1:8080:8000`, `env_file: /srv/pasnik/env/pasnik.env`,
    `stop_grace_period: 30s`, `restart: unless-stopped`, healthcheck
    z `/api/v1/health`) i `db` (postgres:17, **bez portów hosta**,
    healthcheck pg_isready) + profil `backup` z B17. Bind mounts:
-   `/srv/ffp/pgdata`, `/srv/ffp/uploads`, `/srv/ffp/backups`.
+   `/srv/pasnik/pgdata`, `/srv/pasnik/uploads`, `/srv/pasnik/backups`.
    Weryfikacja lokalna: compose config + uruchomienie na maszynie dev
    z katalogami zastępczymi.
 2. **Reverse proxy (D7)**: konkretny plik vhosta dla istniejącego proxy
    właściciela (wg D7) — `proxy_pass http://127.0.0.1:8080`, nagłówki
    X-Forwarded-*, HSTS, limity rozmiaru body ≥ limitów aplikacji,
    ewent. cache statyk (ADR-014). Plik w repo jako szablon
-   (`docker/proxy/ffp.conf.example`) + krok instalacji w runbooku.
+   (`docker/proxy/pasnik.conf.example`) + krok instalacji w runbooku.
 3. **Runbook instalacji (Odroid)**: krok po kroku w OPERATIONS.md:
-   utworzenie katalogów `/srv/ffp/*` z uprawnieniami, `ffp.env`
+   utworzenie katalogów `/srv/pasnik/*` z uprawnieniami, `pasnik.env`
    (chmod 600, komplet zmiennych z `.env.example`), build/pull obrazu,
    `docker compose run --rm app alembic upgrade head` (pierwsza migracja —
    jawna, 09 §2), `task create-admin`, vhost + reload proxy, smoke.
@@ -119,7 +119,7 @@ Brak nowych endpointów. Deliverables operacyjne:
 | Artefakt | Treść |
 |---|---|
 | `docker/compose.prod.yml` | topologia 09 §1 (app+db+profil backup) |
-| `docker/proxy/ffp.conf.example` | vhost wg D7 (szablon bez sekretów/domeny właściciela, jeśli wrażliwa) |
+| `docker/proxy/pasnik.conf.example` | vhost wg D7 (szablon bez sekretów/domeny właściciela, jeśli wrażliwa) |
 | `scripts/deploy.sh` / `task deploy` | update: backup→build→migrate→up |
 | `scripts/rollback.sh` / `task rollback` | poprzedni tag + instrukcja restore |
 | `docs/OPERATIONS.md` | runbooki: instalacja, update, rollback, restore, backup off-device, dodanie użytkownika (create-admin/admin UI), diagnoza: nie wstaje / 500 / pełny dysk / degraded health; sekcja „ostatni restore drill" |
@@ -135,7 +135,7 @@ Brak nowych endpointów. Deliverables operacyjne:
 
 ## Security
 
-- `ffp.env` na hoście chmod 600; sekrety (SECRET_KEY, hasło DB,
+- `pasnik.env` na hoście chmod 600; sekrety (SECRET_KEY, hasło DB,
   ANTHROPIC_API_KEY, remote backupu) NIGDY w repo — w repo tylko
   `.env.example` i szablon vhosta.
 - `db` bez portów hosta; `app` wyłącznie na 127.0.0.1 (proxy terminuje
@@ -169,7 +169,7 @@ diffie przed commitem (krok 11).
 - **Update no-op + rollback**: przećwiczone realnie (ta sama wersja →
   deploy → rollback do tej samej wersji) — procedury działają.
 - **Backup automatyczny**: odczekać/wymusić przebieg crona na produkcji;
-  artefakty w `/srv/ffp/backups` + kopia off-device obecna; prune nie
+  artefakty w `/srv/pasnik/backups` + kopia off-device obecna; prune nie
   usuwa świeżych.
 - Healthcheck compose: zatrzymanie db → kontener app raportuje degraded,
   compose restartuje wg polityki (obserwacja, opis).
@@ -180,7 +180,7 @@ diffie przed commitem (krok 11).
    health `ok`; SPA, API i uploady serwowane przez kontener app.
 2. `db` niedostępna z zewnątrz hosta; `app` słucha tylko na 127.0.0.1.
 3. Backup automatyczny wykonuje się (cron, 03:00) i odkłada komplet
-   w `/srv/ffp/backups` + **kopia off-device wg D6 istnieje w celu**.
+   w `/srv/pasnik/backups` + **kopia off-device wg D6 istnieje w celu**.
 4. **Restore drill przeszedł realnie** — udokumentowany w OPERATIONS.md
    (data, czas trwania, wynik smoke).
 5. Procedura update (backup→build→migrate→up) i rollback przećwiczone;
@@ -190,7 +190,7 @@ diffie przed commitem (krok 11).
 7. `docs/OPERATIONS.md` kompletny: instalacja, update, rollback, restore,
    backup off-device, dodanie użytkownika, diagnoza (nie wstaje / 500 /
    pełny dysk) — każdy runbook z komendami i oczekiwanym wynikiem.
-8. W repo zero sekretów produkcyjnych (`git ls-files` + grep); ffp.env
+8. W repo zero sekretów produkcyjnych (`git ls-files` + grep); pasnik.env
    chmod 600 na hoście.
 9. PROGRESS.md: status + wpis; 09_DEPLOYMENT zgodny ze stanem faktycznym.
 
@@ -204,14 +204,14 @@ diffie przed commitem (krok 11).
 
 ## Expected files/modules
 
-- `docker/compose.prod.yml`, `docker/proxy/ffp.conf.example`
+- `docker/compose.prod.yml`, `docker/proxy/pasnik.conf.example`
 - `scripts/deploy.sh`, `scripts/rollback.sh` (lub targety Taskfile —
   spójnie z B17; uzasadnić wybór)
 - `Taskfile.yml` (targety deploy/rollback/backup-offsite jeśli task)
 - `docs/OPERATIONS.md` (NOWY — jedyny dozwolony nowy dokument)
 - `docs/architecture/09_DEPLOYMENT_AND_OPERATIONS.md` (aktualizacja
   do stanu faktycznego), `docs/implementation-plan/PROGRESS.md`
-- Na hoście (poza repo): `/srv/ffp/{pgdata,uploads,backups,env/ffp.env}`,
+- Na hoście (poza repo): `/srv/pasnik/{pgdata,uploads,backups,env/pasnik.env}`,
   vhost proxy
 
 ## Implementation Notes
@@ -219,7 +219,7 @@ diffie przed commitem (krok 11).
 - Batch dotyka REALNEGO hosta — każdy krok na Odroidzie wykonywać z
   właścicielem i potwierdzać wynik; nic „na ślepo". Kroki wymagające
   fizycznego dostępu/sekretów wykonuje właściciel wg przygotowanych komend.
-- Restore drill NA INNYM środowisku niż produkcja (katalog `/srv/ffp-drill`
+- Restore drill NA INNYM środowisku niż produkcja (katalog `/srv/pasnik-drill`
   albo maszyna dev) — nigdy nie nadpisywać produkcyjnych bind mounts.
 - Kolejność: compose.prod lokalnie → proxy szablon → instalacja → smoke →
   update/rollback → backup off-device → drill → OPERATIONS.md. Dokument
@@ -259,7 +259,7 @@ diffie przed commitem (krok 11).
 
 - [ ] `task check` zielony
 - [ ] Acceptance Criteria 1–9 odhaczone jedno po drugim
-- [ ] Zero sekretów w repo (grep); ffp.env 600 na hoście
+- [ ] Zero sekretów w repo (grep); pasnik.env 600 na hoście
 - [ ] Skan nagłówków/portów z zewnątrz wykonany i opisany
 - [ ] `/code-review` zmian wykonany przed commitem
 - [ ] Commit `batch(18): ...`, `git status` czysty (pliki hosta poza repo)

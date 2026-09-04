@@ -1,6 +1,6 @@
 ---
-name: ffp-security
-description: Reguły bezpieczeństwa Family Food Planner — sesje/CSRF/rate-limit, scope household, publiczne tokeny list, walidacja uploadów, higiena logów i sekretów. Ładuj przy batchach dotykających auth, tokenów, uploadów, eksportu danych lub deploymentu.
+name: pasnik-security
+description: Reguły bezpieczeństwa Paśnika — sesje/CSRF/rate-limit, scope household, publiczne tokeny list, walidacja uploadów, higiena logów i sekretów. Ładuj przy batchach dotykających auth, tokenów, uploadów, eksportu danych lub deploymentu.
 ---
 
 <!-- verified: 2026-08-16 (REVIEW R1 — uzgodnione z kodem po B01–B04; R3/R4 dalej)
@@ -19,7 +19,7 @@ description: Reguły bezpieczeństwa Family Food Planner — sesje/CSRF/rate-lim
   portów bazy w ogóle.
 - **Sesje i hasła (B02)**: `app/core/security.py` (argon2id + rehash,
   `generate_token`, `tokens_match`, TTL 30 dni przesuwne, blokada konta
-  10 porażek / 15 min), `app/core/cookies.py` (`ffp_session` HttpOnly +
+  10 porażek / 15 min), `app/core/cookies.py` (`pasnik_session` HttpOnly +
   `csrf_token` dla JS; `Secure` gdy `APP_ENV=prod`), `app/core/deps.py`
   (jedyne wejście autoryzacji). Logowanie: rate limit 5/min/IP, jeden
   komunikat 401 na wszystkie powody odmowy (anty-enumeracja).
@@ -33,7 +33,7 @@ description: Reguły bezpieczeństwa Family Food Planner — sesje/CSRF/rate-lim
   uploady (B05 `core/uploads.py`), przegląd parametrów argon2/TTL i IP za
   reverse proxy (B17).
 
-# FFP — kontrakt bezpieczeństwa
+# Paśnik — kontrakt bezpieczeństwa
 
 ## Twarde zasady (łamanie = blokada review)
 

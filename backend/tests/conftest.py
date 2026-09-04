@@ -38,7 +38,7 @@ os.environ.setdefault("APP_ENV", "test")
 os.environ.setdefault("SECRET_KEY", "test-secret-nieuzywany-do-prawdziwych-sesji")
 os.environ.setdefault("APP_VERSION", "0.1.0-test")
 # Uploady lądują w katalogu tymczasowym procesu testowego — nigdy w repo.
-os.environ.setdefault("UPLOADS_DIR", tempfile.mkdtemp(prefix="ffp-test-uploads-"))
+os.environ.setdefault("UPLOADS_DIR", tempfile.mkdtemp(prefix="pasnik-test-uploads-"))
 
 # Testy NIGDY nie dotykają bazy deweloperskiej: DATABASE_URL na czas sesji
 # testowej wskazuje db-test (downgrade base w testach migracji kasuje schemat).

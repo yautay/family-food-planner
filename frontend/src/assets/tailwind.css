@@ -1,6 +1,6 @@
-/* Family Food Planner — motyw Tailwind 4.
+/* Paśnik — motyw Tailwind 4.
  *
- * JEDYNE miejsce definicji kolorów w aplikacji (06_UIUX §1, skill ffp-frontend).
+ * JEDYNE miejsce definicji kolorów w aplikacji (06_UIUX §1, skill pasnik-frontend).
  * Komponenty używają klas semantycznych (bg-background, text-muted-foreground,
  * border-border…), nigdy wartości hex. Zmiana palety = zmiana tego pliku.
  *

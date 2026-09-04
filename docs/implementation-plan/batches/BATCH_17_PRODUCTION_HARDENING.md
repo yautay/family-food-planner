@@ -123,7 +123,7 @@ agent B17 wykonuje je jako Stage 1)
 2. **Dockerfile prod**: target `prod` w multi-stage (stage frontend build →
    stage python bez dev-deps; dist w obrazie — ADR-014; Uvicorn workers=2,
    bez --reload; USER nie-root). Tagowanie obrazu wersją git
-   (`task build-prod` → tag `ffp-app:<git describe/sha>`).
+   (`task build-prod` → tag `pasnik-app:<git describe/sha>`).
 3. **Konfiguracja prod**: przegląd `app/core/config.py` — WSZYSTKIE
    wartości różniące środowiska przez env (żadnych defaultów prod w kodzie);
    limity rozmiaru request (body limit dla uploadów: obraz 10 MB, PDF 25 MB
@@ -275,7 +275,7 @@ diffie przed commitem (krok 11).
   restore, healthcheck, env). Po zakończeniu B17 zaktualizować kartę B18
   o faktyczne nazwy targetów/skryptów i wymagane zmienne env.
 - **PROGRESS**: pozycje R4 przeniesione/wykonane — zaktualizować rejestr długu.
-- Zmiany komend → Taskfile + CLAUDE.md + skill ffp-framework naraz.
+- Zmiany komend → Taskfile + CLAUDE.md + project skille `pasnik-*` naraz.
 
 ## Implementation checklist
 

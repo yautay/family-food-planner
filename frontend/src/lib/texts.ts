@@ -5,7 +5,7 @@
  * które muszą brzmieć identycznie w kilku widokach.
  */
 
-export const APP_NAME = 'Family Food Planner'
+export const APP_NAME = 'Paśnik'
 export const APP_TAGLINE = 'Planer żywienia rodziny'
 
 export const auth = {
@@ -849,7 +849,7 @@ export const shoppingList = {
 
 /** Publiczna strona `/l/:token` — poza shellem, bez danych rodziny. */
 export const publicList = {
-  brand: 'Family Food Planner',
+  brand: 'Paśnik',
   heading: 'Lista zakupowa',
   loading: 'Wczytywanie listy…',
   // DOKŁADNIE ten komunikat wymaga ADR-010 — nie parafrazować.

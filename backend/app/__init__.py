@@ -1,1 +1,1 @@
-"""Family Food Planner — backend (modularny monolit FastAPI, ADR-001)."""
+"""Paśnik — backend (modularny monolit FastAPI, ADR-001)."""

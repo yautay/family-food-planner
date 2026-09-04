@@ -7,7 +7,7 @@ awaria.
 
 Użycie:
     task create-admin
-    FFP_ADMIN_EMAIL=... FFP_ADMIN_PASSWORD=... task create-admin
+    PASNIK_ADMIN_EMAIL=... PASNIK_ADMIN_PASSWORD=... task create-admin
 """
 
 from __future__ import annotations
@@ -36,9 +36,9 @@ from app.models import Base  # noqa: F401
 from app.modules.accounts.models import UserRole
 from app.modules.accounts.service import AccountsService
 
-ENV_EMAIL = "FFP_ADMIN_EMAIL"
-ENV_PASSWORD = "FFP_ADMIN_PASSWORD"
-ENV_DISPLAY_NAME = "FFP_ADMIN_DISPLAY_NAME"
+ENV_EMAIL = "PASNIK_ADMIN_EMAIL"
+ENV_PASSWORD = "PASNIK_ADMIN_PASSWORD"
+ENV_DISPLAY_NAME = "PASNIK_ADMIN_DISPLAY_NAME"
 
 
 class CliError(RuntimeError):
@@ -111,7 +111,9 @@ def create_admin_command() -> int:
 
 def main(argv: list[str] | None = None) -> int:
     """Punkt wejścia `python -m app.cli`."""
-    parser = argparse.ArgumentParser(prog="app.cli", description="Narzędzia administracyjne FFP")
+    parser = argparse.ArgumentParser(
+        prog="app.cli", description="Narzędzia administracyjne Paśnika"
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("create-admin", help="Tworzy konto administratora")
 

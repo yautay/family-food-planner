@@ -156,7 +156,7 @@ Serwis `transfer/service.py`:
   potwierdzenie → apply → podsumowanie (liczby utworzonych). Błąd wersji =
   czytelny komunikat PL, bez stacktrace.
 - Pobieranie eksportu: fetch z credentials → blob → download (nazwa
-  `ffp-export-YYYY-MM-DD.zip`); spinner na przycisku (06_UIUX §3.4).
+  `pasnik-export-YYYY-MM-DD.zip`); spinner na przycisku (06_UIUX §3.4).
 
 ## Security
 

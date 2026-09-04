@@ -30,7 +30,7 @@
 
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
 
-const DB_NAME = 'ffp-offline'
+const DB_NAME = 'pasnik-offline'
 const DB_VERSION = 1
 const SNAPSHOTS = 'list-snapshots'
 const QUEUE = 'mutation-queue'

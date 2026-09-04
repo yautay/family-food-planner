@@ -1,4 +1,4 @@
-# Family Food Planner — stack deweloperski (jedno polecenie: `task dev`).
+# Paśnik — stack deweloperski (jedno polecenie: `task dev`).
 #
 # Cztery serwisy: app (FastAPI, hot reload), frontend (vite dev server, HMR),
 # db (dane trwałe w wolumenie nazwanym), db-test (dane na tmpfs — baza testów
@@ -11,10 +11,10 @@
 # bazy do sieci lokalnej (07_SECURITY §9). compose.prod.yml (B18) nie
 # publikuje portów bazy w ogóle.
 
-name: ffp-dev
+name: pasnik-dev
 
 x-postgres-env: &postgres-env
-  POSTGRES_USER: ${POSTGRES_USER:-ffp}
+  POSTGRES_USER: ${POSTGRES_USER:-pasnik}
   POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?ustaw POSTGRES_PASSWORD w .env}
 
 services:
@@ -22,13 +22,13 @@ services:
     image: postgres:17
     environment:
       <<: *postgres-env
-      POSTGRES_DB: ${POSTGRES_DB:-ffp}
+      POSTGRES_DB: ${POSTGRES_DB:-pasnik}
     ports:
       - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ffp} -d ${POSTGRES_DB:-ffp}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-pasnik} -d ${POSTGRES_DB:-pasnik}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -39,7 +39,7 @@ services:
     image: postgres:17
     environment:
       <<: *postgres-env
-      POSTGRES_DB: ${POSTGRES_TEST_DB:-ffp_test}
+      POSTGRES_DB: ${POSTGRES_TEST_DB:-pasnik_test}
       # Baza jednorazowa — inicjalizacja bez fsync jest tu bezpieczna i szybka.
       POSTGRES_INITDB_ARGS: "--no-sync"
     command:
@@ -55,7 +55,7 @@ services:
     tmpfs:
       - /var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ffp} -d ${POSTGRES_TEST_DB:-ffp_test}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-pasnik} -d ${POSTGRES_TEST_DB:-pasnik_test}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -73,7 +73,7 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       SECRET_KEY: ${SECRET_KEY:?ustaw SECRET_KEY w .env}
       # W sieci compose baza to `db`, nie 127.0.0.1 z .env.
-      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-ffp}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-ffp}
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-pasnik}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-pasnik}
       # Bind mount z Windows/WSL2 nie generuje zdarzeń inotify — bez tego
       # uvicorn --reload nie zauważa zmian (uwaga z karty BATCH_01).
       WATCHFILES_FORCE_POLLING: "true"

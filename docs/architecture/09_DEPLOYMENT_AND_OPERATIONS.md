@@ -15,10 +15,10 @@ na podstawie rzeczywiście istniejącej aplikacji.
 - **Lifecycle danych ≠ lifecycle kontenera** — bind mounts hosta:
 
 ```
-/srv/ffp/pgdata    → /var/lib/postgresql/data
-/srv/ffp/uploads   → /data/uploads      (zdjęcia, PDF-y importu)
-/srv/ffp/backups   → /backups           (dumpy + kopie uploads)
-/srv/ffp/env/ffp.env (chmod 600)        → env_file kontenera app
+/srv/pasnik/pgdata    → /var/lib/postgresql/data
+/srv/pasnik/uploads   → /data/uploads      (zdjęcia, PDF-y importu)
+/srv/pasnik/backups   → /backups           (dumpy + kopie uploads)
+/srv/pasnik/env/pasnik.env (chmod 600)        → env_file kontenera app
 ```
 
 - Obrazy: multi-stage Dockerfile (stage frontend build → stage python;
@@ -40,7 +40,7 @@ na podstawie rzeczywiście istniejącej aplikacji.
   kopia pliku env (sekrety!) — komplet wystarczający do pełnego odtworzenia.
 - **Kiedy**: cron kontener (profil backup) codziennie 03:00; retencja
   7 dziennych + 4 tygodniowe (prune skryptem).
-- **Dokąd**: `/srv/ffp/backups` + zalecana kopia off-device (rsync na NAS /
+- **Dokąd**: `/srv/pasnik/backups` + zalecana kopia off-device (rsync na NAS /
   rclone do chmury — decyzja właściciela przy B18).
 - **Restore (runbook w B18, ćwiczony realnie)**: świeży compose → przywróć
   env → `pg_restore` → przywróć uploads → migracje idempotentnie → smoke.
@@ -61,8 +61,8 @@ w razie wątpliwości restore z backupu sprzed update.
 |---|---|---|---|
 | compose | compose.dev.yml (hot reload, porty otwarte) | compose.test.yml (db tmpfs) | compose.prod.yml (B18) |
 | frontend | vite dev server + proxy /api | build | dist w obrazie app |
-| dane | wolumeny nazwane | efemeryczne | bind mounts /srv/ffp |
-| sekrety | .env lokalny | wartości testowe | ffp.env chmod 600 |
+| dane | wolumeny nazwane | efemeryczne | bind mounts /srv/pasnik |
+| sekrety | .env lokalny | wartości testowe | pasnik.env chmod 600 |
 
 ## 6. Obserwowalność (na miarę domową)
 

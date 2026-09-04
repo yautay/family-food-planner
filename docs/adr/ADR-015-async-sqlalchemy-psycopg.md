@@ -3,7 +3,7 @@
 Status: ACCEPTED (2026-08-16, BATCH_01)
 
 ## Kontekst
-Architektura zakłada route'y `async` w FastAPI (ADR-001, skill ffp-backend:
+Architektura zakłada route'y `async` w FastAPI (ADR-001, skill pasnik-backend:
 „żadnych blokujących wywołań w event loopie"), ale nie rozstrzygała, czy
 warstwa DB jest synchroniczna czy asynchroniczna. Wybór trzeba było podjąć
 przy pisaniu `app/core/db.py` w BATCH_01, bo determinuje sygnatury serwisów
@@ -39,4 +39,4 @@ z resztą architektury i utrudnia późniejsze operacje współbieżne.
 − Serwisy muszą być `async` (każde `session.execute` z `await`); testy
   integracyjne dotykające sesji są `async`.
 − Windows-dev ma dodatkowy warunek (SelectorEventLoop) — udokumentowany
-  w CLAUDE.md i skillu `ffp-backend`; pętla dev i tak stoi w Dockerze.
+  w CLAUDE.md i skillu `pasnik-backend`; pętla dev i tak stoi w Dockerze.

@@ -237,7 +237,7 @@ Review batch sam jest procesem przeglądowym — SKILL-REVIEW/SKILL-SECREV uruch
 - `docs/implementation-plan/PROGRESS.md` — werdykt + wpis dziennika.
 - Ewentualnie: drobne naprawy `backend/**`/`frontend/**`; aktualizacje
   kart `BATCH_08…11`, `docs/architecture/**`, `00_MASTER_PLAN.md`,
-  `.claude/skills/ffp-framework/SKILL.md`, `CLAUDE.md`.
+  `.claude/skills/pasnik-*/SKILL.md`, `CLAUDE.md`.
 
 ## Implementation Notes
 
@@ -346,7 +346,7 @@ audytu i wyniki uruchomień: PROGRESS.md, wpis „2026-08-21 — REVIEW R2".
   pierwszeństwo nad kilkudziesięcioma sekundami: specy dzielą jedną bazę, jedno
   konto i globalny katalog, a szukajki są trigramowe, więc równoległość
   produkowała czerwone przebiegi bez winy aplikacji. Reguła spisana
-  w 08_TESTING §3.1 i w skillu `ffp-frontend`.
+  w 08_TESTING §3.1 i w skillu `pasnik-frontend`.
 - **Purge danych E2E działa tylko przeciw localhostowi** (bramka `baseURL`
   z `/security-review`) — funkcja kasuje szeroko i na koncie ADMIN-a.
 

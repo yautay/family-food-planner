@@ -138,7 +138,7 @@ Review batch sam jest procesem przeglądowym — SKILL-REVIEW/SKILL-SECREV uruch
 - [ ] `docs/architecture/01…09` vs kod — każdy dokument potwierdzony
       albo zaktualizowany do stanu faktycznego
 - [ ] ADR-001…014: żaden nie jest martwy/łamany; naruszenia = ustalenie
-- [ ] Skill `ffp-framework` + CLAUDE.md aktualne
+- [ ] Project skille `pasnik-*` + CLAUDE.md aktualne
 - [ ] D10 (retencja): rewizja zapowiedziana przy R4 — ocenić i zapisać
       rekomendację właścicielowi
 - [ ] **D6/D7 nadal OPEN?** → jawne przypomnienie właścicielowi w raporcie

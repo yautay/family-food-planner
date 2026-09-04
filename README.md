@@ -1,4 +1,4 @@
-# Family Food Planner
+# Paśnik
 
 Prywatna, rodzinna aplikacja do planowania żywienia: przepisy, kalorie
 i makroskładniki (+ indeks/ładunek glikemiczny), plany dnia i tygodnia,

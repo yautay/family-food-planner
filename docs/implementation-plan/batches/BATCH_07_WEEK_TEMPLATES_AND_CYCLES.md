@@ -509,7 +509,7 @@ błędów nie jest regresją B07** — to jedna wspólna przyczyna środowiskowa
 
 Do zrobienia przez właściciela (operacja na poświadczeniach, świadomie NIE
 wykonana przez agenta): zsynchronizować hasło — albo `task create-admin`
-z `FFP_ADMIN_EMAIL`/`FFP_ADMIN_PASSWORD` równymi `E2E_ADMIN_*`, albo wpisać do
+z `PASNIK_ADMIN_EMAIL`/`PASNIK_ADMIN_PASSWORD` równymi `E2E_ADMIN_*`, albo wpisać do
 `E2E_ADMIN_PASSWORD` faktyczne hasło konta. Potem `task test-e2e`.
 
 ### Wynik skilli Review (krok 11 master promptu)

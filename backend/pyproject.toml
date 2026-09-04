@@ -1,7 +1,7 @@
 [project]
-name = "ffp-backend"
+name = "pasnik-backend"
 version = "0.1.0"
-description = "Family Food Planner — backend (modularny monolit FastAPI)"
+description = "Paśnik — backend (modularny monolit FastAPI)"
 requires-python = ">=3.13"
 dependencies = [
     "fastapi>=0.115",

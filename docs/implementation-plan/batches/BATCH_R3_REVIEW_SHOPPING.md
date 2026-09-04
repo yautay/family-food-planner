@@ -245,7 +245,7 @@ Review batch sam jest procesem przeglądowym — SKILL-REVIEW/SKILL-SECREV uruch
 - `docs/implementation-plan/PROGRESS.md` — werdykt + wpis dziennika.
 - Ewentualnie: drobne naprawy `backend/**`/`frontend/**`; aktualizacje
   kart `BATCH_12…16`, `docs/architecture/**`, `00_MASTER_PLAN.md`,
-  `.claude/skills/ffp-framework/SKILL.md`, `CLAUDE.md`.
+  `.claude/skills/pasnik-*/SKILL.md`, `CLAUDE.md`.
 
 ## Implementation Notes
 

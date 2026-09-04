@@ -13,7 +13,7 @@ faktyczny seed, a nie osobną, równoległą definicję danych.
 
 Regeneracja po świadomej zmianie zachowania::
 
-    FFP_UPDATE_SNAPSHOTS=1 task test-unit -- tests/unit/shopping/test_engine_snapshot.py
+    PASNIK_UPDATE_SNAPSHOTS=1 task test-unit -- tests/unit/shopping/test_engine_snapshot.py
 """
 
 from __future__ import annotations
@@ -289,14 +289,14 @@ def test_snapshot_podgladu_na_seedzie_demo() -> None:
     """
     payload = _dump(generate_preview(demo_engine_input()))
 
-    if os.environ.get("FFP_UPDATE_SNAPSHOTS") == "1":  # pragma: no cover - narzędzie
+    if os.environ.get("PASNIK_UPDATE_SNAPSHOTS") == "1":  # pragma: no cover - narzędzie
         SNAPSHOT.write_text(
             json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
         )
 
     assert SNAPSHOT.is_file(), (
         f"Brak snapshotu {SNAPSHOT.name}. Wygeneruj go świadomie: "
-        "FFP_UPDATE_SNAPSHOTS=1 task test-unit -- tests/unit/shopping/test_engine_snapshot.py"
+        "PASNIK_UPDATE_SNAPSHOTS=1 task test-unit -- tests/unit/shopping/test_engine_snapshot.py"
     )
     assert payload == json.loads(SNAPSHOT.read_text(encoding="utf-8"))
 

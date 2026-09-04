@@ -13,7 +13,7 @@ pytestmark = pytest.mark.unit
 
 def _settings(**overrides: object) -> Settings:
     base: dict[str, object] = {
-        "database_url": "postgresql+psycopg://u:p@localhost:5432/ffp",
+        "database_url": "postgresql+psycopg://u:p@localhost:5432/pasnik",
         "secret_key": "sekret",
         "app_env": "test",
         "app_version": "9.9.9",

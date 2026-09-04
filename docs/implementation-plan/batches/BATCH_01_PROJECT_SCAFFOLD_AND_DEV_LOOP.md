@@ -8,7 +8,7 @@ Po tym batchu repozytorium ma kompletny szkielet monorepo (backend FastAPI +
 frontend Vue 3) z działającą pętlą deweloperską: `docker compose` podnosi
 aplikację z hot-reloadem i PostgreSQL, `task check` przechodzi na zielono,
 `/api/v1/health` odpowiada. Powstaje też kontrakt jakości dla wszystkich
-kolejnych sesji: `CLAUDE.md`, uzgodnione project skille ffp-* i generowanie
+kolejnych sesji: `CLAUDE.md`, uzgodnione project skille pasnik-* i generowanie
 typów TS z OpenAPI. Zero logiki domenowej — wyłącznie fundament.
 
 ## Context
@@ -32,7 +32,7 @@ Wymagane lektury przed startem:
   `task check`).
 - `docs/implementation-plan/03_AI_SKILLS.md` — manifest systemu skilli
   (hierarchia, matryca, polityka aktualizacji); ten batch uzgadnia
-  istniejące skille ffp-* z rzeczywistym kodem.
+  istniejące skille pasnik-* z rzeczywistym kodem.
 - ADR-001 (modularny monolit), ADR-002 (bind mounts), ADR-007 (frontend
   stack), ADR-014 (backend serwuje SPA — w dev odroczony, patrz Notes).
 
@@ -87,7 +87,7 @@ Wymagane lektury przed startem:
    testu scope/uprawnień, i18n; wskaźnik na
    `docs/implementation-plan/implementation_prompt.md`. Project skille
    JUŻ ISTNIEJĄ jako artefakty blueprintu (2026-08-16):
-   `.claude/skills/ffp-{backend,frontend,domain-calc,security}/SKILL.md`.
+   `.claude/skills/pasnik-{backend,frontend,domain-calc,security}/SKILL.md`.
    Zadanie tego batcha: UZGODNIĆ je z rzeczywistym kodem (nazwy tasków,
    ścieżki, wersje w nagłówku `stack:`), zaktualizować datę `verified:`
    i usunąć rozjazdy — nie tworzyć od zera. Przy zmianach strukturalnych
@@ -195,7 +195,7 @@ diffie przed commitem (krok 11).
 6. `/login` renderuje się z tokens 06_UIUX (krem `#FAF6EF`, akcent
    `#E07A2F`) — weryfikacja wizualna.
 7. W repo nie ma pliku `.env` ani żadnego sekretu (`git ls-files` czysty).
-8. `CLAUDE.md` i 4 project skille (`.claude/skills/ffp-*/SKILL.md`) są
+8. `CLAUDE.md` i 4 project skille (`.claude/skills/pasnik-*/SKILL.md`) są
    uzgodnione ze stanem faktycznym repo (komendy task istnieją i działają,
    ścieżki prawdziwe, `verified:` zaktualizowane) — zgodnie z 03_AI_SKILLS.
 
@@ -222,7 +222,7 @@ diffie przed commitem (krok 11).
   `src/components/ui/*` (shadcn-vue), `frontend/e2e/` (konfig Playwright)
 - `docker/Dockerfile`, `docker/compose.dev.yml`
 - `Taskfile.yml`, `.env.example`, `.gitignore`, `.editorconfig`
-- `CLAUDE.md`, `.claude/skills/ffp-{backend,frontend,domain-calc,security}/SKILL.md` (aktualizacja)
+- `CLAUDE.md`, `.claude/skills/pasnik-{backend,frontend,domain-calc,security}/SKILL.md` (aktualizacja)
 - `docs/implementation-plan/PROGRESS.md` (aktualizacja)
 
 ## Implementation Notes
@@ -245,7 +245,7 @@ diffie przed commitem (krok 11).
 
 ## Cross-Batch Impact
 
-- **Wszystkie batche**: Taskfile, CLAUDE.md i project skille ffp-* to
+- **Wszystkie batche**: Taskfile, CLAUDE.md i project skille pasnik-* to
   kontrakt każdej kolejnej sesji — zmiany komend wymagają aktualizacji
   wszystkich trzech miejsc naraz.
 - **B02**: zastępuje placeholder `create-admin`, dopina CSRF w
@@ -270,7 +270,7 @@ diffie przed commitem (krok 11).
       db-seed-demo)
 - [x] task fe-types działa, generated.ts commitowany
 - [x] .env.example, .gitignore, .editorconfig
-- [x] CLAUDE.md + uzgodnienie 4 skilli .claude/skills/ffp-*/SKILL.md
+- [x] CLAUDE.md + uzgodnienie 4 skilli .claude/skills/pasnik-*/SKILL.md
 - [x] Testy: api health, unit config/factory, int migracje, fe-test, e2e konfig
 - [x] PROGRESS.md zaktualizowany
 
@@ -305,7 +305,7 @@ z `create_app()` i `GET /api/v1/health`. Alembic zainicjalizowany
 vite-plugin-pwa (manifest PL, bez offline), vitest + Playwright.
 `docker/{Dockerfile,compose.dev.yml}` (app + frontend + db + db-test),
 `Taskfile.yml`, `.env.example`, `.editorconfig`, `.gitignore`, `CLAUDE.md`,
-uzgodnione 4 skille ffp-*.
+uzgodnione 4 skille pasnik-*.
 
 ### Decyzje implementującego (wymagane przez kartę)
 

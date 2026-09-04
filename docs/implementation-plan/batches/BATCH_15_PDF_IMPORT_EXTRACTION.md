@@ -399,7 +399,7 @@ liczby z §1 co do jednej**: 24 dni, 96 posiłków, 642 wiersze składników,
    (03_DATABASE §9). Widoczność egzekwuje jawny warunek właścicielski
    w serwisie, wzorzec `nutrition/service.py` (cele żywieniowe), z wyjątkiem
    ADMIN-a wg D16. Nie jest to „ręczny filtr scope", którego zabrania skill
-   `ffp-backend`: encja świadomie stoi poza wzorcem.
+   `pasnik-backend`: encja świadomie stoi poza wzorcem.
 6. **Nowa trasa + pozycja nawigacji** wbrew regule CLAUDE.md „batch podmienia
    `component` istniejącej trasy": mapa 05_FRONTEND §3 powstawała przed audytem
    PDF-ów i nie przewidywała ekranu importu. Karta §Frontend wymaga go wprost
@@ -488,8 +488,8 @@ SKILL-REVIEW.
 
 ### Skille
 
-- **SKILL-BE** (`.claude/skills/ffp-backend`) i **SKILL-CALC**
-  (`.claude/skills/ffp-domain-calc`) — narzędzie `Skill` nie wystawia w tym
+- **SKILL-BE** (`.claude/skills/pasnik-backend`) i **SKILL-CALC**
+  (`.claude/skills/pasnik-domain-calc`) — narzędzie `Skill` nie wystawia w tym
   środowisku skilli projektowych, więc zgodnie z 03_AI_SKILLS §6 pkt 5 treść
   przeczytana wprost z plików w repo.
 - **SKILL-PDF** (`anthropic-skills:pdf`) — załadowany narzędziem `Skill`.

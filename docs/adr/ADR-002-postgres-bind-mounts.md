@@ -8,8 +8,8 @@ uploady) muszą przeżyć rekreację kontenerów i być łatwe do backupu.
 
 ## Decyzja
 PostgreSQL 17 jako kontener compose; katalog danych na bind mount
-`/srv/ffp/pgdata`. Analogicznie `/srv/ffp/uploads` (zdjęcia, PDF-y importu)
-i `/srv/ffp/backups`. Migracje: Alembic; polityka numeracji = pierwszy
+`/srv/pasnik/pgdata`. Analogicznie `/srv/pasnik/uploads` (zdjęcia, PDF-y importu)
+i `/srv/pasnik/backups`. Migracje: Alembic; polityka numeracji = pierwszy
 wolny numer + `down_revision` z `alembic heads` (bez rezerwacji numerów
 w planie — sprawdzona lekcja netQArnera). Migracje uruchamiane jawnie
 w procedurze update, nie przy starcie kontenera.

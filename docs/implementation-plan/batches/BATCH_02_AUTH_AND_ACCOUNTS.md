@@ -337,8 +337,8 @@ Testy: 54 unit / 18 int / 55 api / 39 vitest / 4 E2E — wszystkie zielone,
    zamiast usuwać". Zgodne z ADR-012 (fizyczne usunięcie tylko dla encji
    nieużywanych) i nie zostawia w bazie kont-widm. Dezaktywacja pozostaje
    przez PATCH `is_active`.
-3. **Nazwy cookies**: `ffp_session` (HttpOnly) + `csrf_token` (dla JS).
-   Prefiks `ffp_` chroni przed kolizją z innymi aplikacjami na localhost
+3. **Nazwy cookies**: `pasnik_session` (HttpOnly) + `csrf_token` (dla JS).
+   Prefiks `pasnik_` chroni przed kolizją z innymi aplikacjami na localhost
    w dev.
 4. **`sessions` bez `updated_at`** — 03_DATABASE §2 wylicza kolumny tej
    tabeli wprost; rolę znacznika ostatniego użycia pełni przesuwane
@@ -403,7 +403,7 @@ Testy: 54 unit / 18 int / 55 api / 39 vitest / 4 E2E — wszystkie zielone,
 3. Formularz tworzenia konta na `/admin/uzytkownicy` zakłada zawsze rolę
    USER; nadanie roli ADMIN to osobna akcja na liście. Wystarczające dla
    zakresu karty; ewentualny selektor roli w formularzu — przy B03.
-4. **Skille `ffp-security` i `ffp-backend` mają nieaktualne nagłówki**
+4. **Skille `pasnik-security` i `pasnik-backend` mają nieaktualne nagłówki**
    („do dostarczenia: sesje/CSRF/rate limit (B02) … nagłówki i CSP (B17)"
    — już są; `argon2-cffi`/`slowapi` są w `pyproject`). Świadomie NIE
    aktualizowane tutaj: właścicielem aktualizacji skilli są batche review

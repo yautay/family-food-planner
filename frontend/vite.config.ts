@@ -49,7 +49,7 @@ export default defineConfig({
               url.pathname.startsWith('/api/') && !url.pathname.startsWith('/api/v1/auth/'),
             handler: 'NetworkFirst',
             options: {
-              cacheName: 'ffp-api',
+              cacheName: 'pasnik-api',
               networkTimeoutSeconds: 3,
               expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 },
               cacheableResponse: { statuses: [200] },
@@ -60,7 +60,7 @@ export default defineConfig({
             urlPattern: ({ url }: { url: URL }) => url.pathname.startsWith('/uploads/'),
             handler: 'CacheFirst',
             options: {
-              cacheName: 'ffp-uploads',
+              cacheName: 'pasnik-uploads',
               expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 30 },
               cacheableResponse: { statuses: [200] },
             },
@@ -68,8 +68,8 @@ export default defineConfig({
         ],
       },
       manifest: {
-        name: 'Family Food Planner',
-        short_name: 'FFP',
+        name: 'Paśnik',
+        short_name: 'Paśnik',
         description: 'Planowanie posiłków, wartości odżywczych i zakupów dla rodziny.',
         lang: 'pl',
         dir: 'ltr',

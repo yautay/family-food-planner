@@ -100,7 +100,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     configure_logging(app_env=settings.app_env, log_level=settings.log_level)
 
     app = FastAPI(
-        title="Family Food Planner API",
+        title="Paśnik API",
         version=settings.app_version,
         description="API planera żywienia rodzinnego. Kontrakt dla frontendu (task fe-types).",
         docs_url="/api/docs" if settings.app_env != "prod" else None,

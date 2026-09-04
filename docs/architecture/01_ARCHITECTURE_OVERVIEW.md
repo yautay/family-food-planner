@@ -1,6 +1,6 @@
 # 01 — Przegląd architektury
 
-Family Food Planner (FFP) — prywatna, rodzinna aplikacja do planowania
+Paśnik — prywatna, rodzinna aplikacja do planowania
 żywienia, przepisów, kalorii/makro, spiżarni i inteligentnych list
 zakupowych. Mała liczba użytkowników, dostęp publiczny przez Internet
 (istniejący reverse proxy), hosting: Odroid H2, Docker + Docker Compose.
@@ -14,7 +14,7 @@ uzasadnia, a każdy dodatkowy proces to koszt operacyjny na Odroidzie.
 ```
 ┌──────────────────────────── Odroid H2 ───────────────────────────┐
 │  reverse proxy (istniejący, TLS)                                  │
-│      │ https://ffp.<domena>                                       │
+│      │ https://pasnik.<domena>                                       │
 │      ▼                                                            │
 │  ┌─ kontener app ────────────────────────────┐  ┌─ kontener db ─┐ │
 │  │ Uvicorn + FastAPI                          │  │ PostgreSQL 17 │ │
@@ -22,8 +22,8 @@ uzasadnia, a każdy dodatkowy proces to koszt operacyjny na Odroidzie.
 │  │  /*         → SPA dist (StaticFiles)       │  └───────┬───────┘ │
 │  │  /uploads/* → pliki (auth-gated)           │          │         │
 │  └───────┬────────────────────────────────────┘          │         │
-│     bind mount /srv/ffp/uploads          bind mount /srv/ffp/pgdata│
-│     bind mount /srv/ffp/backups  ◄─ pg_dump + kopia uploads        │
+│     bind mount /srv/pasnik/uploads          bind mount /srv/pasnik/pgdata│
+│     bind mount /srv/pasnik/backups  ◄─ pg_dump + kopia uploads        │
 └────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -78,7 +78,7 @@ family-food-planner/
     source_pdfs/     # 8 PDF-ów dietetyczki (wejście importera + testy)
     reference/       # prototype.db — TYLKO referencja walidacyjna importera
   docs/              # architektura, ADR, implementation-plan
-  .claude/skills/    # project skille ffp-* (03_AI_SKILLS)
+  .claude/skills/    # project skille pasnik-* (03_AI_SKILLS)
   Taskfile.yml       # jedyne źródło komend dev (task help)
   CLAUDE.md · .env.example · .editorconfig · .gitignore
 ```

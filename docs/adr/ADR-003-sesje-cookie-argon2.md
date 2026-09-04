@@ -17,7 +17,7 @@ administrator (rodzina). SPA i API na tym samym originie.
 
 ## Uszczegółowienia z implementacji (BATCH_02, 2026-08-16)
 
-- Cookies: `ffp_session` (HttpOnly) i `csrf_token` (czytelne dla JS),
+- Cookies: `pasnik_session` (HttpOnly) i `csrf_token` (czytelne dla JS),
   `SameSite=Lax; Path=/`; flaga `Secure` włączana przez `APP_ENV=prod`
   (na http://localhost nie ma TLS). Nazwy i atrybuty w `app/core/cookies.py`.
 - TTL przesuwne działa po OBU stronach: przy przesunięciu `sessions.expires_at`

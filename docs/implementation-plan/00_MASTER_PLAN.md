@@ -1,4 +1,4 @@
-# 00 — Master Plan implementacji Family Food Planner
+# 00 — Master Plan implementacji Paśnika
 
 Data: 2026-08-16 · Faza planistyczna (bez implementacji) · Właściciel: Michał
 Metodyka: adaptacja sprawdzonego procesu netQArnera (jeden batch = jedna
@@ -6,7 +6,7 @@ Metodyka: adaptacja sprawdzonego procesu netQArnera (jeden batch = jedna
 
 ## 1. Executive overview
 
-FFP = prywatna aplikacja rodzinna: produkty kanoniczne → przepisy →
+Paśnik = prywatna aplikacja rodzinna: produkty kanoniczne → przepisy →
 planowanie dni/tygodni → kalorie/makro/ŁG → spiżarnia → silnik zakupowy →
 listy (mobile/print/QR/link publiczny) → PWA/offline → import PDF diet →
 produkcja na Odroid H2 (Docker Compose, za istniejącym reverse proxy).

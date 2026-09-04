@@ -77,10 +77,10 @@ Minimalny zestaw dla projektu. Project skille żyją w `.claude/skills/`
 
 | ID | Skill | Typ | Obszar |
 |---|---|---|---|
-| SKILL-BE | `.claude/skills/ffp-backend` | project | Python/FastAPI/SQLAlchemy/Alembic/Pydantic/pytest — kontrakt backendu |
-| SKILL-FE | `.claude/skills/ffp-frontend` | project | Vue3/TS/Vite/Tailwind/shadcn-vue/Pinia/Query — kontrakt frontendu + UX |
-| SKILL-CALC | `.claude/skills/ffp-domain-calc` | project | silniki nutrition/shopping: Decimal, jednostki, determinizm, property-based |
-| SKILL-SEC | `.claude/skills/ffp-security` | project | sesje/CSRF/scope/tokeny publiczne/uploady/logi/sekrety |
+| SKILL-BE | `.claude/skills/pasnik-backend` | project | Python/FastAPI/SQLAlchemy/Alembic/Pydantic/pytest — kontrakt backendu |
+| SKILL-FE | `.claude/skills/pasnik-frontend` | project | Vue3/TS/Vite/Tailwind/shadcn-vue/Pinia/Query — kontrakt frontendu + UX |
+| SKILL-CALC | `.claude/skills/pasnik-domain-calc` | project | silniki nutrition/shopping: Decimal, jednostki, determinizm, property-based |
+| SKILL-SEC | `.claude/skills/pasnik-security` | project | sesje/CSRF/scope/tokeny publiczne/uploady/logi/sekrety |
 | SKILL-REVIEW | `/code-review` (wbudowany) | builtin | przegląd poprawności diffu |
 | SKILL-SECREV | `/security-review` (wbudowany) | builtin | audyt bezpieczeństwa zmian |
 | SKILL-PDF | `anthropic-skills:pdf` (wbudowany) | builtin | praca z PDF (pdfplumber/pypdf) |
@@ -139,7 +139,7 @@ pisania kodu). Required = ładowane na starcie sesji, po lekturze karty.
 1. Karta batcha ma sekcję **`## Skills`** (Required / Recommended / Review)
    z identyfikatorami SKILL-*.
 2. Master prompt (krok 1f) każe załadować Required przez narzędzie Skill
-   (project skille: nazwa katalogu, np. `ffp-backend`; wbudowane: ich nazwa).
+   (project skille: nazwa katalogu, np. `pasnik-backend`; wbudowane: ich nazwa).
 3. Recommended ładuje się tylko, gdy sesja wchodzi w dany obszar.
 4. Review Skills uruchamiane w kroku 11 master prompta (przed commitem).
 5. **Skill niedostępny w środowisku**: nie udawaj użycia — odnotuj brak

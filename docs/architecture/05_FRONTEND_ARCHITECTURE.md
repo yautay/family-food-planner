@@ -139,7 +139,8 @@ Stan faktyczny po BATCH_12.
 
 **PWA** (`vite.config.ts`, `index.html`):
 
-- manifest PL: `name` „Family Food Planner", `short_name` „FFP", `lang: pl`,
+- manifest PL: `name` i `short_name` „Paśnik" (nazwa mieści się na ekranie
+  domowym, więc skrótu nie ma), `lang: pl`,
   `display: standalone`, `theme_color` #E07A2F, `background_color` #FAF6EF,
   ikony PNG 192/512 w wariantach `any` i `maskable` (`public/icons/`).
   Splash na Androidzie składa przeglądarka z ikony 512 + `background_color`;

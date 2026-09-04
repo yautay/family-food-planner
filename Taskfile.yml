@@ -1,8 +1,8 @@
-# Family Food Planner — jedyne źródło komend deweloperskich (`task help`).
+# Paśnik — jedyne źródło komend deweloperskich (`task help`).
 #
 # Kontrakt dla każdej sesji AI: kod uruchamia się TYLKO przez te targety
-# (skille ffp-* i CLAUDE.md odwołują się do ich nazw). Zmiana nazwy komendy
-# = aktualizacja Taskfile + CLAUDE.md + skilli ffp-* w tym samym commicie.
+# (skille pasnik-* i CLAUDE.md odwołują się do ich nazw). Zmiana nazwy komendy
+# = aktualizacja Taskfile + CLAUDE.md + skilli pasnik-* w tym samym commicie.
 #
 # Podział: usługi (baza, hot reload) stoją w Dockerze, narzędzia jakości
 # (pytest/ruff/mypy/vitest/eslint) biegną na hoście przez uv i npm — szybka
@@ -243,7 +243,7 @@ tasks:
       - '{{.COMPOSE}} exec db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
 
   create-admin:
-    desc: 'Tworzy konto administratora (hasło z promptu albo FFP_ADMIN_PASSWORD)'
+    desc: 'Tworzy konto administratora (hasło z promptu albo PASNIK_ADMIN_PASSWORD)'
     dir: backend
     interactive: true
     cmds:

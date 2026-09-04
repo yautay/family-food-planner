@@ -1,4 +1,4 @@
-# Family Food Planner — obraz aplikacji.
+# Paśnik — obraz aplikacji.
 #
 # Multi-stage. W BATCH_01 istnieje wyłącznie ścieżka deweloperska:
 #   base → dev   (uvicorn --reload, kod z bind mounta)
