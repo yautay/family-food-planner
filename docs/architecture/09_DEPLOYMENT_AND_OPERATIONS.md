@@ -10,8 +10,14 @@ na podstawie rzeczywiście istniejącej aplikacji.
 
 - 2 kontenery: `app` (Uvicorn+FastAPI, serwuje też SPA i uploady)
   i `db` (postgres:17). Opcjonalny profil `backup` (kontener cron).
-- Sieć: tylko `app` wystawia port na localhost hosta (np. 127.0.0.1:8080);
-  reverse proxy hosta → ten port. `db` bez portów hosta.
+- Sieć: tylko `app` wystawia port na localhost hosta; `db` bez portów.
+  **Port NIE MOŻE być 8080** (tak podawał ten dokument jako przykład): na
+  docelowym hoście `127.0.0.1:8080` zajmuje Pi-hole (`pihole.cpt-sztos.com`
+  w `Caddyfile` właściciela, ustalenie D7 z 2026-09-05). Zajęte są tam także
+  3000, 1880, 4173, 8013, 8888, 9000 i 9101. Proponowany port aplikacji:
+  **8081** — B18 potwierdza go `ss -ltnp` PRZED wpisaniem do compose,
+  bo lista usług na tym hoście może się zmienić.
+  Reverse proxy hosta (Caddy) kieruje na ten port.
 - **Lifecycle danych ≠ lifecycle kontenera** — bind mounts hosta:
 
 ```

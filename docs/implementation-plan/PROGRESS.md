@@ -30,7 +30,7 @@ commit wykonany). Kolumna „Blokery" = zależności + decyzje z 02_DECISIONS.
 | R4 REVIEW_PRE_PRODUCTION | [x] | — | `batch(R4)` na master (hash wpisać po push) |
 | 19 FIX_LIST_PAGINATION | [ ] | R4 (ustalenie P1 — warunek werdyktu) | |
 | 17 PRODUCTION_HARDENING | [ ] | R4 | |
-| 18 PRODUCTION_DEPLOYMENT_AND_OPERATIONS | [ ] | 17, **19**; **D6, D7** | |
+| 18 PRODUCTION_DEPLOYMENT_AND_OPERATIONS | [ ] | 17, 19 (D6 i D7 zatwierdzone 2026-09-05) | |
 
 ## Dziennik
 
@@ -42,11 +42,12 @@ zmiany dotykające przyszłych batchy trzeba wpisać do ich kart
 
 ---
 
-**2026-09-05 — DECYZJE WŁAŚCICIELA po raporcie R4: D6, D24 i rozszerzenie D16
-zamknięte; D7 częściowo; kolejność B19 → B17 → B18 ustalona.**
+**2026-09-05 — DECYZJE WŁAŚCICIELA po raporcie R4: D6, D7, D24 i rozszerzenie
+D16 zamknięte; kolejność B19 → B17 → B18 ustalona.**
 
-Cztery z pięciu pytań z raportu R4 mają odpowiedź. **Rejestr 02_DECISIONS ma
-teraz tylko JEDNĄ decyzję blokującą batch — D7 — i ta blokuje wyłącznie B18.**
+Wszystkie pytania z raportu R4 mają odpowiedź. **Rejestr 02_DECISIONS nie ma
+już ANI JEDNEJ decyzji blokującej batch** — pierwszy raz od początku programu.
+Zostaje w nim pięć pozycji bez konsumenta (D8 FUTURE, D9, D10, D11, D21).
 
 1. **D6 — kopia off-device: na razie BEZ automatu, ręcznie na dysk zewnętrzny.**
    Odrzucone rclone do chmury i rsync na NAS. Dla **B18** znaczy to trzy rzeczy:
@@ -81,14 +82,45 @@ teraz tylko JEDNĄ decyzję blokującą batch — D7 — i ta blokuje wyłączni
    wybrać wiersz WŁASNY. Bez tego rozdzielenia wraca błąd, w którym ADMIN
    planujący własny obiad kasował tytuł cudzego dnia.
 
-4. **D7 — domena `pasnik.cpt-sztos.com.pl`, proxy to CADDY, nie nginx.**
-   Pierwotna rekomendacja zakładała nginksa i była błędna — karta B18 została
-   przestawiona: zamiast szablonu vhosta powstaje
-   `docker/proxy/pasnik.Caddyfile.example`, a z listy zadań znika ręczna
-   konfiguracja TLS i przekierowania HTTP→HTTPS (Caddy robi oba sam).
-   **Bramka B18 zostaje otwarta**, bo brakuje jeszcze czterech szczegółów:
-   jak Caddy jest uruchomiony, jak ułożona jest jego konfiguracja, czy stoi na
-   tym samym hoście i czy DNS subdomeny już wskazuje na ten host.
+4. **D7 — ZATWIERDZONE. Domena `pasnik.cpt-sztos.com`, proxy to CADDY jako
+   usługa systemowa na tym samym hoście.** Pierwotna rekomendacja zakładała
+   nginksa i była błędna — karta B18 przestawiona: zamiast szablonu vhosta
+   powstaje `docker/proxy/pasnik.Caddyfile.example`, a z listy zadań znika
+   ręczna konfiguracja TLS i przekierowania HTTP→HTTPS (Caddy robi oba sam,
+   a ACME na tym hoście działa — `charts`, `toc` i `seaweed-filler` mają
+   publiczne certyfikaty). Docelowy blok to trzy linijki:
+   `reverse_proxy 127.0.0.1:8081` plus `encode zstd gzip`.
+
+   **Lektura realnego `/etc/caddy/Caddyfile` dała cztery ustalenia, których
+   żadna z odpowiedzi wprost nie zawierała — i jedno z nich jest kolizją:**
+
+   - **`127.0.0.1:8080` ZAJMUJE Pi-hole.** A dokładnie ten port 09_DEPLOYMENT
+     §1 podawał jako przykład dla aplikacji. Gdyby B18 wziął dokument
+     dosłownie, kontener albo by nie wstał, albo przesłonił Pi-hole.
+     Dokument poprawiony, proponowany port to **8081**; zajęte na tym hoście
+     są też 3000, 1880, 4173, 8013, 8888, 9000 i 9101. B18 potwierdza
+     `ss -ltnp` przed wpisaniem do compose.
+   - **Blok `pasnik.cpt-sztos.com` JUŻ ISTNIEJE** i serwuje statyczny landing
+     (`root * /srv/sftp/ftpuser/files/landing`, commit `2a34e5e`). B18 go
+     PODMIENIA — dwa bloki na tę samą domenę to błąd konfiguracji, nie
+     nadpisanie.
+   - **Access log Caddy'ego to TRZECIA warstwa, w której może wyciec publiczny
+     token listy.** Do dziś maskowaliśmy dwie (nasz `structlog` i access log
+     Uvicorna) — obie w kontenerze. Caddy zapisuje PEŁNY URI, więc blok
+     z dyrektywą `log` wpisałby `/api/v1/public/lists/<token>` do pliku na
+     hoście, poza wszystkim, co kontrolujemy. Token w takim logu działa: kto go
+     przeczyta, otwiera listę bez logowania. Dopisane do **07_SECURITY §5
+     pkt 9** jako wymaganie do zweryfikowania GREPEM po realnym logu.
+   - **Limitu rozmiaru ciała nie trzeba ustawiać** (Caddy domyślnie nie
+     ogranicza, więc PDF 25 MB i paczka transferu 100 MB przechodzą), ale
+     **HSTS nie jest ustawiony nigdzie** w konfiguracji właściciela, a
+     07_SECURITY §3 przypisuje go proxy — B18 dokłada go z KRÓTKIM `max-age`
+     na start, bo przeglądarka ten nagłówek zapamiętuje.
+
+   **Jedna rzecz do potwierdzenia jednym słowem**: właściciel podał domenę
+   jako `pasnik.cpt-sztos.com.pl`, ale w realnym `Caddyfile` jest
+   `pasnik.cpt-sztos.com` (bez `.pl`), tak jak wszystkie pozostałe serwisy na
+   tym hoście. Przyjęto wersję z konfiguracji.
 
    **Konsekwencja techniczna niezależna od tych odpowiedzi, wpisana do B17**:
    za proxy wszystkie żądania przychodzą z adresu proxy, więc `get_remote_address`

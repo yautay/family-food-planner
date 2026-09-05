@@ -1,8 +1,8 @@
 # BATCH_18 — PRODUCTION_DEPLOYMENT_AND_OPERATIONS
 
-Klasa: PROD · Zależności: B17 + **bramki decyzji D6 (backup off-device)
-i D7 (domena/proxy) — batch NIE startuje, dopóki obie nie są ZATWIERDZONE
-w 02_DECISIONS** · Szacunek rozmiaru: L
+Klasa: PROD · Zależności: B17 + B19 · Bramki decyzji **D6 i D7 —
+ZATWIERDZONE 2026-09-05**, patrz „Ustalenia REVIEW R4" niżej ·
+Szacunek rozmiaru: L
 
 ## Goal
 
@@ -21,11 +21,12 @@ w pełni przez env. NIE istnieją: compose.prod.yml, konfiguracja proxy, katalog
 REALNYM hoście właściciela — kroki wykonywane na Odroidzie wymagają jego
 udziału/dostępu; agent przygotowuje komplet i prowadzi procedurę.
 
-**STOP-bramka**: jeśli D6 lub D7 mają status OPEN w
-`docs/implementation-plan/02_DECISIONS.md` — zatrzymaj się i zapytaj
-właściciela (implementation_prompt pkt 1e). Z D7 muszą wynikać: domena/
-subdomena, typ proxy, sposób dokładania konfiguracji; z D6: cel kopii
-off-device (NAS/chmura/rclone remote) i dane dostępowe (poza repo!).
+**STOP-bramka — ZDJĘTA 2026-09-05**: D6 i D7 są ZATWIERDZONE (treść
+w `02_DECISIONS`, streszczenie w „Ustaleniach REVIEW R4" niżej). Zostaje
+jedno pytanie kontrolne przed pierwszym krokiem: **potwierdzić domenę**
+(`pasnik.cpt-sztos.com` z realnego `Caddyfile` kontra `…com.pl`
+z wcześniejszej odpowiedzi właściciela). Gdyby któraś z tych decyzji wróciła
+kiedyś do statusu OPEN — obowiązuje implementation_prompt pkt 1e.
 
 Wymagane lektury przed startem:
 
@@ -41,9 +42,8 @@ Wymagane lektury przed startem:
 
 **Ustalenia REVIEW R4 (2026-09-05) dla tego batcha:**
 
-1. **D6 ZATWIERDZONE 2026-09-05, D7 CZĘŚCIOWO.** STOP-bramka dotyczy już
-   tylko D7 — brakuje szczegółów uruchomienia i konfiguracji Caddy'ego.
-   **B17 startuje bez obu.**
+1. **D6 i D7 ZATWIERDZONE 2026-09-05 — STOP-bramka decyzyjna tego batcha
+   ZDJĘTA.** Zależności od B17 i B19 zostają.
    - **D6: kopia off-device jest RĘCZNA, na dysk zewnętrzny.** Do
      `docs/OPERATIONS.md` wchodzi PROCEDURA, nie skrypt w cronie: co
      skopiować, skąd, jak sprawdzić kompletność. Backup automatyczny
@@ -52,14 +52,49 @@ Wymagane lektury przed startem:
      ratuje przed pomyłką użytkownika, ale nie przed awarią dysku ani
      kradzieżą sprzętu. Krok kopiowania zostawić jako miejsce do wypełnienia,
      żeby dołożenie NAS-a albo chmury nie wymagało zmiany kodu.
-   - **D7: domena to `pasnik.cpt-sztos.com.pl`, proxy to Caddy** (nie nginx —
-     pierwotna rekomendacja zakładała nginksa i była błędna). TLS terminuje
-     Caddy; aplikacja słucha po HTTP na loopbacku, więc `APP_ENV=prod`
-     i cookies `Secure` działają poprawnie mimo braku TLS wewnątrz.
-     Zamiast szablonu w składni nginksa batch dostarcza
-     **`docker/proxy/pasnik.Caddyfile.example`**. Do potwierdzenia przed startem:
-     sposób uruchomienia Caddy'ego, układ jego konfiguracji, czy stoi na tym
-     samym hoście i czy DNS subdomeny już wskazuje na ten host.
+   - **D7: domena `pasnik.cpt-sztos.com`, proxy to Caddy jako USŁUGA
+     SYSTEMOWA na tym samym hoście** (nie nginx i nie kontener — pierwotna
+     rekomendacja zakładała nginksa i była błędna). TLS terminuje Caddy;
+     aplikacja słucha po HTTP na loopbacku, więc `APP_ENV=prod` i cookies
+     `Secure` działają poprawnie mimo braku TLS wewnątrz. DNS już wskazuje
+     na ten host, a ACME na nim działa (`charts`, `toc`, `seaweed-filler`
+     mają publiczne certyfikaty), więc `tls` nie wymaga żadnej dyrektywy
+     i docelowy blok jest krótki:
+
+     ```
+     pasnik.cpt-sztos.com {
+         encode zstd gzip
+         reverse_proxy 127.0.0.1:8081
+     }
+     ```
+
+     **Cztery pułapki, każda sprawdzona w realnym `Caddyfile` właściciela:**
+     (a) blok `pasnik.cpt-sztos.com` **JUŻ ISTNIEJE** i serwuje statyczny
+     landing (`root * /srv/sftp/ftpuser/files/landing`, commit `2a34e5e`) —
+     ten batch go PODMIENIA, nie dopisuje drugiego; dwa bloki na tę samą
+     domenę to błąd konfiguracji, nie nadpisanie.
+     (b) **Port 8080 zajmuje Pi-hole**, choć 09_DEPLOYMENT §1 podawał go jako
+     przykład — stąd 8081, do potwierdzenia `ss -ltnp` (zajęte są też 3000,
+     1880, 4173, 8013, 8888, 9000, 9101).
+     (c) `Caddyfile` jest JEDNYM plikiem bez dyrektywy `import`, więc
+     edytujemy go w miejscu; nie ma katalogu, do którego dałoby się wrzucić
+     osobny plik.
+     (d) **`log` dla tego bloku zapisałby publiczny token listy w pełnym
+     URI** (07_SECURITY §5 pkt 9) — albo go nie włączamy (tak ma większość
+     serwisów właściciela), albo filtrujemy pole; weryfikacja grepem po
+     realnym logu, nie po dokumentacji.
+     Dwie rzeczy do potwierdzenia, a nie ustawiania: limit rozmiaru ciała
+     (Caddy domyślnie NIE ogranicza, więc PDF 25 MB i paczka 100 MB
+     przechodzą) oraz HSTS (**nie jest ustawiony nigdzie** w konfiguracji
+     właściciela, a 07_SECURITY §3 przypisuje go proxy — dołożyć z KRÓTKIM
+     `max-age` na start, bo przeglądarka ten nagłówek zapamiętuje).
+     Wzorem jest istniejący blok `toc.cpt-sztos.com`. Szablon w repo:
+     **`docker/proxy/pasnik.Caddyfile.example`**. Przeładowanie:
+     `caddy validate --config /etc/caddy/Caddyfile` → `systemctl reload caddy`.
+     **Jedna rzecz do potwierdzenia jednym słowem przed pierwszym krokiem**:
+     domena. We wcześniejszej odpowiedzi padło `pasnik.cpt-sztos.com.pl`,
+     ale w realnym `Caddyfile` jest `pasnik.cpt-sztos.com` (bez `.pl`)
+     i wszystkie pozostałe serwisy też są pod `cpt-sztos.com`.
 2. **Nowa zależność: `BATCH_19_FIX_LIST_PAGINATION`.** Ustalenie P1 R4 — bez
    niego ekrany list ucinają się po 50 pozycjach, a właściciel importuje
    jadłospisy (103 dania, 185 produktów) dokładnie wtedy, gdy aplikacja idzie

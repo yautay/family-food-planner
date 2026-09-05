@@ -136,7 +136,19 @@ Dziewięć szczegółów wykonawczych, które trzeba utrzymać:
    `publicList.ts` mapuje 404 i 410 na jeden ekran, więc osoba z linkiem
    niczego się nie dowiaduje. Zmiana na „410 zawsze" wymaga decyzji, nie
    refaktoru.
-9. Maskowanie działa w DWÓCH warstwach, bo obie piszą na stdout kontenera:
+9. **Od wdrożenia warstwy są TRZY, nie dwie** (ustalenie D7, 2026-09-05):
+   dochodzi access log REVERSE PROXY. Caddy zapisuje pełny URI żądania, więc
+   blok z dyrektywą `log` dla `pasnik.*` wpisze
+   `/api/v1/public/lists/<pełny-token>` do pliku na hoście — poza aplikacją,
+   poza Dockerem i poza wszystkim, co maskujemy dzisiaj. Token w takim logu
+   działa: kto go przeczyta, otwiera listę bez logowania. **B18 ma wybrać
+   jedno z dwojga i ZWERYFIKOWAĆ na realnym logu, nie na dokumentacji**:
+   albo nie włączać `log` dla tego bloku w ogóle (reszta serwisów właściciela
+   też go nie ma — wyjątkiem jest `toc`), albo użyć filtra pól Caddy'ego
+   (`format filter`) i zamaskować ścieżkę. Sprawdzenie jest banalne: wejść na
+   publiczny link i zgrepować plik logu po tokenie.
+9a. Maskowanie w aplikacji działa w DWÓCH warstwach, bo obie piszą na stdout
+   kontenera:
    `mask_path()` w `RequestLoggingMiddleware` (nasz log) oraz
    `MaskPublicTokenFilter` na loggerze `uvicorn.access` (access log Uvicorna
    formatuje ścieżkę sam z `record.args` i o middleware nie wie). Druga warstwa
