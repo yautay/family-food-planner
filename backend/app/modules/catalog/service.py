@@ -58,6 +58,7 @@ from app.modules.catalog.models import (
 )
 from app.modules.catalog.naming import normalize_name
 from app.modules.catalog.nutrition_adapter import ProductNutrition, nutrition_for
+from app.modules.catalog.schemas import ProductSort
 from app.modules.catalog.unit_weights import merge_samples
 from app.modules.catalog.units import PIECE_LABEL, canonical_unit_label, normalize_unit_label
 
@@ -380,8 +381,16 @@ class CatalogService:
         category_id: int | None = None,
         verification_status: VerificationStatus | None = None,
         include_archived: bool = False,
+        sort: ProductSort = ProductSort.NAME,
     ) -> tuple[list[ProductView], int]:
-        """Lista produktów z wyszukiwarką trigramową i filtrami (04_API §1)."""
+        """Lista produktów z wyszukiwarką trigramową i filtrami (04_API §1).
+
+        `sort` wybiera porządek CAŁEGO zbioru, nie pobranej strony — kolejka
+        weryfikacji układa się po `created_at` w bazie, a nie w przeglądarce
+        (ustalenie R4, BATCH_19). Przy szukaniu najlepsze trafienia nadal idą
+        pierwsze (wzorzec `pantry.service._ordering`): fraza wpisana w szukajkę
+        ma mieć wpływ na to, co widać u góry, niezależnie od wybranego porządku.
+        """
         statement: Select[tuple[CanonicalProduct]] = select(CanonicalProduct)
         if not include_archived:
             statement = statement.where(CanonicalProduct.is_archived.is_(False))
@@ -391,12 +400,18 @@ class CatalogService:
             statement = statement.where(CanonicalProduct.verification_status == verification_status)
 
         phrase = (query or "").strip()
-        ordering: tuple[Any, ...]
+        prefix: tuple[Any, ...] = ()
         if phrase:
             statement = statement.where(_search_condition(phrase))
-            ordering = (_similarity(phrase).desc(), CanonicalProduct.name, CanonicalProduct.id)
-        else:
-            ordering = (CanonicalProduct.name, CanonicalProduct.id)
+            prefix = (_similarity(phrase).desc(),)
+        ordering: tuple[Any, ...] = (
+            (*prefix, CanonicalProduct.created_at, CanonicalProduct.id)
+            if sort is ProductSort.CREATED_AT
+            # `id` domyka porządek: `created_at` nadaje `now()` transakcji, więc
+            # wiersze utworzone jednym żądaniem mają IDENTYCZNY znacznik i bez
+            # tego kolejność stron nie byłaby stabilna między zapytaniami.
+            else (*prefix, CanonicalProduct.name, CanonicalProduct.id)
+        )
 
         total = (
             await self._session.execute(select(func.count()).select_from(statement.subquery()))

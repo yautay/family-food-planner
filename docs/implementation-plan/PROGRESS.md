@@ -28,7 +28,7 @@ commit wykonany). Kolumna „Blokery" = zależności + decyzje z 02_DECISIONS.
 | 15 PDF_IMPORT_EXTRACTION | [x] | — | `batch(15)` na master (hash wpisać po push) |
 | 16 PDF_IMPORT_REVIEW_AND_AI | [x] | — | `batch(16)` na master (hash wpisać po push) |
 | R4 REVIEW_PRE_PRODUCTION | [x] | — | `batch(R4)` na master (hash wpisać po push) |
-| 19 FIX_LIST_PAGINATION | [ ] | R4 (ustalenie P1 — warunek werdyktu) | |
+| 19 FIX_LIST_PAGINATION | [x] | — | `batch(19)` na master (hash wpisać po push) |
 | 17 PRODUCTION_HARDENING | [ ] | R4 | |
 | 18 PRODUCTION_DEPLOYMENT_AND_OPERATIONS | [ ] | 17, 19 (D6 i D7 zatwierdzone 2026-09-05) | |
 
@@ -39,6 +39,79 @@ co weszło + **„rzeczy, o których muszą wiedzieć następne batche"**
 (odstępstwa, nowe kontrakty, pułapki). Wpis NIE zastępuje propagacji —
 zmiany dotykające przyszłych batchy trzeba wpisać do ich kart
 (00_MASTER_PLAN §8); dziennik to indeks, nie schowek.
+
+---
+
+**2026-09-05 — BATCH_19 (FIX_LIST_PAGINATION) — warunek 1 werdyktu R4 ZAMKNIĘTY.**
+
+Sześć ekranów listy dochodzi teraz do ostatniej pozycji, a licznik mówi „50
+z 185" zamiast samego „185". **Wzorzec: „pokaż więcej" z rosnącym `offset` na
+`useInfiniteQuery`**, jeden composable (`frontend/src/api/pagination.ts`) plus
+jeden komponent (`components/domain/LoadMoreButton.vue`) — nie sześć kopii.
+Rosnący `limit` odrzucony z trzech powodów: rozbija się o sufit 200 (04_API §1),
+karta batcha zakazuje podnoszenia `limit` ponad sufit, a trzecie kliknięcie
+pobierałoby 150 pozycji, żeby pokazać 50 nowych.
+
+**Rzecz, o której muszą wiedzieć następne batche — `offset` NIE WCHODZI do
+klucza zapytań.** Niesie go `pageParam`, więc klucz listy jest ten sam co przed
+batchem i `invalidateQueries` po mutacji nadal trafia w CAŁĄ listę. Klucz per
+strona rozbiłby cache na osobne wpisy, z których inwalidacja odświeżałaby
+jeden — to ta sama pułapka, którą B11 rozwiązał rozłącznymi prefiksami
+`index`/`detail`. Dlatego `offset` w interfejsach filtrów w `queryKeys.ts` jest
+teraz OPCJONALNY: podają go wyłącznie pickery, które biorą jedną krótką stronę
+i paginacji nie mają. **Nowy ekran listy reużywa `usePaginatedList`; własna
+kolejka stron albo kopiowanie doładowanych stron do Pinii to błąd review
+(ADR-007).**
+
+**Sortowanie kolejki weryfikacji poszło na SERWER** (`GET /products?sort=`,
+zamknięty słownik `name|created_at`, literówka = 422). To był najgorszy przypadek
+z R4 i wariant „skreślić deklarację" był gorszy: `/admin/weryfikacja` to ekran,
+na którym właściciel uzupełnia wartości odżywcze po imporcie, więc kolejność
+„od najstarszych" jest tam funkcją, nie ozdobą. **Zmierzone na 68 pozycjach
+w realnej kolejce bazy dev**: stara ścieżka (serwer sortuje po `name`, strona
+układa po `created_at`) nie pokazywała na pierwszej stronie ANI najstarszego
+realnego produktu, ANI ostatniego z zaimportowanej sześćdziesiątki — po
+naprawie pierwsza strona zaczyna się od najstarszego, a „pokaż więcej" dowozi
+resztę. Konwencja `?sort=` dopisana do **04_API §1**: porządek listy należy do
+serwera, a porządek nadany POBRANEJ STRONIE w przeglądarce jest błędem, bo
+układa wycinek wybrany innym kryterium.
+
+Rozmiary stron zostały jak były (`/spizarnia` 100, reszta 50) — batch dokłada
+dosięgalność, nie przestawia stron; zmniejszenie strony spiżarni DOŁOŻYŁOBY
+kliknięć tam, gdzie ich dziś nie ma (06_UIUX §2).
+
+Dokumentacja: nowy **06_UIUX §3.6** (obowiązujący wzorzec paginacji, sześć
+reguł), akapit „Stan faktyczny po REVIEW R4" w **05_FRONTEND §3** skreślony
+i zastąpiony stanem faktycznym, **04_API §1** rozszerzone o `?sort=`.
+`e2e/cleanup.ts` dostał `clearCategories` (kategorie idą PO produktach — FK
+z 409, a słownik kategorii jest globalny, więc śmieć widzą wszystkie ekrany).
+
+**`/code-review` na diffie znalazł DWA realne błędy we własnym wzorcu i oba są
+naprawione z testem regresji** (warto, bo dotyczą composable'a, na którym stoi
+sześć ekranów):
+
+1. **Nieudane doładowanie kasowało z widoku wiersze, które już były na ekranie.**
+   `isError` wystawiał stan błędu CAŁEGO `useInfiniteQuery`, a ten zapala się
+   także po nieudanym `fetchNextPage`. Odtworzone probem: po padnięciu drugiej
+   strony liczba wyrenderowanych kart spadała z 50 na 0, a licznik dalej mówił
+   „50 z 60" — czyli wracał dokładnie ten rozjazd liczby z widokiem, który ten
+   batch likwiduje. Naprawa: `isError` tylko gdy `pages.length === 0`, plus
+   `loadMoreFailed` (lista zostaje, komunikat siada przy przycisku, bo on jest
+   ponowieniem). Reguła dopisana do **06_UIUX §3.6 pkt 7**.
+2. **Paginacja po `offset` mogła wyrenderować ten sam wiersz dwa razy.** Gdy
+   zbiór zmieni się między pobraniem stron, granice się przesuwają i pozycja
+   wchodzi na dwie strony — dwa węzły z tym samym `:key` psują patchowanie listy
+   w Vue. Naprawa: odsiew po `id` (`TItem extends { id: number }`), licznik
+   `loaded` liczony PO odsiewie, a `offset` dalej z surowej liczby pobranych
+   wierszy. Odsiew NIE naprawia pominięcia wiersza — to robi `invalidateQueries`,
+   po którym TanStack pobiera wszystkie wczytane strony na raz.
+
+**Świadomie zostaje**: paginacja `/import` (dług U25/U29), filtry
+czasu/trudności/oceny w `/przepisy` (API je ma, 06_UIUX §4 widok 2 ich nie chce
+— rewizja to decyzja właściciela), wirtualizacja i nieskończone przewijanie.
+**Nowy follow-up**: select przypisania konta na `/admin/rodziny` bierze jedną
+stronę z sufitem 200 bez „pokaż więcej" — to kontrolka formularza, nie ekran
+listy, i przy instancji powyżej 200 kont potrzebuje SZUKAJKI, nie doładowywania.
 
 ---
 

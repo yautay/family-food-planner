@@ -8,6 +8,7 @@ tu 404-owania cudzych zasobów — jest jedna widoczność i różne prawa zapis
 from __future__ import annotations
 
 from collections.abc import Sequence
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
@@ -16,7 +17,7 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deletion import UsedInRef
-from app.modules.catalog.models import MeasureKind, VerificationStatus
+from app.modules.catalog.models import CanonicalProduct, MeasureKind, VerificationStatus
 from app.modules.catalog.service import (
     register_product_reference_finder,
     unregister_product_reference_finder,
@@ -701,6 +702,87 @@ async def test_przelicznik_o_zerowej_gramaturze_jest_odrzucany(
         json={"unit_label": "garść", "grams_per_unit": "0"},
         headers=csrf_headers(db_client),
     )
+
+    assert response.status_code == 422
+
+
+# --- porządek listy (BATCH_19) ----------------------------------------------------------
+
+
+async def _stamp_created_at(
+    session: AsyncSession, product: CanonicalProduct, moment: datetime
+) -> None:
+    """Nadpisuje `created_at` — `func.now()` daje czas TRANSAKCJI, więc produkty
+    utworzone jednym testem miałyby identyczny znacznik i „najstarszy" nie
+    znaczyłby nic."""
+    product.created_at = moment
+    await session.flush()
+
+
+async def test_lista_produktow_domyslnie_alfabetycznie(
+    db_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """Brak `sort` = porządek sprzed BATCH_19; katalog przegląda się po nazwie."""
+    user = await create_user(db_session)
+    category = await create_category(db_session)
+    for name in ("Cebula", "Awokado", "Burak"):
+        await create_product(db_session, category=category, name=name)
+    await login(db_client, user.email)
+
+    body = (await db_client.get(PRODUCTS)).json()
+
+    assert [item["name"] for item in body["items"]] == ["Awokado", "Burak", "Cebula"]
+
+
+async def test_sort_created_at_uklada_kolejke_weryfikacji_od_najstarszych(
+    db_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """Ustalenie R4 (P1): kolejka weryfikacji ma się opróżniać od najstarszych.
+
+    Nazwy są w kolejności ODWROTNEJ do wieku, więc test rozróżnia „serwer
+    sortuje po `created_at`" od „serwer sortuje po nazwie". Do BATCH_19
+    porządek wieku nadawała przeglądarka POBRANEJ STRONIE — czyli układała po
+    wieku pięćdziesiątkę wybraną alfabetycznie i produkt spoza pierwszych nazw
+    był nieosiągalny. `limit=1` odtwarza tu tamtą granicę strony.
+    """
+    user = await create_user(db_session)
+    category = await create_category(db_session)
+    oldest = await create_product(db_session, category=category, name="Ziemniak")
+    middle = await create_product(db_session, category=category, name="Marchew")
+    newest = await create_product(db_session, category=category, name="Agrest")
+    await _stamp_created_at(db_session, oldest, datetime(2026, 1, 1, tzinfo=UTC))
+    await _stamp_created_at(db_session, middle, datetime(2026, 2, 1, tzinfo=UTC))
+    await _stamp_created_at(db_session, newest, datetime(2026, 3, 1, tzinfo=UTC))
+    await login(db_client, user.email)
+
+    body = (
+        await db_client.get(
+            PRODUCTS, params={"sort": "created_at", "verification_status": "unverified"}
+        )
+    ).json()
+
+    assert [item["name"] for item in body["items"]] == ["Ziemniak", "Marchew", "Agrest"]
+    assert body["total"] == 3
+
+    # Pierwsza strona wybiera NAJSTARSZY, nie pierwszy alfabetycznie.
+    first_page = (await db_client.get(PRODUCTS, params={"sort": "created_at", "limit": 1})).json()
+    assert [item["name"] for item in first_page["items"]] == ["Ziemniak"]
+
+    # Kolejna strona dowozi resztę — do ostatniej pozycji da się dojść (AC 1).
+    second_page = (
+        await db_client.get(PRODUCTS, params={"sort": "created_at", "limit": 1, "offset": 2})
+    ).json()
+    assert [item["name"] for item in second_page["items"]] == ["Agrest"]
+
+
+async def test_nieznany_porzadek_listy_jest_odrzucany(
+    db_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """`sort` jest zamkniętym słownikiem — literówka daje 422, nie cichy porządek."""
+    user = await create_user(db_session)
+    await login(db_client, user.email)
+
+    response = await db_client.get(PRODUCTS, params={"sort": "cena"})
 
     assert response.status_code == 422
 

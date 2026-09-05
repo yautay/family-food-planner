@@ -186,3 +186,41 @@ describe('AdminHouseholdsPage', () => {
     expect(createHousehold).toHaveBeenCalledWith('Nowakowie')
   })
 })
+
+/** Paginacja listy rodzin (BATCH_19) — jeden z sześciu ekranów z ustalenia R4 P1. */
+describe('AdminHouseholdsPage — paginacja', () => {
+  const PAGE_SIZE = 50
+  const TOTAL = 60
+  const ALL = Array.from({ length: TOTAL }, (_unused, index) => ({
+    ...HOUSEHOLD,
+    id: index + 1,
+    name: `Rodzina ${index + 1}`,
+  }))
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    fetchHousehold.mockResolvedValue(DETAIL)
+    fetchUsers.mockResolvedValue({ items: [ANNA], total: 1 })
+    fetchHouseholds.mockImplementation(({ offset = 0, limit = PAGE_SIZE }) =>
+      Promise.resolve({ items: ALL.slice(offset, offset + limit), total: TOTAL }),
+    )
+  })
+
+  it('pierwsza strona pokazuje limit rodzin i relację do całości', async () => {
+    const wrapper = await mountPage()
+
+    expect(wrapper.findAll('[data-testid^="household-row-"]')).toHaveLength(PAGE_SIZE)
+    expect(wrapper.get('[data-testid="households-total"]').text()).toContain('50 z 60')
+  })
+
+  it('„pokaż więcej" dowozi ostatnią rodzinę', async () => {
+    const wrapper = await mountPage()
+
+    await wrapper.get('[data-testid="households-load-more"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.findAll('[data-testid^="household-row-"]')).toHaveLength(TOTAL)
+    expect(wrapper.get(`[data-testid="household-row-${TOTAL}"]`).text()).toContain('Rodzina 60')
+    expect(wrapper.find('[data-testid="households-load-more"]').exists()).toBe(false)
+  })
+})

@@ -3259,6 +3259,18 @@ export interface components {
             updated_at: string;
         };
         /**
+         * ProductSort
+         * @description Porządek listy produktów (04_API §1).
+         *
+         *     Domyślnie alfabetycznie — katalog przegląda się po nazwie. `CREATED_AT`
+         *     istnieje dla KOLEJKI WERYFIKACJI (`?verification_status=unverified`), która
+         *     ma się opróżniać od najstarszych: do BATCH_19 układała po wieku dopiero to,
+         *     co serwer wybrał ALFABETYCZNIE, więc przy zbiorze większym niż strona
+         *     produkt spoza pierwszych nazw był z tego ekranu nieosiągalny (ustalenie R4).
+         * @enum {string}
+         */
+        ProductSort: "name" | "created_at";
+        /**
          * ProductUpdateRequest
          * @description Częściowa edycja pól opisowych produktu (USER).
          */
@@ -5379,6 +5391,7 @@ export interface operations {
                 category_id?: number | null;
                 verification_status?: components["schemas"]["VerificationStatus"] | null;
                 include_archived?: boolean;
+                sort?: components["schemas"]["ProductSort"];
             };
             header?: never;
             path?: never;

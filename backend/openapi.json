@@ -976,6 +976,15 @@
               "default": false,
               "title": "Include Archived"
             }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ProductSort",
+              "default": "name"
+            }
           }
         ],
         "responses": {
@@ -10759,6 +10768,15 @@
         ],
         "title": "ProductRead",
         "description": "Produkt na liście — komplet potrzebny kafelkowi i pickerowi."
+      },
+      "ProductSort": {
+        "type": "string",
+        "enum": [
+          "name",
+          "created_at"
+        ],
+        "title": "ProductSort",
+        "description": "Porządek listy produktów (04_API §1).\n\nDomyślnie alfabetycznie — katalog przegląda się po nazwie. `CREATED_AT`\nistnieje dla KOLEJKI WERYFIKACJI (`?verification_status=unverified`), która\nma się opróżniać od najstarszych: do BATCH_19 układała po wieku dopiero to,\nco serwer wybrał ALFABETYCZNIE, więc przy zbiorze większym niż strona\nprodukt spoza pierwszych nazw był z tego ekranu nieosiągalny (ustalenie R4)."
       },
       "ProductUpdateRequest": {
         "properties": {

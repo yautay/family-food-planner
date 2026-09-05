@@ -23,13 +23,14 @@ import {
 } from '@/api/adminHouseholds'
 import { fetchUsers } from '@/api/adminUsers'
 import { ApiError } from '@/api/client'
+import { PAGE_SIZE, usePaginatedList } from '@/api/pagination'
+import type { AdminHouseholdsFilters } from '@/api/queryKeys'
 import { queryKeys } from '@/api/queryKeys'
+import LoadMoreButton from '@/components/domain/LoadMoreButton.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { adminHouseholds as texts, common } from '@/lib/texts'
-
-const PAGE_SIZE = 50
+import { adminHouseholds as texts, common, listCount } from '@/lib/texts'
 
 interface UsedIn {
   type: string
@@ -39,13 +40,21 @@ interface UsedIn {
 
 const queryClient = useQueryClient()
 
-const filters = computed(() => ({ limit: PAGE_SIZE, offset: 0 }))
-const households = useQuery({
+// Filtry BEZ `offset` — numer strony niesie `pageParam` (src/api/pagination.ts).
+const filters = computed<AdminHouseholdsFilters>(() => ({ limit: PAGE_SIZE }))
+const households = usePaginatedList({
   queryKey: computed(() => queryKeys.adminHouseholds.list(filters.value)),
-  queryFn: () => fetchHouseholds(filters.value),
+  fetchPage: (page) => fetchHouseholds({ ...filters.value, ...page }),
 })
 
-/** Konta potrzebne do selecta przypisania — bez rodziny albo już w tej rodzinie. */
+/**
+ * Konta potrzebne do selecta przypisania — bez rodziny albo już w tej rodzinie.
+ *
+ * Jedna strona z sufitem serwera (200, 04_API §1), bez „pokaż więcej": to jest
+ * SELECT wewnątrz formularza, a nie ekran listy. Instancja Paśnika ma kilka
+ * kont; gdyby kiedyś przekroczyła 200, ten select potrzebuje szukajki, a nie
+ * doładowywania (odnotowane jako follow-up B19).
+ */
 const usersFilters = { limit: 200, offset: 0 }
 const users = useQuery({
   queryKey: queryKeys.adminUsers.list(usersFilters),
@@ -224,11 +233,14 @@ function detach(userId: number): void {
           {{ common.unexpectedError }}
         </p>
         <p
-          v-else-if="households.data.value?.items.length === 0"
+          v-else-if="households.items.value.length === 0"
           class="text-muted-foreground text-sm"
           data-testid="households-empty"
         >
           {{ texts.emptyState }}
+        </p>
+        <p v-else class="text-muted-foreground text-sm tabular-nums" data-testid="households-total">
+          {{ texts.title }}: {{ listCount(households.loaded.value, households.total.value) }}
         </p>
 
         <div v-if="actionError" class="grid gap-1" role="alert" data-testid="households-error">
@@ -242,9 +254,9 @@ function detach(userId: number): void {
           </ul>
         </div>
 
-        <ul v-if="households.data.value" class="grid gap-2" data-testid="households-list">
+        <ul v-if="households.items.value.length" class="grid gap-2" data-testid="households-list">
           <li
-            v-for="household in households.data.value.items"
+            v-for="household in households.items.value"
             :key="household.id"
             class="border-border grid gap-3 rounded-lg border p-3"
             :data-testid="`household-row-${household.id}`"
@@ -382,6 +394,16 @@ function detach(userId: number): void {
             </div>
           </li>
         </ul>
+
+        <LoadMoreButton
+          :loaded="households.loaded.value"
+          :total="households.total.value"
+          :has-more="households.hasMore.value"
+          :loading="households.isLoadingMore.value"
+          :failed="households.loadMoreFailed.value"
+          testid="households-load-more"
+          @more="households.loadMore"
+        />
       </CardContent>
     </Card>
   </section>

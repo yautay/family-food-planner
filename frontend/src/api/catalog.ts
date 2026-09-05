@@ -22,6 +22,7 @@ export type UnitWeightUpdate = components['schemas']['UnitWeightUpdateRequest']
 export type MeasureKind = components['schemas']['MeasureKind']
 export type Perishability = components['schemas']['Perishability']
 export type VerificationStatus = components['schemas']['VerificationStatus']
+export type ProductSort = components['schemas']['ProductSort']
 
 export interface ProductFilters {
   limit: number
@@ -30,6 +31,13 @@ export interface ProductFilters {
   category_id?: number
   verification_status?: VerificationStatus
   include_archived?: boolean
+  /**
+   * Porządek listy po stronie SERWERA (B19). Kolejka weryfikacji podaje
+   * `created_at`, bo „najstarsze na górze" ma być prawdą o całym zbiorze,
+   * a nie o pobranej stronie — sortowanie w przeglądarce układało po wieku
+   * pięćdziesiątkę wybraną alfabetycznie (ustalenie R4).
+   */
+  sort?: ProductSort
 }
 
 export function fetchProducts(filters: ProductFilters): Promise<ProductList> {

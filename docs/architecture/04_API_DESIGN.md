@@ -14,6 +14,17 @@ szczegółowe schematy powstają w batchach i żyją w OpenAPI.
   `rate_limited` (429).
 - **Paginacja** list: `?limit=` (default 50, max 200) `&offset=`;
   odpowiedź `{items, total}`. Wyszukiwanie: `?q=` (trigram po nazwie).
+  Sufit `limit` jest twardy — UI dochodzi do dalszych pozycji ROSNĄCYM
+  `offset` („pokaż więcej", 06_UIUX §3.6), nie podnoszeniem `limit`.
+- **Porządek listy** należy do SERWERA. Zasób, którego ekran obiecuje
+  konkretną kolejność, przyjmuje parametr `?sort=` z zamkniętym słownikiem
+  (literówka = 422). Dziś: `GET /products?sort=name|created_at` (domyślnie
+  `name`; `created_at` dla kolejki weryfikacji, która ma się opróżniać od
+  najstarszych) i `GET /pantry?sort=expiry|name`. Przy podanym `?q=` najlepsze
+  trafienia trigramu idą pierwsze, a `sort` porządkuje resztę. Porządek nadany
+  POBRANEJ STRONIE w przeglądarce jest błędem: układa wycinek wybrany innym
+  kryterium, więc przy zbiorze większym niż strona część danych staje się
+  nieosiągalna (ustalenie R4, naprawione w BATCH_19).
 - **Kwoty/ilości**: stringi dziesiętne w JSON (`"12.5"`) — bez utraty
   precyzji NUMERIC; frontend używa parsera dziesiętnego, nie float, tam
   gdzie liczy (a liczy tylko prezentacyjnie).

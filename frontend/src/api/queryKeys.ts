@@ -4,23 +4,31 @@
  * Każdy moduł dopisuje tu swoje klucze — dzięki temu `invalidateQueries`
  * w mutacjach odwołuje się do jednego źródła prawdy, a nie do literałów
  * rozsianych po komponentach.
+ *
+ * **`offset` jest w tych filtrach OPCJONALNY i ekrany paginowane go NIE
+ * PODAJĄ** (BATCH_19). Numer strony żyje w `pageParam` `useInfiniteQuery`
+ * (`src/api/pagination.ts`), a nie w kluczu: klucz z offsetem tworzyłby osobny
+ * wpis cache'u per strona, więc `invalidateQueries` po mutacji trafiałby
+ * w jedną z nich, a reszta zostawałaby nieodświeżona. Pole zostaje dla
+ * pickerów, które pobierają JEDNĄ krótką stronę (`offset: 0`) i paginacji
+ * nie mają.
  */
 
 export interface AdminUsersFilters {
   limit: number
-  offset: number
+  offset?: number
   q?: string
 }
 
 export interface AdminHouseholdsFilters {
   limit: number
-  offset: number
+  offset?: number
   q?: string
 }
 
 export interface RecipesFilters {
   limit: number
-  offset: number
+  offset?: number
   q?: string
   tag?: number[]
   prep_time_max?: number
@@ -32,16 +40,18 @@ export interface RecipesFilters {
 
 export interface ProductsFilters {
   limit: number
-  offset: number
+  offset?: number
   q?: string
   category_id?: number
   verification_status?: 'unverified' | 'verified'
   include_archived?: boolean
+  /** Porządek CAŁEGO zbioru — kolejka weryfikacji sortuje na serwerze (B19). */
+  sort?: 'name' | 'created_at'
 }
 
 export interface RetailFiltersKey {
   limit: number
-  offset: number
+  offset?: number
   canonical_product_id?: number
   store_id?: number
   q?: string
@@ -54,13 +64,13 @@ export interface StoresFiltersKey {
 
 export interface ShoppingListsFiltersKey {
   limit: number
-  offset: number
+  offset?: number
   status?: 'active' | 'expired'
 }
 
 export interface PantryFiltersKey {
   limit: number
-  offset: number
+  offset?: number
   q?: string
   category_id?: number
   sort?: 'expiry' | 'name'

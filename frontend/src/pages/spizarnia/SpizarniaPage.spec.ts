@@ -208,3 +208,55 @@ describe('SpizarniaPage', () => {
     expect(wrapper.find('[data-testid="pantry-card-1"]').exists()).toBe(false)
   })
 })
+
+/**
+ * Paginacja spiżarni (BATCH_19). Strona jest tu WIĘKSZA niż domyślne 50
+ * (`PAGE_SIZE` = 100): spiżarnia to inwentarz przeglądany „ile mam czego",
+ * a nie przeszukiwany katalog — zmniejszenie strony dołożyłoby kliknięć
+ * tam, gdzie ich dziś nie ma (06_UIUX §2).
+ */
+describe('SpizarniaPage — paginacja', () => {
+  const PAGE_SIZE = 100
+  const TOTAL = 130
+  const ALL = Array.from({ length: TOTAL }, (_unused, index) =>
+    item({ id: index + 1, product_id: index + 1 }),
+  )
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    localStorage.clear()
+    fetchCategories.mockResolvedValue({ items: [{ id: 5, name: 'Suche', position: 1 }], total: 1 })
+    fetchPantryItems.mockImplementation(({ offset = 0, limit = PAGE_SIZE }) =>
+      Promise.resolve({ items: ALL.slice(offset, offset + limit), total: TOTAL }),
+    )
+  })
+
+  it('pierwsza strona pokazuje sto pozycji i relację do całości', async () => {
+    const wrapper = await mountPage()
+
+    expect(wrapper.findAll('[data-testid^="pantry-card-"]')).toHaveLength(PAGE_SIZE)
+    expect(wrapper.get('[data-testid="pantry-total"]').text()).toContain('100 z 130')
+  })
+
+  it('„pokaż więcej" dowozi resztę spiżarni', async () => {
+    const wrapper = await mountPage()
+
+    await wrapper.get('[data-testid="pantry-load-more"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.findAll('[data-testid^="pantry-card-"]')).toHaveLength(TOTAL)
+    expect(fetchPantryItems).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ limit: PAGE_SIZE, offset: PAGE_SIZE }),
+    )
+    expect(wrapper.find('[data-testid="pantry-load-more"]').exists()).toBe(false)
+  })
+
+  it('zbiór mieszczący się na stronie nie dostaje przycisku', async () => {
+    fetchPantryItems.mockResolvedValue({ items: [item()], total: 1 })
+
+    const wrapper = await mountPage()
+
+    expect(wrapper.find('[data-testid="pantry-load-more"]').exists()).toBe(false)
+  })
+})

@@ -11,15 +11,15 @@ import { refDebounced } from '@vueuse/core'
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
-import type { RecipeFilters } from '@/api/recipes'
+import { PAGE_SIZE, usePaginatedList } from '@/api/pagination'
 import { fetchRecipes, fetchTags } from '@/api/recipes'
+import type { RecipesFilters } from '@/api/queryKeys'
 import { queryKeys } from '@/api/queryKeys'
+import LoadMoreButton from '@/components/domain/LoadMoreButton.vue'
 import RecipeCard from '@/components/domain/RecipeCard.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { common, recipes as texts } from '@/lib/texts'
-
-const PAGE_SIZE = 50
+import { common, listCount, recipes as texts } from '@/lib/texts'
 
 const router = useRouter()
 const search = ref('')
@@ -28,19 +28,19 @@ const selectedTagIds = ref<number[]>([])
 
 const tags = useQuery({ queryKey: queryKeys.tags.all, queryFn: fetchTags })
 
-const filters = computed<RecipeFilters>(() => ({
+// Filtry BEZ `offset` — numer strony niesie `pageParam` (src/api/pagination.ts).
+const filters = computed<RecipesFilters>(() => ({
   limit: PAGE_SIZE,
-  offset: 0,
   q: debouncedSearch.value.trim() || undefined,
   tag: selectedTagIds.value.length ? [...selectedTagIds.value] : undefined,
 }))
 
-const recipes = useQuery({
+const recipes = usePaginatedList({
   queryKey: computed(() => queryKeys.recipes.list(filters.value)),
-  queryFn: () => fetchRecipes(filters.value),
+  fetchPage: (page) => fetchRecipes({ ...filters.value, ...page }),
 })
 
-const items = computed(() => recipes.data.value?.items ?? [])
+const items = recipes.items
 const isEmpty = computed(() => !recipes.isPending.value && items.value.length === 0)
 const isFiltering = computed(
   () => debouncedSearch.value.trim().length > 0 || selectedTagIds.value.length > 0,
@@ -105,8 +105,9 @@ function openRecipe(id: number): void {
       </ul>
     </div>
 
+    <!-- Relacja widocznych do wszystkich, nie samo `total` (ustalenie R4). -->
     <p class="text-muted-foreground text-sm tabular-nums" data-testid="recipes-total">
-      Przepisów: {{ recipes.data.value?.total ?? 0 }}
+      Przepisów: {{ listCount(recipes.loaded.value, recipes.total.value) }}
     </p>
 
     <p v-if="recipes.isPending.value" class="text-muted-foreground text-sm">
@@ -139,5 +140,15 @@ function openRecipe(id: number): void {
         </button>
       </li>
     </ul>
+
+    <LoadMoreButton
+      :loaded="recipes.loaded.value"
+      :total="recipes.total.value"
+      :has-more="recipes.hasMore.value"
+      :loading="recipes.isLoadingMore.value"
+      :failed="recipes.loadMoreFailed.value"
+      testid="recipes-load-more"
+      @more="recipes.loadMore"
+    />
   </section>
 </template>

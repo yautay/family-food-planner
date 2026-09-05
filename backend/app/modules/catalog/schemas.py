@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
+from enum import StrEnum
 from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
@@ -56,6 +57,20 @@ GlycemicIndex = Annotated[
 GramsPerUnit = Annotated[
     Decimal, Field(gt=Decimal("0"), le=Decimal("999999"), max_digits=8, decimal_places=2)
 ]
+
+
+class ProductSort(StrEnum):
+    """Porządek listy produktów (04_API §1).
+
+    Domyślnie alfabetycznie — katalog przegląda się po nazwie. `CREATED_AT`
+    istnieje dla KOLEJKI WERYFIKACJI (`?verification_status=unverified`), która
+    ma się opróżniać od najstarszych: do BATCH_19 układała po wieku dopiero to,
+    co serwer wybrał ALFABETYCZNIE, więc przy zbiorze większym niż strona
+    produkt spoza pierwszych nazw był z tego ekranu nieosiągalny (ustalenie R4).
+    """
+
+    NAME = "name"
+    CREATED_AT = "created_at"
 
 
 # --- kategorie -------------------------------------------------------------------

@@ -980,3 +980,22 @@ export const transferSections: Record<string, string> = {
 export function transferSectionLabel(name: string): string {
   return transferSections[name] ?? name
 }
+
+/**
+ * Paginacja list — wzorzec „pokaż więcej" (BATCH_19, opisany w 06_UIUX §3.6).
+ *
+ * `listCount` mówi RELACJĘ widocznych do wszystkich („50 z 185"), a nie samo
+ * `total`. Do BATCH_19 ekrany pokazywały wyłącznie `total`, więc katalog pisał
+ * „Produktów: 185" i renderował 50 — liczba i widok kłamały razem (ustalenie R4).
+ */
+export const pagination = {
+  showMore: 'Pokaż więcej',
+  loadingMore: 'Wczytywanie…',
+  loadMoreFailed: 'Nie udało się wczytać kolejnych pozycji. Spróbuj ponownie.',
+  remaining: (count: number) => `pozostało ${count}`,
+} as const
+
+/** „50 z 185" — ile pozycji widać z ilu wszystkich. */
+export function listCount(loaded: number, total: number): string {
+  return `${loaded} z ${total}`
+}

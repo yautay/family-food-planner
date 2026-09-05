@@ -76,19 +76,51 @@ Stan faktyczny po BATCH_11 — trzy rzeczy, które wiążą kolejne trasy public
   `client.ts` NIE dostał trybu warunkowego, bo jeden `if` w warstwie HTTP całej
   aplikacji łatwo pomylić, a pomyłka oznaczałaby wysyłanie cudzej sesji.
 
-Stan faktyczny po REVIEW R4 — **żaden ekran listy nie ma paginacji**. API
-paginuje (`?limit=&offset=` → `{items,total}`), ale KAŻDA strona wysyła
-`offset: 0` ze stałym limitem: `/produkty` 50, `/przepisy` 50, `/spizarnia`
-100, `/admin/weryfikacja` 50, `/admin/uzytkownicy` 50, `/admin/rodziny` 50,
-`/import` bez paginacji świadomie (importów jest z natury mało). Do dziś to
-nie bolało — seed demo ma 15 produktów i 5 przepisów. Zaboli natychmiast po
-ręcznym imporcie ośmiu jadłospisów, który daje **103 dania i 185 nazw
-produktów**: `/produkty` pokaże „Produktów: 185" i wyrenderuje 50, bez
-żadnego śladu, że reszta istnieje. Najgorszy przypadek to
-`/admin/weryfikacja`, bo sortuje „najstarsze na górze" po stronie KLIENTA,
-czyli sortuje pięćdziesiątkę wybraną alfabetycznie przez serwer — kolejka
-weryfikacji nigdy nie pokaże produktu spoza pierwszych 50 nazw.
-Naprawa: karta `BATCH_19_FIX_LIST_PAGINATION` (bramka przed B18).
+~~Stan faktyczny po REVIEW R4 — żaden ekran listy nie ma paginacji.~~
+**NIEAKTUALNE — dług zamknięty w BATCH_19.** Akapit opisywał wyłącznie ten
+dług (każdy ekran wysyłał `offset: 0` ze stałym limitem, a `/produkty` pisało
+„Produktów: 185" i renderowało 50), więc razem z naprawą traci przedmiot.
+
+Stan faktyczny po BATCH_19 — **paginacja to jeden wzorzec dla wszystkich
+ekranów listowych**, opisany w 06_UIUX §3.6:
+
+- `src/api/pagination.ts` — `usePaginatedList` na `useInfiniteQuery`; zwraca
+  `items`/`total`/`loaded`/`hasMore`/`isPending`/`isLoadingMore`/`loadMore`.
+  **`offset` NIE wchodzi do klucza zapytań** — niesie go `pageParam`, więc
+  klucz listy jest ten sam co przed batchem i `invalidateQueries` po mutacji
+  nadal trafia w całą listę (klucz per strona rozbiłby cache na wpisy, z których
+  inwalidacja odświeżałaby jeden). Dlatego `offset` w interfejsach filtrów
+  w `queryKeys.ts` jest OPCJONALNY: podają go tylko pickery, które pobierają
+  jedną krótką stronę i paginacji nie mają.
+- `src/components/domain/LoadMoreButton.vue` — przycisk „Pokaż więcej (N)",
+  ≥44 px, spinner na sobie zamiast skeletonu listy; `failed` dokłada przy nim
+  komunikat ponowienia.
+- **Rozdzielenie stanów błędu jest częścią kontraktu**: `isError` zapala się
+  WYŁĄCZNIE, gdy padła pierwsza strona (nie ma czego pokazać), a nieudane
+  doładowanie to `loadMoreFailed` — lista zostaje na ekranie. Wystawienie
+  ekranowi surowego `isError` całego `useInfiniteQuery` kasowało 50 poprawnych
+  wierszy po jednym nieudanym kliknięciu.
+- Pozycje są ODSIEWANE po `id` (`TItem extends { id: number }`): paginacja po
+  `offset` może oddać ten sam wiersz na dwóch stronach, gdy zbiór zmieni się
+  między pobraniami, a dwa węzły z tym samym `:key` psują patchowanie listy.
+- Ekrany i rozmiary stron: `/produkty` 50, `/przepisy` 50, `/spizarnia` **100**
+  (inwentarz przeglądany „ile mam czego", nie przeszukiwany katalog — mniejsza
+  strona dołożyłaby kliknięć), `/admin/weryfikacja` 50, `/admin/uzytkownicy` 50,
+  `/admin/rodziny` 50. `/import` zostaje bez paginacji ŚWIADOMIE (dług U25/U29 —
+  importów jest z natury mało).
+- Każdy z tych ekranów pokazuje licznik `listCount(loaded, total)` („50 z 185"),
+  nie samo `total`.
+- **`/admin/weryfikacja` sortuje na SERWERZE** (`GET /products?sort=created_at`,
+  04_API §1). Sortowanie po stronie klienta układało po wieku pięćdziesiątkę,
+  którą serwer wybrał alfabetycznie, więc produkt spoza pierwszych 50 nazw był
+  z tego ekranu nieosiągalny — a to jest ekran, na którym uzupełnia się wartości
+  odżywcze po imporcie jadłospisów. Zmierzone na 68 pozycjach w kolejce: stara
+  ścieżka nie pokazywała na pierwszej stronie ANI najstarszego realnego produktu,
+  ANI ostatniego z zaimportowanej partii.
+- Świadomie POZA zakresem: wirtualizacja list i nieskończone przewijanie
+  sterowane scrollem; select przypisania konta na `/admin/rodziny` bierze jedną
+  stronę z sufitem 200 (to kontrolka formularza, nie ekran listy — przy większej
+  instancji potrzebuje szukajki, nie doładowywania).
 
 ## 4. Komponenty
 

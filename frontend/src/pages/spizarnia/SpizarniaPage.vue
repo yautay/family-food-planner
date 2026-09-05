@@ -22,15 +22,18 @@ import { computed, reactive, ref } from 'vue'
 import { fetchCategories } from '@/api/catalog'
 import type { MeasureKind, Product, ProductDetail } from '@/api/catalog'
 import { ApiError } from '@/api/client'
-import type { PantryFilters, PantryItem, PantrySort } from '@/api/pantry'
+import { usePaginatedList } from '@/api/pagination'
+import type { PantryItem, PantrySort } from '@/api/pantry'
 import {
   createPantryItem,
   deletePantryItem,
   fetchPantryItems,
   updatePantryItem,
 } from '@/api/pantry'
+import type { PantryFiltersKey } from '@/api/queryKeys'
 import { queryKeys } from '@/api/queryKeys'
 import AmountInput from '@/components/domain/AmountInput.vue'
+import LoadMoreButton from '@/components/domain/LoadMoreButton.vue'
 import PantryItemCard from '@/components/domain/PantryItemCard.vue'
 import PantryItemRow from '@/components/domain/PantryItemRow.vue'
 import ProductPicker from '@/components/domain/ProductPicker.vue'
@@ -40,9 +43,16 @@ import { Input } from '@/components/ui/input'
 import { isoDate } from '@/lib/dates'
 import { EXPIRY_SOON_DAYS } from '@/lib/expiry'
 import { baseUnitFor } from '@/lib/format'
-import { common, pantry as texts } from '@/lib/texts'
+import { common, listCount, pantry as texts } from '@/lib/texts'
 import { usePantryViewStore } from '@/stores/pantryView'
 
+/**
+ * Strona większa niż domyślne 50 (`api/pagination.PAGE_SIZE`) z powodu
+ * domenowego: spiżarnia to jeden inwentarz domu, przeglądany „ile mam czego",
+ * a nie przeszukiwany katalog. Zmniejszenie strony DOŁOŻYŁOBY kliknięć tam,
+ * gdzie dziś ich nie ma (06_UIUX §2) — B19 dokłada dosięgalność reszty,
+ * nie przestawia rozmiarów stron.
+ */
 const PAGE_SIZE = 100
 /** Podpowiedzi lokalizacji — słownika nie ma, to wolny tekst (karta B08). */
 const LOCATION_HINTS = ['szafka', 'lodówka', 'zamrażarka', 'piwnica'] as const
@@ -61,21 +71,22 @@ const expiringOnly = ref(false)
 
 const categories = useQuery({ queryKey: queryKeys.categories.all, queryFn: fetchCategories })
 
-const filters = computed<PantryFilters>(() => ({
+// Filtry BEZ `offset` — numer strony niesie `pageParam` (src/api/pagination.ts).
+const filters = computed<PantryFiltersKey>(() => ({
   limit: PAGE_SIZE,
-  offset: 0,
   q: debouncedSearch.value.trim() || undefined,
   category_id: categoryId.value ?? undefined,
   sort: sort.value,
   expires_within_days: expiringOnly.value ? EXPIRY_SOON_DAYS : undefined,
 }))
 
-const pantry = useQuery({
+const pantry = usePaginatedList({
   queryKey: computed(() => queryKeys.pantry.list(filters.value)),
-  queryFn: () => fetchPantryItems(filters.value),
+  fetchPage: (page) => fetchPantryItems({ ...filters.value, ...page }),
+  pageSize: PAGE_SIZE,
 })
 
-const items = computed(() => pantry.data.value?.items ?? [])
+const items = pantry.items
 const isEmpty = computed(() => !pantry.isPending.value && items.value.length === 0)
 const isFiltering = computed(
   () => debouncedSearch.value.trim().length > 0 || categoryId.value !== null || expiringOnly.value,
@@ -259,8 +270,9 @@ function confirmRemove(item: PantryItem): void {
     </Card>
 
     <div class="flex flex-wrap items-center justify-between gap-2">
+      <!-- Relacja widocznych do wszystkich, nie samo `total` (ustalenie R4). -->
       <p class="text-muted-foreground text-sm tabular-nums" data-testid="pantry-total">
-        {{ texts.itemsTotal }} {{ pantry.data.value?.total ?? 0 }}
+        {{ texts.itemsTotal }} {{ listCount(pantry.loaded.value, pantry.total.value) }}
       </p>
 
       <div class="flex flex-wrap items-center gap-2">
@@ -416,5 +428,15 @@ function confirmRemove(item: PantryItem): void {
         @remove="confirmRemove"
       />
     </ul>
+
+    <LoadMoreButton
+      :loaded="pantry.loaded.value"
+      :total="pantry.total.value"
+      :has-more="pantry.hasMore.value"
+      :loading="pantry.isLoadingMore.value"
+      :failed="pantry.loadMoreFailed.value"
+      testid="pantry-load-more"
+      @more="pantry.loadMore"
+    />
   </section>
 </template>

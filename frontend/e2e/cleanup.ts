@@ -323,6 +323,30 @@ async function deleteShoppingLists(
   }
 }
 
+/**
+ * Kasuje kategorie o nazwie z danym prefiksem (konto E2E jest ADMIN-em).
+ *
+ * MUSI iść PO `clearProducts`: `canonical_products.category_id` trzyma kategorię
+ * (409 z listą użyć), więc odwrotna kolejność zostawia kategorię w słowniku
+ * globalnym — a ten widzą wszystkie ekrany, także po zakończeniu przebiegu.
+ * Doszło w B19: spec paginacji zakłada WŁASNĄ kategorię, bo filtr kategorii daje
+ * porządek deterministyczny, którego szukajka trigramowa nie gwarantuje.
+ */
+export async function clearCategories(request: APIRequestContext, prefix: string): Promise<void> {
+  const headers = await csrfHeaders(request)
+  await deleteCategories(request, headers, byPrefix(prefix))
+}
+
+async function deleteCategories(
+  request: APIRequestContext,
+  headers: Record<string, string>,
+  matches: (name: string) => boolean,
+): Promise<void> {
+  for (const category of await listNamed(request, `${API}/categories`, matches)) {
+    await tryDelete(request, `${API}/categories/${category.id}`, headers)
+  }
+}
+
 /** Kasuje produkty kanoniczne o nazwie z danym prefiksem (konto E2E jest ADMIN-em). */
 export async function clearProducts(request: APIRequestContext, prefix: string): Promise<void> {
   const headers = await csrfHeaders(request)
@@ -362,6 +386,7 @@ export async function cleanupE2eData(
   await clearRetailProducts(request, namePrefix)
   await clearStores(request, namePrefix)
   await clearProducts(request, namePrefix)
+  await clearCategories(request, namePrefix)
 }
 
 /**
@@ -441,4 +466,5 @@ export async function purgeE2eLeftovers(
   await deleteRetailProducts(request, headers, anyE2e)
   await deleteStores(request, headers, anyE2e)
   await deleteProducts(request, headers, anyE2e)
+  await deleteCategories(request, headers, anyE2e)
 }

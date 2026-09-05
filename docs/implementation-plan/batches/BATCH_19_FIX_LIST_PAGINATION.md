@@ -156,21 +156,125 @@ walidowany po stronie serwera (sufit 200, 04_API §1) i UI nie może go obejść
 
 ## Implementation checklist
 
-- [ ] Wzorzec „pokaż więcej" wybrany i uzasadniony
-- [ ] Sześć ekranów z tabeli §Context przerobionych
-- [ ] `/admin/weryfikacja`: sortowanie rozstrzygnięte (serwer albo skreślona
-      deklaracja)
-- [ ] Licznik „widoczne z wszystkich" na `/produkty` i `/przepisy`
-- [ ] vitest per ekran + E2E paginacji
-- [ ] 06_UIUX i 05_FRONTEND zaktualizowane
+- [x] Wzorzec „pokaż więcej" wybrany i uzasadniony
+- [x] Sześć ekranów z tabeli §Context przerobionych
+- [x] `/admin/weryfikacja`: sortowanie rozstrzygnięte (SERWER — `?sort=created_at`)
+- [x] Licznik „widoczne z wszystkich" na `/produkty` i `/przepisy` (oraz na
+      pozostałych czterech ekranach)
+- [x] vitest per ekran + E2E paginacji
+- [x] 06_UIUX i 05_FRONTEND zaktualizowane (plus 04_API §1 — konwencja `?sort=`)
 
 ## Verification checklist
 
-- [ ] `task check` zielony
-- [ ] E2E dwa kolejne przebiegi z tym samym wynikiem
-- [ ] Acceptance Criteria 1–5 odhaczone
-- [ ] Commit `batch(19): ...`, `git status` czysty
+- [x] `task check` zielony
+- [x] E2E dwa kolejne przebiegi z tym samym wynikiem
+- [x] Acceptance Criteria 1–5 odhaczone
+- [x] Commit `batch(19): ...`, `git status` czysty
 
 ## Completion notes
 
-(wypełnia agent wykonujący)
+### Wzorzec i jego uzasadnienie (decyzja pozostawiona implementującemu)
+
+**Przyjęte: „pokaż więcej" z rosnącym `offset`, zrealizowane na
+`useInfiniteQuery`.** Jeden composable `frontend/src/api/pagination.ts`
+(`usePaginatedList`) + jeden komponent `components/domain/LoadMoreButton.vue`,
+potem sześć użyć — wzorzec NIE jest skopiowany do sześciu plików.
+
+Rekomendacja R4 („pokaż więcej", nie numerowane strony) przyjęta bez zmian:
+aplikacja jest mobile-first (06_UIUX §5), a numerowana paginacja na telefonie to
+cele dotykowe wielkości znaczka pocztowego. Doładowanie nie gubi tego, co
+użytkownik przewinął, więc nie kosztuje kliknięć na powrót (06_UIUX §2).
+
+**Dlaczego `useInfiniteQuery`, a nie zwykłe `useQuery` z rosnącym `limit`** —
+trzy powody, każdy sam wystarczający:
+
+1. **Sufit `limit` to 200** (04_API §1). Rosnący limit rozbiłby się o niego przy
+   201. pozycji, a §Security tej karty wprost zabrania obchodzenia sufitu.
+2. **Rosnący limit pobiera wszystko od nowa.** Trzecie kliknięcie ściągałoby 150
+   pozycji, żeby pokazać 50 nowych.
+3. **`offset` NIE wchodzi do klucza zapytań** — niesie go `pageParam`. To omija
+   pułapkę z §Implementation Notes: klucz z offsetem tworzyłby osobny wpis
+   cache'u per strona, więc `invalidateQueries` po mutacji odświeżałby jedną
+   z nich, a reszta zostawałaby nieaktualna. Klucz listy jest DOKŁADNIE ten sam
+   co przed batchem, więc żadna istniejąca inwalidacja nie wymagała zmiany.
+   Konsekwencja: `offset` w interfejsach filtrów w `queryKeys.ts` jest teraz
+   OPCJONALNY (podają go tylko pickery, które biorą jedną krótką stronę).
+
+Rozmiary stron zostały jak były (`/spizarnia` 100, pozostałe 50). Batch dokłada
+DOSIĘGALNOŚĆ, nie przestawia stron; zmniejszenie strony spiżarni dołożyłoby
+kliknięć tam, gdzie ich dziś nie ma (06_UIUX §2).
+
+### Sortowanie kolejki weryfikacji — rozstrzygnięte na SERWER
+
+Karta dawała wybór: parametr sortowania albo skreślenie deklaracji „najstarsze
+na górze". Wybrany serwer, bo `/admin/weryfikacja` to ekran, na którym
+właściciel uzupełnia wartości odżywcze zaraz po imporcie — kolejność „od
+najstarszych" jest tam funkcją, nie ozdobą.
+
+Doszło: `ProductSort` (`StrEnum`, wzorzec `PantrySort`), parametr `sort`
+w `GET /products` i w `CatalogService.list_products`, porządek
+`(created_at, id)`. `id` domyka porządek, bo `created_at` nadaje `now()`
+TRANSAKCJI — wiersze utworzone jednym żądaniem mają identyczny znacznik i bez
+tie-breakera kolejność stron nie byłaby stabilna między zapytaniami. Przy
+podanym `?q=` prefiks similarity zostaje pierwszy (wzorzec
+`pantry.service._ordering`).
+
+**Zmierzone na żywym stacku, nie z lektury kodu** (68 pozycji w kolejce bazy
+dev: 8 istniejących + 60 zaseedowanych przez API): stara ścieżka — serwer
+sortuje po `name`, strona układa pobraną pięćdziesiątkę po `created_at` — nie
+pokazywała na pierwszej stronie ANI najstarszego realnego produktu („Oliwa
+z oliwek"), ANI ostatniego z zaimportowanej sześćdziesiątki. Po naprawie
+pierwsza strona zaczyna się od najstarszego, a druga (offset=50) dowozi
+pozostałe 18. Dane testowe usunięte po sprawdzeniu — baza dev wróciła do stanu
+wejściowego (8 niezweryfikowanych, zero śladów `B19%`).
+
+### Ustalenia `/code-review` (poziom high) — 3 znalezione, 3 naprawione
+
+1. **Nieudane doładowanie kasowało wiersze, które już były na ekranie**
+   (`pagination.ts`). `isError` wystawiał stan błędu CAŁEGO `useInfiniteQuery`,
+   a ten zapala się także po nieudanym `fetchNextPage`. Odtworzone probem: po
+   padnięciu drugiej strony liczba kart spadała z 50 na 0 i znikał
+   `products-list`, a licznik dalej mówił „50 z 60" — czyli wracał ten sam
+   rozjazd liczby z widokiem, po który ten batch istnieje. Naprawa: `isError`
+   tylko przy `pages.length === 0`, nowy `loadMoreFailed` (lista zostaje,
+   komunikat siada przy przycisku, bo on jest ponowieniem). Reguła dopisana do
+   **06_UIUX §3.6 pkt 7**. Testy: dwa przypadki w `ProduktyPage.spec.ts` + dwa
+   w `LoadMoreButton.spec.ts`.
+2. **Paginacja po `offset` mogła wyrenderować ten sam wiersz dwa razy**
+   (`pagination.ts`). Zmiana zbioru między pobraniem stron przesuwa ich granice,
+   więc pozycja wchodzi na dwie strony, a dwa węzły z tym samym `:key` psują
+   patchowanie listy w Vue. Naprawa: odsiew po `id`
+   (`TItem extends { id: number }`), `loaded` liczony PO odsiewie (licznik ma
+   zgadzać się z tym, co widać), `offset` dalej z surowej liczby pobranych
+   wierszy. Odsiew nie naprawia POMINIĘCIA wiersza — to robi
+   `invalidateQueries`, po którym TanStack pobiera wszystkie wczytane strony na
+   raz; kompromis opisany w nagłówku pliku i w 05_FRONTEND §3.
+3. **Kolejność importów w `catalog/service.py`** łamała regułę isort i wywaliłaby
+   `lint-be`. Naprawione `ruff check --fix` + `ruff format`.
+
+### Odstępstwa od karty
+
+- **Poza literą karty (na plus)**: licznik „widoczne z wszystkich" dostały
+  WSZYSTKIE sześć ekranów, nie tylko `/produkty` i `/przepisy` — na
+  `/admin/uzytkownicy` i `/admin/rodziny` licznika nie było wcale, a bez niego
+  „pokaż więcej" nie mówi, ile jeszcze zostało.
+- **Poza literą karty (wymuszone)**: `e2e/cleanup.ts` dostał `clearCategories`.
+  Spec paginacji potrzebuje WŁASNEJ kategorii, bo filtr kategorii daje porządek
+  deterministyczny, którego szukajka trigramowa nie gwarantuje; bez sprzątania
+  kategoria zostawałaby w słowniku GLOBALNYM, widocznym na wszystkich ekranach.
+  Idzie PO `clearProducts` (FK z 409).
+- **Dokumentacja szersza niż §Stages**: doszła konwencja `?sort=` w **04_API
+  §1** (porządek listy należy do serwera). Bez tego wpisu następny ekran
+  z obiecaną kolejnością powtórzyłby błąd `/admin/weryfikacja`.
+- Filtrów czasu/trudności/oceny w `/przepisy` NIE dodano (§Out of Scope, reguła
+  1 briefu) — dopisane w 06_UIUX §4 widok 2 jako świadomy brak wymagający
+  decyzji właściciela.
+- Migracji nie było — batch nie tyka schematu, jedna głowa `0015` bez zmian.
+
+### Follow-up (nowy, poza zakresem tego batcha)
+
+Select przypisania konta na `/admin/rodziny` (`usersFilters = { limit: 200 }`)
+bierze jedną stronę z sufitem serwera, bez „pokaż więcej". To kontrolka
+formularza, nie ekran listy, więc przy instancji powyżej 200 kont potrzebuje
+SZUKAJKI (jak `ProductPicker`), a nie doładowywania. Dziś bezprzedmiotowe —
+instancja ma kilka kont.

@@ -8,42 +8,51 @@
  * niego backend odpowie 422 i pokaże, czego brakuje.
  *
  * Najstarsze na górze: kolejka ma się opróżniać, a nie rosnąć od góry.
+ * Porządek nadaje SERWER (`?sort=created_at`, BATCH_19), nie przeglądarka.
+ * Do BATCH_19 strona układała po `created_at` to, co serwer wybrał
+ * ALFABETYCZNIE po `name` — czyli sortowała POBRANĄ PIĘĆDZIESIĄTKĘ. Przy 185
+ * produktach z importu jadłospisów produkt spoza pierwszych pięćdziesięciu
+ * nazw był z tego ekranu NIEOSIĄGALNY, a to jest ekran, na którym uzupełnia
+ * się wartości odżywcze po imporcie (ustalenie R4, P1).
+ *
  * Lista korzysta z tego samego klucza zapytań co katalog (`products.list`
  * z filtrem statusu), więc jedna inwalidacja odświeża oba widoki.
  */
-import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
-import { computed, ref } from 'vue'
+import { useMutation, useQueryClient } from '@tanstack/vue-query'
+import { ref } from 'vue'
 
-import type { Product, ProductFilters } from '@/api/catalog'
+import type { Product } from '@/api/catalog'
 import { fetchProducts, verifyProduct } from '@/api/catalog'
 import { ApiError } from '@/api/client'
+import { PAGE_SIZE, usePaginatedList } from '@/api/pagination'
+import type { ProductsFilters } from '@/api/queryKeys'
 import { queryKeys } from '@/api/queryKeys'
+import LoadMoreButton from '@/components/domain/LoadMoreButton.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatNutrient } from '@/lib/format'
-import { adminVerification as texts, common, products as productTexts } from '@/lib/texts'
-
-const PAGE_SIZE = 50
+import {
+  adminVerification as texts,
+  common,
+  listCount,
+  products as productTexts,
+} from '@/lib/texts'
 
 const queryClient = useQueryClient()
 
-const filters: ProductFilters = {
+// Filtry BEZ `offset` — numer strony niesie `pageParam` (src/api/pagination.ts).
+const filters: ProductsFilters = {
   limit: PAGE_SIZE,
-  offset: 0,
   verification_status: 'unverified',
+  sort: 'created_at',
 }
 
-const queue = useQuery({
+const queue = usePaginatedList({
   queryKey: queryKeys.products.list(filters),
-  queryFn: () => fetchProducts(filters),
+  fetchPage: (page) => fetchProducts({ ...filters, ...page }),
 })
 
-/** Najstarsze pierwsze — API sortuje po nazwie, kolejność wieku ustawiamy tutaj. */
-const items = computed<Product[]>(() =>
-  [...(queue.data.value?.items ?? [])].sort((left, right) =>
-    left.created_at.localeCompare(right.created_at),
-  ),
-)
+const items = queue.items
 
 const actionError = ref<string | null>(null)
 
@@ -83,7 +92,7 @@ function formatDate(value: string): string {
       <CardHeader>
         <CardTitle>{{ productTexts.unverified }}</CardTitle>
         <CardDescription class="tabular-nums">
-          {{ queue.data.value?.total ?? 0 }}
+          {{ listCount(queue.loaded.value, queue.total.value) }}
         </CardDescription>
       </CardHeader>
 
@@ -150,6 +159,16 @@ function formatDate(value: string): string {
             </div>
           </li>
         </ul>
+
+        <LoadMoreButton
+          :loaded="queue.loaded.value"
+          :total="queue.total.value"
+          :has-more="queue.hasMore.value"
+          :loading="queue.isLoadingMore.value"
+          :failed="queue.loadMoreFailed.value"
+          testid="verification-load-more"
+          @more="queue.loadMore"
+        />
       </CardContent>
     </Card>
   </section>

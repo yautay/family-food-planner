@@ -13,16 +13,16 @@ import { useQuery } from '@tanstack/vue-query'
 import { refDebounced } from '@vueuse/core'
 import { computed, ref } from 'vue'
 
-import type { ProductFilters } from '@/api/catalog'
 import { fetchCategories, fetchProducts } from '@/api/catalog'
+import { PAGE_SIZE, usePaginatedList } from '@/api/pagination'
+import type { ProductsFilters } from '@/api/queryKeys'
 import { queryKeys } from '@/api/queryKeys'
+import LoadMoreButton from '@/components/domain/LoadMoreButton.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { formatNutrient } from '@/lib/format'
-import { common, products as texts } from '@/lib/texts'
-
-const PAGE_SIZE = 50
+import { common, listCount, products as texts } from '@/lib/texts'
 
 const search = ref('')
 const debouncedSearch = refDebounced(search, 250)
@@ -31,20 +31,20 @@ const includeArchived = ref(false)
 
 const categories = useQuery({ queryKey: queryKeys.categories.all, queryFn: fetchCategories })
 
-const filters = computed<ProductFilters>(() => ({
+// Filtry BEZ `offset` — numer strony niesie `pageParam` (src/api/pagination.ts).
+const filters = computed<ProductsFilters>(() => ({
   limit: PAGE_SIZE,
-  offset: 0,
   q: debouncedSearch.value.trim() || undefined,
   category_id: categoryId.value ?? undefined,
   include_archived: includeArchived.value,
 }))
 
-const products = useQuery({
+const products = usePaginatedList({
   queryKey: computed(() => queryKeys.products.list(filters.value)),
-  queryFn: () => fetchProducts(filters.value),
+  fetchPage: (page) => fetchProducts({ ...filters.value, ...page }),
 })
 
-const items = computed(() => products.data.value?.items ?? [])
+const items = products.items
 const isEmpty = computed(() => !products.isPending.value && items.value.length === 0)
 const isSearching = computed(() => debouncedSearch.value.trim().length > 0)
 </script>
@@ -101,8 +101,10 @@ const isSearching = computed(() => debouncedSearch.value.trim().length > 0)
     </Card>
 
     <div class="flex flex-wrap items-center justify-between gap-2">
+      <!-- Relacja widocznych do wszystkich, nie samo `total`: ekran pisał
+           „Produktów: 185" i renderował 50 (ustalenie R4, BATCH_19). -->
       <p class="text-muted-foreground text-sm tabular-nums" data-testid="products-total">
-        Produktów: {{ products.data.value?.total ?? 0 }}
+        Produktów: {{ listCount(products.loaded.value, products.total.value) }}
       </p>
       <Button as-child class="min-h-11">
         <RouterLink :to="{ name: 'produkt-nowy' }" data-testid="products-add">
@@ -183,5 +185,15 @@ const isSearching = computed(() => debouncedSearch.value.trim().length > 0)
         </Button>
       </li>
     </ul>
+
+    <LoadMoreButton
+      :loaded="products.loaded.value"
+      :total="products.total.value"
+      :has-more="products.hasMore.value"
+      :loading="products.isLoadingMore.value"
+      :failed="products.loadMoreFailed.value"
+      testid="products-load-more"
+      @more="products.loadMore"
+    />
   </section>
 </template>

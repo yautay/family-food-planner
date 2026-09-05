@@ -55,6 +55,43 @@ przyciskową (mobile/dostępność).
    niepełne dane (brak IG itp.) = wyraźna plakietka „niepełne dane" z
    tooltipem czego brakuje.
 
+### 3.6 Paginacja list (BATCH_19)
+
+Ekran listy pokazuje WSZYSTKIE swoje dane albo mówi wprost, że pokazuje
+wycinek — i daje dojść do ostatniej pozycji. Obowiązujący wzorzec:
+
+1. **„Pokaż więcej" z rosnącym `offset`, nigdy numerowane strony.** Aplikacja
+   jest mobile-first (§5), a numerowana paginacja na telefonie to cele dotykowe
+   wielkości znaczka pocztowego; jeden przycisk pełnej szerokości ≥44 px mieści
+   się w obsłudze jednoręcznej. Doładowanie NIE gubi tego, co użytkownik już
+   przewinął, więc nie kosztuje kliknięć na powrót (§2).
+2. **Licznik podaje relację, nie sumę**: „Produktów: 50 z 185". Samo `total`
+   jest gorsze niż brak liczby — ekran mówił „185" i renderował 50, czyli
+   liczba i widok kłamały razem (ustalenie R4).
+3. **Przycisk znika, gdy nie ma czego dowieźć.** Koniec listy musi być widoczny;
+   przycisk, który nic nie robi, jest zaproszeniem do klikania w próżnię.
+4. **Skeleton tylko do PIERWSZEJ odpowiedzi** (§3.4). Doładowanie kolejnej
+   strony to spinner NA PRZYCISKU — lista już coś pokazuje i nie ma prawa
+   zamigotać.
+5. **Porządek listy ustala SERWER.** Ekran, który obiecuje kolejność
+   („najstarsze na górze"), zamawia ją parametrem zapytania; sortowanie
+   pobranej strony w przeglądarce układa wycinek wybrany innym kryterium i przy
+   zbiorze większym niż strona część danych staje się nieosiągalna.
+6. **`limit` rośnie tylko do sufitu serwera (200, 04_API §1) — „pokaż więcej"
+   zwiększa `offset`.** UI nie obchodzi walidacji `limit`.
+7. **Nieudane DOŁADOWANIE nie kasuje tego, co już widać.** Komunikat siada przy
+   przycisku (on jest ponowieniem), a wiersze z cache'u zostają — są poprawne.
+   Błąd zamiast listy wolno pokazać tylko wtedy, gdy padła PIERWSZA strona,
+   czyli gdy naprawdę nie ma czego pokazać. Inaczej jedno nieudane kliknięcie
+   robi z ekranu to samo kłamstwo, które ten wzorzec likwiduje: licznik mówi
+   „50 z 60", a widok jest pusty (ustalenie `/code-review` w B19).
+
+Wirtualizacji list i nieskończonego przewijania sterowanego scrollem świadomie
+NIE MA: przewijanie bez końca zabiera stopkę i orientację „ile jeszcze zostało",
+a wirtualizacja to koszt złożoności przy zbiorach rzędu setek pozycji.
+Realizacja: `src/api/pagination.ts` + `components/domain/LoadMoreButton.vue`
+(05_FRONTEND §3).
+
 ## 4. Widoki kluczowe (mapowanie wizualizacji)
 
 1. **Plan dnia** — nagłówek z datą i 4 kafelkami (Kalorie/Białko/Tłuszcze/
@@ -63,7 +100,10 @@ przyciskową (mobile/dostępność).
    celu), panel boczny: donut makro + słupki tygodnia, FAB „+" dodaje
    posiłek/pozycję.
 2. **Przepisy** — grid kart ze zdjęciem, czasem, kcal/porcję; filtry jako
-   chipsy tagów + szukajka; serce = ulubione (tag systemowy).
+   chipsy tagów + szukajka; serce = ulubione (tag systemowy). Filtrów czasu,
+   trudności i oceny UI świadomie NIE MA, choć API je przyjmuje — rewizja
+   wymaga decyzji właściciela (ustalenie B19). Lista jest paginowana wzorcem
+   z §3.6 (strona 50): import ośmiu jadłospisów daje 103 dania.
 3. **Przepis szczegół** — hero zdjęcie, meta (czas, trudność, typ, kcal),
    taby: Składniki / Przygotowanie / Wartości odżywcze; regulacja liczby
    porcji przelicza składniki i wartości na żywo.
@@ -80,7 +120,10 @@ przyciskową (mobile/dostępność).
    „Przyjmij zakupy do spiżarni" (dialog potwierdzenia) i „Usuń listę" (dialog
    z konsekwencjami). Eksport PDF pozostaje „later".
 6. **Spiżarnia** — grid/lista z filtrem kategorii i sortowaniem po dacie
-   ważności; produkty bliskie przeterminowania wyróżnione.
+   ważności; produkty bliskie przeterminowania wyróżnione. Paginacja wzorcem
+   z §3.6, ale strona jest WIĘKSZA (100): spiżarnia to inwentarz przeglądany
+   „ile mam czego", a nie przeszukiwany katalog, więc mniejsza strona dołożyłaby
+   kliknięć tam, gdzie ich dziś nie ma (§2).
 7. **Statystyki** — zakładki Kalorie/Makroskładniki; słupki stacked
    tydzień/zakres, linie celów; średnie dzienne vs cele.
    Stan po BATCH_13: zakres jako presety **Tydzień / Miesiąc / Własny** (dwa
@@ -94,7 +137,8 @@ przyciskową (mobile/dostępność).
    z niepełnymi danymi dochodzi plakietka „Niepełne dane" z listą braków,
    a zakres bez planu dostaje pusty stan z akcją „Przejdź do planu".
    Wykresy ŁG świadomie NIE MA (ŁG jest w odpowiedzi API, ale nie w UI).
-8. **Edycja produktu** — formularz z kategorią, jednostkami, wartościami
+8. **Edycja produktu** (lista katalogu `/produkty` — paginacja §3.6, strona 50,
+   licznik „50 z 185") — formularz z kategorią, jednostkami, wartościami
    /100 g (+ IG), zdjęciem, datą ważności domyślną; sekcja przeliczników
    jednostek domowych. Stan po BATCH_09: dodatkowo sekcja **„Produkty
    sklepowe"** (warianty z półki: nazwa, marka, sklep, opakowanie, miniatura

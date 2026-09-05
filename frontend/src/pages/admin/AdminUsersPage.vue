@@ -6,20 +6,22 @@
  * własnego ref-a (ADR-007). Formularz tworzenia jest na stronie, bez ekranu
  * pośredniego (06_UIUX §2: mniej kliknięć od intencji do efektu).
  */
-import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
+import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import { computed, reactive, ref } from 'vue'
 
 import type { AdminUser, AdminUserUpdate } from '@/api/adminUsers'
 import { createUser, fetchUsers, updateUser } from '@/api/adminUsers'
 import { ApiError } from '@/api/client'
+import { PAGE_SIZE, usePaginatedList } from '@/api/pagination'
+import type { AdminUsersFilters } from '@/api/queryKeys'
 import { queryKeys } from '@/api/queryKeys'
+import LoadMoreButton from '@/components/domain/LoadMoreButton.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { admin as texts, common } from '@/lib/texts'
+import { admin as texts, common, listCount } from '@/lib/texts'
 import { useAuthStore } from '@/stores/auth'
 
-const PAGE_SIZE = 50
 const MIN_PASSWORD_LENGTH = 10
 
 const auth = useAuthStore()
@@ -27,11 +29,15 @@ const queryClient = useQueryClient()
 
 const search = ref('')
 const appliedSearch = ref('')
-const filters = computed(() => ({ limit: PAGE_SIZE, offset: 0, q: appliedSearch.value }))
+// Filtry BEZ `offset` — numer strony niesie `pageParam` (src/api/pagination.ts).
+const filters = computed<AdminUsersFilters>(() => ({
+  limit: PAGE_SIZE,
+  q: appliedSearch.value,
+}))
 
-const users = useQuery({
+const users = usePaginatedList({
   queryKey: computed(() => queryKeys.adminUsers.list(filters.value)),
-  queryFn: () => fetchUsers(filters.value),
+  fetchPage: (page) => fetchUsers({ ...filters.value, ...page }),
 })
 
 const actionError = ref<string | null>(null)
@@ -211,8 +217,15 @@ const isSelf = (user: AdminUser): boolean => user.id === auth.user?.id
         <p v-else-if="users.isError.value" class="text-destructive text-sm" role="alert">
           {{ common.unexpectedError }}
         </p>
-        <p v-else-if="users.data.value?.items.length === 0" class="text-muted-foreground text-sm">
+        <p
+          v-else-if="users.items.value.length === 0"
+          class="text-muted-foreground text-sm"
+          data-testid="users-empty"
+        >
           {{ texts.emptyState }}
+        </p>
+        <p v-else class="text-muted-foreground text-sm tabular-nums" data-testid="users-total">
+          {{ texts.usersTitle }}: {{ listCount(users.loaded.value, users.total.value) }}
         </p>
 
         <p
@@ -224,9 +237,9 @@ const isSelf = (user: AdminUser): boolean => user.id === auth.user?.id
           {{ actionError }}
         </p>
 
-        <ul v-if="users.data.value" class="grid gap-2" data-testid="users-list">
+        <ul v-if="users.items.value.length" class="grid gap-2" data-testid="users-list">
           <li
-            v-for="user in users.data.value.items"
+            v-for="user in users.items.value"
             :key="user.id"
             class="border-border grid gap-3 rounded-lg border p-3 md:grid-cols-[1fr_auto] md:items-center"
             :data-testid="`user-row-${user.id}`"
@@ -303,6 +316,16 @@ const isSelf = (user: AdminUser): boolean => user.id === auth.user?.id
             </form>
           </li>
         </ul>
+
+        <LoadMoreButton
+          :loaded="users.loaded.value"
+          :total="users.total.value"
+          :has-more="users.hasMore.value"
+          :loading="users.isLoadingMore.value"
+          :failed="users.loadMoreFailed.value"
+          testid="users-load-more"
+          @more="users.loadMore"
+        />
       </CardContent>
     </Card>
   </section>

@@ -51,6 +51,7 @@ from app.modules.catalog.schemas import (
     ProductNutritionRead,
     ProductNutritionRequest,
     ProductRead,
+    ProductSort,
     ProductUpdateRequest,
     RetailProductCreateRequest,
     RetailProductListResponse,
@@ -178,6 +179,7 @@ def build_products_router() -> APIRouter:
         category_id: Annotated[int | None, Query(ge=1)] = None,
         verification_status: VerificationStatus | None = None,
         include_archived: bool = False,
+        sort: ProductSort = ProductSort.NAME,
     ) -> ProductListResponse:
         views, total = await service.list_products(
             limit=limit,
@@ -186,6 +188,7 @@ def build_products_router() -> APIRouter:
             category_id=category_id,
             verification_status=verification_status,
             include_archived=include_archived,
+            sort=sort,
         )
         return ProductListResponse(items=[_to_read(view) for view in views], total=total)
 
