@@ -22,11 +22,10 @@ REALNYM hoście właściciela — kroki wykonywane na Odroidzie wymagają jego
 udziału/dostępu; agent przygotowuje komplet i prowadzi procedurę.
 
 **STOP-bramka — ZDJĘTA 2026-09-05**: D6 i D7 są ZATWIERDZONE (treść
-w `02_DECISIONS`, streszczenie w „Ustaleniach REVIEW R4" niżej). Zostaje
-jedno pytanie kontrolne przed pierwszym krokiem: **potwierdzić domenę**
-(`pasnik.cpt-sztos.com` z realnego `Caddyfile` kontra `…com.pl`
-z wcześniejszej odpowiedzi właściciela). Gdyby któraś z tych decyzji wróciła
-kiedyś do statusu OPEN — obowiązuje implementation_prompt pkt 1e.
+w `02_DECISIONS`, streszczenie w „Ustaleniach REVIEW R4" niżej), a domena
+`pasnik.cpt-sztos.com` potwierdzona przez właściciela. Gdyby któraś z tych
+decyzji wróciła kiedyś do statusu OPEN — obowiązuje implementation_prompt
+pkt 1e.
 
 Wymagane lektury przed startem:
 
@@ -91,10 +90,9 @@ Wymagane lektury przed startem:
      Wzorem jest istniejący blok `toc.cpt-sztos.com`. Szablon w repo:
      **`docker/proxy/pasnik.Caddyfile.example`**. Przeładowanie:
      `caddy validate --config /etc/caddy/Caddyfile` → `systemctl reload caddy`.
-     **Jedna rzecz do potwierdzenia jednym słowem przed pierwszym krokiem**:
-     domena. We wcześniejszej odpowiedzi padło `pasnik.cpt-sztos.com.pl`,
-     ale w realnym `Caddyfile` jest `pasnik.cpt-sztos.com` (bez `.pl`)
-     i wszystkie pozostałe serwisy też są pod `cpt-sztos.com`.
+     Domena **potwierdzona przez właściciela 2026-09-05**; w trakcie ustaleń
+     padło raz `…com.pl` i rozstrzygnął realny `Caddyfile` — odnotowane, żeby
+     nikt tego nie „poprawiał" z powrotem.
 2. **Nowa zależność: `BATCH_19_FIX_LIST_PAGINATION`.** Ustalenie P1 R4 — bez
    niego ekrany list ucinają się po 50 pozycjach, a właściciel importuje
    jadłospisy (103 dania, 185 produktów) dokładnie wtedy, gdy aplikacja idzie
@@ -152,14 +150,16 @@ wdrożeniu, wykonywane na PRAWDZIWEJ domenie, nie na localhoście:
    `/srv/pasnik/pgdata`, `/srv/pasnik/uploads`, `/srv/pasnik/backups`.
    Weryfikacja lokalna: compose config + uruchomienie na maszynie dev
    z katalogami zastępczymi.
-2. **Reverse proxy — CADDY (D7)**: fragment `Caddyfile` dla
-   `pasnik.cpt-sztos.com.pl` → `reverse_proxy 127.0.0.1:8080` (albo adres
-   z sieci, jeśli Caddy stoi na innym hoście — do potwierdzenia w D7).
+2. **Reverse proxy — CADDY (D7)**: PODMIANA istniejącego bloku
+   `pasnik.cpt-sztos.com` (dziś serwuje statyczny landing) na
+   `reverse_proxy 127.0.0.1:8081` — Caddy stoi na TYM SAMYM hoście, więc
+   loopback wystarcza, a port 8080 zajmuje Pi-hole.
    Caddy sam wystawia i odnawia certyfikat oraz przekierowuje HTTP→HTTPS,
    więc tego NIE konfigurujemy ręcznie; do sprawdzenia zostaje reszta:
-   **(a)** limit rozmiaru żądania ≥ limitów aplikacji (PDF 25 MB, paczka
-   transferu 100 MB) — domyślny limit proxy jest częstą przyczyną „nie da się
-   wgrać", która wygląda jak błąd aplikacji; **(b)** `Strict-Transport-Security`
+   **(a)** limit rozmiaru żądania — Caddy domyślnie NIE ogranicza ciała
+   (`request_body` jest opt-in), więc PDF 25 MB i paczka transferu 100 MB
+   przechodzą; potwierdzić realnym wgraniem, nie założyć;
+   **(b)** `Strict-Transport-Security`
    — 07_SECURITY §3 przypisuje HSTS proxy, więc trzeba POTWIERDZIĆ, czy Caddy
    w tej wersji dokłada go sam, a jeśli nie — ustawić jawnie; **(c)** nagłówki
    `X-Forwarded-*` (Caddy ustawia je w `reverse_proxy` domyślnie) muszą być

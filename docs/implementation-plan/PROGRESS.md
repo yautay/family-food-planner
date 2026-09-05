@@ -117,10 +117,11 @@ Zostaje w nim pięć pozycji bez konsumenta (D8 FUTURE, D9, D10, D11, D21).
      07_SECURITY §3 przypisuje go proxy — B18 dokłada go z KRÓTKIM `max-age`
      na start, bo przeglądarka ten nagłówek zapamiętuje.
 
-   **Jedna rzecz do potwierdzenia jednym słowem**: właściciel podał domenę
-   jako `pasnik.cpt-sztos.com.pl`, ale w realnym `Caddyfile` jest
-   `pasnik.cpt-sztos.com` (bez `.pl`), tak jak wszystkie pozostałe serwisy na
-   tym hoście. Przyjęto wersję z konfiguracji.
+   Domena **POTWIERDZONA** przez właściciela tego samego dnia. W trakcie
+   ustaleń padło raz `pasnik.cpt-sztos.com.pl`, ale rozstrzygnął realny
+   `Caddyfile`, w którym jest `pasnik.cpt-sztos.com` — tak jak wszystkie
+   pozostałe serwisy na tym hoście. Odnotowane, bo to jest dokładnie ten
+   rodzaj szczegółu, który ktoś kiedyś „poprawi" z powrotem.
 
    **Konsekwencja techniczna niezależna od tych odpowiedzi, wpisana do B17**:
    za proxy wszystkie żądania przychodzą z adresu proxy, więc `get_remote_address`
