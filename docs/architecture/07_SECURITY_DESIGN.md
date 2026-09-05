@@ -66,6 +66,15 @@ publiczne linki i błędami aplikacyjnymi (IDOR/XSS/CSRF/upload).
   - **nie rozciąga się na zasoby adresowane „moją rodziną"** —
     `/households/my` i profile członków pokazują ADMIN-owi WŁASNĄ rodzinę,
     do cudzych ma `/admin/households/*` (04_API §3 pkt 2a);
+  - **nie rozciąga się na WYBÓR CELU ZAPISU** (ustalenie REVIEW R4): jeżeli
+    zasób jest adresowany czymś innym niż własne id — jak dzień planu, który
+    adresuje DATA — to zapytanie „który wiersz to mój" musi iść po
+    `owned_condition`, nie po `visible_condition`. Inaczej `true()` ADMIN-a
+    zamienia „mój dzień na 10 września" w „najstarszy czyjkolwiek dzień na
+    10 września" i zapis ląduje w cudzej rodzinie. Dla nie-ADMIN-a oba warunki
+    są identyczne, więc rozdzielenie niczego nie zmienia poza tym jednym
+    przypadkiem. Ta sama reguła stoi po stronie spiżarni od REVIEW R3
+    (`select_own_household`, nie widoczność).
   - **nie rozciąga się na dane osobowe w odpowiedziach publicznych**
     (§5) ani na hasła i tokeny (nigdy w logach — §8).
   Konsekwencja dla batchy: każda nowa encja ze `ScopedMixin` dziedziczy to

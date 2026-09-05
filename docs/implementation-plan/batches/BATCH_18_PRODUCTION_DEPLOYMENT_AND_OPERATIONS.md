@@ -39,6 +39,33 @@ Wymagane lektury przed startem:
   (+ D10 retencja, rekomendacja z R4).
 - Karta `BATCH_17` (Completion notes — faktyczne nazwy skryptów/targetów).
 
+**Ustalenia REVIEW R4 (2026-09-05) dla tego batcha:**
+
+1. **D6 i D7 były OPEN w chwili wydania werdyktu R4.** STOP-bramka wyżej
+   obowiązuje bez zmian — R4 ich NIE rozstrzygnął i nie miał prawa.
+   Bez zatwierdzonych D6/D7 ten batch nie startuje; **B17 startuje bez nich**.
+2. **Nowa zależność: `BATCH_19_FIX_LIST_PAGINATION`.** Ustalenie P1 R4 — bez
+   niego ekrany list ucinają się po 50 pozycjach, a właściciel importuje
+   jadłospisy (103 dania, 185 produktów) dokładnie wtedy, gdy aplikacja idzie
+   na produkcję. Kolejność wobec B17 dowolna, ale przed wdrożeniem.
+3. **D10 (retencja) — rekomendacja R4: bez automatu.** Do runbooka
+   operacyjnego zamiast crona kasującego dane: raport zajętości
+   `/srv/pasnik/uploads` (jedyna oś rosnąca bez ograniczenia) oraz komenda
+   „pliki bez referencji" z B17 §Ustalenia R4 pkt 4. Listy i plany zostają
+   — historia jest wartością, a `DELETE /shopping/lists/{id}` wystarcza do
+   ręcznego sprzątania.
+4. **Restore drill ma objąć DRUGĄ ścieżkę** (ustalenie B14, potwierdzone
+   pomiarem w R4): obok `pg_restore` przećwiczyć transfer logiczny —
+   eksport instancji → czysta baza → import. R4 wykonał go realnie na świeżo
+   zmigrowanej bazie: 24 sekcje wróciły co do wiersza, a `to_create` raportu
+   DRY-RUN zgadzało się z tym, co powstało. Plik eksportu **nie ma haseł ani
+   publicznych tokenów**, ale jest danymi osobowymi jak każdy backup.
+5. **Zimny start pierwszego żądania (~1,5 s)** — obserwacja z R2, nadal
+   aktualna. Po każdym `compose up -d` pierwszy `GET /plan/days` jest
+   wyraźnie wolniejszy niż kolejne (~30–50 ms na rozgrzanym procesie,
+   pomiar R4). Do świadomego przyjęcia w 09_DEPLOYMENT albo do rozgrzewki
+   w procedurze wdrożenia — nie jest to problem wydajności aplikacji.
+
 **Warunek z B12 (PWA, ADR-009) — HTTPS jest tu funkcjonalnością, nie ozdobą.**
 Przeglądarka rejestruje service workera WYŁĄCZNIE na `https://` (albo
 `localhost`), więc bez działającego TLS na reverse proxy lista zakupowa

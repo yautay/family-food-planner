@@ -84,8 +84,10 @@ from app.modules.transfer.importer import (
     assert_zip_signature,
     decisions_by_key,
     display_name,
+    mark_blocked,
     natural_key,
     open_archive,
+    parent_blocked,
     photo_names,
     read_document,
     remap_cycle_templates,
@@ -578,6 +580,9 @@ class TransferService:
         reused: dict[str, int] = {}
         warnings: list[str] = []
         saved_photos: list[str] = []
+        # Identyfikatory Z PLIKU tych wierszy, których zawartości import NIE tyka:
+        # reużytych rodziców i wszystkiego, co przez nich pominięte (D22).
+        blocked: dict[str, set[Any]] = {}
 
         try:
             for section in sections_for(document.scope):
@@ -593,6 +598,7 @@ class TransferService:
                         taken=taken,
                         chosen=chosen,
                         id_map=id_map,
+                        blocked=blocked,
                         warnings=warnings,
                         saved_photos=saved_photos,
                     )
@@ -670,10 +676,19 @@ class TransferService:
         taken: dict[str, set[str]],
         chosen: Mapping[tuple[str, int], CollisionAction],
         id_map: IdMap,
+        blocked: dict[str, set[Any]],
         warnings: list[str],
         saved_photos: list[str],
     ) -> str:
         """Wstaw jeden wiersz sekcji. Zwraca `created` / `reused` / `skipped`."""
+        # D22: rodzic REUŻYTY (albo sam pominięty) zostaje ze swoją zawartością
+        # nietknięty. Sprawdzamy to PRZED `resolve_references`, bo pominięte
+        # dziecko nie trafia do `id_map` i jego własne dzieci nie miałyby czego
+        # rozwiązać — dostałyby „martwą referencję" i wywróciłyby cały import.
+        if parent_blocked(section, row, blocked):
+            mark_blocked(section, row, blocked)
+            return "skipped"
+
         table = section_table(section)
         references = section_references(section)
         resolved = resolve_references(section, row, id_map, references)
@@ -700,6 +715,7 @@ class TransferService:
             if action is CollisionAction.USE_EXISTING:
                 if section.pk is not None:
                     id_map.record(section.name, row.get(section.pk), match.id)
+                mark_blocked(section, row, blocked)
                 return "reused"
             key = self._rename_copy(section, values, taken.setdefault(section.name, set()))
 
@@ -747,7 +763,10 @@ class TransferService:
                     .returning(table.c[section.pk])
                 )
             ).scalar_one_or_none()
-            return "reused" if skipped is None else "created"
+            if skipped is None:
+                mark_blocked(section, row, blocked)
+                return "reused"
+            return "created"
 
         if section.merge_key is not None:
             new_id = (
@@ -767,6 +786,7 @@ class TransferService:
                     )
                 ).scalar_one()
                 id_map.record(section.name, row.get(section.pk), new_id)
+                mark_blocked(section, row, blocked)
                 return "reused"
             id_map.record(section.name, row.get(section.pk), new_id)
             return "created"

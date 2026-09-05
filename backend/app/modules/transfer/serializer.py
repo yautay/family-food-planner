@@ -108,10 +108,21 @@ class Section:
     #: import wstawia go `ON CONFLICT DO NOTHING` i nie potrzebuje jego id.
     idempotent: bool = False
     #: Kolumny UNIQUE, po których wiersz SCALA SIĘ z istniejącym zamiast wywalać
-    #: import. Dzieci trafiają wtedy do wiersza, który już jest — dokładnie tak,
-    #: jak instancjacja szablonu DOPISUJE posiłki do istniejącego dnia planu
-    #: (`PlanningService.append_day_payload`, B07).
+    #: import.
     merge_key: tuple[str, ...] | None = None
+    #: Kolumna referencji do RODZICA KOMPOZYCJI — tego jednego wiersza, którego
+    #: częścią jest ta sekcja (ADR-012: FK `ON DELETE CASCADE` rodzic→dziecko).
+    #: Gdy import REUŻYWA rodzica, jego dzieci POMIJA (decyzja **D22**):
+    #: „użyj istniejącego" znaczy „zostaw ten wiersz i jego zawartość w spokoju",
+    #: więc reużyty przepis nie dostaje drugiego kompletu składników, a reużyty
+    #: dzień planu — drugiego kompletu posiłków. Bez tego ten sam plik
+    #: zaimportowany dwa razy podwaja zawartość rodzica, a przy pętli
+    #: eksport→import rośnie ona wykładniczo (zmierzone w B16: 1536 składników
+    #: w daniu o trzech).
+    #: Referencja do SŁOWNIKA (produkt kanoniczny, kategoria, tag, sklep) tym
+    #: NIE JEST — reużycie produktu nie ma prawa skasować składnika, który go
+    #: używa. Kryterium jest jedno i sprawdzalne: `ON DELETE CASCADE` w bazie.
+    parent: str | None = None
 
 
 SECTIONS: tuple[Section, ...] = (
@@ -169,6 +180,7 @@ SECTIONS: tuple[Section, ...] = (
         columns=("unit_label", "grams_per_unit", "source", "samples_count"),
         references={"product_id": "canonical_products"},
         idempotent=True,
+        parent="product_id",
     ),
     Section(
         name="product_nutrient_values",
@@ -176,6 +188,7 @@ SECTIONS: tuple[Section, ...] = (
         columns=("amount_per_100",),
         references={"product_id": "canonical_products", "nutrient_code": "nutrients"},
         idempotent=True,
+        parent="product_id",
     ),
     Section(
         name="retail_products",
@@ -246,12 +259,14 @@ SECTIONS: tuple[Section, ...] = (
         model=RecipeIngredient,
         columns=("display_qty", "display_unit", "amount", "amount_unit", "note", "position"),
         references={"recipe_id": "recipes", "product_id": "canonical_products"},
+        parent="recipe_id",
     ),
     Section(
         name="recipe_tags",
         model=recipe_tags,
         references={"recipe_id": "recipes", "tag_id": "tags"},
         pk=None,
+        parent="recipe_id",
     ),
     Section(
         name="recipe_ratings",
@@ -259,6 +274,7 @@ SECTIONS: tuple[Section, ...] = (
         columns=("rating",),
         references={"recipe_id": "recipes", "user_id": "users"},
         idempotent=True,
+        parent="recipe_id",
     ),
     Section(
         name="plan_days",
@@ -274,6 +290,7 @@ SECTIONS: tuple[Section, ...] = (
         model=PlanMeal,
         columns=("name", "position", "kcal_target"),
         references={"plan_day_id": "plan_days"},
+        parent="plan_day_id",
     ),
     Section(
         name="plan_meal_items",
@@ -284,6 +301,7 @@ SECTIONS: tuple[Section, ...] = (
             "recipe_id": "recipes",
             "product_id": "canonical_products",
         },
+        parent="plan_meal_id",
     ),
     Section(
         name="plan_item_servings",
@@ -293,6 +311,7 @@ SECTIONS: tuple[Section, ...] = (
             "plan_meal_item_id": "plan_meal_items",
             "member_profile_id": "member_profiles",
         },
+        parent="plan_meal_item_id",
     ),
     Section(
         name="day_templates",
@@ -346,6 +365,7 @@ SECTIONS: tuple[Section, ...] = (
         columns=("name", "round_name", "expires_at"),
         references={"generation_id": "shopping_generations", "store_id": "stores"},
         scoped=True,
+        parent="generation_id",
     ),
     Section(
         name="shopping_list_items",
@@ -370,6 +390,7 @@ SECTIONS: tuple[Section, ...] = (
             "product_id": "canonical_products",
             "retail_product_id": "retail_products",
         },
+        parent="list_id",
     ),
     Section(
         name="audit_entries",

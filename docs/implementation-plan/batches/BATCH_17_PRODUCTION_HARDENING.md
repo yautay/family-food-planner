@@ -111,10 +111,77 @@ Wymagane lektury przed startem:
 
 ## Ustalenia R4 do wykonania
 
-(wypełnia karta review R4 — konkretne naprawy P1 z plikami i opisem;
-agent B17 wykonuje je jako Stage 1)
+Wypełnione przez **REVIEW R4 (2026-09-05)**. Wykonać jako Stage 1, każdy
+punkt odhaczyć z krótkim opisem w Completion notes. Punkty 1–3 to jedyne
+ustalenia P1 R4 przypisane do tego batcha — reszta długu programu jest
+w PROGRESS jako rejestr P2/P3 i tu jej NIE MA.
 
-- [ ] _placeholder — uzupełnia R4_
+- [ ] **1. Healthcheck nie sprawdza migracji.** `GET /api/v1/health` zwraca
+      dziś dosłownie `{"status":"ok","version":"0.1.0"}` (sprawdzone realnym
+      requestem), a **09_DEPLOYMENT §2 wymaga statusu `degraded`, gdy głowa
+      Alembica nie zgadza się z bazą**. To nie jest kosmetyka: procedura
+      update z §4 nie migruje automatycznie, więc jedyną rzeczą, która ma
+      wykryć „kontener wstał na starym schemacie", jest właśnie healthcheck.
+      Uwaga wykonawcza: dzisiejszy endpoint świadomie nie dotyka bazy
+      (B01), więc dochodzi zależność od sesji — healthcheck compose musi
+      tolerować `degraded` inaczej niż `down`.
+- [ ] **2. CSP nie ma dyrektyw, które NIE dziedziczą po `default-src`.**
+      Realny nagłówek to `default-src 'self'; img-src 'self' data: blob:;
+      style-src 'self' 'unsafe-inline'`. `object-src` i `worker-src`
+      dziedziczą i są bezpieczne, ale **`base-uri` i `form-action` NIE
+      dziedziczą** — bez nich wstrzyknięty `<base>` przestawia wszystkie
+      ścieżki względne, a przejęty formularz może wysłać dane na obcy host.
+      Dołożyć `base-uri 'none'; form-action 'self'; frame-ancestors 'none'`
+      (to ostatnie jako nowocześniejszy odpowiednik `X-Frame-Options`, który
+      zostaje). Miejsce: `app/core/middleware.py::SECURITY_HEADERS`
+      + 07_SECURITY §3. **Po zmianie zweryfikować rejestrację service workera
+      na buildzie produkcyjnym** — to ta sama pułapka, co w punkcie „Do
+      przeglądu z B12" wyżej.
+- [ ] **3. Endpointy uploadu nie mają rate limitu.** Limity ma `/auth/login`
+      (5/min/IP), `/import/jobs/{id}/ai-suggest` (10/min) i cała ścieżka
+      `/public/*` (60/min wspólnie). NIE mają go: `POST /import/pdf` (25 MB
+      na żądanie!), `POST /recipes/{id}/photo`, `PUT /retail-products/{id}/photo`
+      i `POST /transfer/import` (100 MB). Model zagrożeń §1 nie broni się przed
+      członkiem rodziny, ale broni przed PRZEJĘTĄ sesją — a tam jedyny koszt
+      zapełnienia dysku Odroida to pętla `curl`. To naturalnie łączy się
+      ze Stage 3 (body limit): limit rozmiaru i limit częstości to dwie
+      połowy tej samej ochrony.
+- [ ] **4. Pliki uploadów bez referencji nie mają żadnego sprzątacza.**
+      R4 znalazł w `backend/data/uploads/import-pdf/` **trzy PDF-y (4,4 MB)**,
+      do których nie prowadzi żaden wiersz `import_jobs` — pozostałość po
+      testach dziedziczących `UPLOADS_DIR` z `.env` (dług **U26**) i po
+      resecie bazy dev z D23. Na produkcji ten sam mechanizm zostawi śmieci
+      po każdym nieudanym imporcie. **Nie budować crona kasującego** (D10:
+      nic nie usuwamy automatycznie) — wystarczy komenda raportująca „pliki
+      bez referencji", którą runbook backupu woła obok `du`.
+- [ ] **6. Prefiks `__Host-` dla cookies sesji i CSRF** (obserwacja z audytu
+      frontendu w R4). Double-submit czyta PIERWSZE ciasteczko `csrf_token`
+      z `document.cookie` — to standardowe zastrzeżenie tego wzorca: subdomena
+      albo sąsiad na tym samym rejestrowalnym domenie mogłaby przypiąć własną
+      parę cookie+nagłówek. Lekarstwo nie leży we froncie, tylko w `Set-Cookie`:
+      prefiks `__Host-` wiąże ciasteczko z dokładnie jednym hostem i `Path=/`.
+      **Pułapka wykonawcza**: `__Host-` WYMAGA flagi `Secure`, więc na
+      `http://localhost` przeglądarka takie ciasteczko odrzuci — nazwa musi być
+      zależna od `APP_ENV` tak samo, jak dziś jest `Secure`
+      (`app/core/cookies.py`). Zmiana wylogowuje istniejące sesje.
+- [ ] **7. `create_async_engine` bez `hide_parameters=True`** (obserwacja
+      z audytu core w R4). `core/errors.py` loguje pełny traceback, a
+      SQLAlchemy dokleja do komunikatu `DBAPIError` sekcję `[parameters: ...]`.
+      Nieobsłużony błąd na INSERCIE do `sessions` wypisałby więc **token sesji**
+      do logu — dokładnie to, czego zabrania 07_SECURITY §8. Nie da się tego
+      wywołać z zewnątrz (to awaria bazy, nie żądanie użytkownika), więc nie
+      jest to dziura, tylko jedna linia w `core/db.py`, która zamyka klasę
+      problemu.
+- [ ] **8. `PRIVATE_SUBDIRS` porównuje się z uwzględnieniem wielkości liter**
+      (`core/uploads.py:157`). Na Linuksie produkcyjnym nieszkodliwe, bo
+      `/uploads/Transfer/...` po prostu nie istnieje. Na hoście deweloperskim
+      z systemem plików bez rozróżniania wielkości liter (Windows, macOS)
+      ścieżka `Transfer/` przechodzi kontrolę i trafia w ten sam plik.
+      `parts[0].lower()` zamyka temat niezależnie od systemu.
+- [ ] **5. Zajętość `/srv/pasnik/uploads` do runbooka backupu** (rewizja
+      **D10** w R4): to JEDYNA oś, która rośnie bez ograniczenia — zdjęcia
+      przepisów i wariantów oraz jadłospisy PDF zatwierdzonych importów
+      zostają na zawsze i tak ma być (audyt pochodzenia przepisu).
 
 ## Stages
 

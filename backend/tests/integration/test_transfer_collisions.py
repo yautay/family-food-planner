@@ -225,14 +225,24 @@ async def test_plik_ktory_nie_jest_zipem_konczy_sie_422(
         )
 
 
-async def test_import_wlasnego_eksportu_dopisuje_do_istniejacego_dnia_planu(
+async def test_import_wlasnego_eksportu_reuzywa_dnia_planu_i_nie_tyka_jego_posilkow(
     db_session: AsyncSession, settings: Settings
 ) -> None:
     """Ten sam plik wgrany na TO SAMO konto scala dni planu, zamiast wywalać import.
 
     `plan_days` ma UNIQUE(owner_user_id, day), więc import własnego eksportu
-    trafiłby w konflikt przy pierwszym dniu. Scalanie jest zgodne z domeną:
-    instancjacja szablonu też DOPISUJE posiłki do istniejącego dnia (B07).
+    trafiłby w konflikt przy pierwszym dniu. Wiersz dnia jest więc REUŻYWANY.
+
+    **Decyzja D22 (2026-08-30, wdrożona w REVIEW R4) zmieniła to, co dzieje się
+    z jego posiłkami.** Do R4 dopisywały się od nowa — z uzasadnieniem „tak samo
+    DOPISUJE instancjacja szablonu (B07)". Różnica, której to uzasadnienie nie
+    widziało: szablon instancjuje CZŁOWIEK jednym kliknięciem i wie, co robi,
+    a import przy każdym przebiegu doklejał komplet po cichu. Efekt zmierzono
+    w BATCH_16 na `transfer.spec.ts`: po kilku pętlach eksport→import dzień miał
+    1536 posiłków zamiast dwóch. Od R4 „użyj istniejącego" znaczy „zostaw ten
+    wiersz i jego zawartość w spokoju" — posiłki reużytego dnia są POMIJANE.
+    Sam przypadek „dopisz posiłki do istniejącego dnia" pozostaje uzasadniony,
+    ale wymaga JAWNEJ decyzji użytkownika przy kolizji (poza zakresem D22).
     """
     author = await factories.create_user(db_session, email="autor@example.com")
     category = await factories.create_category(db_session, name="Warzywa")
@@ -256,6 +266,7 @@ async def test_import_wlasnego_eksportu_dopisuje_do_istniejacego_dnia_planu(
 
     assert summary.reused["plan_days"] == 1
     assert await _count(db_session, PlanDay) == 1
-    # Posiłek DOPISAŁ się do istniejącego dnia — treść nie przepadła i nie ma
-    # drugiego dnia na tę samą datę.
-    assert await _count(db_session, PlanMeal) == 2
+    # Dzień został reużyty, więc jego posiłek ZOSTAŁ TAKI, JAKI BYŁ (D22):
+    # ani nie zniknął, ani nie doszedł jego duplikat.
+    assert await _count(db_session, PlanMeal) == 1
+    assert "plan_meals" not in summary.created

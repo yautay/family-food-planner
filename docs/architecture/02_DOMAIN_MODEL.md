@@ -352,6 +352,11 @@ Stan faktyczny po BATCH_16 (review i zatwierdzanie):
   schematu) + ZIP ze zdjęciami. ADMIN: pełny eksport instancji.
 - Import: walidacja wersji + dry-run raport (co powstanie/koliduje) →
   zastosowanie. Dane należą do użytkownika — pełne odzyskanie bez SaaS.
+- **„Użyj istniejącego" znaczy „nie ruszaj"** (D22, wdrożone w REVIEW R4):
+  import reużywający wiersz pomija jego sekcje-dzieci, więc reużyty przepis nie
+  dostaje drugiego kompletu składników ani reużyty dzień planu drugiego kompletu
+  posiłków. Kryterium „dziecka" jest sprawdzalne w bazie: FK `ON DELETE CASCADE`
+  do rodzica (ADR-012). Szczegóły i granice: 04_API §2, sekcja formatu.
 
 ## 12. Audit
 

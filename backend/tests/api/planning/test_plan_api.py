@@ -13,11 +13,13 @@ from decimal import Decimal
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.scope import Scope
 from app.modules.catalog.models import CanonicalProduct, VerificationStatus
 from app.modules.catalog.units import AmountUnit
+from app.modules.planning.models import PlanDay, PlanMeal
 from tests.factories import (
     create_admin,
     create_category,
@@ -161,6 +163,61 @@ async def test_d16_admin_widzi_cudzy_plan_na_sciezkach_uzytkownika(
     await login(db_client, admin.email)
 
     assert (await db_client.get(f"{PLAN}/days/{DAY}")).json()["id"] == plan_day.id
+
+
+async def test_admin_nie_dopisuje_do_cudzego_dnia_planu(
+    db_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """ADMIN WIDZI cudzy dzień (D16), ale ZAPISUJE zawsze do własnego (R4).
+
+    Dzień planu nie ma id w URL-u — adresuje go data — więc ten sam resolver
+    odpowiadał na pytanie „który dzień pokazać" i „do którego dnia dopisać".
+    `visible_condition` daje ADMIN-owi `true()`, więc administrator bez własnego
+    dnia na daną datę trafiał w NAJSTARSZY wiersz dowolnego użytkownika: posiłek
+    lądował w cudzym planie, a `PUT /plan/days/{date}` kasował mu tytuł
+    i przestawiał `scope` na `private`. D16 mówi wprost, że wyjątek dla ADMIN-a
+    dotyczy ODCZYTU i nie rozciąga się na mutacje reguł właścicielskich.
+    """
+    household = await create_household(db_session)
+    owner = await create_user(db_session, email="owner@example.com", household=household)
+    admin = await create_admin(db_session)
+    cudzy = await create_plan_day(
+        db_session, owner=owner, day=DAY_DATE, title="Urodziny Zosi", scope=Scope.HOUSEHOLD
+    )
+
+    await login(db_client, admin.email)
+    headers = csrf_headers(db_client)
+
+    # Odczyt bez zmian — D16 nadal obowiązuje.
+    assert (await db_client.get(f"{PLAN}/days/{DAY}")).json()["id"] == cudzy.id
+
+    created = await db_client.post(
+        f"{PLAN}/days/{DAY}/meals", json={"name": "Obiad admina"}, headers=headers
+    )
+    assert created.status_code == 201
+
+    await db_session.refresh(cudzy)
+    meals = (
+        (await db_session.execute(select(PlanMeal).where(PlanMeal.plan_day_id == cudzy.id)))
+        .scalars()
+        .all()
+    )
+    assert meals == [], "Posiłek ADMIN-a wylądował w cudzym dniu planu."
+
+    # ADMIN dostał WŁASNY wiersz na tę datę, a cudzy został nietknięty.
+    own = (
+        await db_session.execute(
+            select(PlanDay).where(PlanDay.day == DAY_DATE, PlanDay.owner_user_id == admin.id)
+        )
+    ).scalar_one()
+    assert own.id != cudzy.id
+
+    await db_client.put(
+        f"{PLAN}/days/{DAY}", json={"title": None, "scope": "private"}, headers=headers
+    )
+    await db_session.refresh(cudzy)
+    assert cudzy.title == "Urodziny Zosi", "PUT ADMIN-a skasował tytuł cudzego dnia."
+    assert cudzy.scope is Scope.HOUSEHOLD, "PUT ADMIN-a przestawił scope cudzego dnia."
 
 
 async def test_anty_idor_na_zagniezdzonym_id_posilku_i_pozycji(

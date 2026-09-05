@@ -62,6 +62,7 @@ from app.modules.nutrition.engine import (
 from app.modules.nutrition.models import UserNutritionGoal
 from app.modules.nutrition.service import GoalsService, goal_for_day
 from app.modules.nutrition.types import (
+    GOAL_NUMERIC_FIELDS,
     ZERO_VALUES,
     GoalStatus,
     GoalThresholds,
@@ -213,15 +214,6 @@ class FitProposal:
     resulting_nutrition: NutritionValues
 
 
-#: Pola celu odwzorowane na pola wyniku silnika — kolejność = kolejność kafelków.
-_GOAL_FIELDS: tuple[tuple[str, str], ...] = (
-    ("kcal", "kcal"),
-    ("protein_g", "protein_g"),
-    ("fat_g", "fat_g"),
-    ("carbs_g", "carbs_g"),
-)
-
-
 class PlanningService:
     """Operacje na planie dnia. Jedyne miejsce I/O modułu planning."""
 
@@ -266,6 +258,14 @@ class PlanningService:
         2. **Rozkład rodzinny NIE wchodzi do wyniku**: suma multiplierów jest
            równa `servings`, więc doliczanie go skalowałoby ilości dwa razy
            (02_DOMAIN §13.3).
+        3. **Dni bierzemy zbiorem WŁASNYM, nie widocznym** (ustalenie REVIEW R4).
+           Zakupy to stan domowy, a nie odczyt: `visible_condition` daje
+           ADMIN-owi `true()` (D16), więc lista zakupowa administratora
+           powstawałaby z planów WSZYSTKICH rodzin w instancji. To ta sama
+           granica, którą R3 postawił po stronie spiżarni
+           (`PantryService.receive_purchase` idzie po `select_own_household`,
+           nie po widoczności) — bez niej obie strony silnika mówiłyby o innym
+           domu. Dla nie-ADMIN-a warunek jest identyczny, więc nic się nie zmienia.
 
         Liczba zapytań jest stała (dni → posiłki → pozycje), niezależnie od
         rozmiaru zakresu.
@@ -275,7 +275,7 @@ class PlanningService:
         if (date_to - date_from).days + 1 > MAX_RANGE_DAYS:
             raise PlanValidationError(RANGE_TOO_LONG)
 
-        resolved = await self._resolved_days(user, date_from=date_from, date_to=date_to)
+        resolved = await self._resolved_days(user, date_from=date_from, date_to=date_to, owned=True)
         if not resolved:
             return []
 
@@ -326,18 +326,21 @@ class PlanningService:
         return rows
 
     async def _resolved_days(
-        self, user: User, *, date_from: date, date_to: date
+        self, user: User, *, date_from: date, date_to: date, owned: bool = False
     ) -> dict[date, PlanDay]:
         """Po JEDNYM dniu na datę: własny użytkownika przed widocznym rodzinnym.
 
         Ta sama data może mieć DWA widoczne wiersze `plan_days` (własny i cudzy
         rodzinny), więc `setdefault` po sortowaniu „własny pierwszy" jest tym,
         co czyni `list_days`, `demand_rows` i `_resolve_day` jedną regułą.
+
+        `owned=True` zawęża zbiór do dni NALEŻĄCYCH do użytkownika — patrz
+        `_resolve_day`, gdzie stoi uzasadnienie tej granicy.
         """
         rows = (
             (
                 await self._session.execute(
-                    _DAYS.select_visible(user)
+                    (_DAYS.select_owned(user) if owned else _DAYS.select_visible(user))
                     .where(PlanDay.day >= date_from, PlanDay.day <= date_to)
                     .order_by(PlanDay.day, (PlanDay.owner_user_id == user.id).desc(), PlanDay.id)
                 )
@@ -367,7 +370,7 @@ class PlanningService:
         tytuł to zwykła edycja treści, którą może zrobić każdy członek rodziny
         widzący ten dzień (02_DOMAIN §3.1 pkt 2).
         """
-        entity = await self._resolve_day(user, day)
+        entity = await self._resolve_day(user, day, for_write=True)
         if entity is None:
             entity = PlanDay(day=day, title=title, **ScopedQuery.ownership_for_create(user, scope))
             self._session.add(entity)
@@ -390,7 +393,7 @@ class PlanningService:
         Mniej kliknięć od intencji do efektu (06_UIUX §2): użytkownik chce dodać
         „II śniadanie", a nie najpierw „utworzyć dzień".
         """
-        entity = await self._resolve_day(user, day)
+        entity = await self._resolve_day(user, day, for_write=True)
         if entity is None:
             entity = PlanDay(day=day, **ScopedQuery.ownership_for_create(user, Scope.PRIVATE))
             self._session.add(entity)
@@ -674,7 +677,7 @@ class PlanningService:
         Tytuł ustawiamy tylko przy TWORZENIU dnia: dopisanie szablonu do dnia,
         który użytkownik już nazwał, nie ma prawa tej nazwy nadpisać.
         """
-        day_entity = await self._resolve_day(user, target)
+        day_entity = await self._resolve_day(user, target, for_write=True)
         if day_entity is None:
             day_entity = PlanDay(
                 day=target,
@@ -742,16 +745,33 @@ class PlanningService:
 
     # --- pomocnicze: dostęp z kontrolą scope ----------------------------------------
 
-    async def _resolve_day(self, user: User, day: date) -> PlanDay | None:
-        """Widoczny dzień dla daty: WŁASNY przed rodzinnym, potem najstarszy id.
+    async def _resolve_day(
+        self, user: User, day: date, *, for_write: bool = False
+    ) -> PlanDay | None:
+        """Dzień dla daty: WŁASNY przed rodzinnym, potem najstarszy id.
 
         Jedna reguła dla odczytu, dopisywania i kopiowania — bez niej ta sama
         data znaczyłaby co innego w każdej operacji.
+
+        **`for_write=True` zawęża zbiór z `visible` do `owned` i to NIE jest
+        kosmetyka** (ustalenie REVIEW R4). Dzień planu nie ma id w URL-u —
+        adresuje go DATA — więc ten resolver jest jednocześnie celem ZAPISU dla
+        `upsert_day`, `create_meal` i `append_day_payload`. `visible_condition`
+        zwraca ADMIN-owi `true()` (D16), a D16 mówi wprost, że wyjątek dotyczy
+        ODCZYTU i „nie rozciąga się na mutacje reguł właścicielskich". Bez tego
+        zawężenia ADMIN, który nie ma własnego dnia na daną datę, trafiał
+        w NAJSTARSZY wiersz dowolnego użytkownika z dowolnej rodziny: dodanie
+        posiłku lądowało w cudzym planie, a `PUT /plan/days/{date}` kasowało mu
+        tytuł i przestawiało `scope` na `private`, wypychając dzień z widoku
+        jego własnej rodziny. Odtworzone realnie w R4 na działającym stacku.
+        Dla nie-ADMIN-a `owned_condition` jest DOKŁADNIE tym samym warunkiem,
+        co `visible_condition` (`core/scope.py`), więc członek rodziny nadal
+        dopisuje posiłki do wspólnego dnia rodzinnego — reguła z B07 bez zmian.
         """
         rows = (
             (
                 await self._session.execute(
-                    _DAYS.select_visible(user)
+                    (_DAYS.select_owned(user) if for_write else _DAYS.select_visible(user))
                     .where(PlanDay.day == day)
                     .order_by((PlanDay.owner_user_id == user.id).desc(), PlanDay.id)
                     .limit(1)
@@ -1193,11 +1213,17 @@ def _item_values(
 def _progress(
     values: NutritionValues, goal: UserNutritionGoal | None, thresholds: GoalThresholds
 ) -> dict[str, GoalMetric]:
-    """Kafelki wartość/cel/delta/status dla kcal i trzech makroskładników."""
+    """Kafelki wartość/cel/delta/status dla kcal i trzech makroskładników.
+
+    Lista pól przychodzi z `nutrition/types.GOAL_NUMERIC_FIELDS` — jedno źródło
+    dla kafelków planu dnia i dla statusów statystyk (dług zgłoszony w BATCH_13,
+    domknięty w REVIEW R4). Nazwa pola wyniku i nazwa pola celu są tu ZAWSZE
+    identyczne, więc mapa par była tylko drugą kopią tej samej prawdy.
+    """
     progress: dict[str, GoalMetric] = {}
-    for field, goal_field in _GOAL_FIELDS:
+    for field in GOAL_NUMERIC_FIELDS:
         value = getattr(values, field)
-        target = None if goal is None else getattr(goal, goal_field)
+        target = None if goal is None else getattr(goal, field)
         progress[field] = GoalMetric(
             value=value,
             target=target,

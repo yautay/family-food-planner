@@ -316,3 +316,33 @@ def test_delta_podsumowania_to_srednia_minus_srednia_celu() -> None:
     assert metric.target == Decimal("2000")
     assert metric.delta == Decimal("-100")
     assert metric.status is GoalStatus.OK
+
+
+def test_srednia_celow_zaokragla_sie_na_wyjsciu_jak_reszta_wartosci() -> None:
+    """Cel i delta podsumowania są zaokrąglone tak samo, co same wartości.
+
+    Ustalenie REVIEW R4: `avg` przechodziło przez `round_for_output`, ale
+    ŚREDNIA CELÓW nie — a trzy dni z celami 2000/2000/2200 dają w mianowniku
+    trójkę i liczbę `2066.666666666666666666666667`. Frontend obcina wyłącznie
+    KOŃCOWE ZERA (`formatDecimal`), więc dokładnie tyle cyfr lądowało na
+    ekranie Statystyk. Reguła jest jedna dla całego wyjścia (02_DOMAIN §6):
+    kcal do 1, makra do 0,1.
+    """
+    stats = build_daily_stats(
+        dates=[date(2026, 8, 10), date(2026, 8, 11), date(2026, 8, 12)],
+        nutrition_by_day={
+            date(2026, 8, 10): values("2000", protein="100"),
+            date(2026, 8, 11): values("2000", protein="100"),
+            date(2026, 8, 12): values("2000", protein="100"),
+        },
+        goals=[goal(date(2026, 8, 1), "2000"), goal(date(2026, 8, 12), "2200", protein="121")],
+        thresholds=DEFAULT_THRESHOLDS,
+    )
+
+    kcal = stats.summary.progress["kcal"]
+    assert kcal.target == Decimal("2067"), "kcal zaokrągla się do jedności"
+    assert kcal.delta == Decimal("-67")
+
+    protein = stats.summary.progress["protein_g"]
+    assert protein.target == Decimal("121.0"), "makra zaokrąglają się do 0,1 g"
+    assert protein.delta == Decimal("-21.0")

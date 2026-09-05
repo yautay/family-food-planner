@@ -65,7 +65,6 @@ family-food-planner/
       api/           # client.ts (apiFetch/ApiError), queryKeys.ts, generated.ts
       assets/        # tailwind.css — JEDYNE miejsce definicji kolorów
       components/    # ui/ (shadcn-vue: button, card, input) + domain/ (B02+)
-      composables/   # (B02+)
       layouts/       # AppShell.vue
       pages/         # LoginPage.vue; plan-dnia, tydzien, przepisy… (B02+)
       stores/        # (B02+ — authStore)
@@ -99,7 +98,7 @@ moduł wyłącznie przez service.
 | Obrazy | Pillow (walidacja + miniatury) | |
 | Logi | structlog → stdout (JSON w prod) | zbiera Docker |
 | Frontend | Vue 3 + TypeScript + Vite + Pinia + Tailwind CSS 4 | bez Nuxta |
-| Komponenty | shadcn-vue (reka-ui) + lucide-vue-next | ADR-007 |
+| Komponenty | shadcn-vue (reka-ui) + `@lucide/vue` | ADR-007 (paczka `lucide-vue-next` jest zdeprecjonowana) |
 | Server state | TanStack Query (Vue Query) | Pinia tylko UI state |
 | Formularze | vee-validate + zod | |
 | PWA | vite-plugin-pwa (Workbox) + idb | ADR-009 |

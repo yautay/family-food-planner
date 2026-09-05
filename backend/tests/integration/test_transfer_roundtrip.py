@@ -411,3 +411,57 @@ async def test_pozycja_planu_z_niewidocznym_przepisem_nie_psuje_pliku(
     summary = await service.apply(fresh, import_id=import_id, decisions=[])
     assert summary.created["plan_days"] == 1
     assert "plan_meal_items" not in summary.created
+
+
+async def test_d22_drugi_import_nie_dokłada_dzieci_reużytym_rodzicom(
+    db_session: AsyncSession, settings: Settings
+) -> None:
+    """Ten sam plik zaimportowany DWA razy nie podwaja zawartości rodzica (D22).
+
+    Pathologia zmierzona w BATCH_16: „użyj istniejącego" zostawiało przepis
+    w spokoju, ale jego składniki wjeżdżały od nowa (sekcje-dzieci nie mają
+    klucza naturalnego). Przy pętli eksport→import rosło to wykładniczo —
+    1536 składników w daniu o trzech.
+
+    Asercja jest per sekcja, bo NIE każda sekcja ma tu zostać nietknięta:
+    wiersz bez klucza naturalnego (wariant sklepowy, profil, pozycja spiżarni)
+    to z definicji „utwórz kopię" i drugi import robi drugą kopię. Decyzja D22
+    dotyczy wyłącznie DZIECI wiersza, który import rozpoznał jako ten sam.
+    """
+    uploads_root = Path(settings.uploads_dir)
+    seeded = await _seed(db_session, uploads_root)
+    service = TransferService(db_session, uploads_dir=settings.uploads_dir, max_zip_mb=100)
+
+    exported = await service.export(
+        seeded.user, scope=TransferScope.USER, app_version="test", now=utcnow()
+    )
+    archive_bytes = exported.path.read_bytes()
+
+    # Import na TO SAMO konto — przepisy i szablony kolidują po nazwie, a dzień
+    # planu scala się po `UNIQUE(owner_user_id, day)`.
+    import_id, first_report = await service.dry_run(
+        seeded.user, filename="export.zip", data=archive_bytes
+    )
+    assert first_report.collisions, "Import własnego pliku MUSI zgłosić kolizje nazw."
+    await service.apply(seeded.user, import_id=import_id, decisions=[])
+
+    after_first = {
+        model: await _count(db_session, model)
+        for model in (RecipeIngredient, RecipeRating, PlanMeal, PlanMealItem, PlanItemServing)
+    }
+
+    import_id, second_report = await service.dry_run(
+        seeded.user, filename="export.zip", data=archive_bytes
+    )
+    summary = await service.apply(seeded.user, import_id=import_id, decisions=[])
+
+    for model, before in after_first.items():
+        assert await _count(db_session, model) == before, (
+            f"{model.__name__}: reużyty rodzic dostał drugi komplet dzieci (D22)."
+        )
+
+    # Raport DRY-RUN mówi to samo, co zrobi zapis: dzieci reużytego przepisu
+    # nie są obiecywane. Bez tego użytkownik czytałby liczby, które nie zajdą.
+    assert "recipe_ingredients" not in second_report.to_create
+    assert "recipe_ingredients" not in summary.created
+    assert summary.reused.get("recipes"), "Przepis o tej samej nazwie ma być REUŻYTY."

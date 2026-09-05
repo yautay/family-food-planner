@@ -42,6 +42,7 @@ from app.modules.transfer.schemas import (
 from app.modules.transfer.serializer import (
     SECTIONS_BY_NAME,
     Section,
+    section_references,
     sections_for,
 )
 
@@ -237,18 +238,50 @@ class DryRunResult:
     photos: int
 
 
+def parent_blocked(
+    section: Section, row: Mapping[str, Any], blocked: Mapping[str, set[Any]]
+) -> bool:
+    """Czy rodzic kompozycji tego wiersza jest reużyty albo pominięty (decyzja D22).
+
+    Wspólne dla raportu DRY-RUN i dla zapisu — inaczej raport obiecywałby wiersze,
+    których `apply` nie utworzy.
+    """
+    if section.parent is None:
+        return False
+    target = section_references(section).get(section.parent)
+    if target is None:
+        return False
+    source_id = row.get(section.parent)
+    return source_id is not None and source_id in blocked.get(target, set())
+
+
+def mark_blocked(section: Section, row: Mapping[str, Any], blocked: dict[str, set[Any]]) -> None:
+    """Zapamiętaj, że zawartości TEGO wiersza z pliku import nie tyka (D22)."""
+    if section.pk is None:
+        return
+    source_id = row.get(section.pk)
+    if source_id is not None:
+        blocked.setdefault(section.name, set()).add(source_id)
+
+
 def analyze(
     document: ExportFile,
     *,
     existing: ExistingIndex,
     archive_photos: Iterable[str],
 ) -> DryRunResult:
-    """Policz raport DRY-RUN. Funkcja czysta — nie zapisuje ani nie czyta bazy."""
+    """Policz raport DRY-RUN. Funkcja czysta — nie zapisuje ani nie czyta bazy.
+
+    Liczby są liczone dla decyzji DOMYŚLNYCH (`USE_EXISTING` przy każdej kolizji),
+    bo tak samo zachowa się `apply`, gdy użytkownik niczego nie zmieni — łącznie
+    z pomijaniem dzieci reużytego rodzica (D22).
+    """
     available = set(archive_photos)
     to_create: dict[str, int] = {}
     collisions: list[CollisionRead] = []
     warnings: list[str] = []
     missing_photos = 0
+    blocked: dict[str, set[Any]] = {}
 
     for section in sections_for(document.scope):
         rows = document.data.get(section.name) or []
@@ -257,6 +290,9 @@ def analyze(
         section_existing = existing.get(section.name, {})
         creating = 0
         for row in rows:
+            if parent_blocked(section, row, blocked):
+                mark_blocked(section, row, blocked)
+                continue
             if section.photo is not None:
                 path = row.get(section.photo)
                 if path and str(path) not in available:
@@ -266,6 +302,7 @@ def analyze(
             if match is None:
                 creating += 1
                 continue
+            mark_blocked(section, row, blocked)
             if section.auto_reuse:
                 warnings.append(
                     f"„{display_name(section, row)}” już istnieje — użyto istniejącego wpisu."

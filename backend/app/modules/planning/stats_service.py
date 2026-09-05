@@ -37,6 +37,7 @@ from app.modules.nutrition.engine import (
     aggregate,
     goal_status,
     portion_nutrition,
+    round_field_for_output,
     round_for_output,
 )
 from app.modules.nutrition.models import UserNutritionGoal
@@ -183,11 +184,15 @@ def summarize(days: Sequence[DayStat], thresholds: GoalThresholds) -> StatsSumma
     progress: dict[str, GoalMetric] = {}
     for field in GOAL_NUMERIC_FIELDS:
         value = Decimal("0") if avg is None else getattr(avg, field)
-        target = targets[field]
+        # `avg` przeszło już przez `round_for_output`, ale ŚREDNIA CELÓW nie —
+        # a siedem dni w mianowniku daje `2085.714285714285714285714286`, które
+        # frontend pokazuje w całości (obcina tylko końcowe zera). Zaokrąglamy
+        # tą samą regułą, co resztę wyjścia (02_DOMAIN §6, ustalenie REVIEW R4).
+        target = round_field_for_output(field, targets[field])
         progress[field] = GoalMetric(
             value=value,
             target=target,
-            delta=None if target is None else value - target,
+            delta=None if target is None else round_field_for_output(field, value - target),
             # Bez ani jednego dnia z planem nie ma czego oceniać: status „za mało"
             # przy pustym zakresie byłby zarzutem wobec użytkownika, nie informacją.
             status=None if avg is None else goal_status(value, target, thresholds),

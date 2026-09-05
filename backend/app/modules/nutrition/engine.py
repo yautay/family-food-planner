@@ -48,6 +48,7 @@ __all__ = [
     "ingredient_nutrition",
     "portion_nutrition",
     "recipe_nutrition",
+    "round_field_for_output",
     "round_for_output",
     "scale",
 ]
@@ -255,3 +256,17 @@ def round_for_output(values: NutritionValues) -> NutritionValues:
         complete=values.complete,
         missing=values.missing,
     )
+
+
+def round_field_for_output(field: str, value: Decimal | None) -> Decimal | None:
+    """Zaokrąglenie POJEDYNCZEGO pola tą samą regułą, co `round_for_output`.
+
+    Potrzebne tam, gdzie na wyjście idzie liczba policzona z wartości, ale NIE
+    będąca `NutritionValues` — dziś: średnia celów zakresu i delta wobec niej
+    w `/stats/daily` (ustalenie REVIEW R4). Bez tego średnia z siedmiu dni
+    wychodziła jako `2085.714285714285714285714286` i dokładnie tak lądowała na
+    ekranie, bo formatter frontendu obcina wyłącznie KOŃCOWE ZERA.
+    """
+    if value is None:
+        return None
+    return value.quantize(_OUTPUT_QUANTA[field], rounding=ROUND_HALF_UP)

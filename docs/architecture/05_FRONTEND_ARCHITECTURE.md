@@ -31,7 +31,7 @@ odpowiedzi API nie piszemy.
 /                     → redirect /plan-dnia
 /plan-dnia/:date?     PlanDniaPage        (widok 1 wizualizacji)
 /tydzien/:weekStart?  PlanTygodniaPage    (widok 4)
-/przepisy, /przepisy/:id, /przepisy/:id/edytuj   (widoki 2–3)
+/przepisy, /przepisy/nowy, /przepisy/:id, /przepisy/:id/edytuj   (widoki 2–3)
 /produkty, /produkty/nowy, /produkty/:id/edytuj   (widok 8)
 /spizarnia            SpizarniaPage       (widok 6)
 /zakupy               ZakupyPage — konfig tur + generacja + preview
@@ -44,13 +44,17 @@ odpowiedzi API nie piszemy.
                         dzienna vs średnia celów ze statusem
 /import               ImportPage — DOSTARCZONE w B15: upload jadłospisu PDF,
                         lista importów ze statusami po polsku i podgląd raportu
-                        odczytu (liczby, sumy kontrolne dni, issues). Ekran
-                        review i zatwierdzanie dokłada B16
+                        odczytu (liczby, sumy kontrolne dni, issues)
+/import/jobs/:id/review  ImportReviewPage — DOSTARCZONE w B16: mapowania,
+                        porcje, scalenia, asysta AI i zatwierdzenie importu
 /ustawienia           UstawieniaPage      (cele, profile rodziny, sklepy, konto)
-/admin/*              AdminPage (użytkownicy, rodziny, weryfikacja produktów,
-                      audit, import/eksport) — od B14 istnieje `/admin/dane`
-                      (AdminDanePage: eksport i import CAŁEJ instancji);
-                      sekcja „Twoje dane" użytkownika mieszka w /ustawienia
+/admin/uzytkownicy · /admin/rodziny · /admin/weryfikacja · /admin/dane
+                      (AdminDanePage: eksport i import CAŁEJ instancji, B14);
+                      sekcja „Twoje dane" użytkownika mieszka w /ustawienia.
+                      **Ekranu `/admin/audit` NIE MA** — `GET /api/v1/audit`
+                      istnieje i jest ADMIN-only, ale B03 miał ten widok jako
+                      opcjonalny („jeśli tanio") i nie powstał. Dziennik czyta
+                      się dziś przez API albo bazę (ustalenie REVIEW R4)
 /login
 /l/:token             PublicznaListaPage  — POZA shellem aplikacji, bez auth
 ```
@@ -71,6 +75,20 @@ Stan faktyczny po BATCH_11 — trzy rzeczy, które wiążą kolejne trasy public
   (`src/api/publicList.ts`) z `credentials: 'omit'` i bez nagłówka CSRF —
   `client.ts` NIE dostał trybu warunkowego, bo jeden `if` w warstwie HTTP całej
   aplikacji łatwo pomylić, a pomyłka oznaczałaby wysyłanie cudzej sesji.
+
+Stan faktyczny po REVIEW R4 — **żaden ekran listy nie ma paginacji**. API
+paginuje (`?limit=&offset=` → `{items,total}`), ale KAŻDA strona wysyła
+`offset: 0` ze stałym limitem: `/produkty` 50, `/przepisy` 50, `/spizarnia`
+100, `/admin/weryfikacja` 50, `/admin/uzytkownicy` 50, `/admin/rodziny` 50,
+`/import` bez paginacji świadomie (importów jest z natury mało). Do dziś to
+nie bolało — seed demo ma 15 produktów i 5 przepisów. Zaboli natychmiast po
+ręcznym imporcie ośmiu jadłospisów, który daje **103 dania i 185 nazw
+produktów**: `/produkty` pokaże „Produktów: 185" i wyrenderuje 50, bez
+żadnego śladu, że reszta istnieje. Najgorszy przypadek to
+`/admin/weryfikacja`, bo sortuje „najstarsze na górze" po stronie KLIENTA,
+czyli sortuje pięćdziesiątkę wybraną alfabetycznie przez serwer — kolejka
+weryfikacji nigdy nie pokaże produktu spoza pierwszych 50 nazw.
+Naprawa: karta `BATCH_19_FIX_LIST_PAGINATION` (bramka przed B18).
 
 ## 4. Komponenty
 

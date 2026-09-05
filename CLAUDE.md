@@ -270,6 +270,29 @@ Dołożone w BATCH_15 (też fundament):
   został zmierzony jego `extract_text()`, a inna biblioteka inaczej skleja
   kolumny i unieważniłaby regexy.
 
+Dołożone w REVIEW R4 (też fundament):
+
+- `app/modules/transfer/serializer.py::Section.parent` + `importer.py::
+  parent_blocked`/`mark_blocked` — kontrakt decyzji **D22**: import, który
+  REUŻYWA wiersza, POMIJA jego sekcje-dzieci. Kryterium „dziecka" jest jedno
+  i sprawdzalne w bazie: FK `ON DELETE CASCADE` do rodzica (ADR-012), więc
+  składniki przepisu i posiłki dnia — tak, a produkt kanoniczny w składniku —
+  nie. Nowa sekcja formatu z takim FK deklaruje `parent` w TYM SAMYM batchu,
+  inaczej ten sam plik zaimportowany dwa razy podwoi zawartość rodzica.
+  Sprawdzenie idzie PRZED `resolve_references` (pominięte dziecko nie trafia
+  do `IdMap`, więc jego własne dzieci dostałyby „martwą referencję"), a tych
+  samych funkcji używa raport DRY-RUN — `to_create` ma mówić to, co zrobi
+  `apply`.
+- `app/modules/nutrition/engine.py += round_field_for_output(field, value)` —
+  zaokrąglenie POJEDYNCZEJ liczby tą samą regułą, co `round_for_output`
+  (kcal → 1, reszta → 0,1). Używa go `stats_service.summarize` dla ŚREDNIEJ
+  CELÓW i delty. Reguła bez zmian: liczba policzona z wartości odżywczych
+  wychodzi na zewnątrz zaokrąglona, bo formatter frontendu obcina wyłącznie
+  końcowe zera i pokaże `2085,714285714285714285714286` w całości.
+- `nutrition/types.GOAL_NUMERIC_FIELDS` jest JEDYNĄ listą pól celu —
+  `planning/service.py::_GOAL_FIELDS` (druga kopia z B13) już nie istnieje.
+  Nowe pole celu = wpis w `types.py`, nigdzie indziej.
+
 Testy: `tests/{unit,integration,api}/` (pakiet — z `__init__.py`), markery
 `unit`/`integration`/`api` (wymagane — bez markera test nie wejdzie do
 żadnego targetu), docstring po polsku opisujący scenariusz. Fixture'y

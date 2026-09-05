@@ -263,12 +263,32 @@ drodze są kasowane ręcznie. Paczka należy do konta, które ją wgrało — cu
 `import_id` daje **404**, identycznie jak nieistniejący. Import zostawia wpis
 `transfer.import` w dzienniku (liczby i decyzje, nigdy treść encji).
 
-Dwa zachowania przy powtórnym imporcie WŁASNEGO pliku na to samo konto:
-`plan_days` **scala się** z istniejącym dniem po `UNIQUE(owner_user_id, day)`
-(posiłki dopisują się jak przy instancjacji szablonu, B07), a wiersze niosące
-FAKT o encji nadrzędnej (`product_unit_weights`, `product_nutrient_values`,
-`recipe_ratings`, `user_nutrition_goals`) wchodzą `ON CONFLICT DO NOTHING`.
-Pozostałe konflikty UNIQUE kończą się **409** z instrukcją, nie 500.
+Trzy zachowania przy powtórnym imporcie WŁASNEGO pliku na to samo konto:
+`plan_days` **scala się** z istniejącym dniem po `UNIQUE(owner_user_id, day)`;
+wiersze niosące FAKT o encji nadrzędnej (`product_unit_weights`,
+`product_nutrient_values`, `recipe_ratings`, `user_nutrition_goals`) wchodzą
+`ON CONFLICT DO NOTHING`; a **zawartość wiersza REUŻYTEGO zostaje nietknięta**
+(decyzja **D22**, wdrożona w REVIEW R4). Pozostałe konflikty UNIQUE kończą się
+**409** z instrukcją, nie 500.
+
+„Zawartość" znaczy sekcje-dzieci kompozycji — te, których wiersz ma w bazie FK
+`ON DELETE CASCADE` do rodzica: składniki i oceny przepisu, posiłki dnia planu,
+pozycje posiłku, rozkłady porcji, pozycje listy zakupowej, przeliczniki i
+wartości mikro produktu. Reużyty przepis NIE dostaje drugiego kompletu
+składników, a reużyty dzień planu — drugiego kompletu posiłków; bez tej reguły
+pętla eksport→import podwajała je przy każdym przebiegu (zmierzone w B16:
+1536 składników w daniu o trzech). Referencja do SŁOWNIKA (produkt kanoniczny,
+kategoria, tag, sklep) dzieckiem NIE jest — reużycie produktu nie ma prawa
+skasować składnika, który go używa. Raport DRY-RUN liczy to tak samo jak zapis,
+więc `to_create` nie obiecuje wierszy, których `apply` nie utworzy.
+
+**Czego ta reguła NIE robi**: wiersz bez klucza naturalnego (wariant sklepowy,
+profil członka, pozycja spiżarni, konfiguracja tury, generacja, lista, szablon,
+cykl) nie ma tożsamości, po której import mógłby go rozpoznać — drugi import
+tworzy jego drugą kopię i tak ma być („utwórz kopię" to jedyna sensowna
+semantyka dla wiersza, którego nie da się utożsamić). Osobną sprawą, wskazaną
+przez D22 i NIEROZSTRZYGNIĘTĄ, jest to, czy scalenie dnia planu ma pozostać
+milczące, czy stać się jawną decyzją przy kolizji.
 
 ## 3. Zasady autoryzacji w API
 
@@ -280,6 +300,20 @@ Pozostałe konflikty UNIQUE kończą się **409** z instrukcją, nie 500.
    z macierzą 08_TESTING §4, w której ADMIN ma 200 w każdym wierszu. Widoczność
    to jednak NIE to samo co prawo do zmiany: modyfikacja scope i usunięcie idą
    przez `assert_can_manage`, więc reguły właścicielskie zostają w mocy.
+2-bis. **Widoczność nie wybiera CELU ZAPISU** (ustalenie REVIEW R4, 2026-09-05).
+   Dzień planu nie ma id w URL-u — adresuje go DATA — więc `PlanningService`
+   ma jeden resolver „który dzień dla tej daty", z którego korzystał zarówno
+   odczyt, jak i `PUT /plan/days/{date}`, `POST /plan/days/{date}/meals`
+   i instancjacja szablonu. Przy `visible_condition` (ADMIN → `true()`)
+   administrator BEZ własnego dnia na daną datę trafiał w najstarszy wiersz
+   dowolnego użytkownika z dowolnej rodziny: posiłek lądował w cudzym planie,
+   a `PUT` kasował tytuł i przestawiał `scope` na `private`. Od R4 resolver ma
+   dwa tryby — odczyt zostaje przy `visible` (D16 bez zmian), zapis idzie po
+   `owned_condition`, które dla nie-ADMIN-a jest DOKŁADNIE tym samym warunkiem,
+   więc członek rodziny nadal dopisuje do wspólnego dnia (B07). Tą samą granicą
+   objęte jest `demand_rows`: lista zakupowa ADMIN-a nie ma prawa powstać
+   z planów cudzych rodzin — po stronie spiżarni ta zasada obowiązuje od R3.
+   Test: `tests/api/planning/test_plan_api.py::test_admin_nie_dopisuje_do_cudzego_dnia_planu`.
 2a. Zasoby należące do rodziny bez kolumn scope (`member_profiles`) filtruje
    się porównaniem `household_id`; cudze i nieistniejące dają identyczne 404.
    `ScopedQuery` obowiązuje encje z kolumnami wzorca 03_DATABASE §4.

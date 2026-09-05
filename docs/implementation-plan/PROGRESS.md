@@ -27,9 +27,10 @@ commit wykonany). Kolumna „Blokery" = zależności + decyzje z 02_DECISIONS.
 | 14 IMPORT_EXPORT | [x] | — | `batch(14)` na master (hash wpisać po push) |
 | 15 PDF_IMPORT_EXTRACTION | [x] | — | `batch(15)` na master (hash wpisać po push) |
 | 16 PDF_IMPORT_REVIEW_AND_AI | [x] | — | `batch(16)` na master (hash wpisać po push) |
-| R4 REVIEW_PRE_PRODUCTION | [ ] | 01–16 | |
+| R4 REVIEW_PRE_PRODUCTION | [x] | — | `batch(R4)` na master (hash wpisać po push) |
+| 19 FIX_LIST_PAGINATION | [ ] | R4 (ustalenie P1 — warunek werdyktu) | |
 | 17 PRODUCTION_HARDENING | [ ] | R4 | |
-| 18 PRODUCTION_DEPLOYMENT_AND_OPERATIONS | [ ] | 17; **D6, D7** | |
+| 18 PRODUCTION_DEPLOYMENT_AND_OPERATIONS | [ ] | 17, **19**; **D6, D7** | |
 
 ## Dziennik
 
@@ -40,6 +41,446 @@ zmiany dotykające przyszłych batchy trzeba wpisać do ich kart
 (00_MASTER_PLAN §8); dziennik to indeks, nie schowek.
 
 ---
+
+**2026-09-05 — REVIEW R4 (REVIEW_PRE_PRODUCTION) — WERDYKT: GO WARUNKOWE**
+
+**B17 może startować od razu. B18 nie startuje, dopóki nie zamkną się trzy
+warunki niżej.** Aplikacja jest przedprodukcyjnie zdrowa tam, gdzie decyduje
+się bezpieczeństwo danych rodziny: publiczna ścieżka nie wypuszcza PII, uploady
+mają sniffing i autoryzację, w repo nie ma sekretów, oba audyty zależności są
+czyste, a **backup logiczny naprawdę odtwarza dane** — sprawdzone round-tripem
+na CZYSTEJ instancji, nie zadeklarowane. Wydajność ma zapas rzędu
+dziesięciokrotności budżetu. Warunki dotyczą rzeczy, które uderzają dopiero
+przy realnym użyciu.
+
+**Warunki werdyktu:**
+
+1. **`BATCH_19_FIX_LIST_PAGINATION` przed B18** (P1, nowa karta). Żaden ekran
+   listy nie ma paginacji — każdy wysyła `offset: 0` ze stałym limitem. Dziś
+   niewidoczne (15 produktów demo), po imporcie ośmiu jadłospisów **103 dania
+   i 185 nazw produktów** trafi w sufit 50.
+2. **D6 i D7 zatwierdzone przed B18** — bramka istniała przed R4 i R4 jej NIE
+   rusza. **B17 ich nie potrzebuje.**
+3. **Punkty 1–3 z „Ustaleń R4" w karcie B17**: healthcheck sprawdzający
+   zgodność migracji (09_DEPLOYMENT §2 tego WYMAGA), CSP bez `base-uri`
+   i `form-action` (te dwie dyrektywy NIE dziedziczą po `default-src`), brak
+   rate limitu na endpointach uploadu.
+
+GO warunkowe, a nie NO-GO, bo po naprawach z tego commita nie została ani jedna
+znana dziura w danych albo autoryzacji — zostało niewykończenie, którego cena
+rośnie dopiero po wdrożeniu.
+
+---
+
+**NAJWAŻNIEJSZE ZNALEZISKO — ADMIN dopisywał do CUDZEGO dnia planu.
+NAPRAWIONE w tym commicie.**
+
+Dzień planu nie ma id w URL-u — adresuje go DATA — więc `PlanningService`
+miał JEDEN resolver „który dzień dla tej daty", z którego korzystał zarówno
+odczyt, jak i `PUT /plan/days/{date}`, `POST /plan/days/{date}/meals`
+i instancjacja szablonu. Resolver pytał `visible_condition`, a ta zwraca
+ADMIN-owi `true()` (D16). Skutek: administrator, który NIE miał własnego dnia
+na daną datę, trafiał w najstarszy wiersz **dowolnego użytkownika z dowolnej
+rodziny**.
+
+Odtworzone realnie na działającym stacku (nie z lektury kodu): ADMIN wykonał
+`POST /plan/days/2029-11-17/meals` → posiłek wylądował w dniu cudzej rodziny;
+`PUT /plan/days/2029-11-17` → cudzemu dniowi zniknął tytuł („Urodziny Zosi"
+→ `null`) i `scope` przeskoczył `household` → `private`, czyli dzień wypadł
+z widoku pozostałych członków TAMTEJ rodziny. Żadnego z tych pól ADMIN nie
+nazwał — wystarczyło, że planował własny obiad.
+
+To nie jest eskalacja uprawnień (trzeba sesji ADMIN-a), tylko **cicha korupcja
+cudzych danych przy zwykłym użyciu** — i wprost łamie D16, która mówi, że
+wyjątek dla ADMIN-a dotyczy ODCZYTU i „nie rozciąga się na mutacje reguł
+właścicielskich".
+
+Naprawa: `_resolve_day(..., for_write=True)` i `_resolved_days(..., owned=True)`
+używają `owned_condition` zamiast `visible_condition` na ścieżkach ZAPISU
+(`upsert_day`, `create_meal`, `append_day_payload`) oraz w `demand_rows`.
+Dla nie-ADMIN-a `owned_condition` jest DOKŁADNIE tym samym warunkiem, więc
+członek rodziny nadal dopisuje posiłki do wspólnego dnia rodzinnego — reguła
+z B07 bez zmian, żaden istniejący test nie musiał być osłabiony. `demand_rows`
+weszło do tej samej granicy z osobnego powodu: lista zakupowa ADMIN-a
+powstawała z planów WSZYSTKICH rodzin, podczas gdy spiżarnia po drugiej
+stronie silnika idzie po `select_own_household` od R3 — obie strony mówiły
+o innym domu. Test: `test_admin_nie_dopisuje_do_cudzego_dnia_planu`; test D16
+na ODCZYT (`test_d16_admin_widzi_cudzy_plan_na_sciezkach_uzytkownika`) stoi
+nietknięty obok niego. Granica dopisana do **04_API §3 pkt 2-bis**
+i **07_SECURITY §4**.
+
+---
+
+**Bezpieczeństwo: ZERO otwartych HIGH.**
+
+`/security-review` przeszedł po CAŁYM kodzie w czterech równoległych przebiegach
+(core+auth+konta, moduły domenowe, zakupy+transfer+importer, frontend). Jedyne
+ustalenie powyżej progu to opisany wyżej resolver dnia planu — naprawione.
+Frontend: **zero trafień** na `v-html`/`innerHTML`/`document.write`, zero
+`<a href>` w szablonach (każda nawigacja to `RouterLink` z nazwaną trasą, więc
+`javascript:` nie ma się gdzie pojawić), zero `console.*` w kodzie produkcyjnym,
+zero odczytów `import.meta.env`; skan zbudowanego bundla pod `sk-ant-` i wzorce
+kluczy — czysty. `safeNext` w `LoginPage` odrzuca `next`, który nie zaczyna się
+od jednego `/`.
+
+Zweryfikowane REALNYMI żądaniami na działającym stacku, nie testami:
+
+- nagłówki (nosniff, `Referrer-Policy: same-origin`, `X-Frame-Options: DENY`,
+  CSP bez zewnętrznych źródeł) wychodzą też na ścieżce publicznej i na 404;
+- publiczna lista: token 43 znaki, odpowiedź to DOKŁADNIE
+  `{name, expires_at, items}`, pozycja to dokładnie dziesięć pól z białej listy,
+  **`received_at` nieobecne** (D19), skan po `email`/`owner`/`household`/
+  `user_id`/`product_id`/`from_pantry` — zero trafień;
+- token o złym kształcie → 422 PRZED zapytaniem do bazy, nieznany → 404
+  z tym samym komunikatem co 410, odpowiedź bez `Set-Cookie`;
+- rate limit: 70 żądań GET dało 54×200 + 16×429, PATCH po wyczerpaniu też 429
+  (licznik WSPÓLNY), ścieżka zalogowana nietknięta;
+- maskowanie tokenu potwierdzone GREPEM po realnym logu w OBU warstwach
+  (`structlog` i access log Uvicorna) — `/api/v1/public/lists/***`;
+- mutacja bez `X-CSRF-Token` → 403.
+
+`task audit`: pip-audit „No known vulnerabilities found"; `npm audit` **miał
+jedno HIGH** — `fast-uri` 3.1.5 (łańcuch `vite-plugin-pwa → workbox-build →
+ajv`, `"dev": true`, więc narzędzie budowania, nie kod wysyłany do
+przeglądarki). Podbite do 3.1.7, oba audyty czyste. `task secrets-scan`:
+„no leaks found" (33 commity, 6,07 MB).
+
+**Trzy obserwacje poniżej progu poszły do B17** (pkt 6–8 „Ustaleń R4"):
+prefiks `__Host-` dla cookies, `hide_parameters=True` na silniku (nieobsłużony
+`DBAPIError` na INSERCIE do `sessions` wypisałby token do logu wraz z sekcją
+`[parameters: ...]`) i `PRIVATE_SUBDIRS` porównywane z uwzględnieniem wielkości
+liter.
+
+---
+
+**Wydajność (baza dev, seed demo + przekrój domeny; ASGI, mediana z 5)**
+
+| Widok | Zapytań SQL | Mediana | Min–Max |
+|---|---|---|---|
+| Plan dnia (1 dzień) | 11 | 31 ms | 25–44 ms |
+| **Plan tygodnia (7 dni)** | **11** | **37 ms** | 35–57 ms |
+| Lista przepisów (szukajka) | 9 | 29 ms | 25–51 ms |
+| Katalog produktów (50) | 7 | 38 ms | 24–42 ms |
+| Statystyki (7 dni) | 12 | 45 ms | 32–49 ms |
+| **Statystyki (92 dni — sufit)** | **12** | **43 ms** | 36–50 ms |
+| Konfiguracja tur | 3 | 17 ms | 14–21 ms |
+| Generacja zakupów (7 dni + spiżarnia) | 14 | 55 ms | 44–69 ms |
+| Podgląd generacji (z `params`) | 3 | 14 ms | 12–22 ms |
+| Lista zakupowa (szczegół) | 5 | 24 ms | 22–26 ms |
+| Spiżarnia | 4 | 17 ms | 14–19 ms |
+| Publiczna lista (przez HTTP) | — | 22 ms | 18–37 ms |
+
+**Budżet <500 ms z R2 spełniony z zapasem ×10.** Kluczowe są nie czasy, tylko
+DWIE liczby zapytań: plan tygodnia kosztuje **tyle samo zapytań co jeden dzień**
+(11 = 11), a statystyki na 92 dniach **tyle samo co na 7** (12 = 12) — czyli
+liczba round-tripów nie zależy od zakresu i N+1 nie ma w żadnym z mierzonych
+widoków. Indeksy sprawdzone `EXPLAIN`-em: `ix_day_templates_payload_gin` jest
+faktycznie używany przy containmencie `@>` (nie założony — wymuszony
+`enable_seqscan=off` i odczytany z planu), `ix_canonical_products_name_trgm`
+i `ix_recipes_name_trgm` przy `%`. Regresji wobec R2 nie ma: R2 mierzył
+`GET /plan/days` na 100–177 ms przy 112 pozycjach, tu jest 37 ms przy mniejszym
+planie — rząd wielkości ten sam.
+
+---
+
+**Backup logiczny — round-trip wykonany REALNIE, nie zadeklarowany.**
+
+Eksport instancji z bazy dev → **świeża baza `pasnik_rt`** (`CREATE DATABASE`
++ `alembic upgrade head`, zero wierszy) → dry-run → apply. Odtworzyło się
+WSZYSTKO, co było w źródle, co do wiersza — **25 sekcji z zawartością**
+(23 utworzone + 2 słowniki reużyte, bo migracje zasiewają kategorie i tagi):
+14 kategorii, 9 tagów, 1 sklep, 15 produktów kanonicznych, 10 przeliczników,
+10 wariantów sklepowych, 1 rodzina, 1 konto, 2 profile, 2 cele (CAŁA historia
+z `valid_from`), 5 przepisów, 15 składników, 1 ocena, 7 dni planu, 15 posiłków,
+16 pozycji, 1 szablon dnia, 1 szablon tygodnia, 1 cykl, 2 pozycje spiżarni,
+2 tury, 2 generacje, 4 listy, 40 pozycji list, 6 wpisów audytu. **`to_create` z raportu DRY-RUN zgadzał się
+co do sztuki z tym, co faktycznie powstało** — raport jest rzetelny. Braków
+w zakresie eksportu NIE MA, więc ustalenie blokujące nie powstało.
+
+Uczciwe zastrzeżenie: ten przebieg NIE objął zdjęć, bo dane demo ich nie mają
+(`photos_imported` = 0). Ścieżkę plików pokrywają testy integracyjne —
+`test_round_trip_odtwarza_dane_na_czystej_bazie` (dwa zdjęcia wracają pod
+NOWYMI, losowymi nazwami po re-enkodowaniu) i
+`test_duza_paczka_ze_zdjeciami_przechodzi_w_obie_strony` (~50 MB archiwum).
+
+**D22 WDROŻONA i zmierzona.** Drugi import tego samego pliku dokładał
+**+15 posiłków i +16 pozycji** do REUŻYTYCH dni planu (reużyty rodzic dostawał
+drugi komplet dzieci). Po naprawie: **0**. Mechanizm: `Section.parent` nazywa
+kolumnę rodzica KOMPOZYCJI, a kryterium jest sprawdzalne w bazie — FK
+`ON DELETE CASCADE` (ADR-012). Sprawdzenie idzie PRZED `resolve_references`,
+bo pominięte dziecko nie trafia do `IdMap` i jego własne dzieci dostałyby
+„martwą referencję", wywracając cały import. Tych samych funkcji używa raport
+DRY-RUN. Przepisany został jeden istniejący test
+(`test_import_wlasnego_eksportu_reuzywa_dnia_planu_i_nie_tyka_jego_posilkow`) —
+asercjonował DOKŁADANIE posiłków, czyli zachowanie, które ta decyzja odwraca;
+nie osłabiono go, tylko przestawiono na nową regułę z uzasadnieniem
+w docstringu.
+
+**Czego D22 świadomie NIE obejmuje**: sekcje bez klucza naturalnego (wariant
+sklepowy, profil członka, pozycja spiżarni, tura, generacja, lista, szablon,
+cykl) **nadal duplikują się przy drugim imporcie** — nie mają tożsamości,
+po której dałoby się je rozpoznać, więc „utwórz kopię" jest dla nich jedyną
+sensowną semantyką. Zmierzone i opisane w 04_API §2. Pytanie, czy milczące
+scalanie dnia planu ma zostać milczące, poszło do rejestru jako **D24 (OPEN)**.
+
+---
+
+**Spójność statystyk z planem dnia (ustalenie B13) — potwierdzona pomiarem.**
+
+Ten sam zakres w `/plan/days` i `/stats/daily`: **zero rozjazdów** na 7 dniach
+× 7 polach wartości; statusy identyczne w obu widokach. Dzień bez planu jest
+LUKĄ (`has_plan: false`, `nutrition: null`, statusy `null`), a dzielnikiem
+średniej jest `days_with_plan` (7 z 8 dni zakresu). Zmiana celu w środku
+zakresu działa jak zapowiedziano: przy celach 2000 (od 01.08) i 2200 (od 28.08)
+`summary.goal_progress.kcal.target` wyszło (2000×4 + 2200×3)/7, czyli ŚREDNIA
+celów dni z planem, nie „ostatni cel".
+
+**Przy okazji znaleziony i naprawiony błąd**: ta średnia wychodziła jako
+`"2085.714285714285714285714286"`, a `formatDecimal` we froncie obcina
+wyłącznie KOŃCOWE ZERA — więc ekran Statystyk pokazywał 24 cyfry po przecinku.
+`avg` przechodziło przez `round_for_output`, średnia CELÓW nie. Doszło
+`engine.round_field_for_output(field, value)` (ta sama reguła: kcal → 1,
+makra → 0,1) i `summarize` używa go dla `target` i `delta`. Sprawdzone na żywo:
+`target: "2086"`, `delta: "-779"`. Test:
+`test_srednia_celow_zaokragla_sie_na_wyjsciu_jak_reszta_wartosci`.
+
+Świadoma konsekwencja tej naprawy: `goal_status` podsumowania liczy się teraz
+z celu ZAOKRĄGLONEGO, więc dokładnie na granicy progu (90%/110% z D9) status
+może wyjść inaczej niż przed zmianą. Tak jest POPRAWNIE — `value` było
+zaokrąglane od zawsze, a status ma odpowiadać liczbom, które użytkownik widzi
+na ekranie, nie tym, które zostały w pamięci.
+
+---
+
+**Weryfikacja wyrywkowa AC — po dwa kryteria z każdego batcha**
+
+| Batch | Kryteria | Wynik |
+|---|---|---|
+| 01 | AC1 compose podnosi stack; AC7 zero sekretów w repo | ✔ 4 kontenery healthy; `git ls-files` tylko `.env.example`, gitleaks czysty |
+| 02 | AC5 mutacja bez CSRF → 403; AC3 wylogowanie unieważnia sesję | ✔ realny 403; `test_auth.py` (22 testy) |
+| 03 | AC3 macierz scope; AC5 usunięcie rodziny z członkami → 409 `used_in` | ✔ `test_scope_matrix.py`; `test_u16_*` |
+| 04 | AC5 szukajka toleruje literówki; AC9 kolejka UNVERIFIED | ✔ „marhew" → „Marchew" (similarity 0,50 ≥ próg 0,25); ekran JEST, ale z ustaleniem P1 (paginacja) |
+| 05 | AC4 `?servings=2.5`; AC2 silnik czysty + property-based | ✔ 255 kcal → 639 przy ×2,5 (zaokrąglenie na krawędzi, nie 638 — dokładnie tak ma być); testy hypothesis |
+| 06 | AC6 fit-to-target tylko PROPONUJE; AC2 historia celów | ✔ propozycja 2,13 → 499 kcal, `servings` w bazie nadal 2,00; dwa cele z `valid_from` przeżyły round-trip |
+| 07 | AC1 indeksy GIN; AC7 409 przy przepisie użytym w szablonie | ✔ `EXPLAIN` pokazuje `ix_day_templates_payload_gin`; testy szablonów |
+| 08 | AC5 nic nie odejmuje spiżarni automatycznie; AC3 spiżarnia wspólna | ✔ `generate(use_pantry=true)` → delta `pantry_items` = 0; testy pantry |
+| 09 | AC4 profil sklepu = trwała kolejność; AC7 jedna głowa | ✔ PUT `[5,4,3,2,1]` → GET zwraca `[5,4,3,2,1]`; `alembic heads` = `0015` |
+| 10 | AC2 `generate` zapisuje TYLKO generację; AC7 determinizm | ✔ delta: +1 generacja, 0 list, 0 pozycji; dwa `GET` identyczne bajt w bajt (13 799 B) |
+| 11 | AC4 link 43 znaki; AC6 limit 60/min + maskowanie | ✔ token 43 znaki; 54×200 + 16×429, `***` w obu logach |
+| 12 | AC7 przyjęcie idempotentne (D19); AC4 LWW | ✔ 1. `accept` 200 `created=1`, 2. → 409; `test_shopping_lww.py` |
+| 13 | AC2 słupki zgodne z planem dnia; AC4 dni bez planu to luki | ✔ 0 rozjazdów na 7×7 pól; `days_with_plan` 7 z 8 |
+| 14 | AC6 round-trip na czystej bazie; AC3 raport DRY-RUN rzetelny | ✔ 25 sekcji odtworzonych; `to_create` == `created` |
+| 15 | AC2 liczby korpusu; AC9 walidacja krzyżowa | ✔ `test_pdf_corpus.py` 24/96/**662**/**185**; `test_prototype_crosscheck.py` ≥84/≥592 |
+| 16 | AC5 approve zablokowany przy blokerach; AC8 AI jako propozycja | ✔ `test_approve_gate.py`; `test_ai_parsing.py` + `test_import_ai_assist.py` (zero realnych wywołań) |
+
+**Uwaga do B15 AC2**: karta wymaga „642 składniki, 178 nazw", a testy
+asercjonują 662/185. To NIE jest rozjazd, tylko skutek decyzji **D20** wdrożonej
+w B16 — liczby w karcie B15 opisują stan sprzed rozszerzenia kontraktu §3.2
+i są zapisem historycznym.
+
+**Uzgodnienie liczb korpusu (rozbieżność zgłoszona przy zleceniu R4)**:
+„≥84 przepisy / 592 składniki" to PRÓG walidacji krzyżowej z `prototype.db`
+(D2), „24 dni / 96 posiłków / 662 wiersze / 185 nazw" to POMIAR korpusu
+(01_PDF_AUDIT §1 po D20), a „101 przepisów / 629 składników" z B15 to wynik
+krzyżowy PO dedupie, czyli liczba porównywana z progiem. Trzy różne miary,
+zero sprzeczności — wyjaśnienie dopisane do karty R4 §Tests. Do zapamiętania:
+**103 dania ≠ 96 posiłków**, bo posiłek bywa dwudaniowy (§2).
+
+**Follow-upy obiecane w Completion notes — kontrola przekrojowa**: U7 (skill
+`ffp-framework`) faktycznie zamknięty w commicie renameu — w żywych dokumentach
+zostały wyłącznie wzmianki HISTORYCZNE (treść D23 i dziennik), zgodnie z regułą
+podziału z D23; katalogi skilli to wyłącznie `pasnik-*`. U16/U17 zamknięte
+w R3, U22 zamknięty w B16 (kolumna `from_extras_section`, migracja `0015`),
+U30 rozstrzygnięty jako D22 i wdrożony tutaj. Bramka dryfu modeli z R3 świeci
+zielono. **Nie znalazłem ani jednego follow-upu zadeklarowanego jako wykonany,
+który nie byłby wykonany.**
+
+---
+
+**Dług techniczny — JEDNA lista z priorytetami**
+
+Grep `TODO|FIXME|HACK|XXX` po `backend/**` i `frontend/**`: **zero trafień**.
+Cały dług programu żyje w dziennikach, więc poniżej jest jego konsolidacja.
+
+**P1 — przed wdrożeniem (mają przypisane miejsce wykonania):**
+
+- **Paginacja list w UI** → `BATCH_19_FIX_LIST_PAGINATION` (nowa karta).
+  Sześć ekranów, `offset: 0` na sztywno. Najgorszy przypadek to
+  `/admin/weryfikacja`: sortuje „najstarsze na górze" po stronie KLIENTA,
+  czyli sortuje pięćdziesiątkę wybraną alfabetycznie przez serwer — produkt
+  spoza pierwszych 50 nazw jest z tego ekranu nieosiągalny.
+- **Healthcheck bez kontroli migracji** → B17 pkt 1 (09_DEPLOYMENT §2 WYMAGA
+  statusu `degraded`).
+- **CSP bez `base-uri` i `form-action`** → B17 pkt 2 (te dyrektywy nie
+  dziedziczą po `default-src`).
+- **Brak rate limitu na uploadach** (`/import/pdf` 25 MB, zdjęcia,
+  `/transfer/import` 100 MB) → B17 pkt 3.
+
+**P2 — po wdrożeniu:**
+
+- **U21 POWIĘKSZONY przez D22**: raport DRY-RUN nadal liczy optymistycznie
+  sekcje bez klucza naturalnego, a od R4 dotyczy to także DZIECI rodzica
+  scalanego po `merge_key` — przy powtórnym imporcie na to samo konto raport
+  obiecuje posiłki, których `apply` nie utworzy. Rozjazd występuje WYŁĄCZNIE
+  przy scalaniu (import na czystą instancję jest dokładny — zmierzone).
+  Domknięcie wymaga indeksu istniejących wierszy dla sekcji `merge_key`,
+  czyli tego samego mechanizmu, co D24.
+- **`GET /api/v1/audit` nie ma konsumenta** — ekran `/admin/audit` był w B03
+  opcjonalny („jeśli tanio") i nie powstał. Dziennik operacji zapisuje się przy
+  każdej wrażliwej akcji, ale przeczytać go można tylko przez API albo bazę.
+  Martwy klucz `queryKeys.adminAudit` (`frontend/src/api/queryKeys.ts:174`).
+  Stan dopisany do 05_FRONTEND §3.
+- **ADMIN przechodzi przez `visible_condition` także na ścieżkach ZAPISU
+  zakupów** — `share_list`, `revoke_share`, `update_item`, `resolve`,
+  `finalize`, `accept_to_pantry` wołają `get_or_404` (dla ADMIN-a `true()`)
+  bez `assert_can_manage`. Różnica wobec naprawionego dziś dnia planu jest
+  istotna i dlatego R4 tego NIE ruszył: tam ADMIN trafiał w cudzy wiersz
+  PRZYPADKIEM, tu musi świadomie podać cudze id. Do rozstrzygnięcia razem
+  z rewizją granic D16 — albo domknąć `assert_can_manage`, albo dopisać do
+  D16, że ADMIN edytuje treść wszystkiego.
+- **U27** — N+1 w `ai-suggest`: `_unmapped_names` woła `list_products` raz na
+  nieodwzorowaną nazwę (2 zapytania każde). Po pełnym imporcie to ~180 nazw,
+  czyli rząd 360 zapytań na jedno kliknięcie.
+- **U26 → osierocone pliki**: testy uruchamiane taskiem dziedziczą `UPLOADS_DIR`
+  z `.env`, więc w `backend/data/uploads/import-pdf/` leżą **3 PDF-y (4,4 MB)**
+  bez wiersza w bazie. Na produkcji ten sam mechanizm zostawi śmieci po każdym
+  nieudanym imporcie → B17 pkt 4 (komenda raportująca, NIE cron kasujący).
+- **U12** (świeżość kontraktu API niebramkowana), **U13** (`SECRET_KEY`
+  wymagany, nieużywany), **U24** (`PDF_PARSE_TIMEOUT_S` przerywa żądanie, nie
+  wątek; przy okazji: to stała modułu, nie zmienna env — na Odroidzie może
+  wymagać innej wartości) → wszystkie już w karcie B17. **U19** (brak komendy
+  CLI restore) → B18. W R4 sprawdzone realnie: `task fe-types` daje ZEROWY diff,
+  więc kontrakt jest zgodny z kodem.
+
+**P3 — nice to have:**
+
+- **U14** `ilike` bez `autoescape=True` w wyszukiwarkach ADMIN-a
+  (`accounts/service.py:180`, `households/service.py:183`) — już w karcie B17.
+- **U23** 3 ze 103 nazw dań ucięte przez zawijanie kolumn.
+- **U25/U29** lista importów bez paginacji — świadomie POZA B19.
+- **U28** E2E zostawia zatwierdzony job (statusy rozstrzygnięte są nieusuwalne
+  z założenia).
+- Prefiks `__Host-` dla cookies, `hide_parameters=True`, `PRIVATE_SUBDIRS`
+  bez `lower()` → B17 pkt 6–8.
+- **ADMIN zatwierdzający CUDZY job importu tworzy przepisy NA SIEBIE**
+  (`review_service.approve` przekazuje `actor`, nie właściciela joba). Dziś
+  bez znaczenia (jeden ADMIN = właściciel), do rozstrzygnięcia, gdy powstanie
+  drugie konto ADMIN.
+- `bind_contextvars(user_id=…)` nigdy nie odpinane — kwestia atrybucji logów.
+- `coerce_value` rzuca gołe `ValueError` na złej wartości enuma w pliku
+  transferu → 500 zamiast 422.
+
+**ZAMKNIĘTE, potwierdzone w R4**: U1–U11 (R1/B05), U15 (E2E od R2), U16/U17
+(R3), U18 (seed rozszerzony w B10), U22 (B16), U7 (rename D23), U30 → D22 →
+wdrożone tutaj. Dług z B13 (`planning/service.py::_GOAL_FIELDS` jako druga
+kopia listy pól celu) **domknięty w tym commicie** — została jedna lista,
+`nutrition/types.GOAL_NUMERIC_FIELDS`.
+
+---
+
+**Decyzje**
+
+- **D22 → ZATWIERDZONA i WDROŻONA** (przeniesiona do tabeli zatwierdzonych
+  razem z **D23**, która wisiała w „Otwarte" mimo statusu ZATWIERDZONE).
+- **D10 (retencja) — rewizja wykonana, REKOMENDACJA BEZ ZMIAN**: nic nie
+  usuwamy automatycznie. Sprawdzone w kodzie, co JUŻ się sprząta (sesje przy
+  logowaniu, PDF odrzuconego importu, scratch transferu z TTL 24 h, stare
+  zdjęcie przy podmianie) i co nie rośnie samo. Jedyną nieograniczoną osią jest
+  `/srv/pasnik/uploads`, więc do B17/B18 idą dwa konkrety zamiast automatu:
+  raport zajętości w runbooku backupu i komenda „pliki bez referencji".
+- **D21 — grunt przygotowany POMIAREM, nie szacunkiem**. Parser puszczony na
+  całym korpusie zebrał próbki wszystkich wierszy z jednostką „Sztuka":
+  **42 produkty, 223 próbki**. Rozkład jakości lepszy, niż zakładała §5.2 —
+  **34 produkty (81%) mają rozrzut ZEROWY**, niespójnych jest osiem
+  i ich rozrzut to 12–20% (`Papryka czerwona` 200–230 przy 27 próbkach,
+  `Jajko` 50–60 przy 25, `Cebula` 105–120 przy 24) z jednym odstającym
+  (`Burak` 100–150 g przy trzech próbkach). Mediana ma więc realnie co robić.
+  Dwa zastrzeżenia dla ekranu zatwierdzania: **14 produktów ma DOKŁADNIE JEDNĄ
+  próbkę** (tam „mediana" to przepisanie jednego odczytu — trzeba pokazywać
+  `samples_count`), a „Sztuka" u dietetyczki bywa CAŁYM warzywem (`Cukinia`
+  600 g, `Brokuł` 500 g, `Dynia` 900 g, `Kapusta włoska` 1500 g — wszystkie
+  z rozrzutem zerowym, więc to nie błędy odczytu). Blokerem nadal nie jest
+  jakość danych, tylko D15. Skala: osiem jadłospisów = ~42 propozycje,
+  34 jednogłośne.
+- **D24 (NOWA, OPEN)** — czy scalenie dnia planu przy imporcie ma pozostać
+  milczące. Wskazana wprost przez D22; rekomendacja: zostawić scalanie, ale
+  wymienić je w ostrzeżeniach raportu DRY-RUN.
+- **D6 i D7 — NADAL OPEN. Przypomnienie: bez ich zatwierdzenia B18 NIE
+  STARTUJE. B17 startuje bez nich.**
+
+---
+
+**Dokumentacja: każdy z dziewięciu dokumentów architektury przejrzany.**
+Zaktualizowane do stanu faktycznego: **01_ARCHITECTURE** (§2 wymieniał
+nieistniejący katalog `src/composables/`; §3 podawał `lucide-vue-next` zamiast
+`@lucide/vue`), **02_DOMAIN §11** i **04_API §2** (semantyka D22),
+**04_API §3 pkt 2-bis** i **07_SECURITY §4** (granica „widoczność nie wybiera
+celu zapisu"), **05_FRONTEND §3** (brakowało `/przepisy/nowy`
+i `/import/jobs/:id/review`; `/admin/*` obiecywał ekran audytu, którego nie ma;
+dopisany stan faktyczny paginacji). Potwierdzone jako zgodne bez zmian:
+03_DATABASE (36 tabel w bazie = 36 w `EXPECTED_TABLES`), 06_UIUX,
+08_TESTING, 09_DEPLOYMENT. **ADR-001…015 przejrzane — żaden nie jest martwy
+ani łamany** (karta R4 mówiła „001…014"; ADR-015 istnieje od B01 i został
+dopisany do zakresu audytu). Sprawdzone wyrywkowo w kodzie: zero `float`
+w torze domenowym (jedyne wystąpienia to próg pg_trgm, timeouty i `confidence`
+z JSON-a natychmiast konwertowane na `Decimal`), zero bibliotek wykresów, zero
+i18n, zero JWT/passlib/python-jose, `postgresql+psycopg://` z
+`selector_loop_factory`, cztery store'y Pinia i wszystkie to stan UI, zero
+wartości hex w komponentach, zero `any` w TS. CLAUDE.md dostał sekcję
+„Dołożone w REVIEW R4".
+
+**Co MUSZĄ wiedzieć kolejne batche:**
+
+1. **Widoczność NIE wybiera celu zapisu.** Zasób adresowany czymś innym niż
+   własne id (data, nazwa, klucz naturalny) musi rozstrzygać „który wiersz to
+   mój" przez `owned_condition`, nie `visible_condition` — inaczej `true()`
+   ADMIN-a z D16 zamienia zapis w zapis do cudzej rodziny.
+2. **Nowa sekcja formatu transferu z FK `ON DELETE CASCADE` do rodzica
+   deklaruje `Section.parent` w TYM SAMYM batchu** (D22), inaczej ten sam plik
+   zaimportowany dwa razy podwoi zawartość rodzica.
+3. **Liczba policzona z wartości odżywczych wychodzi na zewnątrz ZAOKRĄGLONA** —
+   `round_field_for_output` dla pojedynczego pola, `round_for_output` dla
+   całych `NutritionValues`. Formatter frontendu obcina wyłącznie końcowe zera
+   i pokaże 24 cyfry po przecinku, jeśli je dostanie.
+4. **Nowy ekran listy MA mieć paginację** — wzorzec ustala B19 i dopisze go do
+   06_UIUX. Do tego czasu każdy nowy `offset: 0` powiększa dług P1.
+
+**Wyniki uruchomień (realne).** `task check` zielony na WEJŚCIU (exit 0,
+przed jakąkolwiek zmianą) i zielony PO naprawach: 3 migrations-check /
+**432 unit** / **330 integration** / **411 api** (13 min 15 s) /
+**398 vitest w 42 plikach** / mypy 201 plików + vue-tsc / ruff / eslint /
+prettier (217 plików) / `vite build` (69 wpisów precache). Przyrost wobec stanu
+na wejściu to dokładnie trzy testy, po jednym na naprawę: +1 unit
+(zaokrąglanie średniej celów), +1 integration (D22), +1 api (izolacja zapisu
+ADMIN-a).
+
+**E2E: 20/20 w DWÓCH kolejnych przebiegach** (1,5 min i 1,3 min) — kryterium
+z 08_TESTING §3.1 spełnione, zero flaków. Warto odnotować `transfer.spec.ts`:
+**2,6 s w obu przebiegach**. Przed D22 ten sam spec potrafił rosnąć do 73 s
+i wywracać na timeoucie dwa cudze specy (B16), a po ręcznym resecie bazy dev
+schodził do 8,6 s. Teraz nie ma czego resetować — reużyty rodzic nie dostaje
+drugiego kompletu dzieci, więc dane nie puchną między przebiegami.
+
+`task audit`: pip-audit „No known vulnerabilities found",
+`npm audit --audit-level=high` „found 0 vulnerabilities" (po podbiciu
+`fast-uri`). `task secrets-scan`: „no leaks found" (33 commity, 6,07 MB).
+`task fe-types`: ZEROWY diff, więc `backend/openapi.json`
+i `frontend/src/api/generated.ts` są zgodne z kodem (U12 sprawdzone realnie,
+choć nadal niebramkowane). `alembic heads`: jedna głowa `0015` — **R4 nie
+dodał migracji**, bo żadna naprawa nie dotknęła schematu.
+
+**Review własnych zmian**: `/code-review` na diffie — **zero ustaleń**.
+Przejrzane hunk po hunku: brak zmiany zachowania dla nie-ADMIN-a
+(`owned_condition` == `visible_condition` poza rolą ADMIN), `mark_blocked`
+wołane transitywnie także dla wiersza POMINIĘTEGO (bez tego dziecko dziecka
+dostałoby „martwą referencję"), `parent` NIE nadany żadnej sekcji
+referencującej słownik.
+
+**Środowisko**: pomiary i round-trip robione na bazie dev odtworzonej przy
+renameie D23 (migracje → `create-admin` → `seed_demo`), więc były to dane
+czyste, nie narosłe. Przekrój domeny doseedowany PRZEZ API pod prefiksem
+„R4 "; dane dowodowe PoC (`poc-obcy@example.com`, „POC Obca Rodzina", dzień
+2029-11-17) usunięte po weryfikacji naprawy.
 
 **2026-09-04 — DECYZJA D23 (właściciel): aplikacja nazywa się „Paśnik".**
 Rewizja D1, wykonana od razu i w pełnym zakresie — razem z identyfikatorami

@@ -25,7 +25,7 @@ kontraktem w `01_PDF_AUDIT.md`.
 | Plik | Rola |
 |---|---|
 | `docs/architecture/01…09_*.md` | architektura: przegląd, domena, DB, API, frontend, UX, security, testy, deployment/backup |
-| `docs/adr/ADR-001…014` | trwałe decyzje techniczne (nie podejmować ponownie!) |
+| `docs/adr/ADR-001…015` | trwałe decyzje techniczne (nie podejmować ponownie!) |
 | `docs/implementation-plan/01_PDF_AUDIT.md` | zmierzony kontrakt importera PDF |
 | `docs/implementation-plan/02_DECISIONS.md` | rejestr decyzji właściciela (D-numery, bramki batchy) |
 | `docs/implementation-plan/03_AI_SKILLS.md` | skille/narzędzia AI używane przy implementacji |
@@ -36,8 +36,8 @@ kontraktem w `01_PDF_AUDIT.md`.
 ## 3. Lista batchy
 
 Klasy: FOUND=fundamenty, CORE=rdzeń, SHOP=zakupy, PLAT=platforma,
-PROD=produkcja, REV=review. Batch identyfikowany NAZWĄ (nie „X z N" —
-plan może się zmieniać).
+PROD=produkcja, REV=review, FIX=batch naprawczy (§6) utworzony przez review.
+Batch identyfikowany NAZWĄ (nie „X z N" — plan może się zmieniać).
 
 | Batch | Nazwa | Klasa | Zależy od | Bramki decyzji |
 |---|---|---|---|---|
@@ -61,8 +61,9 @@ plan może się zmieniać).
 | 15 | PDF_IMPORT_EXTRACTION | PLAT | 05 (zalecane po R3) | — |
 | 16 | PDF_IMPORT_REVIEW_AND_AI | PLAT | 15, 04 | D5 (zatwierdzona) |
 | R4 | REVIEW_PRE_PRODUCTION | REV | wszystkie 01–16 | — |
+| 19 | FIX_LIST_PAGINATION | FIX | R4 (ustalenie P1; przed 18) | — |
 | 17 | PRODUCTION_HARDENING | PROD | R4 | — |
-| 18 | PRODUCTION_DEPLOYMENT_AND_OPERATIONS | PROD | 17 | **D6, D7** |
+| 18 | PRODUCTION_DEPLOYMENT_AND_OPERATIONS | PROD | 17, **19** | **D6, D7** |
 
 ## 4. Graf zależności
 
@@ -86,6 +87,7 @@ flowchart LR
     B15 --> B16[16 PDF review+AI]
     B12 & B13 & B14 & B16 --> R4{{R4 review}}
     R4 --> B17[17 hardening] --> B18[18 deployment]
+    R4 --> B19[19 fix paginacja list] --> B18
 ```
 
 ## 5. Kolejność wykonania i równoległość
@@ -100,6 +102,8 @@ z migracją `alembic heads` musi zwracać jedną głowę.
 Minimalny zestaw „aplikacja używalna na co dzień": B01–B11 (plan + zakupy).
 B15–B16 dowożą treść (przepisy z diet) — bez nich baza jest pusta poza
 wpisami ręcznymi, dlatego NIE odkładać ich za B17/B18.
+
+**Kolejność po REVIEW R4 (2026-09-05)**: R4 → **B19 ∥ B17** → B18. Batch 19 to jedyny batch naprawczy utworzony przez review; jest niezależny od B17 (dotyka wyłącznie frontendu, B17 wyłącznie obrazu prod i backupu), więc mogą iść równolegle albo w dowolnej kolejności — ale OBA przed B18. Numer 19 jest tylko identyfikatorem (§3: batch identyfikuje NAZWA), nie miejscem w sekwencji.
 
 **Potwierdzenie kolejności po REVIEW R3 (2026-08-22)**: sekwencja zostaje
 B12 ∥ B13 ∥ B14 → B15 → B16 → R4. Wariant „B15 od razu po R3" rozważony
