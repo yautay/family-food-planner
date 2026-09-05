@@ -298,8 +298,10 @@ milczące, czy stać się jawną decyzją przy kolizji.
    także na ścieżkach użytkownika** (`ScopedQuery.visible_condition` zwraca mu
    `true()`) — decyzja właściciela **D16, zatwierdzona 2026-08-21**, zgodna
    z macierzą 08_TESTING §4, w której ADMIN ma 200 w każdym wierszu. Widoczność
-   to jednak NIE to samo co prawo do zmiany: modyfikacja scope i usunięcie idą
-   przez `assert_can_manage`, więc reguły właścicielskie zostają w mocy.
+   to jednak NIE to samo co prawo do zmiany REGUŁ WŁAŚCICIELSKICH: modyfikacja
+   scope i usunięcie idą przez `assert_can_manage`. **Edycję TREŚCI ADMIN ma**
+   (rozszerzenie D16 z 2026-09-05) — patrz 07_SECURITY §4 razem z ryzykiem,
+   które właściciel przy tym świadomie przyjął.
 2-bis. **Widoczność nie wybiera CELU ZAPISU** (ustalenie REVIEW R4, 2026-09-05).
    Dzień planu nie ma id w URL-u — adresuje go DATA — więc `PlanningService`
    ma jeden resolver „który dzień dla tej daty", z którego korzystał zarówno

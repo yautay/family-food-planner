@@ -42,6 +42,70 @@ zmiany dotykające przyszłych batchy trzeba wpisać do ich kart
 
 ---
 
+**2026-09-05 — DECYZJE WŁAŚCICIELA po raporcie R4: D6, D24 i rozszerzenie D16
+zamknięte; D7 częściowo; kolejność B19 → B17 → B18 ustalona.**
+
+Cztery z pięciu pytań z raportu R4 mają odpowiedź. **Rejestr 02_DECISIONS ma
+teraz tylko JEDNĄ decyzję blokującą batch — D7 — i ta blokuje wyłącznie B18.**
+
+1. **D6 — kopia off-device: na razie BEZ automatu, ręcznie na dysk zewnętrzny.**
+   Odrzucone rclone do chmury i rsync na NAS. Dla **B18** znaczy to trzy rzeczy:
+   krok kopiowania wchodzi do `OPERATIONS.md` jako PROCEDURA, nie skrypt
+   w cronie; `pasnik.env` nie dostaje zdalnych poświadczeń; a runbook MUSI
+   powiedzieć wprost, przed czym ta konfiguracja nie chroni — kopia leżąca na
+   tym samym Odroidzie ratuje przed pomyłką użytkownika, ale nie przed awarią
+   dysku ani kradzieżą sprzętu. Krok zostaje jako miejsce do wypełnienia, żeby
+   dołożenie NAS-a nie wymagało zmiany kodu.
+
+2. **D24 — scalanie dnia planu zostaje, ale raport DRY-RUN ma je WYMIENIĆ**
+   (wariant b). Pułapka wykonawcza, o której musi wiedzieć batch, który to
+   weźmie: `analyze` jest CZYSTE i nie zna stanu bazy dla sekcji z `merge_key`,
+   więc „7 dni planu zostanie scalonych" wymaga indeksu istniejących wierszy.
+   To jest ten sam mechanizm, którego brakuje **U21** — oba domykają się razem.
+   Priorytet **P2**: rozjazd dotyczy wyłącznie importu do ŻYWEJ instancji,
+   a odtwarzanie na czystą bazę jest co do sztuki dokładne.
+
+3. **D16 rozszerzone (wariant a): ADMIN nie tylko widzi, ale i EDYTUJE treść
+   encji ze scope wszystkich rodzin.** Kod od dawna tak działał; decyzja
+   opisywała tylko odczyt. Właściciel przyjął to jako zamierzone — administrator
+   i tak ma bazę i `/transfer/export?scope=instance`. **Świadomie przyjęte
+   ryzyko**: `share_list` generuje publiczny token dla CUDZEJ listy, a taki link
+   opuszcza instancję i można go najwyżej odwołać. Dziś bezprzedmiotowe (jedno
+   konto ADMIN, jedna rodzina); przy drugiej rodzinie albo drugim adminie punkt
+   wraca do przeglądu.
+
+   **Granica, której to rozszerzenie NIE dotyka i której nie wolno z nim
+   zlepić**: widoczność nadal nie wybiera CELU ZAPISU. Rozszerzenie mówi, co
+   ADMIN może zrobić z wierszem, który JAWNIE WSKAZAŁ po id; naprawa z R4 mówi,
+   że gdy użytkownik wiersza NIE wskazał (dzień planu adresuje data), serwer ma
+   wybrać wiersz WŁASNY. Bez tego rozdzielenia wraca błąd, w którym ADMIN
+   planujący własny obiad kasował tytuł cudzego dnia.
+
+4. **D7 — domena `pasnik.cpt-sztos.com.pl`, proxy to CADDY, nie nginx.**
+   Pierwotna rekomendacja zakładała nginksa i była błędna — karta B18 została
+   przestawiona: zamiast szablonu vhosta powstaje
+   `docker/proxy/pasnik.Caddyfile.example`, a z listy zadań znika ręczna
+   konfiguracja TLS i przekierowania HTTP→HTTPS (Caddy robi oba sam).
+   **Bramka B18 zostaje otwarta**, bo brakuje jeszcze czterech szczegółów:
+   jak Caddy jest uruchomiony, jak ułożona jest jego konfiguracja, czy stoi na
+   tym samym hoście i czy DNS subdomeny już wskazuje na ten host.
+
+   **Konsekwencja techniczna niezależna od tych odpowiedzi, wpisana do B17**:
+   za proxy wszystkie żądania przychodzą z adresu proxy, więc `get_remote_address`
+   zamienia limit 5/min/IP na `/auth/login` w limit GLOBALNY dla wszystkich kont
+   naraz, a 60/min na `/public/*` — we wspólny dla wszystkich osób z linkiem.
+   Caddy ustawia `X-Forwarded-For` w `reverse_proxy` domyślnie, więc po stronie
+   aplikacji zostaje zaufanie do tego nagłówka — ograniczone do adresu proxy,
+   inaczej dowolny klient poda własny i limit logowania przestanie cokolwiek
+   znaczyć. Dotyczy też `accounts/router.py:40`, który zapisuje IP sesji.
+
+5. **Kolejność: B19 → ręczny import ośmiu jadłospisów → B17 → B18.** Batche 19
+   i 17 są wzajemnie niezależne (frontend kontra obraz prod i backup), więc
+   kolejność była wolna. Wybór jest właściwy: import daje 103 dania i 185
+   produktów, a bez paginacji `/admin/weryfikacja` — ekran, na którym uzupełnia
+   się wartości odżywcze — dosięga tylko pięćdziesiątki wybranej alfabetycznie.
+
+
 **2026-09-05 — REVIEW R4 (REVIEW_PRE_PRODUCTION) — WERDYKT: GO WARUNKOWE**
 
 **B17 może startować od razu. B18 nie startuje, dopóki nie zamkną się trzy
@@ -318,13 +382,16 @@ Cały dług programu żyje w dziennikach, więc poniżej jest jego konsolidacja.
 
 **P2 — po wdrożeniu:**
 
-- **U21 POWIĘKSZONY przez D22**: raport DRY-RUN nadal liczy optymistycznie
-  sekcje bez klucza naturalnego, a od R4 dotyczy to także DZIECI rodzica
-  scalanego po `merge_key` — przy powtórnym imporcie na to samo konto raport
-  obiecuje posiłki, których `apply` nie utworzy. Rozjazd występuje WYŁĄCZNIE
-  przy scalaniu (import na czystą instancję jest dokładny — zmierzone).
-  Domknięcie wymaga indeksu istniejących wierszy dla sekcji `merge_key`,
-  czyli tego samego mechanizmu, co D24.
+- **U21 POWIĘKSZONY przez D22, domyka się RAZEM z D24**: raport DRY-RUN nadal
+  liczy optymistycznie sekcje bez klucza naturalnego, a od R4 dotyczy to także
+  DZIECI rodzica scalanego po `merge_key` — przy powtórnym imporcie na to samo
+  konto raport obiecuje posiłki, których `apply` nie utworzy. Rozjazd występuje
+  WYŁĄCZNIE przy scalaniu (import na czystą instancję jest dokładny —
+  zmierzone). **D24 (zatwierdzona 2026-09-05, wariant b) wymaga DOKŁADNIE tego
+  samego mechanizmu**: żeby raport mógł napisać „7 dni planu zostanie
+  scalonych", `analyze` musi znać istniejące wiersze sekcji z `merge_key` —
+  a mając ten indeks, przestaje też zawyżać `to_create`. Jedna praca, dwa
+  długi; wycenić i wykonać razem, priorytet P2 (po wdrożeniu).
 - **`GET /api/v1/audit` nie ma konsumenta** — ekran `/admin/audit` był w B03
   opcjonalny („jeśli tanio") i nie powstał. Dziennik operacji zapisuje się przy
   każdej wrażliwej akcji, ale przeczytać go można tylko przez API albo bazę.

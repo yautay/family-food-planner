@@ -103,7 +103,15 @@ Minimalny zestaw „aplikacja używalna na co dzień": B01–B11 (plan + zakupy)
 B15–B16 dowożą treść (przepisy z diet) — bez nich baza jest pusta poza
 wpisami ręcznymi, dlatego NIE odkładać ich za B17/B18.
 
-**Kolejność po REVIEW R4 (2026-09-05)**: R4 → **B19 ∥ B17** → B18. Batch 19 to jedyny batch naprawczy utworzony przez review; jest niezależny od B17 (dotyka wyłącznie frontendu, B17 wyłącznie obrazu prod i backupu), więc mogą iść równolegle albo w dowolnej kolejności — ale OBA przed B18. Numer 19 jest tylko identyfikatorem (§3: batch identyfikuje NAZWA), nie miejscem w sekwencji.
+**Kolejność po REVIEW R4, USTALONA PRZEZ WŁAŚCICIELA (2026-09-05)**:
+R4 → **B19** → ręczny import ośmiu jadłospisów → **B17** → B18. Batch 19 to
+jedyny batch naprawczy utworzony przez review; jest niezależny od B17 (dotyka
+wyłącznie frontendu, B17 wyłącznie obrazu prod i backupu), więc kolejność była
+wolna — właściciel wybrał B19 najpierw i to jest właściwy wybór: import daje
+103 dania i 185 produktów, a bez paginacji ekran `/admin/weryfikacja`
+(ten, na którym uzupełnia się wartości odżywcze) dosięga tylko pięćdziesiątki
+wybranej alfabetycznie. Numer 19 jest tylko identyfikatorem (§3: batch
+identyfikuje NAZWA), nie miejscem w sekwencji.
 
 **Potwierdzenie kolejności po REVIEW R3 (2026-08-22)**: sekwencja zostaje
 B12 ∥ B13 ∥ B14 → B15 → B16 → R4. Wariant „B15 od razu po R3" rozważony

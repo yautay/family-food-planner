@@ -16,7 +16,7 @@ właścicielowi operować systemem bez tej sesji.
 
 Po B17 istnieją: obraz prod tagowany wersją git, skrypty backup/restore
 (przećwiczone na compose testowym), healthcheck rozszerzony, konfiguracja
-w pełni przez env. NIE istnieją: compose.prod.yml, vhost proxy, katalogi
+w pełni przez env. NIE istnieją: compose.prod.yml, konfiguracja proxy, katalogi
 `/srv/pasnik/*` na Odroidzie, OPERATIONS.md. Ten batch częściowo pracuje na
 REALNYM hoście właściciela — kroki wykonywane na Odroidzie wymagają jego
 udziału/dostępu; agent przygotowuje komplet i prowadzi procedurę.
@@ -24,7 +24,7 @@ udziału/dostępu; agent przygotowuje komplet i prowadzi procedurę.
 **STOP-bramka**: jeśli D6 lub D7 mają status OPEN w
 `docs/implementation-plan/02_DECISIONS.md` — zatrzymaj się i zapytaj
 właściciela (implementation_prompt pkt 1e). Z D7 muszą wynikać: domena/
-subdomena, typ proxy (nginx?), sposób dokładania vhosta; z D6: cel kopii
+subdomena, typ proxy, sposób dokładania konfiguracji; z D6: cel kopii
 off-device (NAS/chmura/rclone remote) i dane dostępowe (poza repo!).
 
 Wymagane lektury przed startem:
@@ -41,9 +41,25 @@ Wymagane lektury przed startem:
 
 **Ustalenia REVIEW R4 (2026-09-05) dla tego batcha:**
 
-1. **D6 i D7 były OPEN w chwili wydania werdyktu R4.** STOP-bramka wyżej
-   obowiązuje bez zmian — R4 ich NIE rozstrzygnął i nie miał prawa.
-   Bez zatwierdzonych D6/D7 ten batch nie startuje; **B17 startuje bez nich**.
+1. **D6 ZATWIERDZONE 2026-09-05, D7 CZĘŚCIOWO.** STOP-bramka dotyczy już
+   tylko D7 — brakuje szczegółów uruchomienia i konfiguracji Caddy'ego.
+   **B17 startuje bez obu.**
+   - **D6: kopia off-device jest RĘCZNA, na dysk zewnętrzny.** Do
+     `docs/OPERATIONS.md` wchodzi PROCEDURA, nie skrypt w cronie: co
+     skopiować, skąd, jak sprawdzić kompletność. Backup automatyczny
+     w `/srv/pasnik/backups` bez zmian. **Runbook musi powiedzieć wprost,
+     przed czym ta konfiguracja NIE chroni**: kopia na tym samym Odroidzie
+     ratuje przed pomyłką użytkownika, ale nie przed awarią dysku ani
+     kradzieżą sprzętu. Krok kopiowania zostawić jako miejsce do wypełnienia,
+     żeby dołożenie NAS-a albo chmury nie wymagało zmiany kodu.
+   - **D7: domena to `pasnik.cpt-sztos.com.pl`, proxy to Caddy** (nie nginx —
+     pierwotna rekomendacja zakładała nginksa i była błędna). TLS terminuje
+     Caddy; aplikacja słucha po HTTP na loopbacku, więc `APP_ENV=prod`
+     i cookies `Secure` działają poprawnie mimo braku TLS wewnątrz.
+     Zamiast szablonu w składni nginksa batch dostarcza
+     **`docker/proxy/pasnik.Caddyfile.example`**. Do potwierdzenia przed startem:
+     sposób uruchomienia Caddy'ego, układ jego konfiguracji, czy stoi na tym
+     samym hoście i czy DNS subdomeny już wskazuje na ten host.
 2. **Nowa zależność: `BATCH_19_FIX_LIST_PAGINATION`.** Ustalenie P1 R4 — bez
    niego ekrany list ucinają się po 50 pozycjach, a właściciel importuje
    jadłospisy (103 dania, 185 produktów) dokładnie wtedy, gdy aplikacja idzie
@@ -101,16 +117,26 @@ wdrożeniu, wykonywane na PRAWDZIWEJ domenie, nie na localhoście:
    `/srv/pasnik/pgdata`, `/srv/pasnik/uploads`, `/srv/pasnik/backups`.
    Weryfikacja lokalna: compose config + uruchomienie na maszynie dev
    z katalogami zastępczymi.
-2. **Reverse proxy (D7)**: konkretny plik vhosta dla istniejącego proxy
-   właściciela (wg D7) — `proxy_pass http://127.0.0.1:8080`, nagłówki
-   X-Forwarded-*, HSTS, limity rozmiaru body ≥ limitów aplikacji,
-   ewent. cache statyk (ADR-014). Plik w repo jako szablon
-   (`docker/proxy/pasnik.conf.example`) + krok instalacji w runbooku.
+2. **Reverse proxy — CADDY (D7)**: fragment `Caddyfile` dla
+   `pasnik.cpt-sztos.com.pl` → `reverse_proxy 127.0.0.1:8080` (albo adres
+   z sieci, jeśli Caddy stoi na innym hoście — do potwierdzenia w D7).
+   Caddy sam wystawia i odnawia certyfikat oraz przekierowuje HTTP→HTTPS,
+   więc tego NIE konfigurujemy ręcznie; do sprawdzenia zostaje reszta:
+   **(a)** limit rozmiaru żądania ≥ limitów aplikacji (PDF 25 MB, paczka
+   transferu 100 MB) — domyślny limit proxy jest częstą przyczyną „nie da się
+   wgrać", która wygląda jak błąd aplikacji; **(b)** `Strict-Transport-Security`
+   — 07_SECURITY §3 przypisuje HSTS proxy, więc trzeba POTWIERDZIĆ, czy Caddy
+   w tej wersji dokłada go sam, a jeśli nie — ustawić jawnie; **(c)** nagłówki
+   `X-Forwarded-*` (Caddy ustawia je w `reverse_proxy` domyślnie) muszą być
+   po stronie aplikacji ZAUFANE tylko dla adresu proxy — patrz B17, punkt
+   „IP za reverse proxy"; **(d)** ewentualny cache statyk (ADR-014).
+   Plik w repo jako szablon (`docker/proxy/pasnik.Caddyfile.example`)
+   + krok instalacji w runbooku.
 3. **Runbook instalacji (Odroid)**: krok po kroku w OPERATIONS.md:
    utworzenie katalogów `/srv/pasnik/*` z uprawnieniami, `pasnik.env`
    (chmod 600, komplet zmiennych z `.env.example`), build/pull obrazu,
    `docker compose run --rm app alembic upgrade head` (pierwsza migracja —
-   jawna, 09 §2), `task create-admin`, vhost + reload proxy, smoke.
+   jawna, 09 §2), `task create-admin`, konfiguracja + reload Caddy'ego, smoke.
 4. **Wykonanie instalacji**: przeprowadzić procedurę na Odroidzie
    (z właścicielem); aplikacja dostępna przez HTTPS na domenie z D7;
    health `ok`; PWA instaluje się z produkcji.
@@ -146,7 +172,7 @@ Brak nowych endpointów. Deliverables operacyjne:
 | Artefakt | Treść |
 |---|---|
 | `docker/compose.prod.yml` | topologia 09 §1 (app+db+profil backup) |
-| `docker/proxy/pasnik.conf.example` | vhost wg D7 (szablon bez sekretów/domeny właściciela, jeśli wrażliwa) |
+| `docker/proxy/pasnik.Caddyfile.example` | fragment `Caddyfile` wg D7 (Caddy, nie nginx) |
 | `scripts/deploy.sh` / `task deploy` | update: backup→build→migrate→up |
 | `scripts/rollback.sh` / `task rollback` | poprzedni tag + instrukcja restore |
 | `docs/OPERATIONS.md` | runbooki: instalacja, update, rollback, restore, backup off-device, dodanie użytkownika (create-admin/admin UI), diagnoza: nie wstaje / 500 / pełny dysk / degraded health; sekcja „ostatni restore drill" |
@@ -231,7 +257,7 @@ diffie przed commitem (krok 11).
 
 ## Expected files/modules
 
-- `docker/compose.prod.yml`, `docker/proxy/pasnik.conf.example`
+- `docker/compose.prod.yml`, `docker/proxy/pasnik.Caddyfile.example`
 - `scripts/deploy.sh`, `scripts/rollback.sh` (lub targety Taskfile —
   spójnie z B17; uzasadnić wybór)
 - `Taskfile.yml` (targety deploy/rollback/backup-offsite jeśli task)

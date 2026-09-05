@@ -63,6 +63,17 @@ publiczne linki i błędami aplikacyjnymi (IDOR/XSS/CSRF/upload).
   wyjątku:
   - **nie rozciąga się na MUTACJE reguł właścicielskich** — zmiana scope
     i usunięcie encji przechodzą przez `ScopedQuery.assert_can_manage`;
+  - **rozciąga się natomiast na EDYCJĘ TREŚCI** (rozszerzenie D16
+    zatwierdzone 2026-09-05, wariant „a" z raportu R4): ADMIN może zmieniać
+    treść encji ze scope wszystkich rodzin — w praktyce dotyczy to modułu
+    shopping (`share_list`, `revoke_share`, `update_item`, `resolve`,
+    `finalize`, `accept_to_pantry` wołają `get_or_404` bez następującego
+    `assert_can_manage`). Uzasadnienie: administrator i tak ma bazę
+    i `/transfer/export?scope=instance`. **Świadomie przyjęte ryzyko**:
+    `share_list` generuje PUBLICZNY TOKEN dla cudzej listy, a taki link
+    opuszcza instancję i można go najwyżej odwołać. Przy jednym koncie ADMIN
+    bezprzedmiotowe; przy drugiej rodzinie albo drugim adminie punkt wraca
+    do przeglądu;
   - **nie rozciąga się na zasoby adresowane „moją rodziną"** —
     `/households/my` i profile członków pokazują ADMIN-owi WŁASNĄ rodzinę,
     do cudzych ma `/admin/households/*` (04_API §3 pkt 2a);

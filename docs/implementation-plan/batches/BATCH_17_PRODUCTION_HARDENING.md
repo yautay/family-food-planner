@@ -44,10 +44,18 @@ Konkrety z B01 do wykorzystania/uzupełnienia:
 - **Do przeglądu z B02** (follow-upy zgłoszone w Completion notes B02):
   1. **IP za reverse proxy** — `get_remote_address` (slowapi) i
      `sessions.ip` biorą adres bezpośredniego połączenia. Po wdrożeniu za
-     nginx wszystkie żądania wyglądają jak z jednego IP, więc limit
-     5/min/IP na `/auth/login` staje się limitem globalnym. Wymaga
-     `--proxy-headers` + `forwarded-allow-ips` (uvicorn) albo
-     `ProxyHeadersMiddleware`, spójnie z konfiguracją proxy z B18.
+     proxy wszystkie żądania wyglądają jak z jednego IP, więc limit
+     5/min/IP na `/auth/login` staje się limitem GLOBALNYM dla wszystkich
+     kont naraz, a limit 60/min na `/public/*` — wspólny dla wszystkich osób
+     z linkiem. Wymaga `--proxy-headers` + `forwarded-allow-ips` (uvicorn)
+     albo `ProxyHeadersMiddleware`. **Proxy jest znane od D7 (2026-09-05):
+     to Caddy, nie nginx.** Caddy w dyrektywie `reverse_proxy` ustawia
+     `X-Forwarded-For` i `X-Forwarded-Proto` domyślnie, więc po stronie
+     aplikacji zostaje wyłącznie ZAUFANIE do tych nagłówków — i to zaufanie
+     musi być ograniczone do adresu proxy, inaczej dowolny klient poda
+     własny `X-Forwarded-For` i limit logowania przestanie cokolwiek znaczyć.
+     Dotyczy to także `accounts/router.py:40` (`request.client.host` zapisywany
+     jako IP sesji) — dziś zapisze adres proxy dla każdej sesji.
   2. Parametry argon2 (domyślne biblioteki), TTL sesji 30 dni i próg
      blokady konta (10 porażek / 15 min) — stałe w `app/core/security.py`.
 - `task audit` i `task secrets-scan` istnieją w Taskfile (nieuruchamiane
