@@ -715,16 +715,19 @@ Dokumentacja:
    Decyzja i jej uzasadnienie nietknięte; ADR-ów nie edytuje się merytorycznie,
    ale wskaźnik do nieistniejącego pliku nie jest treścią decyzji.
 
-**Decyzje wpisane do 02_DECISIONS jako OPEN (z rekomendacją)**
+**Decyzje wpisane do 02_DECISIONS — ROZSTRZYGNIĘTE przez właściciela 2026-09-06**
 
-- **D27** — czy wyczyścić PDF-y i `prototype.db` z HISTORII gita.
-  Rekomendacja: TAK, jednorazowo przed pierwszym publicznym pushem; to
-  `git filter-repo` + force push, czyli operacja właściciela na repozytorium
-  (unieważnia hashe commitów w PROGRESS), nie zadanie dla batcha.
-- **D28** — czy nadać tożsamość sekcjom kopii danych, które jej nie mają
-  (Out of Scope karty). Rekomendacja: na razie NIE — zmiana wymaga nowych
-  UNIQUE-ów w modelu danych i odrzucałaby zapisy, które dziś przechodzą,
-  a główny scenariusz (odtworzenie na czystą instancję) jest dokładny.
+- **D27 = NIE** (rekomendacja była „TAK" — właściciel rozstrzygnął inaczej).
+  Jadłospisy PDF i `prototype.db` zostają w historii gita. Konsekwencję trzeba
+  znać i przyjąć: `git rm` usunął je z HEAD-a, ale każdy klon i każdy commit
+  sprzed tego batcha nadal je niesie, a to dokument zdrowotny jednej osoby.
+  Decyzja jest więc równoznaczna z tym, że **repozytorium pozostaje prywatne** —
+  udostępnienie go komukolwiek spoza rodziny wymaga POWROTU do tej decyzji.
+- **D28 = NIE**, zgodnie z rekomendacją: sekcje bez klucza naturalnego zostają
+  bez tożsamości. Świadomie przyjęty koszt: wczytanie tej samej kopii DRUGI raz
+  na żywą bazę dołoży drugi komplet list, tur, pozycji spiżarni i profili —
+  kasuje się go ręcznie. Temat wraca przy pierwszym realnym podwojeniu, bo
+  wtedy będzie wiadomo, KTÓRA z siedmiu sekcji naprawdę przeszkadza.
 
 **Weryfikacja — realne wyniki**
 
@@ -802,4 +805,4 @@ Dokumentacja:
    dopuszcza kasowanie tylko po jawnej zgodzie w tej samej sesji.
    Stan przed: `task uploads-report` wymienia dokładnie te 13 plików jako
    osierocone i nikt ich nie pobierze (allowlista `/uploads/*`).
-3. Rozstrzygnąć D27 i D28.
+3. ~~Rozstrzygnąć D27 i D28~~ — zrobione 2026-09-06, obie NIE.

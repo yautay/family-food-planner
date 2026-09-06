@@ -105,12 +105,18 @@ Baza dev bez zmian w treści: `recipes` 5, `canonical_products` 22,
    z 7,3 min do 1,5 min i przechodzi 19/19 w dwóch kolejnych przebiegach.
    **Zanim ktoś zacznie łatać asercje w tych specach — niech najpierw sprawdzi
    liczności tych trzech tabel.**
-8. **Pytanie otwarte dla właściciela**: PDF-y i `prototype.db` zniknęły
-   z drzewa roboczego, ale ZOSTAJĄ w historii gita — ich wyczyszczenie wymaga
-   rewrite'u historii i force push, czyli operacji poza batchem. Drugie:
-   idempotencja sekcji BEZ klucza naturalnego (wariant sklepowy, profil, pozycja
-   spiżarni, tura, generacja, lista, szablon, cykl) — drugi import tej samej
-   kopii nadal je dubluje. Oba wpisane do 02_DECISIONS jako **D27** i **D28**.
+8. **Dwie decyzje właściciela ROZSTRZYGNIĘTE tego samego dnia** (02_DECISIONS):
+   **D27 = NIE** — jadłospisy PDF i `prototype.db` zostają w historii gita.
+   Konsekwencja, którą trzeba znać: `git rm` usunął je z HEAD-a, ale każdy klon
+   i każdy commit sprzed tego batcha nadal je niesie, więc **repozytorium
+   pozostaje prywatne** — udostępnienie go komukolwiek spoza rodziny wymaga
+   POWROTU do tej decyzji.
+   **D28 = NIE** — sekcje bez klucza naturalnego (lista zakupowa, tura, pozycja
+   spiżarni, profil, wariant sklepowy, szablon, cykl) zostają bez tożsamości.
+   Wczytanie tej samej kopii DRUGI raz na żywą bazę dołoży ich drugi komplet
+   i kasuje się go ręcznie; odtworzenie na czystą instancję jest dokładne.
+   Temat wraca przy pierwszym realnym podwojeniu — wtedy będzie wiadomo, KTÓRA
+   sekcja przeszkadza, zamiast obstawiać wszystkie siedem.
 
 **2026-09-06 — DECYZJA WŁAŚCICIELA D25: importer PDF do usunięcia W CAŁOŚCI;
 jedynym importem/eksportem zostaje transfer jako „kopia danych rodziny".
