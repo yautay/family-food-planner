@@ -29,8 +29,8 @@ commit wykonany). Kolumna „Blokery" = zależności + decyzje z 02_DECISIONS.
 | 16 PDF_IMPORT_REVIEW_AND_AI | [x] | — | `batch(16)` na master (hash wpisać po push) |
 | R4 REVIEW_PRE_PRODUCTION | [x] | — | `batch(R4)` na master (hash wpisać po push) |
 | 19 FIX_LIST_PAGINATION | [x] | — | `batch(19)` na master (hash wpisać po push) |
-| 17 PRODUCTION_HARDENING | [ ] | R4 | |
-| 18 PRODUCTION_DEPLOYMENT_AND_OPERATIONS | [ ] | 17, 19 (D6 i D7 zatwierdzone 2026-09-05) | |
+| 17 PRODUCTION_HARDENING | [x] | — | `batch(17)` na master (hash wpisać po push) |
+| 18 PRODUCTION_DEPLOYMENT_AND_OPERATIONS | [ ] | — (17 i 19 DONE; D6 i D7 zatwierdzone 2026-09-05) | |
 
 ## Dziennik
 
@@ -39,6 +39,97 @@ co weszło + **„rzeczy, o których muszą wiedzieć następne batche"**
 (odstępstwa, nowe kontrakty, pułapki). Wpis NIE zastępuje propagacji —
 zmiany dotykające przyszłych batchy trzeba wpisać do ich kart
 (00_MASTER_PLAN §8); dziennik to indeks, nie schowek.
+
+---
+
+**2026-09-05 — BATCH_17 (PRODUCTION_HARDENING) — warunek 3 werdyktu R4 ZAMKNIĘTY;
+B18 ma komplet wejść.**
+
+Aplikacja ma obraz produkcyjny, backup z retencją i healthcheck, który mówi
+prawdę o migracjach. Weszło: **target `prod` w `docker/Dockerfile`** (stage
+`frontend-build` → dist w `/app/static`, ADR-014; `USER pasnik` uid 10001; bez
+dev-deps; `HEALTHCHECK`; start przez `docker/entrypoint.sh` z `UVICORN_WORKERS`,
+`LOG_LEVEL`, `--proxy-headers`), `task build-prod` → `pasnik-app:<git describe>`
++ `pasnik-backup`; **`/api/v1/health` = `{status: ok|degraded, version, checks:
+{db, migrations, disk}}`** (`core/health.py`); **`docker/backup/`**: `backup.sh`
+(`pg_dump -Fc` + tar uploadów bez scratcha + opcjonalny env + sha256 + prune),
+`restore.sh`, `cron-loop.sh` (codziennie `BACKUP_AT`), retencja
+`scripts/backup_prune.py` (7 dni WSZYSTKIE zestawy + najnowszy z 4 tygodni ISO,
+unit-testowana), `drill.sh` = `task backup-drill`; **`docker/compose.test.yml`**
+(czysta baza + obraz prod + profil `backup`) jako wzór dla compose.prod.
+Osiem ustaleń R4 wykonanych (karta B17, każde z opisem): health z migracjami
+i dyskiem, **CSP + `object-src 'none'; base-uri 'none'; form-action 'self';
+frame-ancestors 'none'`** (SW zweryfikowany na buildzie prod: `activated`,
+precache 65, zero błędów CSP), **rate limit uploadów** (zdjęcia 30/min, PDF
+i paczka 10/min) razem z **sufitem ciała żądania** (`core/body_limit.py`, 413
+także dla chunked), `task uploads-report` (3 osierocone PDF-y, 4,4 MB — tylko
+raport, D10), **cookies `__Host-` w prod** (frontend sprawdza obie nazwy),
+`hide_parameters=True`, `PRIVATE_SUBDIRS` bez wrażliwości na wielkość liter,
+zajętość uploadów w logu backupu. Do tego długi z R1/R2/B02 przypisane karcie:
+`fe-types-check` w `task check` (U12), `SECRET_KEY` zostaje jako zarezerwowane
+(U13, opisane), `PDF_PARSE_TIMEOUT_S` z env (U24), `autoescape` w szukajkach
+ADMIN-a (U14), `IMAGE_MAX_UPLOAD_MB`, przegląd argon2/TTL/blokady bez zmian.
+
+**Round-trip backup → restore wykonany REALNIE** na stacku testowym (85 s):
+seed → zdjęcie przez API → backup 1 s (dump 132 KB + tar 12 KB + sha256) →
+`down -v` → restore (sumy zgodne, `alembic_version` 0015) → `alembic upgrade
+head` → app zdrowa po 19 s → liczności 18 tabel i 2 pliki uploadów identyczne,
+smoke API (login, przepisy, plan, zdjęcie 200). Logi obrazu prod zgrepowane po
+haśle, id sesji, tokenie publicznym i `sk-ant`: zero trafień, maskowanie
+`/public/lists/***` w obu warstwach, JSON na całym stdout poza dwiema liniami
+supervisora uvicorna.
+
+**Rzeczy, o których muszą wiedzieć następne batche:**
+
+1. **`degraded` to HTTP 200.** Healthcheck Dockera testuje sam kod — kontener na
+   niezmigrowanej bazie jest `healthy`, żeby nie restartował się w pętli za
+   krok, który jest jawny (09 §2). Treść statusu czyta operator/runbook.
+2. **Nowy endpoint uploadu = reguła w `core/body_limit.build_body_limit_rules`
+   + limit w `core/ratelimits.py` + `limiter` w builderze routera** — inaczej
+   dostaje sufit ciała 2 MB i zero rate limitu. Nowa kolumna ze ścieżką pliku =
+   wpis w `uploads_report.collect_references`.
+3. **Literał nazwy cookie w kodzie = błąd review.** Backend:
+   `session_cookie_name`/`csrf_cookie_name(settings)`; frontend/E2E:
+   `CSRF_COOKIE_CANDIDATES`. W prod bez HTTPS logowanie NIE działa (`__Host-`
+   wymaga `Secure`) — smoke produkcyjny przez domenę, nie przez `curl http://`.
+4. **Licznik slowapi jest per proces**, a prod ma 2 workery: realne limity to
+   ×2 (login do 10/min/IP). Twardą granicą jest blokada konta w bazie.
+5. **Supervisor uvicorna zabija workery nieodpowiadające w 5 s** — na wolnym
+   hoście import aplikacji trwa dłużej; `entrypoint.sh` ma
+   `--timeout-worker-healthcheck 30`. Objaw: „Child process [n] died" bez
+   tracebacku.
+6. **Oba obrazy pracują jako uid 10001** — bind mounty `/srv/pasnik/uploads`
+   i `/srv/pasnik/backups` dostają `chown 10001:10001` (B18).
+7. **Za proxy zaufanie do `X-Forwarded-For` ogranicza `FORWARDED_ALLOW_IPS`**
+   (czyta sam uvicorn); w compose Caddy przychodzi z bramy sieci dockera, nie
+   z 127.0.0.1 — B18 wpisuje bramę albo `*` (port tylko na loopbacku hosta).
+8. **`task check` kończy `fe-types-check`**: zmiana kształtu API bez `task
+   fe-types` wywala bramkę na zerowym diffie `openapi.json`/`generated.ts`.
+9. **`task test-e2e` zostawia po każdym przebiegu job importu i PDF na dysku**
+   (`cleanup.ts` nie sprząta `import_jobs`) — katalog uploadów rośnie bez
+   użytkownika; `task uploads-report` to pokazuje, D10 zakazuje automatu.
+
+**Dług — aktualizacja rejestru:** ZAMKNIĘTE w B17: U12 (bramka `fe-types-check`),
+U13 (`SECRET_KEY` — decyzja: zarezerwowane, opisane w 07 §7), U14 (`autoescape`
+w `list_users`/`list_households`), U24 (`PDF_PARSE_TIMEOUT_S` z env), U26
+(osierocone pliki — komenda raportująca), P1 „healthcheck / CSP / rate limit
+uploadów" (pkt 1–3 R4), P3 `__Host-` / `hide_parameters` / `PRIVATE_SUBDIRS`.
+NOWE (P2, dla B18): rola PG `NOSUPERUSER` przez init-skrypt compose.prod (09 §5);
+`FORWARDED_ALLOW_IPS` do ustalenia po `docker network inspect`; weryfikacja SW
+i HSTS na realnej domenie (`frontend/e2e/tools/sw-check.mjs <url>`);
+`secrets-scan` w procedurze deploy. Bez zmian: U21/D24, U25/U29, U27, U28,
+audyt bez konsumenta, ADMIN a cudze listy (D16 rozszerzone).
+
+**Wyniki uruchomień (realne):** `task check` **exit 0** na finalnym drzewie: 3 migrations-check / **482 unit** (20 s) / **333 integration** (2 min 42 s) / **436 api** (13 min 23 s) / **429 vitest w 47 plikach** / mypy 217 plików + vue-tsc / ruff / eslint / prettier / `vite build` (71 wpisów precache) / **fe-types-check** (kontrakt zgodny z kodem). Przyrost wobec wejścia (432/330/414/428): **+50 unit, +3 integration, +22 api, +1 vitest**. E2E: **21/21 w DWÓCH kolejnych przebiegach** (1,9 min i 2,0 min), zero flaków. `task audit`: pip-audit
+„No known vulnerabilities found", `npm audit --audit-level=high` „found 0
+vulnerabilities". `task secrets-scan`: „no leaks found" (38 commitów, 6,28 MB).
+`alembic heads`: jedna głowa `0015` — batch nie dodał migracji. Review: `/code-review` (high, 8 kątów) — 10 ustaleń, wszystkie naprawione (m.in.
+tracebacki ginące w JSON-logu prod, import zdjęć z transferu bez
+`IMAGE_MAX_UPLOAD_MB`, 405 zamiast 404 z catch-alla SPA, dev-deps w warstwie
+`base` obrazu — 681→476 MB, dwa timeouty health ponad HEALTHCHECK, `LOG_LEVEL=WARN`
+wywalający uvicorna; szczegóły w karcie). `/security-review` — 1 ustalenie,
+naprawione: trasa SPA `/l/<token>` nie była maskowana w logach (od B17 backend
+serwuje SPA) — `_PUBLIC_TOKEN_PATH` obejmuje `/l/`.
 
 ---
 

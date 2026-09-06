@@ -11,11 +11,10 @@
 import {
   API_PREFIX,
   ApiError,
-  CSRF_COOKIE,
   CSRF_HEADER,
   apiFetch,
   observeResponse,
-  readCookie,
+  readCsrfToken,
 } from '@/api/client'
 import type { components } from '@/api/generated'
 
@@ -47,7 +46,7 @@ export interface ExportedFile {
  * bo tylko on wie, czy działa w przeglądarce (test jednostkowy nie ma DOM-u).
  */
 export async function downloadExport(scope: TransferScope = 'user'): Promise<ExportedFile> {
-  const token = readCookie(CSRF_COOKIE)
+  const token = readCsrfToken()
   const response = await fetch(`${API_PREFIX}/transfer/export?scope=${scope}`, {
     method: 'POST',
     credentials: 'include',

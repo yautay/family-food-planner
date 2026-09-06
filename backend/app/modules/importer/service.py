@@ -112,11 +112,21 @@ class _StagingCounts:
 class ImporterService:
     """Upload PDF-a → job → staging (02_DOMAIN §10, ADR-011)."""
 
-    def __init__(self, session: AsyncSession, *, uploads_dir: str, max_pdf_mb: int) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        *,
+        uploads_dir: str,
+        max_pdf_mb: int,
+        parse_timeout_s: float = PDF_PARSE_TIMEOUT_S,
+    ) -> None:
         self._session = session
         self._audit = AuditService(session)
         self._uploads_root = Path(uploads_dir)
         self._max_pdf_mb = max_pdf_mb
+        # Konfigurowalne od B17 (`PDF_PARSE_TIMEOUT_S`, dług U24); stała modułu
+        # zostaje wartością domyślną.
+        self._parse_timeout_s = parse_timeout_s
 
     @property
     def max_pdf_bytes(self) -> int:
@@ -207,7 +217,7 @@ class ImporterService:
         try:
             document = await asyncio.wait_for(
                 run_in_threadpool(self._extract_and_parse, relative),
-                timeout=PDF_PARSE_TIMEOUT_S,
+                timeout=self._parse_timeout_s,
             )
         except TimeoutError:
             return await self._fail(job, PARSE_TIMEOUT, actor=actor)

@@ -1,0 +1,7 @@
+# Skrypty wykonywane w kontenerach Linux MUSZĄ mieć LF: `core.autocrlf=true`
+# na hoście Windows zamieniłby je przy checkout na CRLF, a `#!/bin/sh\r`
+# kończy się „no such file or directory" przy starcie obrazu (BATCH_17).
+*.sh text eol=lf
+Dockerfile text eol=lf
+docker/** text eol=lf
+*.mjs text eol=lf

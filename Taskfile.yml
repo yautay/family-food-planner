@@ -16,6 +16,11 @@ dotenv: ['.env']
 
 vars:
   COMPOSE: docker compose --env-file .env -f docker/compose.dev.yml
+  # Stack TESTOWY obrazu prod (B17): czysta baza + pasnik-app:<tag> + profil backup.
+  COMPOSE_TEST: docker compose --env-file .env -f docker/compose.test.yml
+  # Wersja obrazu prod = tag gita; bez tagów — sha (09_DEPLOYMENT §1 i §4).
+  GIT_VERSION:
+    sh: git describe --tags --always --dirty
 
 tasks:
   default:
@@ -85,6 +90,7 @@ tasks:
       - task: lint
       - task: format-check
       - task: fe-build
+      - task: fe-types-check
 
   # Targety pytest przepuszczają argumenty za `--` (CLI_ARGS), żeby dało się
   # zawężyć przebieg bez wołania gołego pytesta (który nie widziałby `.env`):
@@ -255,6 +261,53 @@ tasks:
     cmds:
       - uv run python -m scripts.seed_demo
 
+  uploads-report:
+    desc: 'Raport plików uploadów BEZ referencji w bazie (B17, D10) — tylko raportuje, nic nie usuwa'
+    dir: backend
+    cmds:
+      - uv run python -m app.cli uploads-report
+
+  # --- obraz prod, stack testowy, backup (BATCH_17; compose.prod spina B18) ----
+
+  build-prod:
+    desc: 'Buduje obrazy prod: pasnik-app:<git describe> (SPA w środku, ADR-014) i pasnik-backup'
+    cmds:
+      - docker build -f docker/Dockerfile --target prod --build-arg APP_VERSION={{.GIT_VERSION}} -t pasnik-app:{{.GIT_VERSION}} -t pasnik-app:latest .
+      - docker build -f docker/backup/Dockerfile -t pasnik-backup:{{.GIT_VERSION}} -t pasnik-backup:latest .
+
+  test-stack-up:
+    desc: 'Podnosi stack testowy obrazu prod (compose.test: db + app na 127.0.0.1:8081) i migruje'
+    cmds:
+      - '{{.COMPOSE_TEST}} up -d db'
+      - '{{.COMPOSE_TEST}} run --rm app alembic upgrade head'
+      - '{{.COMPOSE_TEST}} up -d app'
+
+  test-stack-down:
+    desc: 'Zatrzymuje stack testowy i KASUJE jego wolumeny (baza, uploady)'
+    cmds:
+      - '{{.COMPOSE_TEST}} --profile backup down -v --remove-orphans'
+
+  backup:
+    desc: 'Backup stacku testowego: pg_dump -Fc + uploady + prune 7d/4w (docker/backup/backup.sh)'
+    cmds:
+      - '{{.COMPOSE_TEST}} --profile backup run --rm backup backup'
+
+  restore:
+    desc: 'Restore do stacku testowego. Użycie: task restore -- pasnik-<stempel>.dump [pasnik-<stempel>-uploads.tar.gz] [--wipe-uploads] (nazwy z katalogu backupów)'
+    cmds:
+      - '{{.COMPOSE_TEST}} stop app'
+      - '{{.COMPOSE_TEST}} --profile backup run --rm backup restore {{.CLI_ARGS}}'
+      - '{{.COMPOSE_TEST}} run --rm app alembic upgrade head'
+      - '{{.COMPOSE_TEST}} start app'
+    preconditions:
+      - sh: '[ -n "{{.CLI_ARGS}}" ]'
+        msg: 'Podaj plik dumpu: task restore -- pasnik-<stempel>.dump [pasnik-<stempel>-uploads.tar.gz]'
+
+  backup-drill:
+    desc: 'Round-trip backup → down -v → restore → smoke na stacku testowym (docker/backup/drill.sh)'
+    cmds:
+      - bash docker/backup/drill.sh
+
   # --- kontrakt API ---------------------------------------------------------
 
   fe-types:
@@ -272,6 +325,14 @@ tasks:
     dir: frontend
     cmds:
       - npm run generate:api
+
+  fe-types-check:
+    desc: 'Bramka świeżości kontraktu (dług U12, B17): openapi.json i generated.ts muszą odpowiadać kodowi'
+    dir: backend
+    cmds:
+      # Porównanie „wygenerowane teraz" vs „w repo" — NIE `git diff`: `task check`
+      # jest bramką PRZED commitem, więc drzewo jest brudne z definicji.
+      - uv run python -m scripts.check_api_contract
 
   # --- bezpieczeństwo (Review batche i BATCH_17) ----------------------------
 

@@ -14,6 +14,7 @@ from app.core.config import Settings
 from app.core.db import get_session
 from app.core.security import (
     CSRF_COOKIE_NAME,
+    CSRF_HEADER_NAME,
     MAX_FAILED_LOGINS,
     SESSION_COOKIE_NAME,
     SESSION_TTL,
@@ -139,8 +140,42 @@ async def test_logowanie_w_prod_ustawia_cookies_secure(
     response = await login(prod_client, user.email)
 
     assert response.status_code == 200
-    assert "Secure" in set_cookie_header(response, SESSION_COOKIE_NAME)
-    assert "Secure" in set_cookie_header(response, CSRF_COOKIE_NAME)
+    assert "Secure" in set_cookie_header(response, f"__Host-{SESSION_COOKIE_NAME}")
+    assert "Secure" in set_cookie_header(response, f"__Host-{CSRF_COOKIE_NAME}")
+
+
+async def test_w_prod_cookies_maja_prefiks_host_i_dzialaja_pod_nim(
+    prod_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """REVIEW R4 pkt 6: `__Host-` wiąże cookie z jednym hostem; sesja i CSRF muszą
+    działać pod prefiksowaną nazwą, a wariant bez prefiksu w prod nie loguje.
+
+    httpx nie odsyła cookie `Secure` po http, więc wartości przepisujemy ręcznie.
+    """
+    user = await create_user(db_session)
+    response = await login(prod_client, user.email)
+    names = {h.split("=", 1)[0] for h in response.headers.get_list("set-cookie")}
+    assert names == {f"__Host-{SESSION_COOKIE_NAME}", f"__Host-{CSRF_COOKIE_NAME}"}
+    session_value = set_cookie_header(response, f"__Host-{SESSION_COOKIE_NAME}").split(";")[0]
+    csrf_value = set_cookie_header(response, f"__Host-{CSRF_COOKIE_NAME}").split(";")[0]
+
+    prod_client.cookies.clear()
+    bez_prefiksu = await prod_client.get(
+        f"{API}/auth/me",
+        headers={"Cookie": f"{SESSION_COOKIE_NAME}={session_value.split('=', 1)[1]}"},
+    )
+    z_prefiksem = await prod_client.get(f"{API}/auth/me", headers={"Cookie": session_value})
+    mutacja = await prod_client.post(
+        f"{API}/auth/logout",
+        headers={
+            "Cookie": f"{session_value}; {csrf_value}",
+            CSRF_HEADER_NAME: csrf_value.split("=", 1)[1],
+        },
+    )
+
+    assert bez_prefiksu.status_code == 401
+    assert z_prefiksem.status_code == 200
+    assert mutacja.status_code == 204
 
 
 # --- sesja --------------------------------------------------------------------
@@ -322,7 +357,8 @@ async def test_blokada_konta_po_dziesieciu_porazkach_jest_neutralna(
         ("X-Frame-Options", "DENY"),
         (
             "Content-Security-Policy",
-            "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'",
+            "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; "
+            "object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
         ),
     ],
 )

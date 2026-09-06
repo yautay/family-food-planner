@@ -2,10 +2,17 @@
 
 07_SECURITY §8: w logach request id, ścieżka, status, czas, docelowo user id
 (NIE email). NIGDY hasła, tokeny ani payloady. Ścieżki z publicznym tokenem
-listy maskowane do `/public/lists/***` (ADR-010) — **także w access logu
+listy maskowane do `/public/lists/***` i `/l/***` (ADR-010) — **także w access logu
 Uvicorna** (07_SECURITY §5), który formatuje ścieżkę sam i o naszym middleware
 nic nie wie.
-Dev: czytelna konsola. Prod/test: JSON na stdout (zbiera Docker).
+
+Dev: czytelna konsola. Prod/test: JSON na stdout (zbiera Docker) — od BATCH_17
+dotyczy to również rekordów stdlib (`uvicorn`, `uvicorn.access`, biblioteki):
+przechodzą przez `structlog.stdlib.ProcessorFormatter` z tym samym rendererem.
+Wyjątek, którego stąd nie da się usunąć: linie SUPERVISORA uvicorna
+(`Started parent process`, `Child process died`) — proces nadrzędny nigdy nie
+wykonuje `create_app()`, więc pisze domyślnym formatem tekstowym (09 §6).
+Poziom: `LOG_LEVEL`.
 """
 
 from __future__ import annotations
@@ -16,6 +23,7 @@ import sys
 import time
 import uuid
 from collections.abc import Awaitable, Callable
+from typing import TextIO
 
 import structlog
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -24,7 +32,15 @@ from starlette.responses import Response
 
 REQUEST_ID_HEADER = "X-Request-ID"
 
-_PUBLIC_TOKEN_PATH = re.compile(r"(/public/lists/)[^/]+")
+#: Dwie ścieżki niosą publiczny token listy: API (`/api/v1/public/lists/<token>`)
+#: i trasa SPA (`/l/<token>`), którą od BATCH_17 serwuje BACKEND (ADR-014) — bez
+#: drugiej alternatywy każde otwarcie linku wpisywałoby token do obu logów
+#: (ustalenie /security-review B17).
+_PUBLIC_TOKEN_PATH = re.compile(r"(/public/lists/|/l/)[^/]+")
+
+#: Loggery Uvicorna mają WŁASNE handlery z `propagate=False` (jego `dictConfig`),
+#: więc sama konfiguracja roota ich nie obejmuje — trzeba je przepiąć jawnie.
+UVICORN_LOGGERS = ("uvicorn", "uvicorn.error", "uvicorn.access")
 
 
 def mask_path(path: str) -> str:
@@ -77,27 +93,75 @@ def install_access_log_filter() -> None:
     access_logger.addFilter(MaskPublicTokenFilter())
 
 
-def configure_logging(*, app_env: str, log_level: str = "INFO") -> None:
-    """Skonfiguruj structlog i stdlib logging. Idempotentne — wołane z `create_app`."""
-    level = logging.getLevelNamesMapping().get(log_level.upper(), logging.INFO)
+#: Wspólne procesory OBU strumieni (structlog i stdlib) — jedna definicja, żeby
+#: `docker logs` miało jeden kształt znacznika czasu i wyjątku.
+_TIMESTAMPER = structlog.processors.TimeStamper(fmt="iso", utc=True)
 
-    logging.basicConfig(format="%(message)s", stream=sys.stdout, level=level, force=True)
+
+def _renderer(app_env: str) -> structlog.typing.Processor:
+    if app_env == "dev":
+        return structlog.dev.ConsoleRenderer()
+    return structlog.processors.JSONRenderer()
+
+
+def _stdlib_handler(app_env: str, level: int, stream: TextIO) -> logging.Handler:
+    """Handler dla rekordów stdlib: w prod/test JSON tym samym rendererem co structlog."""
+    handler = logging.StreamHandler(stream)
+    handler.setLevel(level)
+    if app_env == "dev":
+        handler.setFormatter(logging.Formatter("%(message)s"))
+        return handler
+    handler.setFormatter(
+        structlog.stdlib.ProcessorFormatter(
+            processors=[
+                structlog.stdlib.ProcessorFormatter.remove_processors_meta,
+                _renderer(app_env),
+            ],
+            foreign_pre_chain=[
+                structlog.stdlib.add_logger_name,
+                structlog.stdlib.add_log_level,
+                _TIMESTAMPER,
+                # Bez tego `exc_info` rekordu (np. „Exception in ASGI application")
+                # trafiłoby do JSON-a jako surowa krotka z adresem obiektu traceback,
+                # a jedyny ślad awarii protokołu/middleware znikałby z `docker logs`.
+                structlog.processors.format_exc_info,
+            ],
+        )
+    )
+    return handler
+
+
+def configure_logging(
+    *, app_env: str, log_level: str = "INFO", stream: TextIO | None = None
+) -> None:
+    """Skonfiguruj structlog i stdlib logging. Idempotentne — wołane z `create_app`.
+
+    `stream` istnieje dla testów (przechwycenie wyjścia); produkcja pisze na stdout.
+    """
+    level = logging.getLevelNamesMapping().get(log_level.upper(), logging.INFO)
+    out = stream or sys.stdout
+
+    handler = _stdlib_handler(app_env, level, out)
+    root = logging.getLogger()
+    root.handlers = [handler]
+    root.setLevel(level)
+    for name in UVICORN_LOGGERS:
+        uvicorn_logger = logging.getLogger(name)
+        uvicorn_logger.handlers = []
+        uvicorn_logger.propagate = True
     install_access_log_filter()
 
-    renderer: structlog.typing.Processor = (
-        structlog.dev.ConsoleRenderer() if app_env == "dev" else structlog.processors.JSONRenderer()
-    )
     structlog.configure(
         processors=[
             structlog.contextvars.merge_contextvars,
             structlog.processors.add_log_level,
-            structlog.processors.TimeStamper(fmt="iso", utc=True),
+            _TIMESTAMPER,
             structlog.processors.StackInfoRenderer(),
             structlog.processors.format_exc_info,
-            renderer,
+            _renderer(app_env),
         ],
         wrapper_class=structlog.make_filtering_bound_logger(level),
-        logger_factory=structlog.PrintLoggerFactory(file=sys.stdout),
+        logger_factory=structlog.PrintLoggerFactory(file=out),
         cache_logger_on_first_use=True,
     )
 

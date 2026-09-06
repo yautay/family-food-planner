@@ -47,16 +47,21 @@ Start od zera: `cp .env.example .env` → `task install` → `task dev`.
 | `task dev` | cały stack w Dockerze (app + frontend + db + db-test), hot reload |
 | `task dev-db` | same bazy (gdy testy uruchamiasz z hosta) |
 | `task down` / `task logs` | zatrzymanie / logi |
-| `task check` | **BRAMKA DoD**: migrations-check + unit + int + api + fe-test + typecheck + lint + format-check + fe-build |
+| `task check` | **BRAMKA DoD**: migrations-check + unit + int + api + fe-test + typecheck + lint + format-check + fe-build + fe-types-check |
 | `task test-unit` / `test-int` / `test-api` / `test-be` | pytest wg markerów; zawężenie przez `--`, np. `task test-int -- -k wydajnosc -s` |
 | `task fe-test` | vitest |
 | `task test-e2e` (+ `task e2e-install`) | Playwright, chromium; zawężenie przez `--`, np. `task test-e2e -- offline-lista.spec.ts` |
 | `task typecheck` / `lint` / `format` / `format-check` | mypy+vue-tsc / ruff+eslint / ruff format+prettier |
 | `task db-migrate` / `db-heads` / `db-revision -- --rev-id 0002 -m "opis"` | Alembic |
-| `task fe-types` | OpenAPI → `backend/openapi.json` → `frontend/src/api/generated.ts` (oba commitowane) |
+| `task fe-types` / `fe-types-check` | OpenAPI → `backend/openapi.json` → `frontend/src/api/generated.ts` (oba commitowane); `-check` = porównanie „wygenerowane teraz" z „w repo" (bramka świeżości kontraktu, w `task check`; NIE `git diff` — bramka DoD chodzi po brudnym drzewie) |
 | `task audit` / `task secrets-scan` | Review batche i BATCH_17 |
 | `task create-admin` | tworzy konto ADMIN (prompt albo `PASNIK_ADMIN_*` z env; nigdy hasło w repo) |
 | `task db-seed-demo` | idempotentny seed demo (od B04: ~15 produktów; kolejne encje dokładają batche domenowe) |
+| `task uploads-report` | pliki uploadów BEZ referencji w bazie — TYLKO raport, nic nie kasuje (D10) |
+| `task build-prod` | obrazy `pasnik-app:<git describe>` (+`:latest`, SPA w środku, ADR-014) i `pasnik-backup` |
+| `task test-stack-up` / `test-stack-down` | stack testowy obrazu prod (`docker/compose.test.yml`, app na 127.0.0.1:8081) / kasacja z wolumenami |
+| `task backup` / `task restore -- <dump> [tar] [--wipe-uploads]` | backup i restore stacku testowego (`docker/backup/*.sh`) |
+| `task backup-drill` | round-trip backup → `down -v` → restore → smoke (`docker/backup/drill.sh`, wymaga `PASNIK_TEST_BACKUPS_DIR`) |
 
 Nigdy nie wołaj gołego `pytest`/`vitest`/`alembic` — Taskfile wstrzykuje
 `.env` i właściwy interpreter.
@@ -170,7 +175,8 @@ Dołożone w BATCH_11 (też fundament):
   — maskowanie publicznego tokenu w **access logu Uvicorna** (nasz log maskuje
   `mask_path`, ale Uvicorn formatuje ścieżkę sam). Nowy endpoint pod
   `/public/lists/` dziedziczy to bez zmian; inny prefiks publiczny wymaga
-  rozszerzenia wzorca `_PUBLIC_TOKEN_PATH`.
+  rozszerzenia wzorca `_PUBLIC_TOKEN_PATH` — od B17 wzorzec obejmuje też trasę
+  SPA `/l/<token>`, bo backend serwuje SPA i widzi tę ścieżkę w logach.
 - `app/core/errors.py += GoneError` (410, kod `gone`) — zasób, który ISTNIAŁ,
   ale przestał być dostępny. Treść komunikatu 410 i 404 na ścieżce publicznej
   jest IDENTYCZNA (nie potwierdzamy istnienia tokenu, ADR-010).
@@ -292,6 +298,52 @@ Dołożone w REVIEW R4 (też fundament):
 - `nutrition/types.GOAL_NUMERIC_FIELDS` jest JEDYNĄ listą pól celu —
   `planning/service.py::_GOAL_FIELDS` (druga kopia z B13) już nie istnieje.
   Nowe pole celu = wpis w `types.py`, nigdzie indziej.
+
+Dołożone w BATCH_17 (też fundament — nie pisz tego od nowa):
+
+- `app/core/health.py` — `/api/v1/health` = `{status: ok|degraded, version,
+  checks: {db, migrations, disk}}`, **zawsze HTTP 200** (09_DEPLOYMENT §2:
+  `degraded` to informacja dla operatora, nie powód do restartu; healthcheck
+  Dockera testuje sam kod). Head migracji liczony ze skryptów (bez `env.py`);
+  próg dysku `DISK_MIN_FREE_MB`. Bez ścieżek, hostów i rewizji w odpowiedzi.
+  Jawny wyjątek od reguły „router nie dotyka sesji DB" (§4): to router
+  infrastrukturalny w `core/`, bez logiki domenowej — sesję przekazuje do
+  `run_health_checks`, które jest jedynym I/O tego modułu.
+- `app/core/body_limit.py` — czysty ASGI `BodyLimitMiddleware`: sufit ciała
+  żądania PRZED aplikacją (413 w kształcie 04_API §1 także dla chunked).
+  Uploady: limit z `Settings` + 1 MB marginesu; reszta `REQUEST_MAX_BODY_MB`.
+  **Nowy endpoint uploadu = reguła w `build_body_limit_rules` + limit
+  w `core/ratelimits.py` w tym samym batchu** — inaczej dostaje sufit 2 MB
+  i zero rate limitu.
+- `app/core/ratelimits.py` — limity uploadów (zdjęcia 30/min, PDF i paczka
+  10/min); routery z uploadem dostają `limiter` z `create_app` (wzór `/auth`).
+  Licznik slowapi jest per PROCES: przy `UVICORN_WORKERS=2` sufit ×2.
+- `app/core/config.py::request_settings(request)` — JEDYNE miejsce, z którego
+  middleware i dependency biorą `Settings` żądania (`app.state.settings`).
+- `app/core/cookies.py` — nazwy cookies zależą od `APP_ENV`: w prod
+  `__Host-pasnik_session` / `__Host-csrf_token` (`session_cookie_name` /
+  `csrf_cookie_name(settings)`). **Literał nazwy cookie w kodzie = błąd
+  review**; frontend sprawdza obie kandydatki (`CSRF_COOKIE_CANDIDATES`
+  w `src/api/client.ts`), E2E to samo w `e2e/cleanup.ts`.
+- `app/core/spa.py` — serwowanie `dist/` przez backend (ADR-014) tylko gdy
+  `SPA_DIST_DIR` ustawione (obraz prod: `/app/static`); catch-all rejestrowany
+  OSTATNI; `/api/*` i `/uploads/*` nigdy nie dostają `index.html`; `assets/`
+  immutable, `index.html`/`sw.js`/`manifest` `no-cache` (kontrakt PWA).
+- `app/core/logging.py` — w prod/test także rekordy stdlib (uvicorn) są
+  JSON-em (`ProcessorFormatter`); `configure_logging(stream=)` do testów.
+  Silnik bazy ma `hide_parameters=True` — nie wyłączaj (07_SECURITY §8).
+- `app/core/uploads_report.py` + `python -m app.cli uploads-report` — raport
+  plików bez referencji (D10: NIC nie kasuje). Nowa kolumna ze ścieżką pliku =
+  wpis w `collect_references`, inaczej jej pliki wyjdą jako „osierocone".
+- Limity plików są konfiguracją: `save_image(..., max_bytes=)`
+  (`IMAGE_MAX_UPLOAD_MB`), `PDF_MAX_UPLOAD_MB`, `TRANSFER_MAX_ZIP_MB`,
+  `PDF_PARSE_TIMEOUT_S`. Stałe w modułach to wartości domyślne.
+- `docker/Dockerfile` target `prod` (+ `frontend-build`), `docker/entrypoint.sh`
+  (`UVICORN_WORKERS`, `LOG_LEVEL`, `--proxy-headers`, `FORWARDED_ALLOW_IPS`
+  czyta sam uvicorn), `docker/compose.test.yml`, `docker/backup/{backup,
+  restore,cron-loop,drill}.sh`, retencja `backend/scripts/backup_prune.py`
+  (stdlib only — jest kopiowany do obrazu backupu). Oba obrazy pracują jako
+  UID 10001. compose.prod, Caddy i runbooki → B18.
 
 Testy: `tests/{unit,integration,api}/` (pakiet — z `__init__.py`), markery
 `unit`/`integration`/`api` (wymagane — bez markera test nie wejdzie do

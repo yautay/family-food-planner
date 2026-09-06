@@ -50,5 +50,24 @@ def test_naglowki_bezpieczenstwa_zgodne_z_07_security() -> None:
     assert SECURITY_HEADERS["Referrer-Policy"] == "same-origin"
     assert SECURITY_HEADERS["X-Frame-Options"] == "DENY"
     assert SECURITY_HEADERS["Content-Security-Policy"] == (
-        "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'"
+        "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; "
+        "object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
     )
+
+
+def test_csp_ma_dyrektywy_niedziedziczace_po_default_src() -> None:
+    """REVIEW R4 pkt 2: `base-uri`, `form-action` i `frame-ancestors` NIE dziedziczą.
+
+    Bez nich wstrzyknięty `<base>` przestawia ścieżki względne, a przejęty
+    formularz wysyła dane na obcy host. `worker-src` świadomie NIE jest wymieniony:
+    dziedziczy `'self'`, czego wymaga service worker (ADR-009).
+    """
+    csp = SECURITY_HEADERS["Content-Security-Policy"]
+    directives = {part.strip().split(" ")[0] for part in csp.split(";") if part.strip()}
+
+    assert {"base-uri", "form-action", "frame-ancestors", "object-src"} <= directives
+    assert "base-uri 'none'" in csp
+    assert "form-action 'self'" in csp
+    assert "frame-ancestors 'none'" in csp
+    assert "worker-src" not in directives
+    assert "http" not in csp, "CSP bez zewnętrznych źródeł"

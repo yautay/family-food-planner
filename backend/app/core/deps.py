@@ -12,11 +12,10 @@ import structlog
 from fastapi import Depends, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import Settings, get_settings
-from app.core.cookies import set_session_cookies
+from app.core.config import Settings, get_settings, request_settings
+from app.core.cookies import csrf_cookie_name, session_cookie_name, set_session_cookies
 from app.core.db import get_session
 from app.core.errors import ForbiddenError, UnauthorizedError
-from app.core.security import CSRF_COOKIE_NAME, SESSION_COOKIE_NAME
 from app.modules.accounts.models import User, UserRole
 from app.modules.accounts.service import SESSION_REQUIRED, AccountsService
 from app.modules.audit.service import AuditService
@@ -138,6 +137,7 @@ def get_importer_service(
         session,
         uploads_dir=settings.uploads_dir,
         max_pdf_mb=settings.pdf_max_upload_mb,
+        parse_timeout_s=settings.pdf_parse_timeout_s,
     )
 
 
@@ -173,6 +173,7 @@ def get_transfer_service(
         session,
         uploads_dir=settings.uploads_dir,
         max_zip_mb=settings.transfer_max_zip_mb,
+        image_max_mb=settings.image_max_upload_mb,
     )
 
 
@@ -189,7 +190,8 @@ async def get_current_user(
     service: Annotated[AccountsService, Depends(get_accounts_service)],
 ) -> User:
     """Cookie → sesja → użytkownik. Brak/niepoprawna/wygasła sesja = 401."""
-    session_id = request.cookies.get(SESSION_COOKIE_NAME)
+    settings = request_settings(request)
+    session_id = request.cookies.get(session_cookie_name(settings))
     if not session_id:
         raise UnauthorizedError(SESSION_REQUIRED)
 
@@ -206,13 +208,13 @@ async def get_current_user(
 
 def _refresh_session_cookies(request: Request, response: Response) -> None:
     """Wyślij te same wartości cookies z nowym `Max-Age` (TTL przesuwne, ADR-003)."""
-    session_id = request.cookies.get(SESSION_COOKIE_NAME)
-    csrf_token = request.cookies.get(CSRF_COOKIE_NAME)
+    settings = request_settings(request)
+    session_id = request.cookies.get(session_cookie_name(settings))
+    csrf_token = request.cookies.get(csrf_cookie_name(settings))
     if not session_id or not csrf_token:
         # Bez tokenu CSRF nie ma czego odświeżać — sesja i tak działa, a nowy
         # token powstanie przy kolejnym logowaniu.
         return
-    settings: Settings = getattr(request.app.state, "settings", None) or get_settings()
     set_session_cookies(response, session_id=session_id, csrf_token=csrf_token, settings=settings)
 
 

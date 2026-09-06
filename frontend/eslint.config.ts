@@ -34,6 +34,21 @@ export default defineConfigWithVueTs(
     },
   },
   {
+    // Narzędzia operacyjne E2E (BATCH_17: `sw-check.mjs`) — skrypty Node, które
+    // przez `page.evaluate` wykonują też kod W PRZEGLĄDARCE, więc widzą oba
+    // zestawy globali. Nie są częścią bundla ani suity Playwrighta.
+    name: 'pasnik/e2e-tools',
+    files: ['e2e/tools/**/*.{mjs,ts}'],
+    languageOptions: {
+      globals: {
+        process: 'readonly',
+        console: 'readonly',
+        window: 'readonly',
+        navigator: 'readonly',
+      },
+    },
+  },
+  {
     // Kod generowany przez shadcn-vue: modyfikujemy go przez tokens, nie przez
     // przepisywanie propsów (ADR-007) — reguły stylistyczne tu nie pomagają.
     name: 'pasnik/shadcn-generated',

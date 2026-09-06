@@ -16,8 +16,17 @@ import { recordServerDate } from '@/lib/offline/clock'
 
 export const API_PREFIX = '/api/v1'
 
-/** Cookie CSRF ustawiane przez backend — celowo bez HttpOnly. */
-export const CSRF_COOKIE = 'csrf_token'
+/**
+ * Cookie CSRF ustawiane przez backend — celowo bez HttpOnly.
+ *
+ * Nazwa zależy od środowiska backendu (07_SECURITY §3, BATCH_17): na produkcji
+ * cookie nosi prefiks `__Host-` (wiąże je z jednym hostem, wymaga `Secure`),
+ * w dev/test prefiksu nie ma, bo `http://localhost` nie ma TLS. Przeglądarka
+ * nie zna `APP_ENV`, więc sprawdza obie kandydatki — pierwsza z wartością wygrywa.
+ * Literał nazwy w kodzie klienta = po zmianie prefiksu double-submit cicho
+ * przestaje działać, a testy tego nie złapią (jadą po HTTP).
+ */
+export const CSRF_COOKIE_CANDIDATES = ['__Host-csrf_token', 'csrf_token'] as const
 export const CSRF_HEADER = 'X-CSRF-Token'
 
 /** Metody wymagające tokenu CSRF (zgodnie z middleware backendu). */
@@ -33,6 +42,17 @@ export function readCookie(name: string): string | undefined {
     const trimmed = part.trim()
     if (trimmed.startsWith(prefix)) {
       return decodeURIComponent(trimmed.slice(prefix.length))
+    }
+  }
+  return undefined
+}
+
+/** Wartość cookie CSRF niezależnie od tego, pod którą nazwą ustawił je backend. */
+export function readCsrfToken(): string | undefined {
+  for (const name of CSRF_COOKIE_CANDIDATES) {
+    const value = readCookie(name)
+    if (value) {
+      return value
     }
   }
   return undefined
@@ -167,7 +187,7 @@ export async function apiFetch<T>(path: string, options: ApiRequestOptions = {})
     requestHeaders.set('Content-Type', 'application/json')
   }
   if (UNSAFE_METHODS.has(method) && !requestHeaders.has(CSRF_HEADER)) {
-    const token = readCookie(CSRF_COOKIE)
+    const token = readCsrfToken()
     if (token) {
       requestHeaders.set(CSRF_HEADER, token)
     }

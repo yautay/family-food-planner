@@ -15,12 +15,14 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Query, Request, UploadFile
 from fastapi.responses import FileResponse
+from slowapi import Limiter
 from starlette.background import BackgroundTask
 
 from app.core.config import Settings, get_settings
 from app.core.deps import CurrentUser, get_transfer_service
+from app.core.ratelimits import FILE_UPLOAD_RATE_LIMIT
 from app.modules.transfer.schemas import (
     DryRunReport,
     ImportApplyRequest,
@@ -33,7 +35,7 @@ ServiceDep = Annotated[TransferService, Depends(get_transfer_service)]
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 
 
-def build_transfer_router() -> APIRouter:
+def build_transfer_router(limiter: Limiter) -> APIRouter:
     """Router `/transfer` — eksport ZIP, dry-run importu i jego zastosowanie."""
     router = APIRouter(prefix="/transfer", tags=["transfer"])
 
@@ -70,14 +72,17 @@ def build_transfer_router() -> APIRouter:
         response_model=DryRunReport,
         summary="Wgranie archiwum i raport DRY-RUN (nic nie zapisuje)",
     )
+    @limiter.limit(FILE_UPLOAD_RATE_LIMIT)
     async def dry_run(
+        request: Request,
         user: CurrentUser,
         service: ServiceDep,
         settings: SettingsDep,
         file: Annotated[UploadFile, File(description="Archiwum ZIP z eksportu")],
     ) -> DryRunReport:
-        # Odczyt z sufitem: do RAM trafia najwyżej limit + 1 bajt, a plik ponad
-        # limit dostaje 413 bez materializowania całości (wzorzec `upload_photo`).
+        # `request` wymaga slowapi (adres klienta). Odczyt z sufitem: do RAM trafia
+        # najwyżej limit + 1 bajt, a plik ponad limit dostaje 413 bez materializowania
+        # całości (wzorzec `upload_photo`).
         limit = settings.transfer_max_zip_mb * 1024 * 1024
         data = await file.read(limit + 1)
         import_id, report = await service.dry_run(

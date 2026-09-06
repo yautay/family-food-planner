@@ -32,6 +32,7 @@ STATUS_TO_CODE: dict[int, str] = {
     405: "method_not_allowed",
     409: "conflict",
     410: "gone",
+    413: "payload_too_large",
     422: "validation_error",
     429: "rate_limited",
 }
@@ -44,6 +45,7 @@ DEFAULT_MESSAGES: dict[int, str] = {
     405: "Metoda niedozwolona dla tego zasobu.",
     409: "Operacja jest w konflikcie z aktualnym stanem danych.",
     410: "Ten zasób nie jest już dostępny.",
+    413: "Żądanie jest za duże.",
     422: "Dane w żądaniu są nieprawidłowe.",
     429: "Zbyt wiele żądań. Spróbuj ponownie za chwilę.",
     500: "Wystąpił nieoczekiwany błąd. Spróbuj ponownie później.",
@@ -98,6 +100,13 @@ class NotFoundError(AppError):
 
     status_code = 404
     code = "not_found"
+
+
+class PayloadTooLargeError(AppError):
+    """413 — ciało żądania ponad limit (uploady i sufit ogólny, 07_SECURITY §6)."""
+
+    status_code = 413
+    code = "payload_too_large"
 
 
 class ForbiddenError(AppError):

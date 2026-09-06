@@ -15,7 +15,6 @@ from PIL import Image
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.core.uploads import MAX_IMAGE_BYTES
 from tests.factories import create_recipe, create_user
 from tests.helpers import API, csrf_headers, login
 
@@ -102,11 +101,12 @@ async def test_nie_obraz_to_422(db_client: AsyncClient, db_session: AsyncSession
 
 
 async def test_za_duzy_plik_to_413(db_client: AsyncClient, db_session: AsyncSession) -> None:
+    """Limit pochodzi z konfiguracji (`IMAGE_MAX_UPLOAD_MB`, B17), nie ze stałej modułu."""
     user = await create_user(db_session)
     recipe = await create_recipe(db_session, owner=user)
     await login(db_client, user.email)
 
-    oversized = b"\x00" * (MAX_IMAGE_BYTES + 1)
+    oversized = b"\x00" * (get_settings().image_max_upload_mb * 1024 * 1024 + 1)
     response = await db_client.post(
         f"{RECIPES}/{recipe.id}/photo",
         files={"file": ("duze.jpg", oversized, "image/jpeg")},

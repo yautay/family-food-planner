@@ -6286,7 +6286,7 @@
             "type": "string",
             "contentMediaType": "application/octet-stream",
             "title": "File",
-            "description": "Plik obrazu, maks. 10 MB"
+            "description": "Plik obrazu (limit: IMAGE_MAX_UPLOAD_MB)"
           }
         },
         "type": "object",
@@ -6301,7 +6301,7 @@
             "type": "string",
             "contentMediaType": "application/octet-stream",
             "title": "File",
-            "description": "Plik obrazu, maks. 10 MB"
+            "description": "Plik obrazu (limit: IMAGE_MAX_UPLOAD_MB)"
           }
         },
         "type": "object",
@@ -7577,24 +7577,71 @@
         "title": "GoalStatus",
         "description": "Status wartości względem celu dnia/posiłku (02_DOMAIN §6, D9)."
       },
+      "HealthChecks": {
+        "properties": {
+          "db": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "fail",
+              "skipped"
+            ],
+            "title": "Db"
+          },
+          "migrations": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "fail",
+              "skipped"
+            ],
+            "title": "Migrations"
+          },
+          "disk": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "fail",
+              "skipped"
+            ],
+            "title": "Disk"
+          }
+        },
+        "type": "object",
+        "required": [
+          "db",
+          "migrations",
+          "disk"
+        ],
+        "title": "HealthChecks",
+        "description": "Wynik trzech sprawdzeń — tylko statusy, żadnych szczegółów infrastruktury."
+      },
       "HealthResponse": {
         "properties": {
           "status": {
             "type": "string",
+            "enum": [
+              "ok",
+              "degraded"
+            ],
             "title": "Status"
           },
           "version": {
             "type": "string",
             "title": "Version"
+          },
+          "checks": {
+            "$ref": "#/components/schemas/HealthChecks"
           }
         },
         "type": "object",
         "required": [
           "status",
-          "version"
+          "version",
+          "checks"
         ],
         "title": "HealthResponse",
-        "description": "Odpowiedź healthchecku — świadomie nie ujawnia niczego poza statusem i wersją."
+        "description": "Odpowiedź healthchecku: status zbiorczy, wersja obrazu, statusy checków."
       },
       "HouseholdCreateRequest": {
         "properties": {

@@ -3,7 +3,8 @@
 Powstaje w BATCH_05 (zdjęcia przepisów), reużywany w B09 (zdjęcia produktów
 retail). Zasady, wszystkie z 07_SECURITY §6 i 03_DATABASE §11:
 
-1. **Limit rozmiaru** 10 MB — powyżej 413, zanim cokolwiek dotknie Pillow.
+1. **Limit rozmiaru** (`IMAGE_MAX_UPLOAD_MB`, domyślnie 10 MB) — powyżej 413,
+   zanim cokolwiek dotknie Pillow.
 2. **Sniffing treści** (Pillow `verify()`), nie rozszerzenia — plik, który nie
    jest obrazem, kończy się 422 niezależnie od nazwy.
 3. **Re-encode** przez Pillow do JPEG — obraz jest renderowany od nowa, więc
@@ -28,10 +29,14 @@ from uuid import uuid4
 
 from PIL import Image, UnidentifiedImageError
 
-from app.core.errors import AppError, NotFoundError
+from app.core.errors import AppError, NotFoundError, PayloadTooLargeError
 
-#: Limit obrazu z 07_SECURITY §6 (PDF-y importu mają własny limit w B15).
-MAX_IMAGE_BYTES = 10 * 1024 * 1024
+#: Domyślny limit obrazu z 07_SECURITY §6 (PDF-y importu mają własny limit
+#: w B15). Instancja przestawia go zmienną `IMAGE_MAX_UPLOAD_MB` (BATCH_17) —
+#: serwisy przekazują `max_bytes` do `save_image`, ta stała jest wartością
+#: domyślną i punktem odniesienia testów.
+DEFAULT_IMAGE_MAX_MB = 10
+MAX_IMAGE_BYTES = DEFAULT_IMAGE_MAX_MB * 1024 * 1024
 #: Prefiks URL endpointu serwującego uploady (`app/main.py::build_uploads_router`).
 #: Ścieżki w bazie są WZGLĘDNE, a URL powstaje wyłącznie tutaj — dzięki temu
 #: żaden moduł nie skleja go po swojemu i nie wystawi ścieżki z dysku.
@@ -54,7 +59,7 @@ JPEG_QUALITY = 85
 INVALID_IMAGE_MESSAGE = (
     "Przesłany plik nie jest poprawnym obrazem. Obsługiwane są zdjęcia (np. JPG, PNG, WEBP)."
 )
-TOO_LARGE_MESSAGE = "Plik jest za duży — zdjęcie może mieć najwyżej 10 MB."
+TOO_LARGE_MESSAGE = "Plik jest za duży — zdjęcie może mieć najwyżej {limit} MB."
 FILE_NOT_FOUND_MESSAGE = "Nie znaleziono pliku."
 
 
@@ -65,11 +70,12 @@ class InvalidUploadError(AppError):
     code = "validation_error"
 
 
-class UploadTooLargeError(AppError):
-    """413 — plik ponad limit; komunikat mówi, jaki limit obowiązuje."""
+class UploadTooLargeError(PayloadTooLargeError):
+    """413 — plik ponad limit; komunikat mówi, jaki limit obowiązuje.
 
-    status_code = 413
-    code = "payload_too_large"
+    Podklasa `PayloadTooLargeError` (sufit ciała żądania, `core/body_limit.py`):
+    jeden kontrakt HTTP = jedna hierarchia wyjątków.
+    """
 
 
 @dataclass(frozen=True)
@@ -100,15 +106,22 @@ def image_urls(path: str | None) -> tuple[str | None, str | None]:
     )
 
 
-def save_image(data: bytes, *, uploads_root: Path, subdir: str) -> SavedImage:
+def image_too_large_message(limit_mb: int) -> str:
+    """Komunikat 413 dla zdjęcia — limit jest konfiguracją instancji, nie stałą."""
+    return TOO_LARGE_MESSAGE.format(limit=limit_mb)
+
+
+def save_image(
+    data: bytes, *, uploads_root: Path, subdir: str, max_bytes: int = MAX_IMAGE_BYTES
+) -> SavedImage:
     """Zwaliduj, re-enkoduj i zapisz obraz + miniaturę. Zwraca ścieżki względne.
 
     Kolejność jest częścią kontraktu bezpieczeństwa: limit rozmiaru PRZED
     parsowaniem (nie karmimy Pillow gigabajtami), sniffing PRZED zapisem
     (na dysk trafia wyłącznie obraz, który sami wyrenderowaliśmy).
     """
-    if len(data) > MAX_IMAGE_BYTES:
-        raise UploadTooLargeError(TOO_LARGE_MESSAGE)
+    if len(data) > max_bytes:
+        raise UploadTooLargeError(image_too_large_message(max_bytes // (1024 * 1024)))
 
     try:
         with Image.open(BytesIO(data)) as probe:
@@ -154,7 +167,10 @@ def resolve_upload_path(path: str, *, uploads_root: Path) -> Path:
     candidate = PurePosixPath(path.replace("\\", "/"))
     if candidate.is_absolute() or ".." in candidate.parts:
         raise NotFoundError(FILE_NOT_FOUND_MESSAGE)
-    if candidate.parts and candidate.parts[0] in PRIVATE_SUBDIRS:
+    # `lower()`: na systemie plików bez rozróżniania wielkości liter (Windows,
+    # macOS) `Transfer/...` trafia w ten sam plik co `transfer/...` — porównanie
+    # musi być niezależne od systemu (ustalenie REVIEW R4 pkt 8).
+    if candidate.parts and candidate.parts[0].lower() in PRIVATE_SUBDIRS:
         raise NotFoundError(FILE_NOT_FOUND_MESSAGE)
 
     root = uploads_root.resolve()

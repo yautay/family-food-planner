@@ -124,7 +124,7 @@ punkt odhaczyć z krótkim opisem w Completion notes. Punkty 1–3 to jedyne
 ustalenia P1 R4 przypisane do tego batcha — reszta długu programu jest
 w PROGRESS jako rejestr P2/P3 i tu jej NIE MA.
 
-- [ ] **1. Healthcheck nie sprawdza migracji.** `GET /api/v1/health` zwraca
+- [x] **1. Healthcheck nie sprawdza migracji.** WYKONANE: `app/core/health.py` — `{status: ok|degraded, version, checks: {db, migrations, disk}}`; head liczony ze skryptów Alembica (bez `env.py`), `migrations: skipped` gdy baza nie odpowiada; `degraded` = nadal HTTP 200 (kontener odpowiadający jest `healthy`, treść czyta operator — 09 §2). Testy: `tests/unit/test_health.py`, `tests/api/test_health.py` (niezmigrowana / bez bazy / mało dysku / pusty klucz Anthropic). `GET /api/v1/health` zwraca
       dziś dosłownie `{"status":"ok","version":"0.1.0"}` (sprawdzone realnym
       requestem), a **09_DEPLOYMENT §2 wymaga statusu `degraded`, gdy głowa
       Alembica nie zgadza się z bazą**. To nie jest kosmetyka: procedura
@@ -133,7 +133,7 @@ w PROGRESS jako rejestr P2/P3 i tu jej NIE MA.
       Uwaga wykonawcza: dzisiejszy endpoint świadomie nie dotyka bazy
       (B01), więc dochodzi zależność od sesji — healthcheck compose musi
       tolerować `degraded` inaczej niż `down`.
-- [ ] **2. CSP nie ma dyrektyw, które NIE dziedziczą po `default-src`.**
+- [x] **2. CSP nie ma dyrektyw, które NIE dziedziczą po `default-src`.** WYKONANE: `+ object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'`; wyjątek Swagger obowiązuje tylko poza prod. **SW zweryfikowany na buildzie prod** (`frontend/e2e/tools/sw-check.mjs`, Playwright Chromium na `pasnik-app:latest`): scope `/`, `activated`, precache 65 wpisów, zero błędów CSP. 07_SECURITY §3.
       Realny nagłówek to `default-src 'self'; img-src 'self' data: blob:;
       style-src 'self' 'unsafe-inline'`. `object-src` i `worker-src`
       dziedziczą i są bezpieczne, ale **`base-uri` i `form-action` NIE
@@ -145,7 +145,7 @@ w PROGRESS jako rejestr P2/P3 i tu jej NIE MA.
       + 07_SECURITY §3. **Po zmianie zweryfikować rejestrację service workera
       na buildzie produkcyjnym** — to ta sama pułapka, co w punkcie „Do
       przeglądu z B12" wyżej.
-- [ ] **3. Endpointy uploadu nie mają rate limitu.** Limity ma `/auth/login`
+- [x] **3. Endpointy uploadu nie mają rate limitu.** WYKONANE: `app/core/ratelimits.py` — zdjęcia (przepis, wariant) 30/min/IP, `POST /import/pdf` i `POST /transfer/import` 10/min/IP; do tego druga połowa ochrony — `app/core/body_limit.py` (413 przed aplikacją, także chunked; uploady = limit + 1 MB marginesu, reszta `REQUEST_MAX_BODY_MB`=2). Testy: `tests/api/test_upload_rate_limits.py`, `tests/api/test_body_limit_api.py`, `tests/unit/test_body_limit.py`. Limity ma `/auth/login`
       (5/min/IP), `/import/jobs/{id}/ai-suggest` (10/min) i cała ścieżka
       `/public/*` (60/min wspólnie). NIE mają go: `POST /import/pdf` (25 MB
       na żądanie!), `POST /recipes/{id}/photo`, `PUT /retail-products/{id}/photo`
@@ -154,7 +154,7 @@ w PROGRESS jako rejestr P2/P3 i tu jej NIE MA.
       zapełnienia dysku Odroida to pętla `curl`. To naturalnie łączy się
       ze Stage 3 (body limit): limit rozmiaru i limit częstości to dwie
       połowy tej samej ochrony.
-- [ ] **4. Pliki uploadów bez referencji nie mają żadnego sprzątacza.**
+- [x] **4. Pliki uploadów bez referencji nie mają żadnego sprzątacza.** WYKONANE: `task uploads-report` (`python -m app.cli uploads-report`, `app/core/uploads_report.py`) — klasyfikuje referencjonowane / tymczasowe (`transfer/`) / OSIEROCONE i wiersze bez pliku; NIC nie kasuje (D10). Zmierzone na bazie dev: 10 plików, 11,6 MB; 5 z referencją, 2 scratch, **3 osierocone, 4,4 MB** (`5a7156f3…`, `b025f343…`, `e4d92d5a…`) — zgodnie z R4. Test: `tests/unit/test_uploads_report.py`.
       R4 znalazł w `backend/data/uploads/import-pdf/` **trzy PDF-y (4,4 MB)**,
       do których nie prowadzi żaden wiersz `import_jobs` — pozostałość po
       testach dziedziczących `UPLOADS_DIR` z `.env` (dług **U26**) i po
@@ -162,7 +162,7 @@ w PROGRESS jako rejestr P2/P3 i tu jej NIE MA.
       po każdym nieudanym imporcie. **Nie budować crona kasującego** (D10:
       nic nie usuwamy automatycznie) — wystarczy komenda raportująca „pliki
       bez referencji", którą runbook backupu woła obok `du`.
-- [ ] **6. Prefiks `__Host-` dla cookies sesji i CSRF** (obserwacja z audytu
+- [x] **6. Prefiks `__Host-` dla cookies sesji i CSRF** WYKONANE: `core/cookies.py::session_cookie_name/csrf_cookie_name(settings)` — `__Host-` razem z `Secure` (`APP_ENV=prod`); deps, middleware CSRF i router auth czytają nazwę przez te funkcje; frontend `CSRF_COOKIE_CANDIDATES` (`client.ts`, `transfer.ts`), E2E `cleanup.ts` to samo. Testy: `tests/unit/test_cookies.py`, `test_auth.py::test_w_prod_cookies_maja_prefiks_host_i_dzialaja_pod_nim`, `client.spec.ts`. Zweryfikowane na obrazie prod: login → `__Host-pasnik_session`/`__Host-csrf_token`, `/auth/me` 200 pod prefiksowaną nazwą. (obserwacja z audytu
       frontendu w R4). Double-submit czyta PIERWSZE ciasteczko `csrf_token`
       z `document.cookie` — to standardowe zastrzeżenie tego wzorca: subdomena
       albo sąsiad na tym samym rejestrowalnym domenie mogłaby przypiąć własną
@@ -172,7 +172,7 @@ w PROGRESS jako rejestr P2/P3 i tu jej NIE MA.
       `http://localhost` przeglądarka takie ciasteczko odrzuci — nazwa musi być
       zależna od `APP_ENV` tak samo, jak dziś jest `Secure`
       (`app/core/cookies.py`). Zmiana wylogowuje istniejące sesje.
-- [ ] **7. `create_async_engine` bez `hide_parameters=True`** (obserwacja
+- [x] **7. `create_async_engine` bez `hide_parameters=True`** WYKONANE: `core/db.py`, jedna linia; żaden test nie asertował `[parameters: ...]`. Test: `test_cookies.py::test_silnik_bazy_ukrywa_parametry_w_komunikatach_bledow`. (obserwacja
       z audytu core w R4). `core/errors.py` loguje pełny traceback, a
       SQLAlchemy dokleja do komunikatu `DBAPIError` sekcję `[parameters: ...]`.
       Nieobsłużony błąd na INSERCIE do `sessions` wypisałby więc **token sesji**
@@ -180,13 +180,13 @@ w PROGRESS jako rejestr P2/P3 i tu jej NIE MA.
       wywołać z zewnątrz (to awaria bazy, nie żądanie użytkownika), więc nie
       jest to dziura, tylko jedna linia w `core/db.py`, która zamyka klasę
       problemu.
-- [ ] **8. `PRIVATE_SUBDIRS` porównuje się z uwzględnieniem wielkości liter**
+- [x] **8. `PRIVATE_SUBDIRS` porównuje się z uwzględnieniem wielkości liter** WYKONANE: `parts[0].lower()` w `resolve_upload_path`; test `test_prywatny_podkatalog_jest_zamkniety_niezaleznie_od_wielkosci_liter`.
       (`core/uploads.py:157`). Na Linuksie produkcyjnym nieszkodliwe, bo
       `/uploads/Transfer/...` po prostu nie istnieje. Na hoście deweloperskim
       z systemem plików bez rozróżniania wielkości liter (Windows, macOS)
       ścieżka `Transfer/` przechodzi kontrolę i trafia w ten sam plik.
       `parts[0].lower()` zamyka temat niezależnie od systemu.
-- [ ] **5. Zajętość `/srv/pasnik/uploads` do runbooka backupu** (rewizja
+- [x] **5. Zajętość `/srv/pasnik/uploads` do runbooka backupu** WYKONANE: `backup.sh` loguje `du -sh` katalogu uploadów i katalogu backupów przy każdym przebiegu (widoczne w `docker logs backup`), a `task uploads-report` daje rozbicie na pliki; 09 §3 wskazuje oba jako pozycje runbooku B18. (rewizja
       **D10** w R4): to JEDYNA oś, która rośnie bez ograniczenia — zdjęcia
       przepisów i wariantów oraz jadłospisy PDF zatwierdzonych importów
       zostają na zawsze i tak ma być (audyt pochodzenia przepisu).
@@ -354,29 +354,213 @@ diffie przed commitem (krok 11).
 
 ## Implementation checklist
 
-- [ ] Ustalenia R4 wykonane i odhaczone
-- [ ] Dockerfile target prod (nie-root, dist, workers=2) + tagowanie git
-- [ ] Config: wszystkie wartości prod przez env; `.env.example` kompletny
-- [ ] Limity rozmiaru request (413 w kształcie błędu)
-- [ ] Logging prod JSON + LOG_LEVEL + weryfikacja braku tokenów
-- [ ] Healthcheck: db + migracje + dysk, statusy ok/degraded
-- [ ] backup.sh (pg_dump -Fc + tar uploads + prune 7d/4w) + restore.sh
-- [ ] Kontener cron w profilu backup
-- [ ] Taskfile: backup/restore/build-prod
-- [ ] Round-trip backup→restore wykonany realnie
-- [ ] Testy: degraded, prune, limit, smoke obrazu prod
-- [ ] 09_DEPLOYMENT + PROGRESS zaktualizowane
+- [x] Ustalenia R4 wykonane i odhaczone
+- [x] Dockerfile target prod (nie-root, dist, workers=2) + tagowanie git
+- [x] Config: wszystkie wartości prod przez env; `.env.example` kompletny
+- [x] Limity rozmiaru request (413 w kształcie błędu)
+- [x] Logging prod JSON + LOG_LEVEL + weryfikacja braku tokenów
+- [x] Healthcheck: db + migracje + dysk, statusy ok/degraded
+- [x] backup.sh (pg_dump -Fc + tar uploads + prune 7d/4w) + restore.sh
+- [x] Kontener cron w profilu backup
+- [x] Taskfile: backup/restore/build-prod
+- [x] Round-trip backup→restore wykonany realnie
+- [x] Testy: degraded, prune, limit, smoke obrazu prod
+- [x] 09_DEPLOYMENT + PROGRESS zaktualizowane
 
 ## Verification checklist
 
-- [ ] `task check` zielony (testy+lint+typecheck)
-- [ ] `alembic heads` = 1 (jeśli doszła migracja: up/down/up przechodzi)
-- [ ] Round-trip backup→restore: raport z czasami i weryfikacją danych
-- [ ] Obraz prod zbudowany i uruchomiony (smoke)
-- [ ] Acceptance Criteria 1–8 odhaczone
-- [ ] `/code-review` zmian wykonany przed commitem
-- [ ] Commit `batch(17): ...`, `git status` czysty
+- [x] `task check` zielony (testy+lint+typecheck)
+- [x] `alembic heads` = 1 (jeśli doszła migracja: up/down/up przechodzi)
+- [x] Round-trip backup→restore: raport z czasami i weryfikacją danych
+- [x] Obraz prod zbudowany i uruchomiony (smoke)
+- [x] Acceptance Criteria 1–8 odhaczone
+- [x] `/code-review` zmian wykonany przed commitem
+- [x] Commit `batch(17): ...`, `git status` czysty
 
 ## Completion notes
 
-(wypełnia agent wykonujący)
+**Wykonane (2026-09-05).** Wszystkie osiem punktów „Ustaleń R4" (odhaczone
+wyżej z opisem), Stage 2–8 z karty. Szczegóły stanu faktycznego: 09_DEPLOYMENT
+§1–6, 07_SECURITY §2/§3/§6/§7/§8, ADR-003, CLAUDE.md „Dołożone w BATCH_17",
+skille `pasnik-backend`/`pasnik-security`, karta B18 („Stan FAKTYCZNY po
+BATCH_17").
+
+**Wyniki uruchomień (realne):** `task check` **exit 0** na finalnym drzewie: 3 migrations-check / **482 unit** (20 s) / **333 integration** (2 min 42 s) / **436 api** (13 min 23 s) / **429 vitest w 47 plikach** / mypy 217 plików + vue-tsc / ruff / eslint / prettier / `vite build` (71 wpisów precache) / **fe-types-check** (kontrakt zgodny z kodem). Przyrost wobec wejścia (432/330/414/428): **+50 unit, +3 integration, +22 api, +1 vitest**. E2E: **21/21 w DWÓCH kolejnych przebiegach** (1,9 min i 2,0 min), zero flaków. `task audit`: pip-audit „No known vulnerabilities found", `npm audit --audit-level=high` „found 0 vulnerabilities". `task secrets-scan`: „no leaks found" (38 commitów, 6,28 MB). `alembic heads`: jedna głowa `0015` — batch nie dodał migracji.
+
+**Round-trip backup → restore (REALNIE, `task backup-drill` =
+`docker/backup/drill.sh`, stack `docker/compose.test.yml`, obraz
+`pasnik-app:c7d0fee-dirty`, Docker Desktop/Windows):** czysta baza → migracje →
+`create-admin` → seed demo → zdjęcie przepisu przez API → liczności 18 tabel
+i 2 pliki uploadów → **backup 1 s** (dump 132 KB `-Fc`, uploady 12 KB tar.gz,
+`sha256`) → `down -v` (wolumeny skasowane, potwierdzone `docker volume ls`) →
+`restore.sh --wipe-uploads` (sumy kontrolne zgodne, `pg_restore` 1 s,
+`alembic_version = 0015`) → `alembic upgrade head` (no-op) → app → health `ok`
+po **19 s** od startu restore → liczności PO == PRZED co do wiersza
+(users 1, canonical_products 15, product_unit_weights 10, retail_products 10,
+stores 1, recipes 5, recipe_ingredients 15, plan_days 7, plan_meals 15,
+plan_meal_items 16, audit_entries 1, reszta 0), 2/2 plików uploadów, smoke:
+login, przepisy 5, dni planu 7, listy 0, zdjęcie przepisu HTTP 200. **Całość
+85 s.** Uczciwe zastrzeżenie: seed demo nie ma list zakupowych ani spiżarni
+(liczności 0 == 0) — pokrycie tych tabel daje test R4 (round-trip transferu)
+i sam `pg_dump`, który nie rozróżnia tabel.
+
+**Smoke obrazu prod (`docker/compose.test.yml`, curl + Playwright):** health
+200 `ok`, CSP z nowymi dyrektywami na każdej odpowiedzi (także 404 `/api/docs`
+w prod), `/` i `/plan-dnia` → `index.html` `no-cache`, `manifest.webmanifest`
+→ `application/manifest+json` `no-cache`, `sw.js` → `text/javascript`
+`no-cache`, `assets/*.js` → `immutable`, `/api/v1/nope` → 404 JSON (nie HTML),
+`/uploads/...` bez sesji → 401, traversal → 404, brak nagłówka `Server`.
+Obraz: `USER pasnik` (uid 10001), `APP_VERSION` = tag, zero dev-deps
+(`pip list | grep pytest|ruff|mypy` = 0), `docker history` bez sekretów,
+681 MB (`pasnik-backup` 488 MB).
+
+**Logi prod (grep po realnym stdout kontenera, 32 linie po logowaniu, `/auth/me`,
+żądaniu z fałszywym tokenem publicznym):** hasło 0 trafień, id sesji 0,
+token publiczny 0, `sk-ant` 0, maskowanie `/public/lists/***` w OBU warstwach
+(structlog + `uvicorn.access`), 30/32 linii to JSON — wyjątkiem są dwie linie
+startowe supervisora uvicorna (proces nadrzędny nie wykonuje `create_app`),
+opisane w 09 §6.
+
+**Decyzje implementującego (karta pozwalała):**
+- **cron = pętla `sleep` (`cron-loop.sh`), nie crond**: crond w `postgres:17`
+  to dodatkowy demon, który nie oddaje wyjścia zadań na stdout kontenera bez
+  obejść i gubi env (jedyne źródło konfiguracji); pętla ma 30 linii i trap na
+  SIGTERM.
+- **pomiar dysku**: `shutil.disk_usage` na najbliższym istniejącym przodku
+  katalogu uploadów (bind mount = dysk danych), próg `DISK_MIN_FREE_MB`.
+- **`degraded` = HTTP 200** (uzasadnienie w 09 §2 i docstringu `health.py`).
+- **`SECRET_KEY` zostaje wymagane i ZAREZERWOWANE** (R1 pkt 2, U13) —
+  wariant „dopisać wprost" z karty; 07_SECURITY §7 i `.env.example`.
+- **`fe-types-check` WESZŁO do `task check`** (R1 pkt 1, U12), ale NIE jako
+  `git diff --exit-code`: `task check` jest bramką PRZED commitem, więc drzewo
+  jest brudne z definicji i porównanie z HEAD padałoby w każdym batchu
+  zmieniającym API (złapane realnym przebiegiem bramki). `scripts/
+  check_api_contract.py` generuje oba pliki do katalogu tymczasowego
+  i porównuje bajtowo z repo — bez gita. Zweryfikowane w obie strony:
+  świeży kontrakt przechodzi, podmieniony tytuł w `openapi.json` daje exit 1
+  z komunikatem po polsku. Koszt ~5 s. **`secrets-scan` NIE weszło**
+  (R2 pkt 5): wymaga obrazu z Docker Hub i sieci — zostaje bramką Review/B17
+  i ma być wywołane w procedurze deploy B18.
+- **Parametry argon2 / TTL 30 dni / blokada 10×15 min — bez zmian** (B02 pkt 2),
+  uzasadnienie w 07 §2 razem z konsekwencją `UVICORN_WORKERS=2` (limity slowapi
+  per proces ⇒ ×2; twardą granicą jest blokada konta w bazie).
+- **Zimny start (R2 pkt 4) — świadomie przyjęty**, opisany w 09 §2; bez
+  rozgrzewki w healthchecku.
+- **Retencja**: 7 dni zachowuje WSZYSTKIE zestawy z dnia (nie tylko najnowszy),
+  żeby ręczny backup przed migracją nie zginął przez nocny — `backup_prune.py`.
+- **Kopia env w backupie** wyłączona domyślnie (`BACKUP_ENV_FILE` puste) — env
+  żyje na hoście; B18 decyduje o montowaniu.
+- **UID 10001 wspólny dla obrazu app i backup** — oba piszą do wolumenu
+  uploadów; bind mounty na hoście dostają `chown 10001:10001` (09 §1).
+
+**Odstępstwa od karty:**
+- Nazwa zmiennej limitu zdjęcia to `IMAGE_MAX_UPLOAD_MB`, nie
+  `MAX_UPLOAD_IMAGE_MB` — spójnie z istniejącymi `PDF_MAX_UPLOAD_MB` /
+  `TRANSFER_MAX_ZIP_MB`.
+- `task backup` / `task restore` operują na STACKU TESTOWYM
+  (`compose.test.yml`), nie na dev — dev nie ma profilu backup, bo baza dev
+  to dane właściciela, a ćwiczenia mają iść na czystej instancji (Implementation
+  Notes); compose.prod spina te same skrypty (B18).
+- `docker/backup/crontab` nie istnieje (zamiennik: `cron-loop.sh`, uzasadnienie
+  wyżej).
+- Użytkownik PG bez SUPERUSER (07 §9) — ZWERYFIKOWANE jako nieegzekwowane
+  i opisane w 09 §5 z receptą dla B18; skrypt init roli to compose.prod (B18).
+
+**Pułapki znalezione po drodze (dla B18 i kolejnych):**
+- **Supervisor uvicorna zabija workery nieodpowiadające na ping w 5 s** —
+  na obciążonym hoście worker importujący aplikację umierał w pętli („Child
+  process [n] died", bez tracebacku). `entrypoint.sh` ustawia
+  `--timeout-worker-healthcheck 30` (`UVICORN_WORKER_HEALTHCHECK_S`).
+- `postgres:17` na wolnym dysku robił `initdb` ~60 s — healthcheck db w
+  compose.test ma `retries: 24`, `start_period: 30s`; compose.prod ma to
+  odziedziczyć.
+- Git Bash konwertuje `/backups/x` na ścieżkę Windows przed dockerem —
+  `drill.sh` ustawia `MSYS_NO_PATHCONV=1`; `python3` bywa stubem Store —
+  skrypt wybiera działający interpreter.
+- FastAPI zamienia KAŻDY wyjątek podczas czytania ciała w 400 — middleware
+  limitu ciała musi sam wysłać 413 i wyciszyć późniejszą odpowiedź aplikacji
+  (komentarz w `body_limit.py`).
+- Cookie `__Host-` nie da się ustawić w jsdom po http (egzekwuje reguły
+  prefiksu) — test frontendu podstawia getter `document.cookie`.
+- **Każdy przebieg `task test-e2e` dodaje job importu i PDF na dysku**
+  (`cleanup.ts` nie sprząta `import_jobs`, statusy rozstrzygnięte są
+  nieusuwalne) — katalog uploadów rośnie także bez użytkownika; `task
+  uploads-report` to pokazuje. Follow-up bez zmiany kodu: okresowy raport
+  w runbooku (B18), nie automat (D10).
+
+**Follow-upy (poza zakresem, do rejestru w PROGRESS):**
+- Rola PG `NOSUPERUSER` + init-skrypt — B18 (opisane w 09 §5).
+- `FORWARDED_ALLOW_IPS` = brama sieci compose albo `*` — B18 wpisuje po
+  `docker network inspect`.
+- Weryfikacja SW i HSTS na REALNEJ domenie — B18 (`sw-check.mjs` przyjmuje URL).
+- `secrets-scan` w procedurze deploy — B18.
+
+**Pytania do właściciela:** brak. Skille: SKILL-BE i SKILL-SEC załadowane na
+starcie; `/code-review` i `/security-review` uruchomione na diffie przed
+commitem (ustalenia niżej).
+
+**Ustalenia review (diff przed commitem):** `/code-review` (high, osiem kątów) dał **10 ustaleń — wszystkie naprawione
+w tym commicie**, z testami tam, gdzie da się je zaasercjonować:
+
+1. **Tracebacki rekordów stdlib ginęły w JSON-logu prod** — `foreign_pre_chain`
+   `ProcessorFormatter` bez `format_exc_info`; `exc_info` z „Exception in ASGI
+   application" wychodziło jako krotka z adresem obiektu. Test
+   `test_w_prod_traceback_rekordu_stdlib_trafia_do_json`.
+2. **Import zdjęć z paczki transferu ignorował `IMAGE_MAX_UPLOAD_MB`** (trzeci
+   wywołujący `save_image` bez `max_bytes`) — zdjęcie przyjęte przez instancję
+   z limitem 20 MB nie wracało z jej własnego eksportu. `TransferService`
+   dostaje `image_max_mb` z `Settings`.
+3. **Catch-all SPA jako `@router.get` dawał 405 dla `HEAD /` i dla nieznanych
+   `/api/*` z metodą inną niż GET** (Starlette: dopasowana ścieżka + zła
+   metoda = 405) — rozjazd prod-only wobec kontraktu 404. Router przyjmuje
+   wszystkie metody, `/api|/uploads` → 404, mutacja na trasie SPA → 405; nowy
+   `tests/api/test_spa.py` (7 testów: index/HEAD/cache/manifest/404/405/
+   traversal/ConfigurationError). Zbiór plików `dist/` liczony RAZ przy starcie
+   (`frozenset`) — bez `resolve()`/`stat()` w pętli zdarzeń i bez własnej
+   logiki anty-traversal.
+4. **Dev-deps w warstwie `base` obrazu** — `uv sync` instaluje grupę `dev`
+   domyślnie, a `--no-dev` w `prod` kasował pliki w NOWEJ warstwie (obraz
+   681 MB). `base` ma `--no-dev`, `dev` dokłada grupę jawnie: **476 MB**,
+   `pip list | grep pytest|ruff|mypy` = 0.
+5. **Dwa timeouty bazy w health (6 s) przekraczały `--timeout 5s` HEALTHCHECK-u**
+   — jedno zapytanie (`SELECT version_num FROM alembic_version`) z rozróżnieniem
+   `ProgrammingError` (baza żyje, niezmigrowana) od reszty (`fail`); head
+   migracji rozgrzewany przy składaniu aplikacji.
+6. **`LOG_LEVEL=WARN|FATAL` wywalał uvicorna na starcie** (zna tylko
+   critical|error|warning|info|debug|trace) — mapowanie synonimów w
+   `entrypoint.sh`.
+7. **`drill.sh` sourcował `.env` jako skrypt bash** — hasło z `&` lub `$`
+   zostałoby wykonane/ucięte; zmienne przychodzą z `dotenv:` Taskfile'a.
+8. **Testy 413 zdjęcia asertowały stałą `MAX_IMAGE_BYTES`, nie limit
+   z konfiguracji** — po zmianie `IMAGE_MAX_UPLOAD_MB` w `.env` bramka
+   czerwieniłaby się na poprawnej konfiguracji.
+9. **Ścieżki `/backups/x` przechodziły przez shell hosta** (Git Bash → ścieżka
+   Windows) — `restore.sh` szuka gołych nazw w `BACKUP_DIR`, `task restore`
+   i drill podają nazwy plików.
+10. **Wyjątek CSP dla Swaggera z literałami ścieżek i `APP_ENV`** — teraz
+    wynika z `app.docs_url`/`openapi_url` (w prod `None` ⇒ zero wyjątków).
+
+Do tego z kątów reuse/simplification: `request_settings(request)` w jednym
+miejscu (`core/config.py`), `UploadTooLargeError` jako podklasa
+`PayloadTooLargeError`, wspólny `_TIMESTAMPER` dla obu strumieni logów,
+szybka ścieżka body-limit przy `Content-Length` (bez opakowywania
+`receive`/`send`), poprawiony komentarz o metodach, martwa gałąź
+`format_size`, nowy test „każdy endpoint multipart ma regułę limitu"
+(z OpenAPI) — pilnuje drugiej tabeli tras. **Świadomie NIE zrobione** (poza
+zakresem, wpisane do długu): dedykowane `COOKIE_SECURE` zamiast `APP_ENV==prod`
+i serwer zwracający nazwę cookie CSRF w odpowiedzi logowania (kandydaci na
+decyzję, nie na cichą zmianę); wspólna stała `MIB`; helpery testowe w
+`tests/helpers.py`.
+
+`/security-review` (pełny diff, z filtrem fałszywych alarmów): **1 ustalenie,
+naprawione** — **po dołożeniu serwowania SPA trasa `/l/<token>` (publiczny link
+listy) trafia do backendu, a oba maskowania (`mask_path`, `MaskPublicTokenFilter`)
+znały tylko `/public/lists/`** — każde otwarcie linku z telefonu wpisywałoby
+token równoważny hasłu do listy do obu logów prod. Wzorzec
+`_PUBLIC_TOKEN_PATH` obejmuje `/l/`, testy w `tests/unit/test_logging.py`,
+07_SECURITY §5 pkt 9a. Pozostałe obszary sprawdzone jako czyste: catch-all SPA
+(zbiór plików, traversal → `index.html`), body-limit (brak desync — uvicorn
+dosysa resztę ciała po `response_complete`), cookies `__Host-` (nazwa z jednego
+źródła, kandydaci frontendu nie obniżają porównania), health (tylko statusy),
+`--proxy-headers` z domyślnym `FORWARDED_ALLOW_IPS=127.0.0.1`, `.dockerignore`,
+skrypty backupu (bez connection stringów w logach).

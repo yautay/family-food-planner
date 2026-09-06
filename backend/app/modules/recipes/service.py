@@ -239,7 +239,14 @@ class RecipesService:
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
-        self._uploads_root = Path(get_settings().uploads_dir)
+        settings = get_settings()
+        self._uploads_root = Path(settings.uploads_dir)
+        self._image_max_bytes = settings.image_max_upload_mb * 1024 * 1024
+
+    @property
+    def image_max_bytes(self) -> int:
+        """Limit zdjęcia w bajtach — router czyta multipart z sufitem `limit + 1`."""
+        return self._image_max_bytes
 
     # --- odczyt -----------------------------------------------------------------
 
@@ -692,7 +699,11 @@ class RecipesService:
 
         # Pillow jest CPU-bound — poza pętlą zdarzeń (ADR-015).
         saved = await run_in_threadpool(
-            save_image, data, uploads_root=self._uploads_root, subdir=PHOTO_SUBDIR
+            save_image,
+            data,
+            uploads_root=self._uploads_root,
+            subdir=PHOTO_SUBDIR,
+            max_bytes=self._image_max_bytes,
         )
         previous = recipe.photo_path
         recipe.photo_path = saved.path

@@ -29,9 +29,17 @@ description: Reguły bezpieczeństwa Paśnika — sesje/CSRF/rate-limit, scope h
 - **Scope (B03)**: `app/core/scope.py` — `ScopedQuery` (cudza encja = 404).
   Encje bez kolumn scope (`member_profiles`) filtruje się porównaniem
   `household_id` — identyczne 404 dla cudzego i nieistniejącego (04_API §2a).
-- Do dostarczenia: publiczne tokeny list i rate limit `/public/*` (B11),
-  uploady (B05 `core/uploads.py`), przegląd parametrów argon2/TTL i IP za
-  reverse proxy (B17).
+- Publiczne tokeny list i rate limit `/public/*` (B11), uploady (B05
+  `core/uploads.py`).
+- **BATCH_17 (hardening)**: cookies `__Host-` w prod (`core/cookies.py`;
+  nazwy przez `session_cookie_name`/`csrf_cookie_name(settings)`, frontend
+  sprawdza `CSRF_COOKIE_CANDIDATES`), CSP z `object-src 'none'; base-uri
+  'none'; form-action 'self'; frame-ancestors 'none'`, sufit ciała żądania
+  (`core/body_limit.py`, 413) + rate limity uploadów (`core/ratelimits.py`),
+  `hide_parameters=True` na silniku, JSON na całym stdout w prod, health
+  `ok|degraded` bez szczegółów infrastruktury, `--proxy-headers` +
+  `FORWARDED_ALLOW_IPS` (zaufanie do `X-Forwarded-For` tylko dla proxy).
+  Parametry argon2/TTL/blokady przeglądnięte i ZOSTAJĄ (07_SECURITY §2).
 
 # Paśnik — kontrakt bezpieczeństwa
 
@@ -53,8 +61,12 @@ description: Reguły bezpieczeństwa Paśnika — sesje/CSRF/rate-limit, scope h
 - Mutacje wymagają `X-CSRF-Token` (double-submit, `hmac.compare_digest`).
   Wyjątek: publiczne PATCH-e tokenowe (autoryzuje token, jest rate limit).
 - Middleware nagłówków: nosniff, Referrer-Policy same-origin, X-Frame-Options
-  DENY, CSP self (img: data:/blob:). CORS nie istnieje (jeden origin) —
-  nie dodawaj CORSMiddleware „na zapas".
+  DENY, CSP self (img: data:/blob:) + `object-src 'none'; base-uri 'none';
+  form-action 'self'; frame-ancestors 'none'` (B17). `worker-src` celowo
+  niewymieniony (dziedziczy `'self'` — service worker). CORS nie istnieje
+  (jeden origin) — nie dodawaj CORSMiddleware „na zapas".
+- Cookie sesji/CSRF: NIGDY literał nazwy — `session_cookie_name(settings)` /
+  `csrf_cookie_name(settings)` (w prod prefiks `__Host-`).
 
 ## Scope i IDOR
 
@@ -84,8 +96,11 @@ description: Reguły bezpieczeństwa Paśnika — sesje/CSRF/rate-limit, scope h
 
 ## Uploady (07_SECURITY §6)
 
-- Limity: obraz ≤10 MB, PDF ≤25 MB. Typ po TREŚCI (Pillow verify / nagłówek
-  %PDF), nigdy po rozszerzeniu. Losowa nazwa (uuid4), zapis poza web-rootem,
+- Limity: obraz ≤10 MB, PDF ≤25 MB, paczka ≤100 MB — z env (`*_MAX_UPLOAD_MB`).
+  Typ po TREŚCI (Pillow verify / nagłówek %PDF), nigdy po rozszerzeniu.
+- **Nowy endpoint uploadu = reguła w `core/body_limit.build_body_limit_rules`
+  + limit tempa w `core/ratelimits.py` + `limiter` w builderze routera** (B17).
+  Bez tego dostaje sufit ciała 2 MB i zero rate limitu. Losowa nazwa (uuid4), zapis poza web-rootem,
   serwowanie przez endpoint z autoryzacją — nigdy surowe StaticFiles.
 - Obrazy re-enkodowane (strip EXIF); PDF parsowany tylko pdfplumberem
   z limitem czasu, nigdy renderowany server-side.
@@ -104,3 +119,7 @@ description: Reguły bezpieczeństwa Paśnika — sesje/CSRF/rate-limit, scope h
   jawnie odnotuj w Completion notes z uzasadnieniem.
 - Zależności: `task audit` (pip-audit + npm audit) i `task secrets-scan`
   (gitleaks) w Review batchach i B17.
+- Operacje (B17): `task uploads-report` (pliki bez referencji — tylko raport,
+  D10), `task build-prod`, `task backup` / `task restore`, `task backup-drill`
+  (round-trip na `docker/compose.test.yml`). Backup = komplet danych rodziny
+  (pliki 600), skrypty nie logują connection stringów.

@@ -14,11 +14,13 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Query, Request, UploadFile, status
+from slowapi import Limiter
 
 from app.core.deps import CurrentUser, get_recipes_service
+from app.core.ratelimits import PHOTO_UPLOAD_RATE_LIMIT
 from app.core.scope import Scope
-from app.core.uploads import MAX_IMAGE_BYTES, image_urls
+from app.core.uploads import image_urls
 from app.modules.nutrition.schemas import nutrition_read
 from app.modules.nutrition.types import NutritionValues
 from app.modules.recipes.schemas import (
@@ -106,7 +108,7 @@ def _to_detail(view: RecipeDetailView) -> RecipeDetail:
     )
 
 
-def build_recipes_router() -> APIRouter:
+def build_recipes_router(limiter: Limiter) -> APIRouter:
     """Router `/recipes` — CRUD, oceny i zdjęcie."""
     router = APIRouter(prefix="/recipes", tags=["recipes"])
 
@@ -206,16 +208,19 @@ def build_recipes_router() -> APIRouter:
         response_model=RecipeDetail,
         summary="Zdjęcie przepisu (multipart; sniffing, re-encode, miniatura)",
     )
+    @limiter.limit(PHOTO_UPLOAD_RATE_LIMIT)
     async def upload_photo(
+        request: Request,
         recipe_id: int,
         user: CurrentUser,
         service: ServiceDep,
-        file: Annotated[UploadFile, File(description="Plik obrazu, maks. 10 MB")],
+        file: Annotated[UploadFile, File(description="Plik obrazu (limit: IMAGE_MAX_UPLOAD_MB)")],
     ) -> RecipeDetail:
-        # Odczyt z sufitem: do RAM trafia najwyżej limit + 1 bajt — plik ponad
-        # limit dostaje 413 z `save_image` bez materializowania całości.
-        # (Spool multiparta na dysku ogranicza reverse proxy — przegląd w B17.)
-        data = await file.read(MAX_IMAGE_BYTES + 1)
+        # `request` wymaga slowapi (adres klienta). Odczyt z sufitem: do RAM trafia
+        # najwyżej limit + 1 bajt — plik ponad limit dostaje 413 z `save_image`
+        # bez materializowania całości; sufit całego ciała pilnuje
+        # `BodyLimitMiddleware` (B17).
+        data = await file.read(service.image_max_bytes + 1)
         return _to_detail(await service.set_photo(recipe_id, actor=user, data=data))
 
     @router.delete(

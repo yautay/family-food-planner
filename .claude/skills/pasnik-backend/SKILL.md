@@ -51,6 +51,14 @@ description: Kontrakt backendu Paśnika — wzorzec modułu FastAPI (router→se
 - `app/modules/audit/service.py` — `record()` bez commita; wpis powstaje
   w transakcji operacji. Nowa akcja = wpis w `AuditAction`/`AuditEntity`
   (`<encja>.<czasownik>`); Decimal w payloadzie przez `format(value, "f")`.
+- **BATCH_17**: `core/health.py` (health `ok|degraded`, zawsze 200),
+  `core/body_limit.py` (sufit ciała żądania, 413), `core/ratelimits.py`
+  (limity uploadów), `core/spa.py` (dist przez backend gdy `SPA_DIST_DIR`),
+  `core/uploads_report.py` (+ `app.cli uploads-report`), `core/cookies.py`
+  z nazwami zależnymi od `APP_ENV`. Endpoint uploadu = wpis w regułach body
+  limit + rate limit; kolumna ze ścieżką pliku = wpis w `collect_references`.
+  `scripts/backup_prune.py` używa WYŁĄCZNIE stdlib (kopiowany do obrazu
+  backupu bez `app`).
 
 ## Wzorzec modułu (ADR-001, 01_ARCHITECTURE §2)
 
@@ -146,7 +154,8 @@ nie ma.
   jest nietykalna.
 - Testy nazywają scenariusz po polsku w docstringu.
 - Uruchamiaj przez `task test-unit|test-int|test-api|check` — nigdy goły
-  `pytest` (zły interpreter/env, brak `.env`).
+  `pytest` (zły interpreter/env, brak `.env`). `task check` od B17 kończy
+  `fe-types-check` — zmiana kształtu API bez `task fe-types` wywala bramkę.
 
 ## Konfiguracja i logi
 

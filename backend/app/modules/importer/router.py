@@ -18,6 +18,7 @@ from fastapi import APIRouter, Depends, File, Query, Request, Response, UploadFi
 from slowapi import Limiter
 
 from app.core.deps import CurrentUser, get_import_review_service, get_importer_service
+from app.core.ratelimits import FILE_UPLOAD_RATE_LIMIT
 from app.modules.importer.models import ImportJob
 from app.modules.importer.review_service import (
     IngredientDecision,
@@ -168,13 +169,16 @@ def build_import_router(limiter: Limiter) -> APIRouter:
         status_code=status.HTTP_201_CREATED,
         summary="Wgranie jadłospisu PDF (multipart; 25 MB, sniffing, parsowanie)",
     )
+    @limiter.limit(FILE_UPLOAD_RATE_LIMIT)
     async def upload_pdf(
+        request: Request,
         user: CurrentUser,
         service: ServiceDep,
         file: Annotated[UploadFile, File(description="Jadłospis PDF, maks. 25 MB")],
     ) -> ImportJobDetail:
-        # Odczyt z sufitem: do RAM trafia najwyżej limit + 1 bajt, a plik ponad
-        # limit dostaje 413 bez materializowania całości (wzorzec `upload_photo`).
+        # `request` wymaga slowapi (adres klienta). Odczyt z sufitem: do RAM trafia
+        # najwyżej limit + 1 bajt, a plik ponad limit dostaje 413 bez materializowania
+        # całości (wzorzec `upload_photo`).
         data = await file.read(service.max_pdf_bytes + 1)
         job = await service.upload(
             actor=user, filename=file.filename or FALLBACK_FILENAME, data=data

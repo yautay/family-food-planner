@@ -1,0 +1,103 @@
+# Paśnik — stack TESTOWY obrazu prod (09_DEPLOYMENT §5, kolumna „test").
+#
+# Do czego: ćwiczenia, które muszą iść na PRAWDZIWYM obrazie prod i CZYSTEJ
+# bazie, a nie na stacku dev z danymi właściciela — smoke obrazu, round-trip
+# backup → zniszczenie → restore (`task backup-drill`), weryfikacja SW/CSP na
+# buildzie produkcyjnym. compose.prod.yml (B18) powstaje z tego pliku: podmienia
+# porty/wolumeny na bind mounty `/srv/pasnik/*` i `env_file` — topologia jest ta sama.
+#
+# Uruchamiać z korzenia repo (zmienne z .env):
+#   task build-prod
+#   docker compose --env-file .env -f docker/compose.test.yml up -d
+#   docker compose --env-file .env -f docker/compose.test.yml run --rm app alembic upgrade head
+#
+# Wolumeny: nazwane (efemeryczne z `down -v`). Zmienna PASNIK_TEST_BACKUPS_DIR
+# może wskazać katalog hosta — wtedy backupy PRZEŻYWAJĄ `down -v`, co jest
+# sensem drilla restore.
+
+name: pasnik-test
+
+x-postgres-env: &postgres-env
+  POSTGRES_USER: ${POSTGRES_USER:-pasnik}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?ustaw POSTGRES_PASSWORD w .env}
+  POSTGRES_DB: ${POSTGRES_DB:-pasnik}
+
+services:
+  db:
+    image: postgres:17
+    environment:
+      <<: *postgres-env
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # Bez portów hosta (07_SECURITY §9) — jak w prod.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-pasnik} -d ${POSTGRES_DB:-pasnik}"]
+      interval: 5s
+      timeout: 5s
+      # Pierwszy `initdb` na obciążonym hoście z wolnym fsync trwał ~60 s
+      # (drill B17 na Docker Desktop) — 10 prób × 5 s uznawało kontener za
+      # unhealthy w połowie inicjalizacji.
+      retries: 24
+      start_period: 30s
+    restart: unless-stopped
+
+  app:
+    image: pasnik-app:${PASNIK_IMAGE_TAG:-latest}
+    environment:
+      APP_ENV: prod
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      SECRET_KEY: ${SECRET_KEY:?ustaw SECRET_KEY w .env}
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-pasnik}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-pasnik}
+      UVICORN_WORKERS: ${UVICORN_WORKERS:-2}
+      # W compose połączenie od reverse proxy hosta przychodzi z bramy sieci
+      # dockera, nie z 127.0.0.1 — patrz docker/entrypoint.sh.
+      FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-127.0.0.1}
+      DISK_MIN_FREE_MB: ${DISK_MIN_FREE_MB:-1024}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    volumes:
+      - uploads:/data/uploads
+    ports:
+      - "127.0.0.1:${PASNIK_TEST_PORT:-8081}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    # Healthcheck dziedziczony z obrazu (sam kod HTTP; `degraded` też jest 200 —
+    # 09_DEPLOYMENT §2). `stop_grace_period` = czas na graceful shutdown uvicorna.
+    stop_grace_period: 30s
+    restart: unless-stopped
+
+  backup:
+    # `image` obok `build`: `task build-prod` taguje obraz, a compose używa go
+    # zamiast budować przy każdym `run` (build wypisywał się do stdout drilla).
+    image: pasnik-backup:${PASNIK_IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: docker/backup/Dockerfile
+    profiles: ["backup"]
+    environment:
+      PGHOST: db
+      PGPORT: "5432"
+      PGUSER: ${POSTGRES_USER:-pasnik}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB:-pasnik}
+      BACKUP_DIR: /backups
+      UPLOADS_DIR: /data/uploads
+      BACKUP_AT: ${BACKUP_AT:-03:00}
+      BACKUP_KEEP_DAILY: ${BACKUP_KEEP_DAILY:-7}
+      BACKUP_KEEP_WEEKLY: ${BACKUP_KEEP_WEEKLY:-4}
+      # Kopia pliku env w zestawie — domyślnie WYŁĄCZONA (env żyje na hoście, B18).
+      BACKUP_ENV_FILE: ${BACKUP_ENV_FILE:-}
+      TZ: ${TZ:-Europe/Warsaw}
+    volumes:
+      - uploads:/data/uploads
+      - ${PASNIK_TEST_BACKUPS_DIR:-backups}:/backups
+    depends_on:
+      db:
+        condition: service_healthy
+    stop_grace_period: 5m
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  uploads:
+  backups:

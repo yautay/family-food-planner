@@ -89,6 +89,11 @@ def get_engine() -> AsyncEngine:
         normalize_database_url(settings.database_url),
         pool_pre_ping=True,
         echo=False,
+        # Bez tego SQLAlchemy dokleja do komunikatu `DBAPIError` sekcję
+        # `[parameters: ...]`, a `core/errors.py` loguje pełny traceback —
+        # nieobsłużony błąd na INSERCIE do `sessions` wypisałby token sesji
+        # do logu (07_SECURITY §8, ustalenie REVIEW R4 pkt 7).
+        hide_parameters=True,
     )
 
 

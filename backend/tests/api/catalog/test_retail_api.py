@@ -22,7 +22,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.security import CSRF_COOKIE_NAME, CSRF_HEADER_NAME
-from app.core.uploads import MAX_IMAGE_BYTES
 from app.modules.catalog.models import MeasureKind
 from tests.factories import (
     create_category,
@@ -353,7 +352,7 @@ async def test_nie_obraz_to_422(db_client: AsyncClient, db_session: AsyncSession
 
 
 async def test_za_duzy_plik_to_413(db_client: AsyncClient, db_session: AsyncSession) -> None:
-    """Limit 10 MB sprawdzany PRZED parsowaniem obrazu."""
+    """Limit (`IMAGE_MAX_UPLOAD_MB`) sprawdzany PRZED parsowaniem obrazu."""
     user = await create_user(db_session)
     category = await create_category(db_session)
     product = await create_product(db_session, category=category)
@@ -362,7 +361,13 @@ async def test_za_duzy_plik_to_413(db_client: AsyncClient, db_session: AsyncSess
 
     response = await db_client.put(
         f"{RETAIL}/{retail.id}/photo",
-        files={"file": ("duze.jpg", b"\x00" * (MAX_IMAGE_BYTES + 1), "image/jpeg")},
+        files={
+            "file": (
+                "duze.jpg",
+                b"\x00" * (get_settings().image_max_upload_mb * 1024 * 1024 + 1),
+                "image/jpeg",
+            )
+        },
         headers=csrf_headers(db_client),
     )
 

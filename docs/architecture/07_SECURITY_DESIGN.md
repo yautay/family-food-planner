@@ -26,8 +26,19 @@ publiczne linki i błędami aplikacyjnymi (IDOR/XSS/CSRF/upload).
   Stan faktyczny (BATCH_02, `app/core/security.py`): blokada jest **stała,
   15-minutowa**, a licznik porażek zeruje się w momencie założenia blokady —
   nie ma backoffu wykładniczego. Wystarcza na model zagrożeń z §1 (≈10 prób
-  na 15 min na konto, przy jednoczesnym limicie 5/min/IP); zaostrzenie
-  parametrów wraca do przeglądu w BATCH_17 razem z parametrami argon2 i TTL.
+  na 15 min na konto, przy jednoczesnym limicie 5/min/IP).
+  **Przegląd BATCH_17 (2026-09-05) — parametry ZOSTAJĄ bez zmian**: argon2id
+  z domyślnymi parametrami argon2-cffi (RFC 9106: t=3, m=64 MiB, p=4 — drugi
+  zalecany zestaw, `check_needs_rehash` podniesie je przy logowaniu, gdy
+  biblioteka je zmieni), TTL sesji 30 dni przesuwne (aplikacja rodzinna na
+  własnych urządzeniach; odwołanie sesji jest natychmiastowe przez DELETE
+  wiersza, ADR-003), blokada 10 porażek / 15 min. Jedna konsekwencja obrazu
+  prod, o której trzeba wiedzieć: **licznik slowapi jest per PROCES**, a
+  `UVICORN_WORKERS=2`, więc realny sufit limitów per IP to dwukrotność
+  wartości (login 5/min → do 10/min). Blokada konta jest w BAZIE, więc jej to
+  nie dotyczy — to ona jest twardą granicą (10 prób / 15 min / konto).
+  Współdzielony licznik (Redis) byłby nowym komponentem wbrew ADR-001 —
+  świadomie odrzucone przy tej skali.
 
 ## 3. CSRF, CORS, nagłówki
 
@@ -43,12 +54,32 @@ publiczne linki i błędami aplikacyjnymi (IDOR/XSS/CSRF/upload).
 - CORS: brak (SPA serwowana z tego samego origin). Nie włączamy „na zapas".
 - Nagłówki (middleware): `X-Content-Type-Options: nosniff`,
   `Referrer-Policy: same-origin`, `X-Frame-Options: DENY`,
-  CSP: `default-src 'self'; img-src 'self' data: blob:; style-src 'self'
-  'unsafe-inline'` (Tailwind inline styles), bez zewnętrznych źródeł.
-  HSTS ustawia reverse proxy.
-  Jedyny wyjątek (BATCH_02): CSP nie jest wysyłane dla `/api/docs`
-  i `/api/openapi.json`, bo Swagger UI ładuje skrypty z CDN. W prod te
-  ścieżki nie istnieją (`docs_url=None`), więc wyjątek jest tam martwy.
+  CSP (stan po BATCH_17, ustalenie REVIEW R4 pkt 2):
+  `default-src 'self'; img-src 'self' data: blob:; style-src 'self'
+  'unsafe-inline'; object-src 'none'; base-uri 'none'; form-action 'self';
+  frame-ancestors 'none'` (Tailwind inline styles), bez zewnętrznych źródeł.
+  `base-uri`, `form-action` i `frame-ancestors` **nie dziedziczą po
+  `default-src`** — bez nich wstrzyknięty `<base>` przestawiałby ścieżki
+  względne, a przejęty formularz mógłby wysłać dane na obcy host;
+  `frame-ancestors 'none'` to nowoczesny odpowiednik `X-Frame-Options: DENY`,
+  który zostaje dla starszych klientów. `worker-src` świadomie NIE jest
+  wymieniony: dziedziczy `'self'`, a dokładnie tego potrzebuje service worker
+  (`/sw.js` + `workbox-*.js` z tego samego originu, ADR-009) — rejestracja SW
+  zweryfikowana na buildzie produkcyjnym w B17. HSTS ustawia reverse proxy.
+  Wyjątek dla Swagger UI (`/api/docs`, `/api/openapi.json`, CDN) obowiązuje
+  **wyłącznie poza prod** — w prod te ścieżki nie istnieją (`docs_url=None`),
+  a middleware nie stosuje wyjątku nawet dla ich 404.
+- **Cookies z prefiksem `__Host-` w prod** (BATCH_17, ustalenie REVIEW R4
+  pkt 6): `__Host-pasnik_session` i `__Host-csrf_token`. Double-submit czyta
+  pierwsze cookie o danej nazwie z `document.cookie`, więc subdomena albo
+  sąsiad na tej samej domenie rejestrowalnej mógłby przypiąć własną parę
+  cookie + nagłówek; prefiks każe przeglądarce odrzucić cookie bez `Secure`,
+  z `Domain` albo z `Path` ≠ `/`. `__Host-` WYMAGA `Secure`, więc włącza się
+  razem z tą flagą (`APP_ENV=prod`); w dev/test nazwy są gołe (`app/core/
+  cookies.py`). **Frontend nie zna nazwy z literału** — `src/api/client.ts`
+  sprawdza obie kandydatki (`CSRF_COOKIE_CANDIDATES`), bo testy jadą po HTTP
+  i literał `csrf_token` przeszedłby je, a na produkcji cicho wyłączyłby
+  mutacje. Zmiana wylogowała istniejące sesje (nowa nazwa cookie).
 
 ## 4. Autoryzacja
 
@@ -148,7 +179,10 @@ Dziewięć szczegółów wykonawczych, które trzeba utrzymać:
    (`format filter`) i zamaskować ścieżkę. Sprawdzenie jest banalne: wejść na
    publiczny link i zgrepować plik logu po tokenie.
 9a. Maskowanie w aplikacji działa w DWÓCH warstwach, bo obie piszą na stdout
-   kontenera:
+   kontenera, i obejmuje DWIE ścieżki z tokenem: `/api/v1/public/lists/<token>`
+   oraz trasę SPA `/l/<token>`, którą od BATCH_17 serwuje backend (ADR-014) —
+   bez tego każde otwarcie linku z telefonu wpisywałoby token do logów prod
+   (ustalenie `/security-review` B17, testy w `tests/unit/test_logging.py`):
    `mask_path()` w `RequestLoggingMiddleware` (nasz log) oraz
    `MaskPublicTokenFilter` na loggerze `uvicorn.access` (access log Uvicorna
    formatuje ścieżkę sam z `record.args` i o middleware nie wie). Druga warstwa
@@ -174,10 +208,21 @@ Dziewięć szczegółów wykonawczych, które trzeba utrzymać:
 
 Dotyczy zdjęć (przepisy/produkty), PDF-ów importu i **paczek transferu**
 (eksport/import logiczny, BATCH_14):
-- limity: obraz ≤ 10 MB, PDF ≤ 25 MB, **paczka transferu ≤ 100 MB**
-  (`TRANSFER_MAX_ZIP_MB`, konfigurowalne per instalacja); MIME sniffing po
+- limity: obraz ≤ 10 MB (`IMAGE_MAX_UPLOAD_MB`), PDF ≤ 25 MB
+  (`PDF_MAX_UPLOAD_MB`), **paczka transferu ≤ 100 MB** (`TRANSFER_MAX_ZIP_MB`)
+  — wszystkie konfigurowalne per instalacja od B17; MIME sniffing po
   treści (Pillow verify / nagłówek %PDF / sygnatura `PK`), nie po
   rozszerzeniu;
+- **dwie połowy jednej ochrony (BATCH_17, ustalenie REVIEW R4 pkt 3)**:
+  (a) `BodyLimitMiddleware` (`app/core/body_limit.py`) odcina ciało żądania
+  PRZED aplikacją — endpointy uploadu dostają swój limit + 1 MB marginesu
+  multiparta, cała reszta API `REQUEST_MAX_BODY_MB` (domyślnie 2 MB); 413
+  w kształcie błędu 04_API §1 także dla ciała bez `Content-Length` (licznik
+  na `receive()`); (b) rate limit per IP na czterech endpointach uploadu
+  (`app/core/ratelimits.py`): zdjęcia 30/min, PDF importu i paczka transferu
+  10/min. Model zagrożeń §1 nie broni się przed członkiem rodziny, ale broni
+  przed PRZEJĘTĄ sesją — bez limitu częstości jedyny koszt zapełnienia dysku
+  Odroida to pętla `curl`;
 - zapis pod losową nazwą na bind mount, poza web-rootem; serwowanie przez
   endpoint z autoryzacją (nie StaticFiles bez auth);
 - obrazy re-enkodowane przez Pillow (strip EXIF, usunięcie payloadów),
@@ -195,10 +240,33 @@ Dotyczy zdjęć (przepisy/produkty), PDF-ów importu i **paczek transferu**
 
 ## 7. Sekrety i konfiguracja
 
-Wyłącznie env (pydantic-settings): `DATABASE_URL`, `SECRET_KEY` (sesje/CSRF),
-`ANTHROPIC_API_KEY` (importer), `TRANSFER_MAX_ZIP_MB` (limit paczki transferu, §6). `.env` w .gitignore od pierwszego commita;
-`.env.example` z placeholderami. W prod: plik env na hoście `chmod 600`
-lub docker secrets. Klucz API Anthropic używany wyłącznie server-side.
+Wyłącznie env (pydantic-settings): `DATABASE_URL`, `SECRET_KEY`,
+`ANTHROPIC_API_KEY` (importer), limity `TRANSFER_MAX_ZIP_MB` /
+`PDF_MAX_UPLOAD_MB` / `IMAGE_MAX_UPLOAD_MB` / `REQUEST_MAX_BODY_MB` (§6),
+`PDF_PARSE_TIMEOUT_S`, `DISK_MIN_FREE_MB`, `SPA_DIST_DIR`, `LOG_LEVEL`,
+`UVICORN_WORKERS`, `FORWARDED_ALLOW_IPS` (komplet z opisem: `.env.example`).
+`.env` w .gitignore od pierwszego commita; `.env.example` z placeholderami.
+W prod: plik env na hoście `chmod 600` lub docker secrets. Klucz API
+Anthropic używany wyłącznie server-side.
+
+**`SECRET_KEY` — stan faktyczny (decyzja BATCH_17, dług U13 z R1)**: zmienna
+jest WYMAGANA, ale dziś NIEUŻYWANA w kodzie — identyfikatory sesji, tokeny
+CSRF i tokeny publiczne pochodzą z `secrets.token_urlsafe(32)`, nie z podpisu
+tym kluczem. Zostaje jako ZAREZERWOWANA (wariant „zostawić i dopisać to wprost"
+z karty B17): usunięcie łamałoby każdy istniejący `.env`, compose i szablon
+`pasnik.env` dla B18 bez zysku funkcjonalnego, a pierwszy podpisywany payload
+(np. jednorazowy link resetu hasła) będzie miał klucz od razu. Nie wolno na tej
+podstawie zakładać, że cokolwiek jest już nim podpisane.
+
+**Zaufanie do `X-Forwarded-For` za proxy (BATCH_17, follow-up B02)**: obraz
+prod uruchamia uvicorna z `--proxy-headers`, a lista zaufanych adresów to
+`FORWARDED_ALLOW_IPS` (czyta ją sam uvicorn; domyślnie `127.0.0.1`). Tylko
+połączenia z tych adresów mogą podstawić adres klienta — dla pozostałych
+nagłówek jest ignorowany, więc klient nie ominie limitu logowania własnym
+`X-Forwarded-For`. Podmieniony `scope["client"]` widzą jednocześnie slowapi
+(`get_remote_address`) i `sessions.ip` (`accounts/router.py`). B18 wpisuje
+adres bramy sieci compose (albo `*`, bo port aplikacji jest opublikowany
+WYŁĄCZNIE na loopbacku hosta — wtedy jedynym nadawcą i tak jest Caddy).
 
 Stan faktyczny `ANTHROPIC_API_KEY` (BATCH_16): pole `Settings.anthropic_api_key`
 z **pustą wartością domyślną** — i to jest wspierany tryb pracy, nie brak
@@ -226,6 +294,17 @@ structlog: request id, user id (nie email), ścieżka, status, czas. NIGDY:
 hasła, tokeny (sesyjne/publiczne/API), pełne payloady z danymi. Wyjątki:
 stacktrace do logów, użytkownik dostaje generyczny komunikat + id błędu.
 Audit log (02 §12) osobno od logów technicznych.
+
+Stan po BATCH_17: w `APP_ENV=prod|test` **cały stdout kontenera jest
+JSON-em** — także rekordy stdlib (`uvicorn`, `uvicorn.access`, biblioteki)
+przechodzą przez `structlog.stdlib.ProcessorFormatter` z tym samym rendererem,
+a maskowanie publicznego tokenu (`MaskPublicTokenFilter`) działa PRZED
+renderowaniem. Poziom z `LOG_LEVEL` (aplikacja i uvicorn — `docker/
+entrypoint.sh`). Silnik bazy ma `hide_parameters=True` (ustalenie REVIEW R4
+pkt 7): komunikat `DBAPIError` nie niesie sekcji `[parameters: ...]`, więc
+nieobsłużony błąd na INSERCIE do `sessions` nie wypisze tokenu sesji razem
+z tracebackiem. Zweryfikowane grepem po realnym logu obrazu prod w B17
+(login, publiczny link, upload): zero tokenów, zero haseł.
 
 ## 9. Zależności i baza
 

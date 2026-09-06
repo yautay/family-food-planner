@@ -1573,7 +1573,7 @@ export interface components {
         Body_upload_photo_api_v1_recipes__recipe_id__photo_post: {
             /**
              * File
-             * @description Plik obrazu, maks. 10 MB
+             * @description Plik obrazu (limit: IMAGE_MAX_UPLOAD_MB)
              */
             file: string;
         };
@@ -1581,7 +1581,7 @@ export interface components {
         Body_upload_photo_api_v1_retail_products__retail_id__photo_put: {
             /**
              * File
-             * @description Plik obrazu, maks. 10 MB
+             * @description Plik obrazu (limit: IMAGE_MAX_UPLOAD_MB)
              */
             file: string;
         };
@@ -2128,14 +2128,39 @@ export interface components {
          */
         GoalStatus: "below" | "ok" | "above";
         /**
+         * HealthChecks
+         * @description Wynik trzech sprawdzeń — tylko statusy, żadnych szczegółów infrastruktury.
+         */
+        HealthChecks: {
+            /**
+             * Db
+             * @enum {string}
+             */
+            db: "ok" | "fail" | "skipped";
+            /**
+             * Migrations
+             * @enum {string}
+             */
+            migrations: "ok" | "fail" | "skipped";
+            /**
+             * Disk
+             * @enum {string}
+             */
+            disk: "ok" | "fail" | "skipped";
+        };
+        /**
          * HealthResponse
-         * @description Odpowiedź healthchecku — świadomie nie ujawnia niczego poza statusem i wersją.
+         * @description Odpowiedź healthchecku: status zbiorczy, wersja obrazu, statusy checków.
          */
         HealthResponse: {
-            /** Status */
-            status: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ok" | "degraded";
             /** Version */
             version: string;
+            checks: components["schemas"]["HealthChecks"];
         };
         /**
          * HouseholdCreateRequest

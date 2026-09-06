@@ -30,7 +30,9 @@ import type { APIRequestContext } from '@playwright/test'
  * śmieci i blokuje kolejny przebieg.
  */
 const API = '/api/v1'
-const CSRF_COOKIE = 'csrf_token'
+// Backend w prod nadaje cookie prefiks `__Host-` (B17); E2E jedzie po HTTP,
+// więc dostaje wariant bez prefiksu — obie nazwy, jak w `src/api/client.ts`.
+const CSRF_COOKIE_CANDIDATES = ['__Host-csrf_token', 'csrf_token']
 const CSRF_HEADER = 'X-CSRF-Token'
 
 /** Górny limit list — sprzątanie ma być tanie, nie kompletne dla całej bazy. */
@@ -52,10 +54,10 @@ interface NamedRow {
  */
 export async function csrfHeaders(request: APIRequestContext): Promise<Record<string, string>> {
   const state = await request.storageState()
-  const token = state.cookies.find((cookie) => cookie.name === CSRF_COOKIE)?.value
+  const token = state.cookies.find((cookie) => CSRF_COOKIE_CANDIDATES.includes(cookie.name))?.value
   if (!token) {
     throw new Error(
-      `Brak cookie ${CSRF_COOKIE} w stanie sesji — sprzątanie E2E wymaga zalogowanego kontekstu.`,
+      `Brak cookie ${CSRF_COOKIE_CANDIDATES.join('/')} w stanie sesji — sprzątanie E2E wymaga zalogowanego kontekstu.`,
     )
   }
   return { [CSRF_HEADER]: token }

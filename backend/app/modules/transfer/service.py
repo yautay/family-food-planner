@@ -38,7 +38,7 @@ from starlette.concurrency import run_in_threadpool
 from app.core.errors import ConflictError, ForbiddenError, NotFoundError
 from app.core.scope import HouseholdScopedQuery, Scope, ScopedQuery
 from app.core.security import generate_token, hash_password
-from app.core.uploads import delete_image, save_image
+from app.core.uploads import DEFAULT_IMAGE_MAX_MB, delete_image, save_image
 from app.modules.accounts.models import User, UserRole
 from app.modules.audit.service import AuditAction, AuditEntity, AuditService
 from app.modules.catalog.models import (
@@ -180,12 +180,22 @@ def coerce_value(column: sa.Column[Any], value: Any) -> Any:
 class TransferService:
     """Eksport i import logiczny danych (02_DOMAIN §11)."""
 
-    def __init__(self, session: AsyncSession, *, uploads_dir: str, max_zip_mb: int) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        *,
+        uploads_dir: str,
+        max_zip_mb: int,
+        image_max_mb: int = DEFAULT_IMAGE_MAX_MB,
+    ) -> None:
         self._session = session
         self._audit = AuditService(session)
         self._uploads_root = Path(uploads_dir)
         self._scratch = self._uploads_root / SCRATCH_SUBDIR
         self._max_zip_mb = max_zip_mb
+        # Ten sam limit co przy zwykłym uploadzie (`IMAGE_MAX_UPLOAD_MB`): zdjęcie,
+        # które instancja przyjęła, musi wrócić z jej własnego eksportu.
+        self._image_max_bytes = image_max_mb * 1024 * 1024
 
     # --- eksport ---------------------------------------------------------------------
 
@@ -859,7 +869,12 @@ class TransferService:
         def read_and_save() -> str:
             with open_archive(archive_path) as archive:
                 payload = archive.read(f"{PHOTOS_PREFIX}{relative}")
-            saved = save_image(payload, uploads_root=self._uploads_root, subdir=IMPORT_PHOTO_SUBDIR)
+            saved = save_image(
+                payload,
+                uploads_root=self._uploads_root,
+                subdir=IMPORT_PHOTO_SUBDIR,
+                max_bytes=self._image_max_bytes,
+            )
             return saved.path
 
         try:

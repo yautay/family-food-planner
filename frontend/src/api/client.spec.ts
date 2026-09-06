@@ -107,6 +107,20 @@ describe('CSRF (double-submit cookie, 07_SECURITY §3)', () => {
     expect(requestHeaders().has('X-CSRF-Token')).toBe(false)
   })
 
+  it('czyta cookie z prefiksem __Host- (nazwa produkcyjna, B17)', async () => {
+    // jsdom EGZEKWUJE reguły prefiksu (`__Host-` wymaga Secure, a origin testu to
+    // http), więc cookie podstawiamy przez getter — liczy się to, że klient nie
+    // zna nazwy z literału i znajduje wariant produkcyjny.
+    const cookieGetter = vi.spyOn(document, 'cookie', 'get')
+    cookieGetter.mockReturnValue('inne=1; __Host-csrf_token=token-prod')
+    mockFetch(jsonResponse({}))
+
+    await apiFetch('/auth/logout', { method: 'POST' })
+
+    expect(requestHeaders().get('X-CSRF-Token')).toBe('token-prod')
+    cookieGetter.mockRestore()
+  })
+
   it('bez cookie nie wysyła pustego nagłówka', async () => {
     mockFetch(jsonResponse({}))
 

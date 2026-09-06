@@ -13,9 +13,9 @@ from fastapi import APIRouter, Depends, Query, Request, Response, status
 from slowapi import Limiter
 
 from app.core.config import Settings
-from app.core.cookies import clear_session_cookies, set_session_cookies
+from app.core.cookies import clear_session_cookies, session_cookie_name, set_session_cookies
 from app.core.deps import AdminUser, CurrentUser, get_accounts_service, require_admin
-from app.core.security import SESSION_COOKIE_NAME, generate_token
+from app.core.security import generate_token
 from app.modules.accounts.schemas import (
     CurrentUser as CurrentUserSchema,
 )
@@ -77,7 +77,7 @@ def build_auth_router(settings: Settings, limiter: Limiter) -> APIRouter:
         user: CurrentUser,
         service: ServiceDep,
     ) -> None:
-        session_id = request.cookies.get(SESSION_COOKIE_NAME)
+        session_id = request.cookies.get(session_cookie_name(settings))
         if session_id:
             await service.logout(session_id)
         clear_session_cookies(response, settings=settings)

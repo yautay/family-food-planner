@@ -22,7 +22,8 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Query, Request, UploadFile, status
+from slowapi import Limiter
 
 from app.core.deps import (
     AdminUser,
@@ -31,7 +32,8 @@ from app.core.deps import (
     get_retail_service,
     get_stores_service,
 )
-from app.core.uploads import MAX_IMAGE_BYTES, image_urls
+from app.core.ratelimits import PHOTO_UPLOAD_RATE_LIMIT
+from app.core.uploads import image_urls
 from app.modules.catalog.models import (
     ProductCategory,
     ProductUnitWeight,
@@ -488,7 +490,7 @@ def build_stores_router() -> APIRouter:
     return router
 
 
-def build_retail_products_router() -> APIRouter:
+def build_retail_products_router(limiter: Limiter) -> APIRouter:
     """Router `/retail-products` — warianty sklepowe produktów kanonicznych."""
     router = APIRouter(prefix="/retail-products", tags=["catalog"])
 
@@ -569,15 +571,17 @@ def build_retail_products_router() -> APIRouter:
         response_model=RetailProductRead,
         summary="Zdjęcie opakowania (multipart; sniffing, re-encode, miniatura)",
     )
+    @limiter.limit(PHOTO_UPLOAD_RATE_LIMIT)
     async def upload_photo(
+        request: Request,
         retail_id: int,
         user: CurrentUser,
         service: RetailServiceDep,
-        file: Annotated[UploadFile, File(description="Plik obrazu, maks. 10 MB")],
+        file: Annotated[UploadFile, File(description="Plik obrazu (limit: IMAGE_MAX_UPLOAD_MB)")],
     ) -> RetailProductRead:
-        # Odczyt z sufitem: do RAM trafia najwyżej limit + 1 bajt — plik ponad
-        # limit dostaje 413 z `save_image` bez materializowania całości (jak B05).
-        data = await file.read(MAX_IMAGE_BYTES + 1)
+        # `request` wymaga slowapi. Odczyt z sufitem: do RAM trafia najwyżej
+        # limit + 1 bajt — plik ponad limit dostaje 413 z `save_image` (jak B05).
+        data = await file.read(service.image_max_bytes + 1)
         return _to_retail_read(await service.set_photo(retail_id, actor=user, data=data))
 
     @router.delete(

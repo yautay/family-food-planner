@@ -20,6 +20,12 @@ administrator (rodzina). SPA i API na tym samym originie.
 - Cookies: `pasnik_session` (HttpOnly) i `csrf_token` (czytelne dla JS),
   `SameSite=Lax; Path=/`; flaga `Secure` włączana przez `APP_ENV=prod`
   (na http://localhost nie ma TLS). Nazwy i atrybuty w `app/core/cookies.py`.
+  **Od BATCH_17 (2026-09-05) w prod nazwy mają prefiks `__Host-`**
+  (`__Host-pasnik_session`, `__Host-csrf_token`) — wiąże cookie z jednym
+  hostem (wymaga `Secure`, zabrania `Domain`, wymusza `Path=/`), co zamyka
+  podstawienie pary cookie+nagłówek przez subdomenę (07_SECURITY §3).
+  Frontend sprawdza obie nazwy (`CSRF_COOKIE_CANDIDATES`), bo nie zna
+  `APP_ENV`.
 - TTL przesuwne działa po OBU stronach: przy przesunięciu `sessions.expires_at`
   (nie częściej niż raz na dobę) serwer wysyła ponownie oba cookies z nowym
   `Max-Age`. Bez tego przeglądarka kasowałaby cookie 30 dni po logowaniu

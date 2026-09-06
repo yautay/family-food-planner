@@ -175,9 +175,14 @@ class AccountsService:
         """Lista kont dla ADMIN-a; `query` filtruje po emailu i nazwie."""
         statement = select(User)
         if query:
-            pattern = f"%{query.strip()}%"
+            # `autoescape`: `%` i `_` z frazy użytkownika są znakami dosłownymi,
+            # nie wzorcem — bez tego „50%" zwracało wszystko od „50" (dług U14).
+            phrase = query.strip()
             statement = statement.where(
-                or_(User.email.ilike(pattern), User.display_name.ilike(pattern))
+                or_(
+                    User.email.icontains(phrase, autoescape=True),
+                    User.display_name.icontains(phrase, autoescape=True),
+                )
             )
 
         total = (

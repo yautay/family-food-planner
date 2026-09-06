@@ -180,7 +180,8 @@ class HouseholdsService:
         """Lista rodzin dla ADMIN-a; `query` filtruje po nazwie."""
         statement = select(Household)
         if query:
-            statement = statement.where(Household.name.ilike(f"%{query.strip()}%"))
+            # `autoescape`: `%`/`_` z frazy są dosłowne, nie wzorcem (dług U14).
+            statement = statement.where(Household.name.icontains(query.strip(), autoescape=True))
 
         total = (
             await self._session.execute(select(func.count()).select_from(statement.subquery()))

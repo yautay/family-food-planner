@@ -115,6 +115,58 @@ Wymagane lektury przed startem:
    pomiar R4). Do świadomego przyjęcia w 09_DEPLOYMENT albo do rozgrzewki
    w procedurze wdrożenia — nie jest to problem wydajności aplikacji.
 
+**Stan FAKTYCZNY po BATCH_17 (2026-09-05) — nazwy, których ten batch używa:**
+
+- Obrazy: `task build-prod` → `pasnik-app:<git describe --tags --always --dirty>`
+  + `:latest` oraz `pasnik-backup:<ta sama wersja>` + `:latest`
+  (`docker/Dockerfile` target `prod`, `docker/backup/Dockerfile`). Oba obrazy
+  pracują jako **UID/GID 10001** — `/srv/pasnik/uploads` i `/srv/pasnik/backups`
+  dostają `chown 10001:10001`, inaczej upload i dump padają na uprawnieniach.
+  `APP_VERSION` w obrazie = tag, więc `version` w health = wersja wdrożona.
+- Start: `docker/entrypoint.sh` (`UVICORN_WORKERS`, `LOG_LEVEL`,
+  `--proxy-headers`, `--timeout-worker-healthcheck 30`); zaufane proxy przez
+  `FORWARDED_ALLOW_IPS` (czyta sam uvicorn). **W compose połączenie od Caddy'ego
+  przychodzi z bramy sieci dockera, nie z 127.0.0.1** — wpisz adres bramy albo
+  `*` (port aplikacji tylko na loopbacku hosta). Bez tego limit `/auth/login`
+  jest globalny dla wszystkich kont.
+- Compose wzorcowy: `docker/compose.test.yml` (db bez portów + app + profil
+  `backup`) — `compose.prod.yml` powstaje przez podmianę wolumenów na bind
+  mounty `/srv/pasnik/*`, portu na `127.0.0.1:8081:8000` i `env_file`.
+  Healthcheck app dziedziczony z obrazu (sam kod HTTP; `degraded` = 200 —
+  09_DEPLOYMENT §2). Healthcheck db: `retries: 24`, `start_period: 30s`
+  (pierwszy `initdb` na wolnym dysku trwał ~60 s).
+- Backup: `docker/backup/backup.sh` (pg_dump -Fc + tar uploadów bez
+  `transfer/` + opcjonalnie `BACKUP_ENV_FILE` + sha256 + prune),
+  `docker/backup/restore.sh <dump> [tar] [--wipe-uploads]`,
+  `docker/backup/cron-loop.sh` (`BACKUP_AT`, `TZ`), retencja
+  `backend/scripts/backup_prune.py` (7 dni WSZYSTKIE zestawy + najnowszy z 4
+  tygodni ISO). Zestaw: `pasnik-<YYYYmmddTHHMMSSZ>.dump`,
+  `pasnik-<stempel>-uploads.tar.gz`, `[.env]`, `.sha256`; uprawnienia 600.
+  **Restore wymaga zatrzymanej app** (`compose stop app`) i kończy się
+  `alembic upgrade head` + start app + smoke — dokładnie tak robi
+  `docker/backup/drill.sh` (`task backup-drill`), który B18 powtarza na
+  Odroidzie jako restore drill.
+- Env nowe od B17 (komplet z opisem w `.env.example`): `UVICORN_WORKERS`,
+  `FORWARDED_ALLOW_IPS`, `DISK_MIN_FREE_MB`, `SPA_DIST_DIR` (obraz ustawia
+  sam), `IMAGE_MAX_UPLOAD_MB`, `REQUEST_MAX_BODY_MB`, `PDF_PARSE_TIMEOUT_S`,
+  `BACKUP_AT`, `BACKUP_KEEP_DAILY`, `BACKUP_KEEP_WEEKLY`, `BACKUP_ENV_FILE`,
+  `TZ`. `SECRET_KEY` nadal WYMAGANE (zarezerwowane, 07_SECURITY §7).
+- Runbook backupu dostaje dwa konkrety z D10: `backup.sh` loguje `du -sh`
+  uploadów i backupów; `task uploads-report` / `python -m app.cli
+  uploads-report` (w kontenerze: `docker compose exec app python -m app.cli
+  uploads-report`) wypisuje pliki bez referencji — nic nie kasuje.
+- Cookies w prod mają prefiks `__Host-` (`__Host-pasnik_session`,
+  `__Host-csrf_token`) — wymaga `Secure`, czyli HTTPS na proxy; po HTTP
+  logowanie w prod NIE ZADZIAŁA (przeglądarka odrzuci cookie). Smoke
+  produkcyjny robić przez domenę, nie przez `curl http://127.0.0.1:8081` z
+  cookie.
+- Użytkownik bazy jest dziś rolą bootstrapową (SUPERUSER) — B18 dodaje skrypt
+  `/docker-entrypoint-initdb.d/` z rolą `NOSUPERUSER` (09_DEPLOYMENT §5).
+- Weryfikacja SW na realnej domenie: `node frontend/e2e/tools/sw-check.mjs
+  https://pasnik.cpt-sztos.com` (Playwright Chromium; wymaga
+  `node_modules` frontendu) — to samo narzędzie, którym B17 potwierdził
+  rejestrację SW na buildzie prod.
+
 **Warunek z B12 (PWA, ADR-009) — HTTPS jest tu funkcjonalnością, nie ozdobą.**
 Przeglądarka rejestruje service workera WYŁĄCZNIE na `https://` (albo
 `localhost`), więc bez działającego TLS na reverse proxy lista zakupowa
@@ -142,8 +194,9 @@ wdrożeniu, wykonywane na PRAWDZIWEJ domenie, nie na localhoście:
 
 ## Stages
 
-1. **compose.prod.yml** (09 §1): serwisy `app` (obraz tagowany, port
-   `127.0.0.1:8080:8000`, `env_file: /srv/pasnik/env/pasnik.env`,
+1. **compose.prod.yml** (09 §1, wzór: `docker/compose.test.yml` z B17):
+   serwisy `app` (obraz `pasnik-app:<tag>`, port `127.0.0.1:8081:8000` —
+   8080 zajmuje Pi-hole, `env_file: /srv/pasnik/env/pasnik.env`,
    `stop_grace_period: 30s`, `restart: unless-stopped`, healthcheck
    z `/api/v1/health`) i `db` (postgres:17, **bez portów hosta**,
    healthcheck pg_isready) + profil `backup` z B17. Bind mounts:

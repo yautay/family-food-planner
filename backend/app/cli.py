@@ -8,6 +8,7 @@ awaria.
 Użycie:
     task create-admin
     PASNIK_ADMIN_EMAIL=... PASNIK_ADMIN_PASSWORD=... task create-admin
+    task uploads-report      # pliki uploadów bez referencji w bazie (B17, D10)
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ import asyncio
 import getpass
 import os
 import sys
+from pathlib import Path
 
 from pydantic import EmailStr, TypeAdapter, ValidationError
 
@@ -24,6 +26,7 @@ from app.core.config import ConfigurationError, get_settings
 from app.core.db import get_session_factory, selector_loop_factory
 from app.core.errors import AppError
 from app.core.security import MIN_PASSWORD_LENGTH
+from app.core.uploads_report import classify, collect_references, render_report, scan_files
 
 # Rejestr modeli MUSI być zaimportowany, choć nic z niego tu nie wołamy:
 # CLI omija `create_app()`, które ładuje wszystkie moduły przez routery, więc bez
@@ -109,6 +112,21 @@ def create_admin_command() -> int:
     return 0
 
 
+async def _uploads_report() -> str:
+    uploads_root = Path(get_settings().uploads_dir)
+    factory = get_session_factory()
+    async with factory() as session:
+        references = await collect_references(session)
+    report = classify(scan_files(uploads_root), references)
+    return render_report(report, uploads_root=uploads_root.resolve())
+
+
+def uploads_report_command() -> int:
+    """Raport plików bez referencji — WYŁĄCZNIE odczyt, nic nie kasuje (D10)."""
+    print(asyncio.run(_uploads_report(), loop_factory=selector_loop_factory()))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     """Punkt wejścia `python -m app.cli`."""
     parser = argparse.ArgumentParser(
@@ -116,12 +134,17 @@ def main(argv: list[str] | None = None) -> int:
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("create-admin", help="Tworzy konto administratora")
+    subparsers.add_parser(
+        "uploads-report", help="Raportuje pliki uploadów bez referencji w bazie (nic nie usuwa)"
+    )
 
     args = parser.parse_args(argv)
     try:
         get_settings()  # czytelny błąd, gdy brakuje DATABASE_URL/SECRET_KEY
         if args.command == "create-admin":
             return create_admin_command()
+        if args.command == "uploads-report":
+            return uploads_report_command()
     except (CliError, ConfigurationError) as exc:
         print(f"Błąd: {exc}", file=sys.stderr)
         return 1

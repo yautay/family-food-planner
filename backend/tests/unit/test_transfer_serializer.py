@@ -189,6 +189,13 @@ def test_paczka_ponad_limit_konczy_sie_413() -> None:
     assert_within_limit(1024, limit_mb=1)
 
 
+def test_prywatny_podkatalog_jest_zamkniety_niezaleznie_od_wielkosci_liter(tmp_path: Any) -> None:
+    """REVIEW R4 pkt 8: na Windows/macOS `Transfer/` trafia w ten sam plik co `transfer/`."""
+    for variant in ("Transfer/abc.zip", "TRANSFER/abc.zip", "Import-PDF/x.pdf", "IMPORT-PDF/x.pdf"):
+        with pytest.raises(NotFoundError):
+            resolve_upload_path(variant, uploads_root=tmp_path)
+
+
 def test_katalog_paczek_transferu_nie_jest_serwowany(tmp_path: Any) -> None:
     """`/uploads/*` sprawdza tylko sesję, więc paczka z KOMPLETEM danych konta
     nie ma prawa leżeć w serwowanym drzewie (ustalenie /code-review B14).

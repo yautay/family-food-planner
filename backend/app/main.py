@@ -10,10 +10,10 @@ from pathlib import Path
 
 from fastapi import APIRouter, FastAPI
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
+from app.core.body_limit import BodyLimitMiddleware, build_body_limit_rules
 from app.core.config import Settings, get_settings
 from app.core.deps import CurrentUser
 from app.core.errors import (
@@ -22,8 +22,10 @@ from app.core.errors import (
     register_error_handlers,
     register_rate_limit_handler,
 )
+from app.core.health import build_health_router
 from app.core.logging import RequestLoggingMiddleware, configure_logging
 from app.core.middleware import CsrfMiddleware, SecurityHeadersMiddleware
+from app.core.spa import build_spa_router
 from app.core.uploads import FILE_NOT_FOUND_MESSAGE, resolve_upload_path
 from app.modules.accounts.router import build_admin_users_router, build_auth_router
 from app.modules.audit.router import build_audit_router
@@ -50,24 +52,6 @@ from app.modules.shopping.router import build_shopping_router
 from app.modules.transfer.router import build_transfer_router
 
 API_V1_PREFIX = "/api/v1"
-
-
-class HealthResponse(BaseModel):
-    """Odpowiedź healthchecku — świadomie nie ujawnia niczego poza statusem i wersją."""
-
-    status: str
-    version: str
-
-
-def build_health_router(settings: Settings) -> APIRouter:
-    """Router `/health` — publiczny, bez sesji (04_API §3 pkt 1)."""
-    router = APIRouter(tags=["health"])
-
-    @router.get("/health", response_model=HealthResponse, summary="Stan aplikacji")
-    async def health() -> HealthResponse:
-        return HealthResponse(status="ok", version=settings.app_version)
-
-    return router
 
 
 def build_uploads_router(settings: Settings) -> APIRouter:
@@ -116,8 +100,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.limiter = limiter
 
     # Kolejność ma znaczenie: dodane później są bardziej „na zewnątrz". Nagłówki
-    # bezpieczeństwa muszą objąć także odpowiedzi odrzucone przez CSRF.
+    # bezpieczeństwa muszą objąć także odpowiedzi odrzucone przez CSRF i przez
+    # sufit rozmiaru ciała (B17); sufit siedzi PRZED CSRF, żeby za duże żądanie
+    # nie docierało do żadnej warstwy aplikacyjnej, ale POD logowaniem, żeby 413
+    # zostało w logu requestów.
     app.add_middleware(CsrfMiddleware)
+    app.add_middleware(
+        BodyLimitMiddleware,
+        default_limit_mb=settings.request_max_body_mb,
+        rules=build_body_limit_rules(settings),
+    )
     app.add_middleware(RequestLoggingMiddleware)
     app.add_middleware(SecurityHeadersMiddleware)
 
@@ -132,8 +124,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(build_products_router(), prefix=API_V1_PREFIX)
     app.include_router(build_categories_router(), prefix=API_V1_PREFIX)
     app.include_router(build_stores_router(), prefix=API_V1_PREFIX)
-    app.include_router(build_retail_products_router(), prefix=API_V1_PREFIX)
-    app.include_router(build_recipes_router(), prefix=API_V1_PREFIX)
+    app.include_router(build_retail_products_router(limiter), prefix=API_V1_PREFIX)
+    app.include_router(build_recipes_router(limiter), prefix=API_V1_PREFIX)
     app.include_router(build_tags_router(), prefix=API_V1_PREFIX)
     app.include_router(build_goals_router(), prefix=API_V1_PREFIX)
     app.include_router(build_plan_router(), prefix=API_V1_PREFIX)
@@ -150,10 +142,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # Limiter jak w `/auth` i routerze publicznym — potrzebuje go WYŁĄCZNIE
     # `POST /import/jobs/{id}/ai-suggest` (koszt wywołań modelu, karta B16).
     app.include_router(build_import_router(limiter), prefix=API_V1_PREFIX)
-    app.include_router(build_transfer_router(), prefix=API_V1_PREFIX)
+    app.include_router(build_transfer_router(limiter), prefix=API_V1_PREFIX)
     app.include_router(build_audit_router(), prefix=API_V1_PREFIX)
     # Uploady poza /api/v1 (01_ARCH §1) — endpoint z sesją, nie StaticFiles.
     app.include_router(build_uploads_router(settings))
+    # SPA z obrazu prod (ADR-014) — catch-all, więc MUSI być ostatni. Dev: pusto
+    # (vite dev server z proxy `/api`), testy: pusto.
+    if settings.spa_dist_dir:
+        app.include_router(build_spa_router(Path(settings.spa_dist_dir)))
 
     return app
 

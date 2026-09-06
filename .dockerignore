@@ -1,0 +1,27 @@
+# Kontekst builda (docker/Dockerfile, target prod) — do obrazu NIE wchodzą:
+# sekrety, dane, artefakty hosta i testy. Lista dopełnia .gitignore, bo
+# `docker build .` nie zna gita.
+.env
+*.env
+!.env.example
+.git
+.github
+.idea
+.vscode
+docs
+frontend/node_modules
+frontend/dist
+frontend/dev-dist
+frontend/test-results
+frontend/playwright-report
+frontend/e2e/.auth
+backend/.venv
+backend/.pytest_cache
+backend/.mypy_cache
+backend/.ruff_cache
+backend/data
+backend/tests
+backend/openapi.json
+**/__pycache__
+uploads
+backups
