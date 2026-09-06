@@ -3,7 +3,7 @@
 Status: ACCEPTED (2026-08-16)
 
 ## Kontekst
-Audyt PDF (01_PDF_AUDIT §5.2): ta sama jednostka domowa („łyżka", „sztuka",
+Pomiar na jadłospisach dietetyczki: ta sama jednostka domowa („łyżka", „sztuka",
 „plaster") ma różną gramaturę zależnie od produktu, a nawet per wystąpienie
 (jajko 50/60 g, łyżka mąki 5/12/15 g). Uniwersalna tabela przeliczników
 jest niemożliwa.

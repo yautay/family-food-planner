@@ -112,25 +112,6 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/pages/StatystykiPage.vue'),
         meta: { title: 'Statystyki' },
       },
-      // Import jadłospisów PDF (BATCH_15). Wyjątek od reguły „batch podmienia
-      // component istniejącej trasy": mapa 05_FRONTEND §3 nie przewidywała
-      // osobnego ekranu importu, bo powstawała przed audytem PDF-ów. Trasa
-      // i pozycja nawigacji wchodzą razem — karta B15 §Frontend.
-      {
-        path: 'import',
-        name: 'import',
-        component: () => import('@/pages/ImportPage.vue'),
-        meta: { title: 'Import PDF' },
-      },
-      // Review pojedynczego importu (BATCH_16). Osobna TRASA, ale ta sama
-      // pozycja nawigacji: review jest krokiem w środku importu, nie działem
-      // aplikacji — dokładanie go do menu rozmyłoby wejście z listy jobów.
-      {
-        path: 'import/jobs/:id/review',
-        name: 'import-review',
-        component: () => import('@/pages/ImportReviewPage.vue'),
-        meta: { title: 'Review importu' },
-      },
       {
         path: 'ustawienia',
         name: 'ustawienia',

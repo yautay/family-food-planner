@@ -413,6 +413,50 @@ async def test_pozycja_planu_z_niewidocznym_przepisem_nie_psuje_pliku(
     assert "plan_meal_items" not in summary.created
 
 
+async def test_kopia_rodziny_ma_wspolne_przepisy_ale_nie_cudze_prywatne(
+    db_session: AsyncSession, settings: Settings
+) -> None:
+    """Granica pliku „kopia danych rodziny" (decyzja **D26**).
+
+    Kopię pobiera JEDEN członek rodziny, ale plik ma odtworzyć to, z czego
+    rodzina korzysta — więc wchodzą do niego także CUDZE przepisy o zasięgu
+    `household`. Prywatny przepis współdomownika NIE wchodzi: plik ląduje
+    w mailu i w kopii zapasowej, a ADR-006 mówi, że prywatność obowiązuje także
+    wewnątrz rodziny. Kryterium jest jedno: `ScopedQuery.owned_condition`.
+    """
+    household = await factories.create_household(db_session, name="Kowalscy")
+    anna = await factories.create_user(db_session, email="anna@example.com", household=household)
+    bartek = await factories.create_user(
+        db_session, email="bartek@example.com", household=household
+    )
+    await factories.create_recipe(
+        db_session, owner=bartek, name="Bigos rodzinny", scope=Scope.HOUSEHOLD
+    )
+    await factories.create_recipe(
+        db_session, owner=bartek, name="Sekretna zapiekanka", scope=Scope.PRIVATE
+    )
+    await factories.create_recipe(db_session, owner=anna, name="Zupa Anny", scope=Scope.PRIVATE)
+    # Cel żywieniowy jest parametrem KONKRETNEJ osoby — cudzy nie wychodzi.
+    await factories.create_goal(db_session, user=bartek, valid_from=date(2030, 1, 1))
+    await factories.create_goal(db_session, user=anna, valid_from=date(2030, 1, 1))
+
+    service = TransferService(db_session, uploads_dir=settings.uploads_dir, max_zip_mb=100)
+    exported = await service.export(
+        anna, scope=TransferScope.USER, app_version="test", now=utcnow()
+    )
+    with zipfile.ZipFile(BytesIO(exported.path.read_bytes())) as archive:
+        document = json.loads(archive.read(DATA_ENTRY_NAME))
+
+    assert sorted(row["name"] for row in document["data"]["recipes"]) == [
+        "Bigos rodzinny",
+        "Zupa Anny",
+    ]
+    assert [row["user_id"] for row in document["data"]["user_nutrition_goals"]] == [anna.id]
+    # Plik rodziny nie niesie kont — po wczytaniu wszystko należy do konta,
+    # które je wczytało (`IdMap.actor_user_id`); UI mówi to wprost (D26).
+    assert "users" not in document["data"]
+
+
 async def test_d22_drugi_import_nie_dokłada_dzieci_reużytym_rodzicom(
     db_session: AsyncSession, settings: Settings
 ) -> None:

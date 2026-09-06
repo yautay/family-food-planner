@@ -129,8 +129,8 @@ nie ma.
 ## Async
 
 - Route'y async; sesja DB też jest async (`AsyncSession`, ADR-015).
-- Żadnych blokujących wywołań w event loopie (Pillow, pdfplumber →
-  `run_in_threadpool`). Bez własnych wątków/kolejek (ADR-001).
+- Żadnych blokujących wywołań w event loopie (Pillow, `zipfile` przy kopii
+  danych → `run_in_threadpool`). Bez własnych wątków/kolejek (ADR-001).
 
 ## pytest
 

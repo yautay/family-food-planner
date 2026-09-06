@@ -53,7 +53,6 @@ services:
       # dockera, nie z 127.0.0.1 — patrz docker/entrypoint.sh.
       FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-127.0.0.1}
       DISK_MIN_FREE_MB: ${DISK_MIN_FREE_MB:-1024}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     volumes:
       - uploads:/data/uploads
     ports:

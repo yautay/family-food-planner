@@ -372,7 +372,7 @@ class PlanCopyRequest(BaseModel):
     source_meal_id: int | None = Field(default=None, ge=1)
     #: Wymagane dla `what="day"` i `what="meal"`; dla bloku daty wylicza serwis.
     target_dates: list[date] = Field(default_factory=list, max_length=COPY_TARGETS_LIMIT)
-    #: --- tylko `what="block"` (model 2+2+2 z 01_PDF_AUDIT §6) ---
+    #: --- tylko `what="block"` (model 2+2+2 z listu dietetyczki) ---
     #: Pierwszy dzień bloku źródłowego.
     source_from: date | None = None
     #: Ile kolejnych dni obejmuje blok.

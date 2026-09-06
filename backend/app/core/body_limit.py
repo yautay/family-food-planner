@@ -1,7 +1,7 @@
 """Sufit rozmiaru ciała żądania — 413 w kształcie błędu 04_API §1 (BATCH_17).
 
 Druga połowa ochrony uploadów obok limitu częstości (`core/ratelimits.py`).
-Serwisy sprawdzają rozmiar PLIKU (`save_image`, importer, transfer), ale robią to
+Serwisy sprawdzają rozmiar PLIKU (`save_image`, transfer), ale robią to
 dopiero po wczytaniu multiparta do pamięci; ten middleware odcina żądanie
 WCZEŚNIEJ i obejmuje też ścieżki, które uploadem nie są — bez niego `POST
 /auth/login` z ciałem 500 MB byłby przyjmowany i parsowany.
@@ -63,7 +63,6 @@ class BodyLimitRule:
 def build_body_limit_rules(settings: Settings) -> tuple[BodyLimitRule, ...]:
     """Reguły per endpoint uploadu — limity z konfiguracji, nie z drugiej listy."""
     return (
-        BodyLimitRule(re.compile(r"^/api/v1/import/pdf$"), settings.pdf_max_upload_mb),
         BodyLimitRule(re.compile(r"^/api/v1/transfer/import$"), settings.transfer_max_zip_mb),
         BodyLimitRule(re.compile(r"^/api/v1/recipes/\d+/photo$"), settings.image_max_upload_mb),
         BodyLimitRule(

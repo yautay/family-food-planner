@@ -23,7 +23,7 @@ konfiguracja) oraz założenia dla **BATCH_18** (compose.prod, proxy, runbooki).
 
 ```
 /srv/pasnik/pgdata    → /var/lib/postgresql/data
-/srv/pasnik/uploads   → /data/uploads      (zdjęcia, PDF-y importu)
+/srv/pasnik/uploads   → /data/uploads      (zdjęcia + scratch kopii danych)
 /srv/pasnik/backups   → /backups           (dumpy + kopie uploads)
 /srv/pasnik/env/pasnik.env (chmod 600)        → env_file kontenera app
 ```
@@ -81,8 +81,9 @@ konfiguracja) oraz założenia dla **BATCH_18** (compose.prod, proxy, runbooki).
     krokiem jawnym), a ukryłby przyczynę. `down` = brak odpowiedzi.
     Operator czyta TREŚĆ: `curl -s 127.0.0.1:8081/api/v1/health`.
   - Bez uwierzytelnienia i bez szczegółów infrastruktury (żadnych ścieżek,
-    hostów, numerów rewizji). Pusty `ANTHROPIC_API_KEY` NIE jest checkiem —
-    to poprawna konfiguracja prod (07_SECURITY §7).
+    hostów, numerów rewizji). Checkiem jest wyłącznie to, co może paść
+    w RUNTIME (baza, migracje, dysk) — ustawienie opcjonalnej funkcji nim
+    nie jest (07_SECURITY §7).
 - **Zimny start (obserwacja R2, potwierdzona R4) — świadomie przyjęty**:
   pierwsze żądanie po starcie procesu (`GET /plan/days`) trwa ~1,5 s
   (budowanie modeli Pydantica, plany zapytań PG), kolejne 30–50 ms. Przy
@@ -187,10 +188,10 @@ migracje w dół tylko gdy downgrade przetestowany (każda migracja ma test down
 Cała konfiguracja różnicująca środowiska idzie przez env
 (`app/core/config.py`, komplet z opisem w `.env.example`): m.in. `APP_ENV`,
 `LOG_LEVEL`, `UVICORN_WORKERS`, `FORWARDED_ALLOW_IPS`, `DISK_MIN_FREE_MB`,
-`SPA_DIST_DIR`, `UPLOADS_DIR`, `IMAGE_MAX_UPLOAD_MB`, `PDF_MAX_UPLOAD_MB`,
-`TRANSFER_MAX_ZIP_MB`, `REQUEST_MAX_BODY_MB`, `PDF_PARSE_TIMEOUT_S`,
-`ANTHROPIC_*`, `BACKUP_AT`, `BACKUP_KEEP_DAILY`, `BACKUP_KEEP_WEEKLY`,
+`SPA_DIST_DIR`, `UPLOADS_DIR`, `IMAGE_MAX_UPLOAD_MB`, `TRANSFER_MAX_ZIP_MB`,
+`REQUEST_MAX_BODY_MB`, `BACKUP_AT`, `BACKUP_KEEP_DAILY`, `BACKUP_KEEP_WEEKLY`,
 `BACKUP_ENV_FILE`, `TZ`. Żadnych wartości prod zaszytych w kodzie.
+Od BATCH_20 nie ma tu ANI JEDNEGO klucza do usługi zewnętrznej (D25).
 
 **Użytkownik bazy (07_SECURITY §9) — stan faktyczny, NIEEGZEKWOWANE**: w compose
 dev/test rola `POSTGRES_USER` jest rolą bootstrapową obrazu `postgres`, czyli
@@ -222,6 +223,7 @@ uptime-check z zewnątrz (np. healthchecks.io ping z crona) — decyzja przy B18
 ## 7. Wymagania sprzętowe (sanity)
 
 Odroid H2 (4 rdzenie, ~8-32 GB RAM): PG + Uvicorn (2 workery) + Caddy hosta
-to ułamek możliwości; pdfplumber przy imporcie to chwilowy peak CPU —
-import wykonywany synchronicznie w request z limitem czasu
-(`PDF_PARSE_TIMEOUT_S`) w wątku (bez Celery; ADR-001).
+to ułamek możliwości. Jedyny chwilowy peak CPU/IO to pakowanie i rozpakowanie
+kopii danych rodziny ze zdjęciami — robione synchronicznie w żądaniu, ale
+NA DYSKU (paczka nigdy nie wchodzi w całości do RAM) i w wątku puli, żeby nie
+blokować pętli zdarzeń (bez Celery; ADR-001).

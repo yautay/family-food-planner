@@ -116,7 +116,7 @@ Stan faktyczny (BATCH_04, migracje `0004` + `0005`):
   ON DELETE RESTRICT; rejestr `nutrients` jest w MVP pusty (ADR-004).
 - Rozszerzenie `pg_trgm` tworzy migracja `0004`; jej `downgrade` świadomie go
   NIE usuwa (rozszerzenie jest własnością bazy, nie jednego batcha).
-- Migracja danych `0005` seeduje 14 kategorii (01_PDF_AUDIT §5.5 + wymagania
+- Migracja danych `0005` seeduje 14 kategorii (jadłospisy dietetyczki + wymagania
   02_DOMAIN §4.3), idempotentnie (`ON CONFLICT DO NOTHING`). „Zbożowe" nie
   wchodzą (D14); „Przetwory" i „puszki-słoiki" scalono w jedną kategorię, bo
   różniła je wyłącznie nazwa, a nie `perishability`.
@@ -162,8 +162,7 @@ Stan faktyczny (BATCH_03, `backend/app/core/scope.py`):
 recipes (id, +scope-wzorzec, name, instructions TEXT DEFAULT '',
        base_servings INT CHECK >=1 DEFAULT 1, prep_time_min INT NULL,
        difficulty INT NULL CHECK 1..10, photo_path TEXT NULL,
-       source ENUM(manual,pdf_import) DEFAULT manual,
-       import_job_id FK NULL, is_archived BOOL)
+       is_archived BOOL)
 recipe_ingredients (id, recipe_id FK CASCADE,
        product_id FK→canonical_products RESTRICT,
        display_qty NUMERIC(8,3) NULL, display_unit TEXT NULL, -- '2 × łyżka'
@@ -180,13 +179,13 @@ recipe_ratings (id, recipe_id FK CASCADE, user_id FK CASCADE,
 
 Stan faktyczny (BATCH_05, migracje `0006` + `0007`):
 
-- Migracja `0006` tworzy trzy typy enumowe: **`entity_scope`** (pierwsza
-  produkcyjna tabela ze scope — 03 §4), **`amount_unit`** (reużyją go
-  planning/pantry/shopping przez `postgresql.ENUM(..., create_type=False)`)
-  i `recipe_source`.
-- **`recipes.import_job_id` jest kolumną BEZ klucza obcego** — tabela
-  `import_jobs` powstaje dopiero w B15 i dopiero tamta migracja dopina
-  constraint (FK do nieistniejącej tabeli nie istnieje w PG).
+- Migracja `0006` tworzy dwa typy enumowe, które przetrwały do dziś:
+  **`entity_scope`** (pierwsza produkcyjna tabela ze scope — 03 §4)
+  i **`amount_unit`** (reużyją go planning/pantry/shopping przez
+  `postgresql.ENUM(..., create_type=False)`). Trzeci typ i dwie kolumny
+  `recipes` opisujące pochodzenie przepisu zdjęła migracja `0016` razem
+  z importem jadłospisów (D25, ADR-016) — po jego wycofaniu miały już tylko
+  jedną możliwą wartość.
 - `recipe_tags` to czysta tabela asocjacyjna bez `created_at`/`updated_at`
   (świadomy wyjątek od §1 — wiersz nie ma cyklu życia poza parą kluczy;
   precedens: append-only `audit_entries` bez `updated_at`).
@@ -387,100 +386,50 @@ Stan faktyczny (BATCH_12, migracja `0013`, decyzja D19):
   last-write-wins — starszy znacznik nie nadpisuje młodszego, a znacznik
   z przyszłości ponad 5 minut jest przycinany do czasu serwera.
 
-## 9. Schemat — importer
+## 9. (wycofane) Schemat — import jadłospisów
 
-```sql
-import_jobs (id, owner_user_id FK, filename, file_path, file_sha256,
-       status ENUM(uploaded,parsed,in_review,approved,rejected,failed),
-       parse_report JSONB NULL, error TEXT NULL)
-staged_recipes (id, import_job_id FK CASCADE, name, day_label, meal_label,
-       instructions TEXT, comment TEXT, declared_servings INT NULL,
-       pdf_kcal NUMERIC(7,1) NULL, pdf_macros JSONB NULL,   -- W/B/T/Bł/ŁG
-       resolution ENUM(create,merge_into_existing,skip) NULL,
-       target_recipe_id FK NULL, resolved_servings INT NULL)
-staged_ingredients (id, staged_recipe_id FK CASCADE, raw_name, raw_qty,
-       raw_unit, grams NUMERIC(10,3), from_extras_section BOOL DEFAULT false,
-       suggested_product_id FK NULL, match_kind ENUM(exact,fuzzy,ai,none),
-       confidence NUMERIC(3,2) NULL CHECK 0..1,
-       confirmed_product_id FK NULL, create_new_product BOOL DEFAULT false)
-import_issues (id, import_job_id FK CASCADE, staged_recipe_id FK NULL,
-       kind ENUM(multi_portion_suspect,kcal_mismatch,unmapped_product,
-                 unit_conflict,duplicate_recipe,parse_warning),
-       severity ENUM(blocker,warning), details JSONB,
-       resolution TEXT NULL, resolved_at timestamptz NULL)
-```
+Cztery tabele obszaru przejściowego i pięć typów enumowych stworzyła migracja
+`0014`, a zdjęła `0016` (decyzja **D25**, ADR-016) razem z dwiema kolumnami
+`recipes` i ich typem. `downgrade` migracji `0016` odtwarza PUSTE struktury —
+treści ani rozstrzygnięć nie da się odzyskać i to jest zamierzone. Numer sekcji
+zostaje, bo starsze dokumenty odwołują się do dalszych sekcji po numerze.
+Kształt tego, co zniknęło, jest w samej migracji `0016`.
 
-Zatwierdzenie joba dozwolone tylko bez nierozwiązanych issues `blocker`.
-
-Stan faktyczny po BATCH_15 (migracja `0014`) — cztery tabele powstały DOKŁADNIE
-wg powyższego schematu, plus rzeczy, których szkic nie precyzował:
-
-- **Typy enumowe są komplet od razu**: `import_job_status`,
-  `staged_recipe_resolution`, `import_match_kind`, `import_issue_kind`,
-  `import_issue_severity`. B15 zapisuje z nich wyłącznie `uploaded`/`parsed`/
-  `failed`, `exact`/`none` oraz `multi_portion_suspect`/`parse_warning` — reszta
-  czeka na B16, żeby ten batch nie musiał pisać migracji łamiącej.
-- **`ON DELETE`**: `staged_*` i `import_issues` kaskadują po jobie (kompozycja,
-  ADR-012); FK do encji domenowych (`canonical_products`, `recipes`) mają
-  RESTRICT, a liczniki referencji do listy „Używane w:" rejestruje
-  `importer/service.py` (`_staging_using_product`, `_staging_using_recipe`).
-- **`recipes.import_job_id` ma wreszcie FK** (`SET NULL`) — dopina go ta sama
-  migracja `0014`; usunięcie joba jest sprzątaniem procesu importu i nie ma
-  prawa zabrać przepisu, który już powstał.
-- **Staging NIE MA kolumn wzorca scope** i nie ma ich zyskać: job należy do
-  osoby, która wgrała plik (`owner_user_id`), bo jadłospis jest dokumentem
-  zdrowotnym pacjenta, a nie stanem domowym. Widoczność egzekwuje jawny warunek
-  właścicielski w serwisie (wzorzec `user_nutrition_goals`), z wyjątkiem ADMIN-a
-  zgodnym z D16.
-- **Staging nie wchodzi do eksportu transfer v1** (BATCH_14): to proces, nie
-  dane domenowe. W pliku eksportu `recipes.import_job_id` jest `null`.
-
-Dołożone w BATCH_16 (migracja `0015`) — dwie kolumny `staged_ingredients`,
-obie wymuszone przez dokumenty nadrzędne, nie przez wygodę implementacji:
-
-- **`confidence NUMERIC(3,2) NULL`** (CHECK 0..1) — 02_DOMAIN §10 wymienia
-  `confidence` jako część StagedIngredient, a ADR-011 wymaga, żeby wynik AI
-  zawsze niósł `match_kind=ai` **razem z pewnością**. Szkic wyżej ją pominął.
-  `NULL` dla dopasowania EXACT i dla braku propozycji: pewność ma sens wyłącznie
-  tam, gdzie ktoś zgadywał.
-- **`from_extras_section BOOL NOT NULL DEFAULT false`** — dług U22 z BATCH_15.
-  Sekcja `Produkty` (01_PDF_AUDIT §3.3/§7) to dodatek podany NA JEDNĄ PORCJĘ,
-  podczas gdy reszta wiersza przepisu jest na całość. Zatwierdzenie przepisu
-  wieloporcjowego mnoży te ilości przez `base_servings`, żeby po podzieleniu
-  wróciły do gramatury z dokumentu; bez znacznika ziemniaki do gołąbków
-  skurczyłyby się z 225 g do 32 g na porcję — po cichu.
-
-Stan po zatwierdzeniu (BATCH_16): `import_jobs.status = approved`, a CAŁY
-staging zostaje. `pdf_kcal`/`pdf_macros` są metadanymi walidacyjnymi (ADR-011)
-— bez nich nie da się już nigdy sprawdzić, czy import był wierny dokumentowi.
-Odrzucenie (`rejected`) kasuje `staged_*` i `import_issues` razem z plikiem
-PDF, ale zostawia wiersz joba jako ślad decyzji.
+**Co ZOSTAŁO, mimo że powstało na potrzeby importu**:
+`product_unit_weights.source` (wolny tekst opisujący źródło, wpisywany także
+ręcznie w formularzu produktu — stare wiersze zostają jako historia) oraz
+`samples_count` (liczba pomiarów za medianą; podbija go dziś wyłącznie
+formularz produktu).
 
 ## 10. Schemat — audit i transfer
 
 ```sql
 audit_entries (id, user_id FK NULL SET NULL, action TEXT, entity_type TEXT,
        entity_id BIGINT NULL, payload JSONB, created_at)
-       -- payload: before/after dla nutrition, parametry importu/eksportu
+       -- payload: before/after dla nutrition, liczby i decyzje kopii danych
        -- indeksy: (entity_type, entity_id), created_at DESC, user_id
        -- BEZ updated_at: tabela jest append-only (BATCH_03)
 ```
 
-Eksport nie ma tabel (generowany plik); import loguje się w audit_entries.
+Kopia danych nie ma tabel (plik generowany na żądanie); pobranie i wczytanie
+zostawiają wpis w `audit_entries`.
 
 ## 11. Storage plików
 
-Uploady (zdjęcia przepisów/produktów, PDF-y importu) na bind mount
+Uploady (zdjęcia przepisów/produktów, paczki kopii danych) na bind mount
 `/data/uploads` (ADR-002), ścieżki względne w DB, nazwy losowe
 (`uuid4().hex + rozszerzenie po sniffingu typu`), oryginalna nazwa tylko
 w metadanych. Miniatury generowane przy uploadzie (Pillow), obok oryginału.
 
-Podkatalogi z danymi JEDNEJ osoby są zamknięte dla endpointu `/uploads/*`
-(`core/uploads.PRIVATE_SUBDIRS`): `transfer` (paczki eksportu, B14) i
-`import-pdf` (wgrane jadłospisy, B15). Endpoint sprawdza wyłącznie sesję, więc
-bez tej bariery każdy zalogowany użytkownik, który poznałby ścieżkę, pobrałby
-cudzy dokument. PDF-y importu nie mają miniatur i nie są serwowane w ogóle —
-czyta je wyłącznie pdfplumber po stronie serwera.
+Endpoint `/uploads/*` serwuje WYŁĄCZNIE podkatalogi z allowlisty
+(`core/uploads.SERVED_SUBDIRS`: `recipes`, `retail`, `transfer-import`);
+wszystko inne dostaje 404. Do BATCH_20 była to lista ZAKAZANYCH i to był błąd
+konstrukcyjny: endpoint sprawdza tylko sesję, więc katalog, o którym kod
+przestał wiedzieć — na przykład po wycofaniu funkcji, która do niego pisała —
+stawał się pobieralny dla każdego zalogowanego. Przy allowliście katalog
+nieznany kodowi jest zamknięty z definicji, a `task uploads-report` pokazuje
+jego pliki jako sieroty. Paczki kopii danych (`transfer/`, KOMPLET danych
+jednego konta) świadomie nie są na allowliście.
 
 ## 12. Retencja i sprzątanie
 
@@ -491,8 +440,10 @@ czyta je wyłącznie pdfplumber po stronie serwera.
   (właściciel albo ADMIN), pozycje giną kaskadą. Bulk delete nadal nie istnieje
   (rewizja przy R4, D10), a żaden automat ani job nie kasuje list — wygaśnięcie
   dotyczy WYŁĄCZNIE publicznego linku.
-- Import jobs: pliki PDF usuwane przy odrzuceniu; zatwierdzone zostają
-  (audyt pochodzenia przepisu).
+- Paczki kopii danych: scratch `uploads/transfer` z TTL 24 h (sprząta go
+  serwis transferu przy kolejnym DRY-RUN-ie i po `apply`).
+- Pliki bez referencji w bazie: `task uploads-report` je WYMIENIA i nic nie
+  kasuje (D10) — decyzję podejmuje człowiek.
 
 ## 13. Backup
 

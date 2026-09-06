@@ -16,12 +16,12 @@ Jednostki systemowe (02_DOMAIN §4.2): `g`, `kg`, `ml`, `l`, `szt.`, `opak.`
 Pierwsze cztery mają stały przelicznik. `szt.` wymaga produktu mierzonego
 w sztukach, a `opak.` — jak każda inna jednostka domowa („łyżka", „garść",
 „plaster") — przelicznika zapisanego PRZY PRODUKCIE (`product_unit_weights`).
-Uniwersalnej tabeli przeliczników nie ma i nie będzie: audyt PDF
-(01_PDF_AUDIT §5.2) pokazał, że łyżka mąki waży 5, 12 albo 15 g zależnie od
+Uniwersalnej tabeli przeliczników nie ma i nie będzie: pomiar na realnych
+jadłospisach pokazał, że łyżka mąki waży 5, 12 albo 15 g zależnie od
 miejsca, a jajko 50 albo 60 g.
 
-Moduł jest importowany przez silnik nutrition (B05), silnik zakupowy (B10)
-i importer (B15/16) — nie wolno mu zależeć od SQLAlchemy ani od warstwy HTTP.
+Moduł jest importowany przez silnik nutrition (B05) i silnik zakupowy (B10) —
+nie wolno mu zależeć od SQLAlchemy ani od warstwy HTTP.
 """
 
 from __future__ import annotations

@@ -106,23 +106,6 @@ async def test_health_degraded_gdy_malo_miejsca_na_dysku(
     assert body["checks"] == {"db": "ok", "migrations": "ok", "disk": "fail"}
 
 
-async def test_pusty_klucz_anthropic_nie_psuje_health(
-    settings: Settings, db_sessions: async_sessionmaker[AsyncSession]
-) -> None:
-    """Pusty `ANTHROPIC_API_KEY` to POPRAWNA konfiguracja prod (07_SECURITY §7) — nie check."""
-    app = create_app(settings.model_copy(update={"anthropic_api_key": ""}))
-
-    async def override() -> AsyncIterator[AsyncSession]:
-        async with db_sessions() as session:
-            yield session
-
-    app.dependency_overrides[get_session] = override
-    async with _client_for(app) as client:
-        body = (await client.get("/api/v1/health")).json()
-
-    assert body["status"] == "ok"
-
-
 async def test_nieistniejaca_sciezka_zwraca_404_w_ksztalcie_kontraktu(client: AsyncClient) -> None:
     """04_API §1: {"error": {code, message, details}} — jeden kształt dla całego API."""
     response = await client.get("/api/v1/nope")

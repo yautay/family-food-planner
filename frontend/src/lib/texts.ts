@@ -542,135 +542,6 @@ export const retail = {
   piecesInvalid: 'Sztuk w opakowaniu musi być liczbą całkowitą większą od zera.',
 } as const
 
-export const pdfImport = {
-  title: 'Import jadłospisu PDF',
-  subtitle:
-    'Wgraj PDF od dietetyczki. Odczytamy dni, posiłki i składniki — nic nie trafi do Twoich ' +
-    'przepisów, dopóki tego nie zatwierdzisz.',
-  dropzone: 'Przeciągnij plik tutaj albo kliknij, żeby wybrać',
-  dropzoneHint: 'Tylko PDF, maksymalnie 25 MB.',
-  choose: 'Wybierz plik',
-  uploading: 'Wgrywam i odczytuję…',
-  jobsTitle: 'Twoje importy',
-  emptyState:
-    'Nie masz jeszcze żadnych importów. Wgraj pierwszy jadłospis — pokażemy, co udało się ' +
-    'z niego odczytać, zanim cokolwiek zapiszemy.',
-  columnFile: 'Plik',
-  columnDate: 'Data',
-  columnStatus: 'Status',
-  columnNumbers: 'Odczytano',
-  showReport: 'Zobacz raport',
-  hideReport: 'Ukryj raport',
-  reportTitle: 'Raport odczytu',
-  reportDays: 'Dni',
-  reportMeals: 'Posiłki',
-  reportRecipes: 'Dania',
-  reportIngredients: 'Składniki',
-  reportPages: 'Strony',
-  reportPagesDetail: 'w tym pominięte (lista zakupów, wymienniki)',
-  reportMatched: 'Zmapowane produkty',
-  reportChecksums: 'Sumy kontrolne dni',
-  checksumOk: 'zgodna',
-  checksumMismatch: 'rozjazd',
-  issuesTitle: 'Do rozstrzygnięcia',
-  issuesBlockers: 'blokujące',
-  issuesWarnings: 'ostrzeżenia',
-  issuesNone: 'Nic nie wymaga decyzji.',
-  openReview: 'Przejdź do review',
-  reviewHint: 'Rozstrzygnij mapowania i porcje, zanim przepisy trafią do katalogu.',
-  resolvedInfo: 'Ten import jest już rozstrzygnięty — decyzje zostały zapisane.',
-  deleteAction: 'Usuń import',
-  deleteConfirm:
-    'Usunąć ten import? Znikną wszystkie odczytane dania i składniki oraz wgrany plik. ' +
-    'Twoje przepisy i produkty zostają bez zmian.',
-  fileTooLarge: 'Plik jest za duży — PDF może mieć najwyżej 25 MB.',
-  fileNotPdf: 'Wybierz plik PDF.',
-  status: {
-    uploaded: 'Wgrany',
-    parsed: 'Sparsowany',
-    in_review: 'W review',
-    approved: 'Zatwierdzony',
-    rejected: 'Odrzucony',
-    failed: 'Błąd',
-  },
-} as const
-
-/** Ekran review importu (`/import/jobs/:id/review`, BATCH_16). */
-export const importReview = {
-  title: 'Review importu',
-  back: 'Wróć do importów',
-  progressMapped: 'Zmapowane składniki',
-  progressIssues: 'Do rozstrzygnięcia',
-  blockersTitle: 'Zanim zatwierdzisz',
-  blockersHint: 'Te rzeczy trzeba rozstrzygnąć — dopóki są, przycisk zatwierdzenia jest nieczynny.',
-  noBlockers: 'Wszystko rozstrzygnięte — możesz zatwierdzić import.',
-  aiSuggest: 'Zaproponuj z AI',
-  aiRunning: 'Pytam AI…',
-  aiHint: 'AI tylko proponuje — każde mapowanie i tak potwierdzasz sam.',
-  approve: 'Zatwierdź import',
-  approving: 'Zatwierdzam…',
-  reject: 'Odrzuć import',
-  rejectConfirm:
-    'Odrzucić ten import? Znikną wszystkie odczytane dania, składniki i wgrany plik. ' +
-    'Twoje przepisy i produkty zostają bez zmian.',
-  scopeLabel: 'Kto ma widzieć te przepisy',
-  scopePrivate: 'Tylko ja',
-  scopeHousehold: 'Cała rodzina',
-  scopeHint: 'Wybór dotyczy CAŁEGO importu — nie ustawia się go osobno przy każdym daniu.',
-  emptyState: 'Ten import nie ma nic do rozstrzygnięcia.',
-  ingredientsTitle: 'Składniki',
-  mappedTo: 'Wybrany produkt',
-  suggestion: 'Propozycja',
-  confirmSuggestion: 'Potwierdź',
-  clearMapping: 'Wyczyść',
-  createNew: 'Utwórz nowy',
-  createNewChosen: 'Powstanie przy zatwierdzeniu',
-  matchExact: 'dokładne dopasowanie',
-  matchAi: 'propozycja AI',
-  matchFuzzy: 'dopasowanie przybliżone',
-  confidence: 'pewność',
-  fromExtras: 'dodatek do posiłku (na porcję)',
-  servingsLabel: 'Na ile porcji jest ten przepis?',
-  servingsHint:
-    'Składniki w jadłospisie są podane na CAŁOŚĆ, a kalorie na jedną porcję — ' +
-    'bez tej liczby nie wiemy, ile waży talerz.',
-  servingsFromPdf: 'z dokumentu',
-  servingsAiHint: 'propozycja AI',
-  nameLabel: 'Nazwa dania',
-  kcalComputed: 'Kalorie wyliczone',
-  kcalPdf: 'Kalorie z jadłospisu',
-  kcalDelta: 'różnica',
-  kcalMismatchBadge: 'rozjazd kalorii',
-  resolutionLabel: 'Co zrobić z tym daniem',
-  resolutionCreate: 'Utwórz przepis',
-  resolutionMerge: 'Scal z istniejącym',
-  resolutionSkip: 'Pomiń',
-  mergeTargetLabel: 'Przepis, z którym scalić',
-  duplicateTitle: 'Możliwy duplikat',
-  duplicateSeparate: 'To osobny przepis',
-  issuesTitle: 'Uwagi',
-  jobIssuesTitle: 'Uwagi do całego pliku',
-  doneTitle: 'Import zatwierdzony',
-  doneRecipes: 'Utworzone przepisy',
-  doneProducts: 'Nowe produkty (do weryfikacji)',
-  doneMerged: 'Scalone z istniejącymi',
-  doneSkipped: 'Pominięte',
-  doneUnitWeights: 'Nauczone przeliczniki jednostek',
-  doneGoToRecipes: 'Zobacz przepisy',
-  severity: {
-    blocker: 'blokuje',
-    warning: 'ostrzeżenie',
-  },
-  issueKind: {
-    multi_portion_suspect: 'Nieznana liczba porcji',
-    kcal_mismatch: 'Rozjazd kalorii',
-    unmapped_product: 'Składniki bez produktu',
-    unit_conflict: 'Konflikt jednostek',
-    duplicate_recipe: 'Możliwy duplikat przepisu',
-    parse_warning: 'Nieodczytany fragment',
-  },
-} as const
-
 export const adminVerification = {
   title: 'Weryfikacja produktów',
   subtitle:
@@ -891,34 +762,48 @@ export const offline = {
  * a import pokazuje raport ZANIM cokolwiek zapisze. Bez tego „Importuj"
  * brzmiałoby jak nieodwracalna operacja i nikt by go nie kliknął.
  */
+/**
+ * Kopia danych rodziny (BATCH_14, przemianowana w BATCH_20 wg D25/D26).
+ *
+ * W kodzie i w API nazwy zostają techniczne (`transfer`, `export`, `import`) —
+ * to nie jest rename techniczny. Zmienia się WYŁĄCZNIE to, co czyta człowiek:
+ * „kopia" zamiast „eksport/import", bo użytkownik robi kopię zapasową swoich
+ * danych, a nie operację na formacie wymiany.
+ */
 export const transfer = {
-  sectionTitle: 'Twoje dane',
+  sectionTitle: 'Kopia danych rodziny',
   sectionSubtitle:
-    'Dane należą do Ciebie. Wyeksportuj je do pliku ZIP albo wczytaj z wcześniejszego eksportu.',
+    'Pobierz kopię produktów, przepisów, planów, spiżarni i list Twojej rodziny albo wczytaj ' +
+    'wcześniejszą kopię. Wczytanie SCALA: to, co już masz, zostaje, a nowe rzeczy dochodzą.',
+  // D26: w pliku rodziny nie ma sekcji kont, więc wszystko, co z niego powstaje,
+  // dostaje właściciela — konto wczytujące. UI musi to powiedzieć PRZED kliknięciem.
+  ownershipNote:
+    'Wszystko, co powstanie z kopii, będzie należeć do Twojego konta i będzie widoczne dla ' +
+    'rodziny tak jak w kopii.',
   instanceTitle: 'Instancja',
   instanceSubtitle:
-    'Eksport i import całej instancji: konta, rodziny i wszystkie dane. Hasła nigdy nie opuszczają bazy.',
+    'Kopia CAŁEJ instalacji: konta, rodziny i wszystkie dane. Hasła nigdy nie opuszczają bazy. ' +
+    'Kopię danych swojej rodziny robi każdy sam w Ustawieniach.',
 
-  exportButton: 'Eksportuj moje dane',
-  exportInstanceButton: 'Eksportuj całą instancję',
+  exportButton: 'Pobierz kopię danych rodziny',
+  exportInstanceButton: 'Pobierz kopię instancji',
   exportPending: 'Przygotowuję plik…',
   exportHint: 'Plik zawiera dane i zdjęcia. Trzymaj go w bezpiecznym miejscu.',
   exportDone: (filename: string) => `Pobrano plik ${filename}.`,
 
-  importButton: 'Importuj z pliku',
-  importInstanceButton: 'Importuj instancję',
-  importTitle: 'Import danych',
-  importInstanceTitle: 'Import instancji',
-  fileLabel: 'Plik eksportu (.zip)',
+  importButton: 'Wczytaj kopię',
+  importInstanceButton: 'Wczytaj kopię instancji',
+  importTitle: 'Wczytanie kopii danych',
+  importInstanceTitle: 'Wczytanie kopii instancji',
+  fileLabel: 'Plik kopii (.zip)',
   fileHint: 'Wybierz plik ZIP pobrany wcześniej z tej aplikacji.',
   analyze: 'Sprawdź plik',
   analyzing: 'Sprawdzam plik…',
 
-  reportTitle: 'Co powstanie po imporcie',
+  reportTitle: 'Co powstanie po wczytaniu',
   reportSubtitle: 'Nic jeszcze nie zostało zapisane — to tylko podgląd.',
-  reportEmpty: 'Ten plik nie zawiera niczego nowego do dodania.',
-  reportFrom: (version: string, date: string) =>
-    `Plik z wersji ${version}, wyeksportowany ${date}.`,
+  reportEmpty: 'Ta kopia nie zawiera niczego nowego do dodania.',
+  reportFrom: (version: string, date: string) => `Plik z wersji ${version}, pobrany ${date}.`,
   columnEntity: 'Dane',
   columnNew: 'Nowe',
   photos: (count: number) => `Zdjęcia w pliku: ${count}`,
@@ -930,12 +815,12 @@ export const transfer = {
   collisionAria: (name: string) => `Decyzja dla: ${name}`,
 
   warningsTitle: 'Uwagi',
-  confirm: 'Zaimportuj',
-  applying: 'Importuję…',
+  confirm: 'Wczytaj',
+  applying: 'Wczytuję…',
   back: 'Wróć',
   close: 'Zamknij',
 
-  summaryTitle: 'Import zakończony',
+  summaryTitle: 'Kopia wczytana',
   summaryCreated: 'Dodano',
   summaryReused: 'Użyto istniejących',
   summaryPhotos: (count: number) => `Zdjęcia: ${count}`,

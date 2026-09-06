@@ -15,8 +15,7 @@ nutrition    — deterministyczny silnik obliczeń (kcal/makro/IG→ŁG), cele
 planning     — plan dnia, plan tygodnia, szablony, cykle, historia
 pantry       — spiżarnia (stan domowy)
 shopping     — silnik zakupowy, tury, listy zakupowe, publiczne linki
-importer     — import PDF (staging, review, zatwierdzanie)
-transfer     — pełny eksport/import logiczny
+transfer     — kopia danych rodziny i kopia instancji (ADR-016)
 audit        — dziennik istotnych operacji
 ```
 
@@ -94,15 +93,18 @@ sztuki): kcal, białko, tłuszcz, węglowodany, błonnik, cukry — oraz
   (objętość), **szt.** (sztuki, z wagą sztuki produktu → gramy).
 - **ProductUnitWeight** (jednostka domowa produktu): para (produkt,
   etykieta jednostki np. „łyżka", „garść", „plaster", „opakowanie") →
-  gramy na 1 jednostkę + `source` + `samples_count`. Audyt PDF (01_PDF_AUDIT
-  §5.2) dowiódł, że gramatura jednostki jest własnością produktu i bywa
-  niespójna — przeliczniki uczone z próbek (mediana), edytowalne.
+  gramy na 1 jednostkę + `source` + `samples_count`. Pomiar na realnych
+  jadłospisach (BATCH_04) dowiódł, że gramatura jednostki jest własnością
+  produktu i bywa niespójna (łyżka mąki: 5, 12 albo 15 g), więc uniwersalnej
+  tabeli przeliczników nie ma. `samples_count` mówi, ile pomiarów stoi za
+  medianą; od BATCH_20 podbija go wyłącznie formularz produktu — mechanizm
+  uczenia się z importu odszedł razem z importerem PDF (D25).
 - Prezentacja: ≥1000 g → wyświetlaj w kg (formatter frontendowy, dane
   zawsze w g/ml).
 
 ### 4.3 Kategorie zakupowe
 
-Słownik globalny (seed z 01_PDF_AUDIT §5.5 + nabiał/pieczywo/suche/
+Słownik globalny (seed z jadłospisów dietetyczki + nabiał/pieczywo/suche/
 makarony-ryż-kasze/puszki-słoiki wg wymagań). Produkt ma dokładnie jedną
 kategorię. Kategorie porządkowane per sklep (§4.5).
 
@@ -139,7 +141,7 @@ opakowań i wyliczania resztek.
 
 ### 4.9 Cykl weryfikacji produktu
 
-`UNVERIFIED` (utworzony inline przez USERA lub import) → ADMIN uzupełnia/
+`UNVERIFIED` (utworzony inline przez USERA lub wniesiony kopią danych) → ADMIN uzupełnia/
 sprawdza wartości → `VERIFIED`. Widoki liczące żywienie pokazują ostrzeżenie,
 gdy w wyliczeniu biorą udział produkty UNVERIFIED lub bez kompletu wartości.
 
@@ -201,7 +203,7 @@ wartości_posiłku/dnia            = Σ pozycji
   (BATCH_06 poprawił tu literówkę „3×1.0", która dawała 7.2 — reguła
   „suma rozkładu = servings" bez zmian, egzekwuje ją serwis planning).
 - Szybkie akcje domenowe: kopiuj dzień → data/daty, kopiuj posiłek, powiel
-  blok N dni (model 2+2+2 z listu dietetyczki — 01_PDF_AUDIT §6).
+  blok N dni (model 2+2+2 z listu dietetyczki).
 - **DayTemplate / WeekTemplate**: zamrożona kopia struktury (bez dat);
   tworzone z istniejącego dnia/tygodnia lub od zera. Instancjacja = kopia
   do planu (bez live-sync).
@@ -313,66 +315,64 @@ rate limit na endpointach publicznych; zero danych użytkownika/rodziny
 w odpowiedzi (tylko treść listy). Po wygaśnięciu przyjazny ekran
 „Ta lista zakupowa już wygasła lub została usunięta."
 
-## 10. Importer PDF
+## 10. (wycofane) Importer PDF
 
-Osobny moduł ze staging area: **ImportJob** (plik, status: UPLOADED →
-PARSED → IN_REVIEW → APPROVED/REJECTED), **StagedRecipe**,
-**StagedIngredient** (surowe: nazwa/ilość/jednostka/gramy + propozycja
-mapowania na produkt kanoniczny + confidence), **ImportIssue** (typ:
-MULTI_PORTION_SUSPECT, KCAL_MISMATCH, UNMAPPED_PRODUCT, UNIT_CONFLICT,
-DUPLICATE_RECIPE; severity; rozstrzygnięcie użytkownika). Kontrakt parsera
-i anomalie: `docs/implementation-plan/01_PDF_AUDIT.md` (wiążący).
-Zatwierdzenie tworzy normalne Recipe/CanonicalProduct + wpis audit.
-Nic nie trafia do danych aplikacji bez review.
+Moduł importu jadłospisów PDF ze staging area, review i zatwierdzaniem
+istniał w B15/B16 i został **usunięty w całości** decyzją właściciela **D25**
+(BATCH_20, ADR-016). Numer sekcji zostaje pusty, żeby odwołania „02_DOMAIN §11"
+w kartach i ADR-ach nadal wskazywały to, co wskazywały. Treść wniesiona
+importerem — przepisy, produkty, przeliczniki jednostek — jest normalnymi
+encjami i została w bazie.
 
-Stan faktyczny po BATCH_16 (review i zatwierdzanie):
+## 11. Kopia danych rodziny i kopia instancji (transfer)
 
-- **Liczba porcji przepisu** = `resolved_servings` (decyzja człowieka) >
-  `declared_servings` (z dokumentu) > 1. Składniki jadłospisu są podane na
-  CAŁOŚĆ przepisu, więc to jest mianownik wszystkich wartości „per porcja".
-- **Sekcja `Produkty` jest wyjątkiem od tej reguły**: dodatek z niej jest
-  podany na JEDNĄ porcję, więc przy zapisie mnoży się go przez liczbę porcji
-  (kolumna `from_extras_section`, 03_DATABASE §9).
-- **Walidacja kcal jest PER POSIŁEK, nie per danie** — `pdf_kcal` opisuje
-  w dokumencie posiłek, a posiłek bywa dwudaniowy (01_PDF_AUDIT errata §9.1).
-  Rozjazd ponad 10% ⇒ issue `kcal_mismatch` (warning) z obiema wartościami;
-  produkty bez wartości odżywczych dają komunikat „nie można zweryfikować",
-  a nie fałszywy rozjazd.
-- **Zatwierdzenie uczy przeliczników jednostek DOMOWYCH** (`product_unit_weights`,
-  mediana z próbek `ilość x jednostka x gramy`). Etykieta „szt." jest z tego
-  wyłączona: mostkiem sztuka → gram jest `piece_weight_g` produktu (ADR-005),
-  którego wolno dotknąć wyłącznie ADMIN-owi (D15).
-- **Produkty zakładane importem powstają jako UNVERIFIED** (§4.9), a wpisy
-  przeliczników o innym źródle niż `pdf_import` są nietykalne — człowiek
-  wygrywa z pomiarem.
+Jedyny import i eksport aplikacji (ADR-016).
 
-## 11. Transfer (eksport/import)
-
-- Eksport logiczny: JSON (wszystkie encje użytkownika/instancji, wersją
-  schematu) + ZIP ze zdjęciami. ADMIN: pełny eksport instancji.
-- Import: walidacja wersji + dry-run raport (co powstanie/koliduje) →
-  zastosowanie. Dane należą do użytkownika — pełne odzyskanie bez SaaS.
+- **Kopia danych rodziny** (`scope=user`, każdy zalogowany): JSON ze wszystkimi
+  encjami, do których konto ma prawo, + ZIP ze zdjęciami. Zakres to
+  `ScopedQuery.owned_condition` (**D26**): encje WŁASNE członka (także
+  `private`) + encje rodziny o `scope=household` (także cudze) + spiżarnia
+  rodziny + profile członków + własne cele i oceny + te wiersze słowników
+  globalnych, do których to wskazuje. **Nie wchodzą**: prywatne encje innych
+  członków ani ich cele i oceny (ADR-006 — prywatność obowiązuje wewnątrz
+  rodziny).
+- **Kopia instancji** (`scope=instance`, ADMIN): dodatkowo konta, rodziny
+  i dziennik. Tylko ona odtwarza przypisanie danych do KONT.
+- **Wczytanie SCALA**: walidacja wersji + raport DRY-RUN (co powstanie,
+  co koliduje, o czym ostrzegamy) → zastosowanie w jednej transakcji.
+  Dane należą do użytkownika — pełne odzyskanie bez SaaS.
 - **„Użyj istniejącego" znaczy „nie ruszaj"** (D22, wdrożone w REVIEW R4):
   import reużywający wiersz pomija jego sekcje-dzieci, więc reużyty przepis nie
   dostaje drugiego kompletu składników ani reużyty dzień planu drugiego kompletu
   posiłków. Kryterium „dziecka" jest sprawdzalne w bazie: FK `ON DELETE CASCADE`
-  do rodzica (ADR-012). Szczegóły i granice: 04_API §2, sekcja formatu.
+  do rodzica (ADR-012).
+- **Raport mówi prawdę o scalaniu** (D24 + dług U21, BATCH_20): dzień planu
+  scalany po `UNIQUE(owner_user_id, day)` dostaje zbiorcze ostrzeżenie („3 dni
+  planu zostaną scalone…"), a `to_create` liczy wyłącznie wiersze, których
+  `apply` naprawdę utworzy — sekcje idempotentne (`ON CONFLICT DO NOTHING`)
+  i wiersze scalane są z niego wyłączone.
+- **Po wczytaniu wszystko należy do konta, które wczytało** (D26): plik rodziny
+  nie niesie sekcji `users`, więc przepis współdomownika dostaje nowego
+  właściciela, choć zostaje widoczny dla rodziny przez `scope=household`.
+  UI mówi to wprost przed kliknięciem.
+- Granice i szczegóły formatu: 04_API §2, sekcja „Format eksportu transfer v1".
 
 ## 12. Audit
 
 AuditEntry: kto, kiedy, operacja, encja, skrót zmiany (JSON before/after
 dla wartości odżywczych). Zakres: zmiany nutrition data, weryfikacja
-produktów, import (job + zatwierdzenia), operacje admina na kontach/
-rodzinach, eksport/import. Bez rozbudowy enterprise.
+produktów, operacje admina na kontach i rodzinach, pobranie i wczytanie
+kopii danych. Bez rozbudowy enterprise.
 
 ## 13. Niezmienniki systemowe (do pilnowania testami)
 
 1. Każda ilość składnika ma jednoznaczną reprezentację w g/ml — zapis bez
    przeliczenia jest niemożliwy.
-2. Wartości żywieniowe nigdy nie są cache'owane w encjach domenowych
-   (wyjątek: zatwierdzone snapshoty importu jako metadane walidacyjne).
+2. Wartości żywieniowe nigdy nie są cache'owane w encjach domenowych —
+   liczy je silnik z jednego źródła przy każdym odczycie.
 3. Zmiana mnożnika porcji w planie zmienia WSZYSTKO spójnie (kcal, makra,
    ŁG, agregaty zakupowe) — bo wszystko jest wyliczane z jednego źródła.
 4. Produkt użyty w jakiejkolwiek encji nie może zostać fizycznie usunięty.
 5. Publiczny endpoint listy nie zwraca żadnych danych poza treścią listy.
-6. Import niczego nie zapisuje do danych aplikacji przed APPROVED.
+6. Wczytanie kopii danych niczego nie zapisuje przed potwierdzeniem raportu
+   DRY-RUN, a samo zastosowanie idzie w JEDNEJ transakcji.

@@ -146,7 +146,7 @@ export function blockCopySequence(
   return pairs
 }
 
-/** Preset „2+2+2" z listu dietetyczki (01_PDF_AUDIT §6): 3 dni, każdy 2 razy. */
+/** Preset „2+2+2" z listu dietetyczki: 3 dni, każdy 2 razy. */
 export const BLOCK_PRESET_2_2_2 = { sourceDays: 3, repeatEach: 2 } as const
 
 /** Domyślne wartości dialogu bloku — źródło = wybrany dzień, cel = tydzień dalej. */

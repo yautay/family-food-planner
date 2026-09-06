@@ -5,7 +5,7 @@ description: Reguły bezpieczeństwa Paśnika — sesje/CSRF/rate-limit, scope h
 
 <!-- verified: 2026-08-16 (REVIEW R1 — uzgodnione z kodem po B01–B04; R3/R4 dalej)
      stack: FastAPI 0.141 · structlog 26 · argon2-cffi 25 · slowapi 0.1.10 · PG 17
-     źródła nadrzędne: 07_SECURITY, ADR-003, ADR-006, ADR-010, ADR-011 -->
+     źródła nadrzędne: 07_SECURITY, ADR-003, ADR-006, ADR-010, ADR-016 -->
 
 ## Co już jest w kodzie (BATCH_01–04)
 
@@ -50,8 +50,10 @@ description: Reguły bezpieczeństwa Paśnika — sesje/CSRF/rate-limit, scope h
    OAuth2 bearer, python-jose, passlib — nawet jeśli „best practice"
    z ogólnej wiedzy to sugeruje. Cookie: HttpOnly+Secure+SameSite=Lax.
 3. Sekrety wyłącznie z env; nowa zmienna → `.env.example` (placeholder,
-   nie wartość). Klucz Anthropic tylko server-side. Żadnych haseł
-   w seedach/testach commitowanych z realną wartością.
+   nie wartość). Od BATCH_20 aplikacja nie ma ŻADNEGO klucza do usługi
+   zewnętrznej (D25) — jedynym sekretem jest hasło bazy w `DATABASE_URL`;
+   nowa integracja wychodząca = decyzja właściciela, nie nowa zmienna.
+   Żadnych haseł w seedach/testach commitowanych z realną wartością.
 4. Hasła: argon2id; rehash przy logowaniu po zmianie parametrów; min. 10 zn.
    Blokada konta jest STAŁA (15 min po 10 porażkach), nie wykładnicza —
    parametry wracają do przeglądu w B17 (07_SECURITY §2 doprecyzowane w R1).
@@ -96,14 +98,18 @@ description: Reguły bezpieczeństwa Paśnika — sesje/CSRF/rate-limit, scope h
 
 ## Uploady (07_SECURITY §6)
 
-- Limity: obraz ≤10 MB, PDF ≤25 MB, paczka ≤100 MB — z env (`*_MAX_UPLOAD_MB`).
-  Typ po TREŚCI (Pillow verify / nagłówek %PDF), nigdy po rozszerzeniu.
+- Limity: obraz ≤10 MB, paczka kopii danych ≤100 MB — z env
+  (`IMAGE_MAX_UPLOAD_MB`, `TRANSFER_MAX_ZIP_MB`). Typ po TREŚCI
+  (Pillow verify / sygnatura ZIP), nigdy po rozszerzeniu.
 - **Nowy endpoint uploadu = reguła w `core/body_limit.build_body_limit_rules`
   + limit tempa w `core/ratelimits.py` + `limiter` w builderze routera** (B17).
   Bez tego dostaje sufit ciała 2 MB i zero rate limitu. Losowa nazwa (uuid4), zapis poza web-rootem,
   serwowanie przez endpoint z autoryzacją — nigdy surowe StaticFiles.
-- Obrazy re-enkodowane (strip EXIF); PDF parsowany tylko pdfplumberem
-  z limitem czasu, nigdy renderowany server-side.
+- Obrazy re-enkodowane (strip EXIF), miniatury generowane przy zapisie.
+- **`/uploads/*` serwuje wyłącznie katalogi z ALLOWLISTY**
+  (`core/uploads.SERVED_SUBDIRS`, BATCH_20). Katalog nieznany kodowi jest
+  zamknięty z definicji — lista ZAKAZANYCH udostępniała resztki po wycofanej
+  funkcji każdemu zalogowanemu. Nowy podkatalog = wpis w allowliście.
 
 ## Logi i błędy
 

@@ -63,7 +63,7 @@ def similarity_threshold(monkeypatch: pytest.MonkeyPatch) -> Iterator[Callable[[
 async def test_duplikat_znormalizowanej_nazwy_jest_odrzucany(
     db_session: AsyncSession, duplicate: str
 ) -> None:
-    """Warianty spacji i wielkości liter to TEN SAM produkt (01_PDF_AUDIT §5.3)."""
+    """Warianty spacji i wielkości liter to TEN SAM produkt (`naming.normalize_name`)."""
     service = CatalogService(db_session)
     user = await create_user(db_session)
     category = await create_category(db_session)

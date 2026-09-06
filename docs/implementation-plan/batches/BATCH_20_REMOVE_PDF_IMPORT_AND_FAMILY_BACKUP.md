@@ -591,38 +591,215 @@ Dokumentacja:
 
 ## Implementation checklist
 
-- [ ] Stage 0: baseline `task check` + liczności tabel z bazy dev
-- [ ] Migracja `0016` (up/down na czystej bazie, listy w testach, dryf modeli)
-- [ ] Backend: moduł + wszystkie sploty z inwentarza usunięte
-- [ ] Zależności: `pyproject.toml` + `uv lock`; `.env.example`; compose.test;
+- [x] Stage 0: baseline `task check` + liczności tabel z bazy dev
+- [x] Migracja `0016` (up/down na czystej bazie, listy w testach, dryf modeli)
+- [x] Backend: moduł + wszystkie sploty z inwentarza usunięte
+- [x] Zależności: `pyproject.toml` + `uv lock`; `.env.example`; compose.test;
       entrypoint
-- [ ] `task fe-types` → `openapi.json` + `generated.ts` bez `/import/*`
-- [ ] Frontend: strony/komponenty/API/klucze/trasy/nawigacja/teksty/specy/E2E
-- [ ] Transfer: teksty „Kopia danych rodziny" (D26), D24 + U21 w raporcie
-- [ ] `PRIVATE_SUBDIRS`/allowlista + test 404 dla `import-pdf/*`
-- [ ] Dane: `git rm` `data/source_pdfs`, `data/reference`
-- [ ] Docs: ADR-016, ADR-011 SUPERSEDED, README ADR, architektura 01–09,
+- [x] `task fe-types` → `openapi.json` + `generated.ts` bez `/import/*`
+- [x] Frontend: strony/komponenty/API/klucze/trasy/nawigacja/teksty/specy/E2E
+- [x] Transfer: teksty „Kopia danych rodziny" (D26), D24 + U21 w raporcie
+- [x] `PRIVATE_SUBDIRS`/allowlista + test 404 dla `import-pdf/*`
+- [x] Dane: `git rm` `data/source_pdfs`, `data/reference`
+- [x] Docs: ADR-016, ADR-011 SUPERSEDED, README ADR, architektura 01–09,
       CLAUDE.md, README, skille, 03_AI_SKILLS, karta B18
-- [ ] Grep-sweep (AC 4) czysty
-- [ ] PROGRESS.md: status + wpis dziennika NA GÓRZE
+- [x] Grep-sweep (AC 4) czysty
+- [x] PROGRESS.md: status + wpis dziennika NA GÓRZE
 
 ## Verification checklist
 
-- [ ] `task check` zielony (migrations-check + unit + int + api + fe-test +
+- [x] `task check` zielony (migrations-check + unit + int + api + fe-test +
       typecheck + lint + format-check + fe-build + fe-types-check)
-- [ ] `task test-e2e` zielony w dwóch kolejnych przebiegach
-- [ ] `task db-heads` = `0016`; `downgrade` → `upgrade` na czystej bazie
-- [ ] `task build-prod` + `task test-stack-up` → `/health` `ok`
-- [ ] `task uploads-report` działa; `GET /uploads/import-pdf/x.pdf` = 404
-- [ ] Liczności `recipes`/`canonical_products`/`product_unit_weights` w bazie
+- [x] `task test-e2e` zielony w dwóch kolejnych przebiegach
+- [x] `task db-heads` = `0016`; `downgrade` → `upgrade` na czystej bazie
+- [x] `task build-prod` + `task test-stack-up` → `/health` `ok`
+- [x] `task uploads-report` działa; `GET /uploads/import-pdf/x.pdf` = 404
+- [x] Liczności `recipes`/`canonical_products`/`product_unit_weights` w bazie
       dev identyczne jak w Stage 0
-- [ ] `/security-review` i `/code-review` na diffie — ustalenia naprawione
+- [x] `/security-review` i `/code-review` na diffie — ustalenia naprawione
       albo odnotowane
-- [ ] Acceptance Criteria 1–8 odhaczone z dowodem; commit `batch(20): …`
+- [x] Acceptance Criteria 1–8 odhaczone z dowodem; commit `batch(20): …`
 
 ## Completion notes
 
-(wypełnia agent: wykonane / odstępstwa / decyzje / follow-upy / pytania —
-w tym: rozmiar obrazu prod przed/po, wariant `PRIVATE_SUBDIRS` vs allowlista
-z uzasadnieniem, pytanie do właściciela o wyczyszczenie PDF-ów z historii
-gita, rekomendacja dla idempotencji sekcji bez klucza naturalnego)
+**Wykonane (2026-09-06)**
+
+- **Stage 0 — baseline**: `task check` na `8f89dc9` zielony (unit 482,
+  integration 333, api 436, vitest 429/47 plików, „All checks passed!").
+  Liczności w bazie dev PRZED: `recipes` **5**, `canonical_products` **22**,
+  `product_unit_weights` **13** (staging: 10 jobów, 131 dań). PO migracji
+  `0016`: **5 / 22 / 13** — identycznie; tabel `import_*`/`staged_*` i sześciu
+  typów enumowych nie ma (sprawdzone `psql` na `pg_tables` i `pg_type`).
+  Przed migracją dev zrobiony `pg_dump -Fc` do katalogu tymczasowego POZA repo
+  (`%TEMP%\b20-dev-backup\pasnik-przed-0016.dump`, 706 KB) — procedura z §Security.
+- **Migracja `0016_remove_pdf_importer`**: `down_revision = 0015` (z `task
+  db-heads`), head = `0016`, jedna głowa. `upgrade`/`downgrade`/`upgrade` na
+  czystej bazie przechodzą, test dryfu modeli zielony BEZ korekty asercji,
+  `EXPECTED_TABLES`/`EXPECTED_ENUM_TYPES`/`DB_TABLES` skrócone.
+- **Backend**: usunięty moduł `app/modules/importer/` i `catalog/unit_weights.py`,
+  komplet splotów z inwentarza karty (rejestr modeli, router, dependencies,
+  ustawienia, reguła body-limit, `uploads_report`, enumy audytu, pochodzenie
+  przepisu, przyjmowanie próbek wag), obie zależności + `uv lock`,
+  `.env.example`, `docker/compose.test.yml`, komentarz w `entrypoint.sh`.
+- **Transfer (D24 + U21)**: `Section.merge_key` obsługuje teraz DWA
+  zastosowania i został dopisany czterem sekcjom `idempotent`;
+  `TransferService._existing_index` buduje po nim indeks istniejących wierszy
+  i podaje go do CZYSTEGO `analyze` razem z `actor_user_id`/`actor_household_id`.
+  Raport dostał zbiorcze ostrzeżenie o scalanych dniach planu
+  (`merged_days_warning`, z odmianą liczebnika) i dokładne `to_create`.
+- **Frontend**: usunięte dwa ekrany z komponentami, klient API, klucze zapytań,
+  trasy, pozycja nawigacji i teksty; sekcja Ustawień przemianowana na
+  **„Kopia danych rodziny"** ze zdaniem o własności (D26).
+- **Bezpieczeństwo — wariant ALLOWLISTY (rekomendacja karty)**: `PRIVATE_SUBDIRS`
+  zastąpione przez `SERVED_SUBDIRS = ("recipes", "retail", "transfer-import")`.
+  Uzasadnienie: lista ZAKAZANYCH wiązała bezpieczeństwo pliku z tym, czy ktoś
+  pamiętał o wpisie — skreślenie wpisu razem z funkcją udostępniało jej resztki
+  każdemu zalogowanemu. Allowlista odwraca domyślną odpowiedź na „nie serwuj",
+  więc katalog nieznany kodowi jest zamknięty sam z siebie. Koszt: nowy
+  podkatalog uploadów wymaga wpisu (udokumentowane w `uploads.py`, CLAUDE.md,
+  07_SECURITY, skillu `pasnik-security`). Sprawdzone też, że
+  `resolve_upload_path` nie jest używane do ścieżek scratcha transferu —
+  `TransferService` składa je sam, więc odwrócenie logiki nic tam nie psuje.
+- **Dane i dokumenty**: `git rm` `data/` (8 PDF + `prototype.db`),
+  `docs/RUNBOOK_IMPORT_PDF.md`, `docs/implementation-plan/01_PDF_AUDIT.md`;
+  nowy **ADR-016**, ADR-011 → `SUPERSEDED przez ADR-016`, architektura 01–09,
+  `CLAUDE.md` (blok B15 skreślony, dopisany blok B20), README, trzy skille
+  `pasnik-*`, `03_AI_SKILLS`, `00_MASTER_PLAN`, karta B18, `.gitignore`.
+
+**Odstępstwa od karty (i dlaczego)**
+
+1. **Grep-sweep AC 4 nie jest w 100% pusty i nie może być** — cztery grupy
+   trafień zostają świadomie, wszystkie POZA kodem aplikacji:
+   - `backend/tests/unit/test_config.py` — test regresyjny, którego TREŚCIĄ są
+     nazwy wycofanych ustawień (`pdf_max_upload_mb`, `anthropic_*`). Karta go
+     WYMAGA w §Tests („chroni przed cichym powrotem ustawień"), a bez literałów
+     nie da się go napisać. Sprzeczność wewnątrz karty; wybrałem test.
+   - `docs/implementation-plan/03_AI_SKILLS.md` — nazwy własne skilli
+     wbudowanych (`anthropic-skills:pdf`, `anthropic-skills:xlsx`,
+     `claude-api`); pierwszy wiersz jest właśnie wykreśleniem SKILL-PDF/API.
+   - `docs/implementation-plan/00_MASTER_PLAN.md` — tabela batchy i akapit
+     historyczny („do 2026-09-06 drugą drogą był import jadłospisów PDF").
+     To ten sam rodzaj zapisu, co PROGRESS i karty batchy z allowlisty.
+   - `.claude/skills/*` i `CLAUDE.md` — **wyczyszczone**; zostało wyłącznie
+     słowo „PDF" w kontekstach niezwiązanych z importerem (zapis listy do PDF
+     jako pomysł „later" w 06_UIUX).
+   Wzorzec AC 4 sprawdzony po każdej rundzie sprzątania; komentarze i docstringi
+   cytujące `01_PDF_AUDIT` przepisane na stan faktyczny (14 miejsc w kodzie,
+   testach i frontendzie).
+2. **Poza inwentarzem karty usunąłem trzy martwe metody serwisów**, które
+   istniały wyłącznie dla importera i których karta nie wymieniła:
+   `CatalogService.find_by_name`, `RecipesService.owned_names` (jedyny konsument
+   — wykrywanie duplikatów w review) oraz pole `source` w `RecipeSummary`
+   i w mapowaniu routera. Bez nich Goal karty („ani jednej linii, która
+   istniała wyłącznie dla importera") nie byłby spełniony, a grep-sweep by ich
+   nie złapał.
+3. **Format `transfer v1` stracił jedno pole** — sekcja `recipes` nie niesie już
+   `source`, bo kolumna zniknęła z modelu. Karta ma „zmianę formatu transfer v1"
+   w Out of Scope, ale ta akurat jest WYMUSZONA usunięciem kolumny, a nie
+   projektowa. Wersji schematu nie podbijałem: import czyta wyłącznie kolumny
+   zadeklarowane w `serializer.py`, więc stara paczka z tym polem wczytuje się
+   bez zmian. Odnotowane w dzienniku PROGRESS pkt 4.
+4. **Test 404 dla pozostawionego pliku używa nazwy `wycofany-modul/`,
+   nie `import-pdf/`** (`tests/api/test_removed_pdf_import.py`,
+   `tests/unit/test_uploads_report.py`). Zachowanie jest asertowane w wersji
+   OGÓLNIEJSZEJ niż w karcie („dowolny katalog spoza allowlisty"), co pokrywa
+   przypadek `import-pdf` i jednocześnie nie zostawia zakazanego literału
+   w sweepie z AC 4.
+5. **`tests/api/test_body_limit_api.py`**: test „ponad limit + margines → 413"
+   przestawiony z jadłospisu PDF na ZDJĘCIE (limit 10 MB), a nie na paczkę
+   transferu. Powód mierzalny: sprawdzenie na paczce wymagałoby ciała 101 MB
+   w pamięci procesu testowego przy każdym przebiegu, a reguła middleware jest
+   dokładnie ta sama.
+6. **ADR-005** dostał poprawioną JEDNĄ frazę — odesłanie do skasowanego
+   `01_PDF_AUDIT` zastąpione opisem („pomiar na jadłospisach dietetyczki").
+   Decyzja i jej uzasadnienie nietknięte; ADR-ów nie edytuje się merytorycznie,
+   ale wskaźnik do nieistniejącego pliku nie jest treścią decyzji.
+
+**Decyzje wpisane do 02_DECISIONS jako OPEN (z rekomendacją)**
+
+- **D27** — czy wyczyścić PDF-y i `prototype.db` z HISTORII gita.
+  Rekomendacja: TAK, jednorazowo przed pierwszym publicznym pushem; to
+  `git filter-repo` + force push, czyli operacja właściciela na repozytorium
+  (unieważnia hashe commitów w PROGRESS), nie zadanie dla batcha.
+- **D28** — czy nadać tożsamość sekcjom kopii danych, które jej nie mają
+  (Out of Scope karty). Rekomendacja: na razie NIE — zmiana wymaga nowych
+  UNIQUE-ów w modelu danych i odrzucałaby zapisy, które dziś przechodzą,
+  a główny scenariusz (odtworzenie na czystą instancję) jest dokładny.
+
+**Weryfikacja — realne wyniki**
+
+- `task check` **zielony**: migrations-check 3, unit 408, integration 269,
+  api 411, vitest 393/43 pliki, typecheck, lint, format-check, fe-build,
+  fe-types-check — „All checks passed!". (Baseline na `8f89dc9`: 482/333/436
+  i 429 vitest; różnica to WYŁĄCZNIE testy usunięte razem z importerem plus
+  11 nowych: 10 przypadków „trasy importu nie istnieją" + serwowanie uploadów,
+  3 w transferze, 1 na `Settings`.)
+- `task test-e2e`: **19/19 w DWÓCH kolejnych przebiegach** (1,7 min i 1,5 min).
+  Pierwsze trzy próby padły i **to nie była regresja**: baza dev miała 992 tury
+  zakupowe, 4084 generacje i 2048 list z dawnych przebiegów E2E, więc `/zakupy`
+  renderowało wszystko naraz i specy leciały na timeoucie (7,3 min i 5 porażek).
+  Te wiersze nie mają prefiksu `E2E `, więc `cleanupE2eData` nigdy ich nie
+  kasowało — **follow-up niżej**. Właściciel zatwierdził czyszczenie; po nim
+  suita jest 4× szybsza. Przepisy, produkty, plan i spiżarnia nietknięte.
+- `task db-heads` = `0016`; `downgrade` → `upgrade` na czystej bazie przechodzi
+  (`test_upgrade_downgrade_upgrade_na_czystej_bazie`), dryf modeli zerowy.
+- `task build-prod` + `task test-stack-up` → `GET /health` =
+  `{"status":"ok","version":"8f89dc9-dirty","checks":{"db":"ok","migrations":"ok","disk":"ok"}}`.
+  **Rozmiar obrazu prod: 476 MB → 392 MB (−84 MB, −17,6%)** — wypadły
+  `pdfminer-six`, `pypdfium2`, `cryptography`, `charset-normalizer`,
+  `docstring-parser`, `jiter`, `httpx2` i pięć innych (13 pakietów z locka).
+  Pillow ZOSTAJE.
+- `task uploads-report` działa bez importera i pokazuje 13 pozostawionych
+  PDF-ów (18,9 MB) jako osierocone — dokładnie to, po co powstał (D10).
+
+**Review skille**
+
+- `/code-review` (high): trzy ustalenia, **wszystkie naprawione w tym commicie**.
+  (1) `KEY_SEPARATOR` był surowym bajtem `0x1F` wklejonym w literał zamiast
+  escape'u `` — niewidoczny w diffie, a przy zjedzeniu przez narzędzie
+  klucze złożone zaczęłyby się sklejać dwuznacznie; (2) `rmdir()` w `finally`
+  nowego testu API mógł zamienić zielony test w błąd, bo katalog leży
+  w REALNYM katalogu uploadów; (3) **CRLF** — edycje przez `pathlib.write_text`
+  na Windows zamieniły LF na CRLF w 69 plikach, w tym w `docker/entrypoint.sh`,
+  przez co kontener prod wpadał w pętlę `exec … no such file or directory`.
+  `task check` tego NIE łapie (git normalizuje przy commicie), złapało dopiero
+  uruchomienie obrazu. Wszystkie 69 plików znormalizowane z powrotem do LF,
+  obraz przebudowany i przetestowany.
+- `/security-review`: **brak findings o confidence ≥ 8**. Zweryfikowane
+  osobno: allowlista `resolve_upload_path` (nowy warunek jest ŚCIŚLE WĘŻSZY
+  od listy zakazanych, sprawdzenia `is_absolute`/`..`/`is_relative_to`
+  nietknięte, wszystkie trzy `subdir=` w kodzie pokrywają się z allowlistą,
+  scratch transferu nie chodzi tą ścieżką); brak nowej drogi do danych spoza
+  zakresu; brak wycieku między kontami przez nowy indeks (dla `scope=user`
+  `IdMap.get("users", …)` zawsze zwraca konto importujące, więc klucz scalania
+  zawiera wyłącznie jego id, a gałąź `merge_key` nigdy nie tworzy
+  `CollisionRead`); `apply` nadal nie wstawi encji z cudzym `owner_user_id`;
+  migracja `0016` odtwarza w `downgrade` komplet FK i CHECK-ów.
+  Uwaga poniżej progu, świadomie nienaprawiona: separator `` da się
+  teoretycznie przemycić w `unit_label` i sfałszować trafienie w mapie —
+  efekt ogranicza się do LICZBY w raporcie DRY-RUN w obrębie tabeli globalnej,
+  bez przekroczenia granicy konta.
+
+**Follow-upy (poza zakresem tego batcha)**
+
+1. **Sprzątanie E2E nie obejmuje tur, generacji i list zakupowych** —
+   `cleanupE2eData` kasuje po prefiksie `E2E `, a `shopping-generate.spec.ts`
+   tworzy tury „Niedziela"/„Środa" i listy „Zakupy <zakres dat>" bez prefiksu.
+   Efekt narastał od B10: zmierzone 992/4084/2048 wierszy i suita wolniejsza
+   4×, aż do fałszywych porażek. Naprawa = prefiks w tych trzech specach albo
+   sprzątanie po id z odpowiedzi.
+2. `docs/architecture/07_SECURITY_DESIGN.md` niósł surowe bajty `0x03 0x04`
+   wewnątrz `` `PK` `` (artefakt sprzed tego batcha) — zniknęły przy
+   przepisaniu tej sekcji, ale warto sprawdzić resztę dokumentów.
+
+**Do zrobienia przez WŁAŚCICIELA poza repo**
+
+1. Usunąć z lokalnego `.env` klucze `PDF_MAX_UPLOAD_MB`, `PDF_PARSE_TIMEOUT_S`
+   i `ANTHROPIC_*` — `Settings` ma `extra="ignore"`, więc start nie pada, ale
+   zostawione kłamią o konfiguracji instalacji.
+2. Skasować katalog `backend/data/uploads/import-pdf/` (13 plików, 18,9 MB,
+   dane osobowe). Agent go NIE ruszył — to dane, nie artefakt builda, a karta
+   dopuszcza kasowanie tylko po jawnej zgodzie w tej samej sesji.
+   Stan przed: `task uploads-report` wymienia dokładnie te 13 plików jako
+   osierocone i nikt ich nie pobierze (allowlista `/uploads/*`).
+3. Rozstrzygnąć D27 i D28.

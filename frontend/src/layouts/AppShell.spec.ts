@@ -65,6 +65,10 @@ describe('AppShell', () => {
     }
     expect(wrapper.text()).toContain('Plan dnia')
     expect(wrapper.text()).toContain('Spiżarnia')
+    // Import jadłospisów PDF wycofany w BATCH_20 (D25) — pozycji menu nie ma,
+    // a kopia danych rodziny jest sekcją Ustawień, nie własnym działem.
+    expect(wrapper.find('[data-testid="nav-item-import"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('Import PDF')
   })
 
   it('ukrywa wpis Admin przed zwykłym użytkownikiem', async () => {

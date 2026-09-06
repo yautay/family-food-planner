@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * „Powiel blok" — model 2+2+2 z listu dietetyczki (01_PDF_AUDIT §6).
+ * „Powiel blok" — model 2+2+2 z listu dietetyczki.
  *
  * Dietę stosuje się 2 dni pod rząd, więc blok kopiuje kolejne dni PARAMI:
  * d1,d1,d2,d2,d3,d3. Preset „2+2+2" ustawia to jednym kliknięciem, bo to

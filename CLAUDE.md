@@ -248,34 +248,6 @@ Dołożone w BATCH_12 (też fundament):
   **Warunku `checked != item.checked` nie wolno ruszać** — na nim stoi
   idempotencja PATCH-a, bez której kolejka offline dublowałaby zapisy.
 
-Dołożone w BATCH_15 (też fundament):
-
-- `app/modules/importer/parser.py` — TRZECI czysty moduł obliczeniowy obok
-  silników (ADR-008): wejście = teksty stron z pdfplumber, wyjście = dataclassy.
-  Zero I/O, więc cały parser testuje się na wyciętych fragmentach. Kontrakt
-  struktury jest WIĄŻĄCY i mieszka w `docs/implementation-plan/01_PDF_AUDIT.md`
-  (razem z **erratą §9** dopisaną przez ten batch) — linia niepasująca do
-  kontraktu zostaje ZGŁOSZONA jako `parse_warning`, nigdy „dopasowana" innym
-  wzorcem. Nie dokładaj wzorców bez pomiaru i erraty.
-- `app/modules/importer/matching.py` — mapowanie EXACT po
-  `catalog.naming.normalize_name`. Ta sama funkcja, co klucz unikalności
-  katalogu: własna normalizacja w importerze produkuje duplikaty, których baza
-  nie przyjmie. Fuzzy i AI to B16 — B15 nie robi ANI JEDNEGO wywołania sieciowego.
-- **Staging stoi poza wzorcem scope.** `import_jobs` nie ma `scope` ani
-  `household_id` (03_DATABASE §9): jadłospis to dokument zdrowotny JEDNEJ osoby.
-  Widoczność egzekwuje jawny warunek właścicielski w serwisie (wzorzec
-  `nutrition/service.py`), ADMIN widzi wszystko wg D16, cudzy job to 404.
-- `core/uploads.PRIVATE_SUBDIRS += "import-pdf"` — endpoint `/uploads/*`
-  sprawdza wyłącznie sesję, więc każdy nowy podkatalog z cudzą prywatnością
-  dopisuje się tutaj.
-- **Parsowanie idzie w `run_in_threadpool` pod `asyncio.wait_for`**
-  (`PDF_PARSE_TIMEOUT_S`). Timeout przerywa ŻĄDANIE, nie wątek — CPU-bound kodu
-  w Pythonie nie da się zabić z zewnątrz. Błąd parsowania to status `failed`
-  z komunikatem po polsku, nigdy 500.
-- Nowa zależność backendu: **pdfplumber** (nie pypdf) — kontrakt 01_PDF_AUDIT
-  został zmierzony jego `extract_text()`, a inna biblioteka inaczej skleja
-  kolumny i unieważniłaby regexy.
-
 Dołożone w REVIEW R4 (też fundament):
 
 - `app/modules/transfer/serializer.py::Section.parent` + `importer.py::
@@ -315,8 +287,9 @@ Dołożone w BATCH_17 (też fundament — nie pisz tego od nowa):
   **Nowy endpoint uploadu = reguła w `build_body_limit_rules` + limit
   w `core/ratelimits.py` w tym samym batchu** — inaczej dostaje sufit 2 MB
   i zero rate limitu.
-- `app/core/ratelimits.py` — limity uploadów (zdjęcia 30/min, PDF i paczka
-  10/min); routery z uploadem dostają `limiter` z `create_app` (wzór `/auth`).
+- `app/core/ratelimits.py` — limity uploadów (zdjęcia 30/min, paczka kopii
+  danych 10/min); routery z uploadem dostają `limiter` z `create_app`
+  (wzór `/auth`).
   Licznik slowapi jest per PROCES: przy `UVICORN_WORKERS=2` sufit ×2.
 - `app/core/config.py::request_settings(request)` — JEDYNE miejsce, z którego
   middleware i dependency biorą `Settings` żądania (`app.state.settings`).
@@ -336,14 +309,45 @@ Dołożone w BATCH_17 (też fundament — nie pisz tego od nowa):
   plików bez referencji (D10: NIC nie kasuje). Nowa kolumna ze ścieżką pliku =
   wpis w `collect_references`, inaczej jej pliki wyjdą jako „osierocone".
 - Limity plików są konfiguracją: `save_image(..., max_bytes=)`
-  (`IMAGE_MAX_UPLOAD_MB`), `PDF_MAX_UPLOAD_MB`, `TRANSFER_MAX_ZIP_MB`,
-  `PDF_PARSE_TIMEOUT_S`. Stałe w modułach to wartości domyślne.
+  (`IMAGE_MAX_UPLOAD_MB`) i `TRANSFER_MAX_ZIP_MB`. Stałe w modułach to
+  wartości domyślne.
 - `docker/Dockerfile` target `prod` (+ `frontend-build`), `docker/entrypoint.sh`
   (`UVICORN_WORKERS`, `LOG_LEVEL`, `--proxy-headers`, `FORWARDED_ALLOW_IPS`
   czyta sam uvicorn), `docker/compose.test.yml`, `docker/backup/{backup,
   restore,cron-loop,drill}.sh`, retencja `backend/scripts/backup_prune.py`
   (stdlib only — jest kopiowany do obrazu backupu). Oba obrazy pracują jako
   UID 10001. compose.prod, Caddy i runbooki → B18.
+
+Dołożone (i ZDJĘTE) w BATCH_20 — decyzja D25, ADR-016:
+
+- **Importu jadłospisów PDF NIE MA i nie ma go pisać od nowa.** Zniknął moduł
+  `app/modules/importer/` z całym obszarem przejściowym (migracja `0016`), obie
+  zależności do czytania PDF-ów i do modelu, ich ustawienia, dwie kolumny
+  `recipes` opisujące pochodzenie przepisu, metody serwisów istniejące
+  wyłącznie dla niego (`RecipesService.create_imported_recipe` i
+  `owned_names`, `CatalogService.find_by_name` i przyjmowanie próbek wag)
+  oraz ekrany `/import*`. **Nowy import danych = ROZSZERZENIE formatu
+  `transfer`** (sekcja w `serializer.py` + klucz naturalny + `parent`, gdy
+  sekcja jest kompozycją), nie nowy moduł z obszarem przejściowym (ADR-016).
+- `app/core/uploads.py` — `PRIVATE_SUBDIRS` (lista ZAKAZANYCH) zastąpione
+  przez **`SERVED_SUBDIRS` (ALLOWLISTA**: `recipes`, `retail`,
+  `transfer-import`). Katalog nieznany kodowi jest zamknięty z definicji, więc
+  wycofanie funkcji nie udostępnia jej resztek każdemu zalogowanemu.
+  **Nowy podkatalog uploadów = wpis TUTAJ w tym samym batchu**, inaczej
+  zdjęcia z niego nie wyświetlą się w ogóle.
+- `Section.merge_key` w `transfer/serializer.py` to teraz **UNIQUE sekcji dla
+  DWÓCH konsumentów**: `apply` scala albo pomija po nim wiersz, a raport
+  DRY-RUN sprawdza po nim, czy wiersz JUŻ jest w bazie. Sekcja `idempotent`
+  MUSI mieć `merge_key` równy swojemu UNIQUE-owi — inaczej `to_create` zawyży
+  (dług U21). Indeks buduje `TransferService._existing_index` (I/O),
+  `importer.analyze` zostaje CZYSTE (ADR-008) i dostaje go argumentem razem
+  z `actor_user_id`/`actor_household_id` (tłumaczy przez nie klucze obce,
+  tak samo jak `apply`).
+- `importer.merged_days_warning` — zbiorcze ostrzeżenie D24 („3 dni planu
+  zostaną scalone…"), z odmianą liczebnika w kodzie: UI nie ma warstwy i18n
+  (D3), więc polską gramatykę robimy sami.
+- Teksty transferu mówią **„kopia danych rodziny"**, nie „eksport/import"
+  (`lib/texts.ts::transfer`); w kodzie i API nazwy techniczne zostają.
 
 Testy: `tests/{unit,integration,api}/` (pakiet — z `__init__.py`), markery
 `unit`/`integration`/`api` (wymagane — bez markera test nie wejdzie do

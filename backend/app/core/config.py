@@ -48,7 +48,8 @@ class Settings(BaseSettings):
     #: urośnie (pg_trgm domyślnie używa 0.3, co gubi krótkie polskie nazwy).
     catalog_search_similarity_threshold: float = 0.25
 
-    #: Katalog uploadów (zdjęcia przepisów B05, retail B09, PDF-y B15) —
+    #: Katalog uploadów (zdjęcia przepisów B05, retail B09, paczki transferu
+    #: B14) —
     #: bind mount POZA web-rootem (03_DATABASE §11, 07_SECURITY §6). Ścieżka
     #: względna liczy się od katalogu roboczego procesu (w kontenerze: /app).
     uploads_dir: str = "data/uploads"
@@ -58,12 +59,6 @@ class Settings(BaseSettings):
     #: rozpakuje. Domyślne 100 MB mieści instancję rodzinną razem ze zdjęciami;
     #: Odroid H2 nie ma pamięci na więcej, a paczkę i tak budujemy na dysku.
     transfer_max_zip_mb: int = 100
-
-    #: Limit wgrywanego jadłospisu PDF (importer, BATCH_15) w megabajtach —
-    #: 07_SECURITY §6. Plik większy kończy się 413, ZANIM pdfplumber cokolwiek
-    #: otworzy. 25 MB mieści każdy plik z korpusu z ogromnym zapasem
-    #: (największy ma ~1,5 MB) i zostawia margines na skany.
-    pdf_max_upload_mb: int = 25
 
     #: Limit zdjęcia (przepisy, warianty sklepowe) w megabajtach — 07_SECURITY §6.
     #: Do BATCH_17 był stałą w `core/uploads.py`; jest konfiguracją, bo to
@@ -77,11 +72,6 @@ class Settings(BaseSettings):
     #: Endpointy uploadu mają własne sufity = ich limit + margines multiparta.
     request_max_body_mb: int = 2
 
-    #: Sufit czasu na ekstrakcję i parsowanie jednego PDF-a (07_SECURITY §6).
-    #: Przerywa ŻĄDANIE, nie wątek (dług U24) — na wolniejszym hoście podnosi
-    #: się tę wartość zamiast zmieniać kod.
-    pdf_parse_timeout_s: float = 60.0
-
     #: Próg wolnego miejsca na dysku danych (katalog uploadów) — poniżej niego
     #: `/api/v1/health` zgłasza `degraded` (09_DEPLOYMENT §2, karta B17).
     disk_min_free_mb: int = 1024
@@ -91,22 +81,6 @@ class Settings(BaseSettings):
     #: ustawia `/app/static`; katalog MUSI istnieć, inaczej start pada
     #: `ConfigurationError` — lepiej wcześnie niż pustą stroną.
     spa_dist_dir: str = ""
-
-    #: Klucz Claude API dla AI-asysty review importu (BATCH_16, ADR-011, D5).
-    #: **Wolno go zostawić pustym** i to jest wspierany tryb pracy: importer
-    #: działa wtedy w pełni deterministycznie, a `POST /import/jobs/{id}/ai-suggest`
-    #: odpowiada 503 z komunikatem po polsku. Klucz żyje WYŁĄCZNIE po stronie
-    #: serwera — nie wychodzi w żadnej odpowiedzi API ani do logów (07_SECURITY §7).
-    anthropic_api_key: str = ""
-    #: Model używany przez asystę. Konfigurowalny, bo ADR-011 tak każe („model
-    #: konfigurowany w env") — wymiana modelu nie może wymagać zmiany kodu.
-    anthropic_model: str = "claude-opus-5"
-    #: Sufit tokenów jednej odpowiedzi. Propozycje mapowań to lista kilkudziesięciu
-    #: krótkich obiektów, więc 4k wystarcza z zapasem, a limit chroni budżet.
-    anthropic_max_tokens: int = 4096
-    #: Twardy limit czasu jednego wywołania. Review ma odpowiadać albo szybko,
-    #: albo z komunikatem — nie wisieć na cudzej infrastrukturze.
-    anthropic_timeout_s: float = 45.0
 
 
 def _format_missing(exc: ValidationError) -> str:

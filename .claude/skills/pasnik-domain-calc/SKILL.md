@@ -68,9 +68,9 @@ węglow. przyswajalne   = max(carbs − fiber, 0)
 - Brak IG lub brak wartości produktu ⇒ wynik z flagą `complete=False`
   i listą `missing` — NIGDY nie zgaduj ani nie wstawiaj zera w miejsce
   braku (0 ≠ brak danych!).
-- Wartości NIE są cache'owane w encjach (niezmiennik 02_DOMAIN §13.2);
-  jedyny snapshot = `pdf_kcal`/`pdf_macros` importu (walidacja, >10%
-  rozjazdu ⇒ issue).
+- Wartości NIE są cache'owane w encjach (niezmiennik 02_DOMAIN §13.2) —
+  liczy je silnik z jednego źródła przy każdym odczycie. Snapshotów nie ma
+  od BATCH_20 (odeszły razem z importem jadłospisów, D25).
 
 ## Silnik zakupowy (02_DOMAIN §9) — ISTNIEJE od B10
 

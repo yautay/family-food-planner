@@ -171,4 +171,30 @@ describe('TransferImportDialog', () => {
     )
     expect(wrapper.find('[data-testid="transfer-step-report"]').exists()).toBe(false)
   })
+
+  it('ostrzeżenie o scaleniu dni planu ląduje w „Uwagach" (D24)', async () => {
+    // Scalanie dnia planu jest MILCZĄCE w zapisie (D22/D24: posiłki zostają
+    // nietknięte), więc jedynym miejscem, gdzie użytkownik może się o nim
+    // dowiedzieć PRZED kliknięciem, jest raport. Bez tej asercji ostrzeżenie
+    // z backendu mogłoby nigdzie się nie renderować i nikt by nie zauważył.
+    uploadForDryRun.mockResolvedValue(
+      report({
+        to_create: { recipes: 1 },
+        warnings: [
+          '3 dni planu zostaną scalone z tym, co już masz — ' +
+            'posiłki, które już tam są, zostaną nietknięte.',
+        ],
+      }),
+    )
+    const wrapper = await mountDialog()
+
+    await pickFile(wrapper)
+    await wrapper.get('[data-testid="transfer-analyze"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Uwagi')
+    expect(wrapper.get('[data-testid="transfer-warnings"]').text()).toContain(
+      '3 dni planu zostaną scalone',
+    )
+  })
 })

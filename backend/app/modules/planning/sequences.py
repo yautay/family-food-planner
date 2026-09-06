@@ -93,7 +93,7 @@ def block_copy_sequence(
     Każdy dzień bloku powtarza się `repeat_each` razy pod rząd, więc 3 dni x 2
     dają kolejność d1,d1,d2,d2,d3,d3 (a NIE d1,d2,d3,d1,d2,d3). Tak działa
     zalecenie dietetyczki „każdą dietę stosuje się 2 dni pod rząd"
-    (01_PDF_AUDIT §6): dni tej samej diety muszą sąsiadować, bo to one
+    (model 2+2+2 z listu dietetyczki): dni tej samej diety muszą sąsiadować, bo to one
     upraszczają zakupy i pozwalają ugotować podwójną porcję.
     """
     if source_days < 1 or repeat_each < 1:

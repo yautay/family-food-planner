@@ -1,6 +1,10 @@
 # ADR-011 — Importer PDF: parser deterministyczny + AI tylko jako sugestia
 
-Status: ACCEPTED (2026-08-16)
+Status: SUPERSEDED przez ADR-016 (2026-09-06)
+
+> Importer PDF został wycofany w całości decyzją właściciela **D25** i usunięty
+> z kodu w BATCH_20. Treść poniżej zostaje jako zapis, na czym stała ta decyzja
+> — nie opisuje stanu aplikacji.
 
 ## Kontekst
 8 PDF-ów dietetyczki ma stabilną, zmierzoną strukturę (01_PDF_AUDIT), ale

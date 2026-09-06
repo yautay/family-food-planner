@@ -42,15 +42,11 @@ odpowiedzi API nie piszemy.
                         zakres tydzień/miesiąc/własny (max 92 dni), zakładki
                         Kalorie/Makroskładniki, luki dni bez planu, średnia
                         dzienna vs średnia celów ze statusem
-/import               ImportPage — DOSTARCZONE w B15: upload jadłospisu PDF,
-                        lista importów ze statusami po polsku i podgląd raportu
-                        odczytu (liczby, sumy kontrolne dni, issues)
-/import/jobs/:id/review  ImportReviewPage — DOSTARCZONE w B16: mapowania,
-                        porcje, scalenia, asysta AI i zatwierdzenie importu
 /ustawienia           UstawieniaPage      (cele, profile rodziny, sklepy, konto)
 /admin/uzytkownicy · /admin/rodziny · /admin/weryfikacja · /admin/dane
-                      (AdminDanePage: eksport i import CAŁEJ instancji, B14);
-                      sekcja „Twoje dane" użytkownika mieszka w /ustawienia.
+                      (AdminDanePage: kopia CAŁEJ instancji, B14);
+                      sekcja „Kopia danych rodziny" mieszka w /ustawienia
+                      (B20 — jedyna droga importu i eksportu dla użytkownika).
                       **Ekranu `/admin/audit` NIE MA** — `GET /api/v1/audit`
                       istnieje i jest ADMIN-only, ale B03 miał ten widok jako
                       opcjonalny („jeśli tanio") i nie powstał. Dziennik czyta
@@ -106,17 +102,16 @@ ekranów listowych**, opisany w 06_UIUX §3.6:
 - Ekrany i rozmiary stron: `/produkty` 50, `/przepisy` 50, `/spizarnia` **100**
   (inwentarz przeglądany „ile mam czego", nie przeszukiwany katalog — mniejsza
   strona dołożyłaby kliknięć), `/admin/weryfikacja` 50, `/admin/uzytkownicy` 50,
-  `/admin/rodziny` 50. `/import` zostaje bez paginacji ŚWIADOMIE (dług U25/U29 —
-  importów jest z natury mało).
+  `/admin/rodziny` 50.
 - Każdy z tych ekranów pokazuje licznik `listCount(loaded, total)` („50 z 185"),
   nie samo `total`.
 - **`/admin/weryfikacja` sortuje na SERWERZE** (`GET /products?sort=created_at`,
   04_API §1). Sortowanie po stronie klienta układało po wieku pięćdziesiątkę,
   którą serwer wybrał alfabetycznie, więc produkt spoza pierwszych 50 nazw był
   z tego ekranu nieosiągalny — a to jest ekran, na którym uzupełnia się wartości
-  odżywcze po imporcie jadłospisów. Zmierzone na 68 pozycjach w kolejce: stara
-  ścieżka nie pokazywała na pierwszej stronie ANI najstarszego realnego produktu,
-  ANI ostatniego z zaimportowanej partii.
+  odżywcze produktów wniesionych hurtem. Zmierzone na 68 pozycjach w kolejce:
+  stara ścieżka nie pokazywała na pierwszej stronie ANI najstarszego realnego
+  produktu, ANI ostatniego z wniesionej partii.
 - Świadomie POZA zakresem: wirtualizacja list i nieskończone przewijanie
   sterowane scrollem; select przypisania konta na `/admin/rodziny` bierze jedną
   stronę z sufitem 200 (to kontrolka formularza, nie ekran listy — przy większej

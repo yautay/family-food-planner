@@ -66,7 +66,6 @@ def _to_summary(view: RecipeView, *, nutrition: NutritionValues | None = None) -
         base_servings=recipe.base_servings,
         prep_time_min=recipe.prep_time_min,
         difficulty=recipe.difficulty,
-        source=recipe.source,
         is_archived=recipe.is_archived,
         photo_url=photo_url,
         photo_thumb_url=photo_thumb_url,

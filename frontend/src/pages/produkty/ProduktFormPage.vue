@@ -268,8 +268,9 @@ const addUnitWeight = useMutation({
       unit_label: unitDraft.value.unit_label.trim(),
       grams_per_unit: toApiDecimal(unitDraft.value.grams_per_unit) ?? '0',
       source: toApiText(unitDraft.value.source),
-      // Ręcznie wpisany przelicznik to jedna próbka; importer (B15/16) podbije
-      // licznik, gdy nauczy się gramatury z wielu wystąpień (01_PDF_AUDIT §5.2).
+      // Ręcznie wpisany przelicznik to JEDNA próbka i dziś nikt tego licznika
+      // nie podbija — mechanizm uczenia się gramatury odszedł razem z importem
+      // jadłospisów (D25). Kolumna zostaje: mówi, ile pomiarów stoi za medianą.
       samples_count: 1,
     }),
   onSuccess: async () => {

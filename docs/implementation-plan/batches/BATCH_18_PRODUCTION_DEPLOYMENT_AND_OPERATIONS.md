@@ -4,17 +4,12 @@ Klasa: PROD · Zależności: B17 + B19 + **B20** (od 2026-09-06, D25) · Bramki
 decyzji **D6 i D7 — ZATWIERDZONE 2026-09-05**, patrz „Ustalenia REVIEW R4"
 niżej · Szacunek rozmiaru: L
 
-> **Korekta planu 2026-09-06 (D25, BATCH_20)**: importer PDF zostaje usunięty
-> PRZED wdrożeniem, a jedynym importem/eksportem jest transfer („kopia danych
-> rodziny"). Dla tej karty znaczy to: (1) `pasnik.env` i lista zmiennych BEZ
-> `PDF_MAX_UPLOAD_MB`, `PDF_PARSE_TIMEOUT_S`, `ANTHROPIC_*`; (2) w ustaleniu
-> D7 pkt 4 (limit ciała żądania w Caddy) zostaje wyłącznie „paczka transferu
-> 100 MB" — „PDF 25 MB" jest nieaktualne; (3) wzmianki o ręcznym imporcie
-> jadłospisów w Context to historia (import wykonany przed B20);
-> (4) `docs/OPERATIONS.md` nie opisuje `/import`; (5) restore drill z
-> transferem logicznym — bez zmian. Szczegóły edytuje B20 w tej karcie
-> (Cross-Batch Impact karty B20); do tego czasu czytaj tę kartę z powyższą
-> poprawką.
+> **Korekta wykonana 2026-09-06 przez BATCH_20 (D25)**: import jadłospisów
+> został usunięty PRZED wdrożeniem, a jedynym importem i eksportem jest
+> transfer — „kopia danych rodziny" (ADR-016). Treść tej karty jest już
+> poprawiona: lista zmiennych bez ustawień wycofanego importu, limit ciała
+> w Caddy tylko dla paczki 100 MB, `docs/OPERATIONS.md` nie opisuje `/import`.
+> Restore drill z transferem logicznym — bez zmian.
 
 ## Goal
 
@@ -106,9 +101,10 @@ Wymagane lektury przed startem:
      padło raz `…com.pl` i rozstrzygnął realny `Caddyfile` — odnotowane, żeby
      nikt tego nie „poprawiał" z powrotem.
 2. **Nowa zależność: `BATCH_19_FIX_LIST_PAGINATION`.** Ustalenie P1 R4 — bez
-   niego ekrany list ucinają się po 50 pozycjach, a właściciel importuje
-   jadłospisy (103 dania, 185 produktów) dokładnie wtedy, gdy aplikacja idzie
-   na produkcję. Kolejność wobec B17 dowolna, ale przed wdrożeniem.
+   niego ekrany list ucinają się po 50 pozycjach, a katalog rodziny to już
+   103 dania i 185 produktów (wniesione importem jadłospisów PRZED B20;
+   sam importer usunięty decyzją D25). Kolejność wobec B17 dowolna, ale
+   przed wdrożeniem. **ZROBIONE** — B19 na master.
 3. **D10 (retencja) — rekomendacja R4: bez automatu.** Do runbooka
    operacyjnego zamiast crona kasującego dane: raport zajętości
    `/srv/pasnik/uploads` (jedyna oś rosnąca bez ograniczenia) oraz komenda
@@ -160,9 +156,11 @@ Wymagane lektury przed startem:
   Odroidzie jako restore drill.
 - Env nowe od B17 (komplet z opisem w `.env.example`): `UVICORN_WORKERS`,
   `FORWARDED_ALLOW_IPS`, `DISK_MIN_FREE_MB`, `SPA_DIST_DIR` (obraz ustawia
-  sam), `IMAGE_MAX_UPLOAD_MB`, `REQUEST_MAX_BODY_MB`, `PDF_PARSE_TIMEOUT_S`,
+  sam), `IMAGE_MAX_UPLOAD_MB`, `REQUEST_MAX_BODY_MB`, `TRANSFER_MAX_ZIP_MB`,
   `BACKUP_AT`, `BACKUP_KEEP_DAILY`, `BACKUP_KEEP_WEEKLY`, `BACKUP_ENV_FILE`,
   `TZ`. `SECRET_KEY` nadal WYMAGANE (zarezerwowane, 07_SECURITY §7).
+  Po B20 w `pasnik.env` NIE MA już ustawień wycofanego importu jadłospisów
+  ani żadnego klucza do usługi zewnętrznej (D25).
 - Runbook backupu dostaje dwa konkrety z D10: `backup.sh` loguje `du -sh`
   uploadów i backupów; `task uploads-report` / `python -m app.cli
   uploads-report` (w kontenerze: `docker compose exec app python -m app.cli
@@ -222,8 +220,9 @@ wdrożeniu, wykonywane na PRAWDZIWEJ domenie, nie na localhoście:
    Caddy sam wystawia i odnawia certyfikat oraz przekierowuje HTTP→HTTPS,
    więc tego NIE konfigurujemy ręcznie; do sprawdzenia zostaje reszta:
    **(a)** limit rozmiaru żądania — Caddy domyślnie NIE ogranicza ciała
-   (`request_body` jest opt-in), więc PDF 25 MB i paczka transferu 100 MB
-   przechodzą; potwierdzić realnym wgraniem, nie założyć;
+   (`request_body` jest opt-in), więc paczka kopii danych 100 MB przechodzi;
+   potwierdzić realnym wgraniem, nie założyć (limit 25 MB dla jadłospisu PDF
+   z ustalenia D7 pkt 4 jest po B20 bezprzedmiotowy);
    **(b)** `Strict-Transport-Security`
    — 07_SECURITY §3 przypisuje HSTS proxy, więc trzeba POTWIERDZIĆ, czy Caddy
    w tej wersji dokłada go sam, a jeśli nie — ustawić jawnie; **(c)** nagłówki
@@ -288,9 +287,9 @@ Brak nowych endpointów. Deliverables operacyjne:
 
 ## Security
 
-- `pasnik.env` na hoście chmod 600; sekrety (SECRET_KEY, hasło DB,
-  ANTHROPIC_API_KEY, remote backupu) NIGDY w repo — w repo tylko
-  `.env.example` i szablon vhosta.
+- `pasnik.env` na hoście chmod 600; sekrety (SECRET_KEY, hasło DB, remote
+  backupu) NIGDY w repo — w repo tylko `.env.example` i szablon vhosta.
+  Po B20 aplikacja nie ma żadnego klucza do usługi zewnętrznej (D25).
 - `db` bez portów hosta; `app` wyłącznie na 127.0.0.1 (proxy terminuje
   TLS; HSTS na proxy — 07 §3).
 - Backupy (lokalne i off-device) zawierają dane rodziny + env: uprawnienia

@@ -599,7 +599,7 @@ class PlanningService:
         return [await self.get_day(user, target) for target in targets]
 
     async def copy_block(self, *, user: User, payload: PlanCopyRequest) -> list[DayView]:
-        """Powiel blok N dni z powtórzeniem K (model 2+2+2 z 01_PDF_AUDIT §6).
+        """Powiel blok N dni z powtórzeniem K (model 2+2+2 z listu dietetyczki).
 
         Kolejność wyniku to d1,d1,d2,d2,d3,d3 — dieta stosowana „2 dni pod rząd”
         wymaga dni SĄSIADUJĄCYCH, nie przeplotu. Sekwencję liczy czysta funkcja

@@ -28,6 +28,8 @@ from app.modules.transfer.importer import (
     assert_archive_entries,
     assert_within_limit,
     assert_zip_signature,
+    merge_index_key,
+    merged_days_warning,
     natural_key,
     read_document,
     remap_cycle_templates,
@@ -189,25 +191,40 @@ def test_paczka_ponad_limit_konczy_sie_413() -> None:
     assert_within_limit(1024, limit_mb=1)
 
 
-def test_prywatny_podkatalog_jest_zamkniety_niezaleznie_od_wielkosci_liter(tmp_path: Any) -> None:
-    """REVIEW R4 pkt 8: na Windows/macOS `Transfer/` trafia w ten sam plik co `transfer/`."""
-    for variant in ("Transfer/abc.zip", "TRANSFER/abc.zip", "Import-PDF/x.pdf", "IMPORT-PDF/x.pdf"):
+def test_allowlista_katalogow_dziala_niezaleznie_od_wielkosci_liter(tmp_path: Any) -> None:
+    """REVIEW R4 pkt 8: na Windows/macOS `Recipes/` trafia w ten sam plik co `recipes/`.
+
+    Allowlista musi więc porównywać niezależnie od systemu — inaczej ta sama
+    ścieżka byłaby raz serwowana, raz nie, zależnie od hosta.
+    """
+    for variant in ("Recipes/a.jpg", "RECIPES/a.jpg", "Retail/b.jpg"):
+        assert resolve_upload_path(variant, uploads_root=tmp_path).name in {"a.jpg", "b.jpg"}
+    for variant in ("Transfer/abc.zip", "TRANSFER/abc.zip"):
         with pytest.raises(NotFoundError):
             resolve_upload_path(variant, uploads_root=tmp_path)
 
 
-def test_katalog_paczek_transferu_nie_jest_serwowany(tmp_path: Any) -> None:
-    """`/uploads/*` sprawdza tylko sesję, więc paczka z KOMPLETEM danych konta
-    nie ma prawa leżeć w serwowanym drzewie (ustalenie /code-review B14).
+def test_serwowane_sa_wylacznie_katalogi_z_allowlisty(tmp_path: Any) -> None:
+    """`/uploads/*` sprawdza tylko sesję, więc lista ZAKAZANYCH była pułapką (BATCH_20).
 
-    Zdjęcia importu (`transfer-import/`) muszą zostać serwowane — prywatny jest
-    wyłącznie katalog paczek, nie wszystko, co zaczyna się na „transfer".
+    Katalog, o którym kod już nie wie — bo funkcja, która do niego pisała,
+    została wycofana — musi być zamknięty SAM Z SIEBIE. Przy liście zakazanych
+    stawał się pobieralny dla każdego zalogowanego w chwili, gdy znikał z niej
+    wpis. Paczka transferu (KOMPLET danych konta) jest tu przypadkiem
+    szczególnym: leży w katalogu uploadów i nadal nie może być serwowana,
+    a zdjęcia rozpakowane z niej (`transfer-import/`) — muszą.
     """
-    with pytest.raises(NotFoundError):
-        resolve_upload_path("transfer/abc.zip", uploads_root=tmp_path)
-    with pytest.raises(NotFoundError):
-        resolve_upload_path("transfer/abc.json", uploads_root=tmp_path)
+    for closed in (
+        "transfer/abc.zip",
+        "transfer/abc.json",
+        "wycofany-modul/x.pdf",
+        "x.jpg",  # plik w korzeniu uploadów nie należy do żadnego katalogu
+    ):
+        with pytest.raises(NotFoundError):
+            resolve_upload_path(closed, uploads_root=tmp_path)
     assert resolve_upload_path("transfer-import/x.jpg", uploads_root=tmp_path).name == "x.jpg"
+    assert resolve_upload_path("recipes/x.jpg", uploads_root=tmp_path).name == "x.jpg"
+    assert resolve_upload_path("retail/x.jpg", uploads_root=tmp_path).name == "x.jpg"
 
 
 # --- walidacja wersji -----------------------------------------------------------------
@@ -237,6 +254,21 @@ def test_plik_bez_export_json_konczy_sie_422() -> None:
 # --- kolizje --------------------------------------------------------------------------
 
 
+def _analyze(document: Any, *, existing: Any, archive_photos: Any = (), actor_id: int = 1) -> Any:
+    """`analyze` z domyślnym kontem importującym — testy kolizji go nie badają.
+
+    `actor_*` są w sygnaturze od BATCH_20: `analyze` tłumaczy przez nie klucze
+    scalania (`plan_days.owner_user_id`), tak samo jak robi to `apply`.
+    """
+    return analyze(
+        document,
+        existing=existing,
+        archive_photos=archive_photos,
+        actor_user_id=actor_id,
+        actor_household_id=None,
+    )
+
+
 def test_kolizja_produktu_wykrywa_sie_po_normalized_name() -> None:
     """Ten sam produkt pisany inaczej to KOLIZJA, bo klucz liczy `normalize_name`."""
     document = _document(
@@ -245,10 +277,9 @@ def test_kolizja_produktu_wykrywa_sie_po_normalized_name() -> None:
             {"id": 8, "name": "Marchew", "normalized_name": "marchew", "category_id": 1},
         ]
     )
-    result = analyze(
+    result = _analyze(
         document,
         existing={"canonical_products": {"cebula": ExistingEntity(id=99, name="Cebula")}},
-        archive_photos=[],
     )
     assert result.to_create["canonical_products"] == 1
     assert [(c.entity, c.source_id, c.existing_id) for c in result.collisions] == [
@@ -260,9 +291,71 @@ def test_kolizja_produktu_wykrywa_sie_po_normalized_name() -> None:
 def test_brak_zdjecia_w_archiwum_jest_ostrzezeniem_a_nie_bledem() -> None:
     """Encja bez pliku zdjęcia i tak wchodzi — z notką w raporcie (Implementation Notes)."""
     document = _document(recipes=[{"id": 1, "name": "Gołąbki", "photo_path": "recipes/brak.jpg"}])
-    result = analyze(document, existing={}, archive_photos=[])
+    result = _analyze(document, existing={})
     assert result.to_create["recipes"] == 1
     assert any("brakuje" in warning for warning in result.warnings)
+
+
+def test_scalany_dzien_planu_nie_wchodzi_do_to_create_i_dostaje_ostrzezenie() -> None:
+    """D24 + dług U21: raport mówi PRAWDĘ o dniu planu, który `apply` scali.
+
+    Do BATCH_20 `analyze` nie znało kluczy scalania, więc obiecywało utworzenie
+    dnia, którego `apply` nie tworzy (`UNIQUE(owner_user_id, day)`), a razem
+    z nim jego posiłków — a te przy scaleniu są pomijane w całości (D22).
+    """
+    document = _document(
+        plan_days=[
+            {"id": 1, "owner_user_id": 5, "day": "2030-03-04", "title": None, "scope": "private"},
+            {"id": 2, "owner_user_id": 5, "day": "2030-03-05", "title": None, "scope": "private"},
+        ],
+        plan_meals=[{"id": 11, "plan_day_id": 1, "name": "Obiad", "position": 0}],
+    )
+    # Klucz indeksu jest w identyfikatorach BAZY: dzień należy do importującego.
+    existing = {"plan_days": {merge_index_key([7, "2030-03-04"]): ExistingEntity(id=42, name="")}}
+
+    result = _analyze(document, existing=existing, actor_id=7)
+
+    assert result.to_create["plan_days"] == 1
+    assert "plan_meals" not in result.to_create
+    assert [w for w in result.warnings if "scalony" in w] == [
+        "1 dzień planu zostanie scalony z tym, co już masz — "
+        "posiłki, które już tam są, zostaną nietknięte."
+    ]
+
+
+def test_odmiana_liczebnika_w_ostrzezeniu_o_scaleniu() -> None:
+    """Tekst czyta człowiek, a UI nie ma warstwy i18n (D3) — odmianę robimy sami."""
+    assert merged_days_warning(1).startswith("1 dzień planu zostanie scalony")
+    assert merged_days_warning(3).startswith("3 dni planu zostaną scalone")
+    assert merged_days_warning(7).startswith("7 dni planu zostanie scalonych")
+    assert merged_days_warning(13).startswith("13 dni planu zostanie scalonych")
+    assert merged_days_warning(22).startswith("22 dni planu zostaną scalone")
+
+
+def test_wiersz_idempotentny_ktory_juz_jest_nie_wchodzi_do_to_create() -> None:
+    """U21: `ON CONFLICT DO NOTHING` nic nie tworzy, więc raport nie ma tego obiecywać.
+
+    Cel żywieniowy jest tu przypadkiem GRANICZNYM i dlatego wybranym: nie ma
+    rodzica kompozycji, więc nie chroni go pomijanie dzieci reużytego wiersza
+    (D22) — jedyne, co powstrzymuje raport przed zawyżeniem, to klucz scalania
+    `(user_id, valid_from)`. Plik użytkownika nie niesie sekcji `users`, więc
+    `user_id` rozwiązuje się na konto wykonujące import.
+    """
+    document = _document(
+        user_nutrition_goals=[
+            {"id": 1, "user_id": 5, "valid_from": "2030-01-01", "kcal": "2000"},
+            {"id": 2, "user_id": 5, "valid_from": "2030-06-01", "kcal": "2100"},
+        ]
+    )
+    existing = {
+        "user_nutrition_goals": {
+            merge_index_key([7, "2030-01-01"]): ExistingEntity(id=99, name=""),
+        }
+    }
+
+    result = _analyze(document, existing=existing, actor_id=7)
+
+    assert result.to_create["user_nutrition_goals"] == 1
 
 
 def test_klucz_naturalny_sekcji_bez_klucza_jest_pusty() -> None:

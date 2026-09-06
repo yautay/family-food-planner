@@ -36,7 +36,7 @@ esac
 
 # --timeout-worker-healthcheck: supervisor uvicorna pinguje workery i ZABIJA te,
 # które nie odpowiedzą w czasie (domyślnie 5 s), a worker importujący aplikację
-# (pdfplumber, anthropic, Pillow) na obciążonym albo wolnym CPU (Odroid) potrafi
+# (SQLAlchemy, Pillow) na obciążonym albo wolnym CPU (Odroid) potrafi
 # tyle nie odpowiadać. Objaw z drilla B17: pętla „Child process [n] died" bez
 # tracebacku. 30 s to zapas, nie tolerancja na zawieszony proces.
 exec uvicorn app.main:create_app --factory \

@@ -23,9 +23,6 @@ from app.modules.catalog.retail_service import RetailService
 from app.modules.catalog.service import CatalogService
 from app.modules.catalog.stores_service import StoresService
 from app.modules.households.service import HouseholdsService
-from app.modules.importer.ai_assist import AiAssistant
-from app.modules.importer.review_service import ReviewService
-from app.modules.importer.service import ImporterService
 from app.modules.nutrition.service import GoalsService
 from app.modules.pantry.service import PantryService
 from app.modules.planning.service import PlanningService
@@ -126,42 +123,6 @@ def get_shopping_lists_service(
 ) -> ShoppingListsService:
     """Serwis gotowych list zakupowych: odhaczanie, sklep, udostępnianie (BATCH_11)."""
     return ShoppingListsService(session)
-
-
-def get_importer_service(
-    session: Annotated[AsyncSession, Depends(get_session)],
-    settings: Annotated[Settings, Depends(get_settings)],
-) -> ImporterService:
-    """Serwis importera PDF (BATCH_15) — zna katalog uploadów i limit pliku."""
-    return ImporterService(
-        session,
-        uploads_dir=settings.uploads_dir,
-        max_pdf_mb=settings.pdf_max_upload_mb,
-        parse_timeout_s=settings.pdf_parse_timeout_s,
-    )
-
-
-def get_import_review_service(
-    session: Annotated[AsyncSession, Depends(get_session)],
-    settings: Annotated[Settings, Depends(get_settings)],
-) -> ReviewService:
-    """Serwis review importu PDF (BATCH_16) — rozstrzygnięcia, approve, reject.
-
-    Asystenta AI budujemy ZAWSZE, także bez klucza: `available=False` jest
-    normalnym stanem instancji (ADR-011) i musi dojechać do odpowiedzi
-    `staged`, żeby UI wiedziało, czy pokazywać przyciski AI.
-    """
-    return ReviewService(
-        session,
-        uploads_dir=settings.uploads_dir,
-        max_pdf_mb=settings.pdf_max_upload_mb,
-        assistant=AiAssistant(
-            api_key=settings.anthropic_api_key,
-            model=settings.anthropic_model,
-            max_tokens=settings.anthropic_max_tokens,
-            timeout_s=settings.anthropic_timeout_s,
-        ),
-    )
 
 
 def get_transfer_service(

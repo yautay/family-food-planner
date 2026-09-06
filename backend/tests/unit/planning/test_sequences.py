@@ -129,7 +129,7 @@ def test_cykl_bez_szablonow_nie_ma_rotacji() -> None:
 
 
 def test_blok_trzy_dni_razy_dwa_daje_szesc_dat_parami() -> None:
-    """Model 2+2+2 z 01_PDF_AUDIT §6: kolejność d1,d1,d2,d2,d3,d3.
+    """Model 2+2+2 z listu dietetyczki: kolejność d1,d1,d2,d2,d3,d3.
 
     To jest sedno całej funkcji: dni tej samej diety MUSZĄ sąsiadować. Przeplot
     (d1,d2,d3,d1,d2,d3) dawałby te same 6 dat i te same posiłki, ale niweczyłby

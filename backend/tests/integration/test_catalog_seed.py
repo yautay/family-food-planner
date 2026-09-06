@@ -22,7 +22,7 @@ pytestmark = pytest.mark.integration
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 
-#: Kategorie wymagane przez 01_PDF_AUDIT §5.5 i 02_DOMAIN §4.3 po decyzji D14
+#: Kategorie wymagane przez 02_DOMAIN §4.3 po decyzji D14
 #: i po scaleniu „przetworów" z „puszkami i słoikami" (uzasadnienie w migracji).
 EXPECTED_CATEGORIES = {
     "Warzywa": "fresh",

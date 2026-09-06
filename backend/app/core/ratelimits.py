@@ -1,6 +1,6 @@
 """Limity tempa endpointów UPLOADU (ustalenie REVIEW R4 pkt 3, karta B17).
 
-Limit rozmiaru (`core/body_limit.py`, `save_image`, limit PDF-a i paczki) i limit
+Limit rozmiaru (`core/body_limit.py`, `save_image`, limit paczki transferu) i limit
 częstości to dwie połowy tej samej ochrony: pojedynczy plik nie przekroczy
 sufitu, a ich strumień nie zapełni dysku Odroida pętlą `curl` z przejętej sesji
 (07_SECURITY §1 i §6). Limity logowania i ścieżki publicznej mieszkają przy
@@ -17,6 +17,6 @@ from __future__ import annotations
 #: kilka zdjęć na minutę; 30 to zapas na wgrywanie serii po powrocie z zakupów.
 PHOTO_UPLOAD_RATE_LIMIT = "30/minute"
 
-#: Duże pliki: jadłospis PDF (≤ 25 MB) i paczka transferu (≤ 100 MB). Jedna osoba
-#: importuje kilka jadłospisów rocznie; E2E wgrywa 1 PDF i 3 paczki na przebieg.
+#: Duże pliki: paczka transferu (≤ 100 MB). Kopię danych rodziny wczytuje się
+#: kilka razy w roku; E2E wgrywa 3 paczki na przebieg.
 FILE_UPLOAD_RATE_LIMIT = "10/minute"

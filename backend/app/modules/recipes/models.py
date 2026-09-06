@@ -47,21 +47,12 @@ from app.modules.catalog.units import AmountUnit
 
 __all__ = [
     "AMOUNT_UNIT_ENUM",
-    "RECIPE_SOURCE_ENUM",
     "Recipe",
     "RecipeIngredient",
     "RecipeRating",
-    "RecipeSource",
     "Tag",
     "recipe_tags",
 ]
-
-
-class RecipeSource(StrEnum):
-    """Pochodzenie przepisu: ręczne albo z importu PDF (B15/16)."""
-
-    MANUAL = "manual"
-    PDF_IMPORT = "pdf_import"
 
 
 def _pg_enum(enum: type[StrEnum], name: str) -> Enum:
@@ -72,7 +63,6 @@ def _pg_enum(enum: type[StrEnum], name: str) -> Enum:
 #: Typy enumowe współdzielone przez modele i migrację — jedna definicja nazw.
 #: `amount_unit` będzie reużyty przez planning (B06), pantry (B08) i shopping
 #: (B10/11) — te migracje MUSZĄ użyć `postgresql.ENUM(..., create_type=False)`.
-RECIPE_SOURCE_ENUM = _pg_enum(RecipeSource, "recipe_source")
 AMOUNT_UNIT_ENUM = _pg_enum(AmountUnit, "amount_unit")
 
 
@@ -108,23 +98,6 @@ class Recipe(TimestampMixin, ScopedMixin, Base):
     difficulty: Mapped[int | None] = mapped_column(Integer, nullable=True)
     #: Ścieżka względna na bind mount uploadów (03_DATABASE §11), nie URL.
     photo_path: Mapped[str | None] = mapped_column(Text, nullable=True)
-    source: Mapped[RecipeSource] = mapped_column(
-        RECIPE_SOURCE_ENUM,
-        nullable=False,
-        default=RecipeSource.MANUAL,
-        server_default=RecipeSource.MANUAL.value,
-    )
-    #: Job importu PDF, z którego powstał przepis (BATCH_16). FK dopina
-    #: migracja `0014` razem z tabelą `import_jobs` — do BATCH_15 kolumna
-    #: czekała bez constraintu (karta B05). SET NULL, nie RESTRICT: usunięcie
-    #: joba jest sprzątaniem procesu importu i nie ma prawa zabrać przepisu,
-    #: który już żyje własnym życiem w danych aplikacji.
-    import_job_id: Mapped[int | None] = mapped_column(
-        BigInteger,
-        ForeignKey("import_jobs.id", ondelete="SET NULL"),
-        nullable=True,
-        index=True,
-    )
     is_archived: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("false")
     )

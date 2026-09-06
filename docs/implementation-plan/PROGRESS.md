@@ -30,8 +30,8 @@ commit wykonany). Kolumna „Blokery" = zależności + decyzje z 02_DECISIONS.
 | R4 REVIEW_PRE_PRODUCTION | [x] | — | `batch(R4)` na master (hash wpisać po push) |
 | 19 FIX_LIST_PAGINATION | [x] | — | `batch(19)` na master (hash wpisać po push) |
 | 17 PRODUCTION_HARDENING | [x] | — | `batch(17)` na master (hash wpisać po push) |
-| 20 REMOVE_PDF_IMPORT_AND_FAMILY_BACKUP | [ ] | — (D25 zatwierdzone 2026-09-06; D26 = rekomendacja, nie blokuje; B17 i R4 DONE) | |
-| 18 PRODUCTION_DEPLOYMENT_AND_OPERATIONS | [ ] | **B20** (od 2026-09-06 — usunięcie importera PDF musi wejść PRZED wdrożeniem); 17 i 19 DONE; D6 i D7 zatwierdzone 2026-09-05 | |
+| 20 REMOVE_PDF_IMPORT_AND_FAMILY_BACKUP | [x] | — | `batch(20)` na master (hash wpisać po push) |
+| 18 PRODUCTION_DEPLOYMENT_AND_OPERATIONS | [ ] | — (17, 19 i **20** DONE; D6 i D7 zatwierdzone 2026-09-05) | |
 
 ## Dziennik
 
@@ -42,6 +42,75 @@ zmiany dotykające przyszłych batchy trzeba wpisać do ich kart
 (00_MASTER_PLAN §8); dziennik to indeks, nie schowek.
 
 ---
+
+**2026-09-06 — BATCH_20 (REMOVE_PDF_IMPORT_AND_FAMILY_BACKUP) — importu PDF
+nie ma; jedynym importem i eksportem jest kopia danych rodziny (D25, ADR-016).**
+
+Wyszło z repo wszystko, co istniało wyłącznie dla importu jadłospisów: moduł
+`app/modules/importer/` (3924 linie), cztery tabele obszaru przejściowego
+z sześcioma typami enumowymi (migracja **`0016`**, head = `0016`), dwie kolumny
+`recipes` opisujące pochodzenie przepisu, dwie zależności (czytnik PDF i SDK
+modelu — z locka wypadło 13 pakietów), ustawienia `PDF_*`/`ANTHROPIC_*`,
+9 endpointów `/api/v1/import/*`, dwa ekrany SPA z komponentami i klientem API,
+~3,8 k linii testów, 12,6 MB danych (`data/` znika w całości), `01_PDF_AUDIT.md`
+i `RUNBOOK_IMPORT_PDF.md`. Nowy **ADR-016**, ADR-011 → `SUPERSEDED`.
+Baza dev bez zmian w treści: `recipes` 5, `canonical_products` 22,
+`product_unit_weights` 13 — przed i po migracji identycznie.
+
+**Rzeczy, o których muszą wiedzieć następne batche:**
+
+1. **Nowy import danych = ROZSZERZENIE formatu `transfer`, nie nowy moduł**
+   (ADR-016): sekcja w `serializer.py` + klucz naturalny + `parent`, gdy sekcja
+   jest kompozycją. Osobny moduł z obszarem przejściowym wolno założyć dopiero
+   wtedy, gdy źródło wymaga review z decyzjami człowieka — i to jest nowa
+   decyzja właściciela, nie wybór implementującego.
+2. **`core/uploads.PRIVATE_SUBDIRS` już nie istnieje — jest `SERVED_SUBDIRS`,
+   czyli ALLOWLISTA** (`recipes`, `retail`, `transfer-import`). Odwrócenie było
+   wymuszone bezpieczeństwem: `/uploads/{path}` sprawdza wyłącznie sesję, więc
+   przy liście ZAKAZANYCH skreślenie wpisu razem z funkcją udostępniało jej
+   resztki na dysku każdemu zalogowanemu (tu: jadłospisy z nazwiskiem pacjenta).
+   **Nowy podkatalog uploadów = wpis w allowliście w tym samym batchu**, inaczej
+   zdjęcia z niego nie wyświetlą się w ogóle. Test: `tests/api/
+   test_removed_pdf_import.py`.
+3. **`Section.merge_key` ma teraz DWÓCH konsumentów** (D24 + dług U21 zamknięte):
+   `apply` scala albo pomija po nim wiersz, a raport DRY-RUN sprawdza po nim, czy
+   wiersz JUŻ jest w bazie. Sekcja `idempotent` MUSI mieć `merge_key` równy
+   swojemu UNIQUE-owi z bazy, inaczej `to_create` zawyży. Indeks buduje
+   `TransferService._existing_index` (I/O), `importer.analyze` zostaje CZYSTE
+   (ADR-008) i dostaje go argumentem razem z `actor_user_id`/`actor_household_id`
+   — tłumaczy przez nie klucze obce dokładnie tak, jak robi to `apply`.
+   Test „raport = zapis" porównuje CAŁE słowniki, więc złapie też sekcję
+   dołożoną w przyszłości bez klucza scalania.
+4. **Format `transfer` v1 stracił jedno pole**: sekcja `recipes` nie niesie już
+   `source`. Wersji schematu NIE podbito — import czyta wyłącznie kolumny
+   zadeklarowane w `serializer.py`, więc stara paczka z tym polem wczytuje się
+   bez zmian, a nowa jest po prostu o pole krótsza.
+5. **Aplikacja nie ma ANI JEDNEGO klucza do usługi zewnętrznej.** Jedynym
+   sekretem w konfiguracji jest hasło bazy w `DATABASE_URL`. Nowa integracja
+   wychodząca na zewnątrz = decyzja właściciela, nie „dopisanie zmiennej"
+   (07_SECURITY §7).
+6. **Właściciel ma dwie rzeczy do zrobienia poza repo** (agent ich nie tyka):
+   skasować z lokalnego `.env` klucze `PDF_MAX_UPLOAD_MB`, `PDF_PARSE_TIMEOUT_S`
+   i `ANTHROPIC_*` (`Settings` ma `extra="ignore"`, więc start nie pada — ale
+   zostawione kłamią o konfiguracji) oraz usunąć katalog
+   `backend/data/uploads/import-pdf/` (13 plików, dane osobowe; do tego czasu
+   `task uploads-report` pokazuje je jako sieroty i nikt ich nie pobierze).
+7. **Sprzątanie E2E nie obejmuje tur, generacji ani list zakupowych** (nowy
+   dług, zmierzony w tym batchu): `cleanupE2eData` kasuje po prefiksie `E2E `,
+   a `shopping-generate.spec.ts` tworzy tury „Niedziela"/„Środa" i listy
+   „Zakupy <zakres dat>" BEZ prefiksu. Narastało od B10: w bazie dev stały
+   **992 tury, 4084 generacje i 2048 list**, ekran `/zakupy` renderował
+   wszystkie naraz i trzy specy zakupowe padały na timeoucie, wyglądając na
+   regresję tego batcha. Po wyczyszczeniu (zgoda właściciela) suita zeszła
+   z 7,3 min do 1,5 min i przechodzi 19/19 w dwóch kolejnych przebiegach.
+   **Zanim ktoś zacznie łatać asercje w tych specach — niech najpierw sprawdzi
+   liczności tych trzech tabel.**
+8. **Pytanie otwarte dla właściciela**: PDF-y i `prototype.db` zniknęły
+   z drzewa roboczego, ale ZOSTAJĄ w historii gita — ich wyczyszczenie wymaga
+   rewrite'u historii i force push, czyli operacji poza batchem. Drugie:
+   idempotencja sekcji BEZ klucza naturalnego (wariant sklepowy, profil, pozycja
+   spiżarni, tura, generacja, lista, szablon, cykl) — drugi import tej samej
+   kopii nadal je dubluje. Oba wpisane do 02_DECISIONS jako **D27** i **D28**.
 
 **2026-09-06 — DECYZJA WŁAŚCICIELA D25: importer PDF do usunięcia W CAŁOŚCI;
 jedynym importem/eksportem zostaje transfer jako „kopia danych rodziny".

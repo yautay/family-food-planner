@@ -206,28 +206,33 @@ Dziewięć szczegółów wykonawczych, które trzeba utrzymać:
 
 ## 6. Uploady
 
-Dotyczy zdjęć (przepisy/produkty), PDF-ów importu i **paczek transferu**
-(eksport/import logiczny, BATCH_14):
-- limity: obraz ≤ 10 MB (`IMAGE_MAX_UPLOAD_MB`), PDF ≤ 25 MB
-  (`PDF_MAX_UPLOAD_MB`), **paczka transferu ≤ 100 MB** (`TRANSFER_MAX_ZIP_MB`)
-  — wszystkie konfigurowalne per instalacja od B17; MIME sniffing po
-  treści (Pillow verify / nagłówek %PDF / sygnatura `PK`), nie po
+Dotyczy zdjęć (przepisy/produkty) i **paczek kopii danych** (transfer, B14):
+- limity: obraz ≤ 10 MB (`IMAGE_MAX_UPLOAD_MB`), **paczka ≤ 100 MB**
+  (`TRANSFER_MAX_ZIP_MB`) — obie konfigurowalne per instalacja od B17;
+  MIME sniffing po treści (Pillow verify / sygnatura ZIP `PK`), nie po
   rozszerzeniu;
 - **dwie połowy jednej ochrony (BATCH_17, ustalenie REVIEW R4 pkt 3)**:
   (a) `BodyLimitMiddleware` (`app/core/body_limit.py`) odcina ciało żądania
   PRZED aplikacją — endpointy uploadu dostają swój limit + 1 MB marginesu
   multiparta, cała reszta API `REQUEST_MAX_BODY_MB` (domyślnie 2 MB); 413
   w kształcie błędu 04_API §1 także dla ciała bez `Content-Length` (licznik
-  na `receive()`); (b) rate limit per IP na czterech endpointach uploadu
-  (`app/core/ratelimits.py`): zdjęcia 30/min, PDF importu i paczka transferu
-  10/min. Model zagrożeń §1 nie broni się przed członkiem rodziny, ale broni
+  na `receive()`); (b) rate limit per IP na trzech endpointach uploadu
+  (`app/core/ratelimits.py`): zdjęcia 30/min, paczka kopii danych 10/min.
+  Model zagrożeń §1 nie broni się przed członkiem rodziny, ale broni
   przed PRZEJĘTĄ sesją — bez limitu częstości jedyny koszt zapełnienia dysku
   Odroida to pętla `curl`;
 - zapis pod losową nazwą na bind mount, poza web-rootem; serwowanie przez
   endpoint z autoryzacją (nie StaticFiles bez auth);
+- **`/uploads/*` serwuje wyłącznie podkatalogi z ALLOWLISTY**
+  (`core/uploads.SERVED_SUBDIRS`: `recipes`, `retail`, `transfer-import`).
+  Do BATCH_20 była to lista ZAKAZANYCH i to był błąd konstrukcyjny: endpoint
+  sprawdza tylko sesję, więc katalog, o którym kod przestał wiedzieć (bo
+  funkcję wycofano), stawał się pobieralny dla każdego zalogowanego razem
+  ze wszystkim, co w nim zostało. Katalog paczek (`transfer/`) świadomie nie
+  jest serwowany — to KOMPLET danych jednego konta. **Nowy podkatalog uploadów
+  = wpis w allowliście w tym samym batchu**;
 - obrazy re-enkodowane przez Pillow (strip EXIF, usunięcie payloadów),
-  miniatury generowane; PDF nigdy nie jest renderowany server-side poza
-  pdfplumber (parsing w try/except z limitem czasu);
+  miniatury generowane;
 - **archiwum transferu** (BATCH_14, `transfer/importer.py`) przechodzi kontrolę
   w tej kolejności: limit rozmiaru PRZED otwarciem → sygnatura ZIP → lista
   wpisów (dozwolone WYŁĄCZNIE `export.json` i `photos/<nazwa>`; ścieżka
@@ -240,14 +245,17 @@ Dotyczy zdjęć (przepisy/produkty), PDF-ów importu i **paczek transferu**
 
 ## 7. Sekrety i konfiguracja
 
-Wyłącznie env (pydantic-settings): `DATABASE_URL`, `SECRET_KEY`,
-`ANTHROPIC_API_KEY` (importer), limity `TRANSFER_MAX_ZIP_MB` /
-`PDF_MAX_UPLOAD_MB` / `IMAGE_MAX_UPLOAD_MB` / `REQUEST_MAX_BODY_MB` (§6),
-`PDF_PARSE_TIMEOUT_S`, `DISK_MIN_FREE_MB`, `SPA_DIST_DIR`, `LOG_LEVEL`,
-`UVICORN_WORKERS`, `FORWARDED_ALLOW_IPS` (komplet z opisem: `.env.example`).
+Wyłącznie env (pydantic-settings): `DATABASE_URL`, `SECRET_KEY`, limity
+`TRANSFER_MAX_ZIP_MB` / `IMAGE_MAX_UPLOAD_MB` / `REQUEST_MAX_BODY_MB` (§6),
+`DISK_MIN_FREE_MB`, `SPA_DIST_DIR`, `LOG_LEVEL`, `UVICORN_WORKERS`,
+`FORWARDED_ALLOW_IPS` (komplet z opisem: `.env.example`).
 `.env` w .gitignore od pierwszego commita; `.env.example` z placeholderami.
-W prod: plik env na hoście `chmod 600` lub docker secrets. Klucz API
-Anthropic używany wyłącznie server-side.
+W prod: plik env na hoście `chmod 600` lub docker secrets.
+
+**Od BATCH_20 aplikacja nie ma ANI JEDNEGO klucza do usługi zewnętrznej**:
+D25 wycofało import jadłospisów razem z jego kluczem API, więc jedynym
+sekretem w konfiguracji jest hasło do bazy w `DATABASE_URL`. Nowa integracja
+wychodząca na zewnątrz = nowa decyzja właściciela, nie „dopisanie zmiennej".
 
 **`SECRET_KEY` — stan faktyczny (decyzja BATCH_17, dług U13 z R1)**: zmienna
 jest WYMAGANA, ale dziś NIEUŻYWANA w kodzie — identyfikatory sesji, tokeny
@@ -267,16 +275,6 @@ nagłówek jest ignorowany, więc klient nie ominie limitu logowania własnym
 (`get_remote_address`) i `sessions.ip` (`accounts/router.py`). B18 wpisuje
 adres bramy sieci compose (albo `*`, bo port aplikacji jest opublikowany
 WYŁĄCZNIE na loopbacku hosta — wtedy jedynym nadawcą i tak jest Caddy).
-
-Stan faktyczny `ANTHROPIC_API_KEY` (BATCH_16): pole `Settings.anthropic_api_key`
-z **pustą wartością domyślną** — i to jest wspierany tryb pracy, nie brak
-konfiguracji. Instancja bez klucza prowadzi import w całości deterministycznie,
-a `POST /import/jobs/{id}/ai-suggest` odpowiada 503 (ADR-011). Klucz nie
-pojawia się w ŻADNEJ odpowiedzi API (`GET .../staged` niesie wyłącznie flagę
-`ai_available: bool`) ani w logach: `ai_assist._ask` loguje sam fakt
-niepowodzenia, bez treści promptu, bez odpowiedzi i bez wyjątku SDK, który
-potrafi nieść nagłówki żądania. Towarzyszą mu `ANTHROPIC_MODEL`,
-`ANTHROPIC_MAX_TOKENS` i `ANTHROPIC_TIMEOUT_S` — te sekretami nie są.
 
 Skan repo: `task secrets-scan` (gitleaks w kontenerze). Konfiguracja
 `.gitleaks.toml` (od review R2, 2026-08-21) zachowuje WSZYSTKIE domyślne

@@ -19,18 +19,17 @@ Architektura: modularny monolit (ADR-001). UI wyłącznie PL (D3).
 
 Kluczowa konsekwencja decyzji D2 (czysty start danych): aplikacja rusza
 z pustą bazą — treść wchodzi ręcznie (inline create) albo z **kopii danych
-rodziny** (transfer, B14). Do 2026-09-06 drugą drogą był PDF importer
-(B15–B16, kontrakt `01_PDF_AUDIT.md`); decyzją **D25** zostaje usunięty
-w całości przez **B20**, a treść wniesiona nim do bazy zostaje jako zwykłe
-przepisy i produkty.
+rodziny** (transfer, B14). Do 2026-09-06 drugą drogą był import jadłospisów
+PDF (B15–B16); decyzją **D25** został usunięty w całości przez **B20**,
+a treść wniesiona nim do bazy została jako zwykłe przepisy i produkty
+(ADR-016).
 
 ## 2. Dokumenty programu
 
 | Plik | Rola |
 |---|---|
 | `docs/architecture/01…09_*.md` | architektura: przegląd, domena, DB, API, frontend, UX, security, testy, deployment/backup |
-| `docs/adr/ADR-001…015` | trwałe decyzje techniczne (nie podejmować ponownie!) |
-| `docs/implementation-plan/01_PDF_AUDIT.md` | zmierzony kontrakt importera PDF — **kasowany przez B20 (D25)**; po B20 dostępny tylko w historii gita |
+| `docs/adr/ADR-001…016` | trwałe decyzje techniczne (nie podejmować ponownie!) |
 | `docs/implementation-plan/02_DECISIONS.md` | rejestr decyzji właściciela (D-numery, bramki batchy) |
 | `docs/implementation-plan/03_AI_SKILLS.md` | skille/narzędzia AI używane przy implementacji |
 | `docs/implementation-plan/PROGRESS.md` | status batchy + dziennik „o czym muszą wiedzieć następne batche" |

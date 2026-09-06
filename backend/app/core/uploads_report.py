@@ -1,21 +1,25 @@
 """Raport plików uploadów bez referencji w bazie (BATCH_17, ustalenie REVIEW R4 pkt 4).
 
 Katalog uploadów to JEDYNA oś, która rośnie bez ograniczenia (D10): zdjęcia
-przepisów i wariantów oraz jadłospisy PDF zatwierdzonych importów zostają na
-zawsze — i tak ma być (audyt pochodzenia przepisu). Ale plik traci właściciela,
-gdy testy dziedziczą `UPLOADS_DIR` z `.env` (dług U26), gdy baza zostaje
-zresetowana albo gdy nieudany import zostawi PDF bez wiersza. Ta komenda
-WYŁĄCZNIE RAPORTUJE — nic nie kasuje (D10: nic nie usuwamy automatycznie);
-decyzję podejmuje człowiek z runbookiem w ręku (B18).
+przepisów i wariantów sklepowych zostają na zawsze — i tak ma być. Ale plik
+traci właściciela, gdy testy dziedziczą `UPLOADS_DIR` z `.env` (dług U26), gdy
+baza zostaje zresetowana albo gdy funkcja, która pisała do swojego podkatalogu,
+zostaje wycofana i zostawia go na dysku. Ta komenda WYŁĄCZNIE RAPORTUJE —
+nic nie kasuje (D10: nic nie usuwamy automatycznie); decyzję podejmuje człowiek
+z runbookiem w ręku (B18).
 
 Podział katalogu:
 
 - `recipes/`, `retail/`, `transfer-import/` — zdjęcia; referencją jest
   `recipes.photo_path` / `retail_products.photo_path` (miniatura `_thumb`
   wynika z konwencji nazwy, więc liczy się razem z oryginałem);
-- `import-pdf/` — jadłospisy; referencją jest `import_jobs.file_path`;
 - `transfer/` — SCRATCH paczek eksportu/importu z TTL 24 h (kasuje je serwis
-  transferu przy kolejnym dry-runie) — raportowany osobno, nigdy jako „osierocony".
+  transferu przy kolejnym dry-runie) — raportowany osobno, nigdy jako „osierocony";
+- każdy INNY katalog — pliki bez kolumny, która by je trzymała, czyli sieroty
+  (tak wychodzą resztki po funkcji wycofanej razem z jej tabelą).
+
+**Nowa kolumna ze ścieżką pliku = wpis w `collect_references` w tym samym
+batchu**, inaczej jej pliki wyjdą w raporcie jako osierocone.
 
 Klasyfikacja jest czystą funkcją (`classify`), więc testuje się bez bazy;
 `collect_references` to jedyne I/O bazodanowe, `scan_files` — jedyne dyskowe.
@@ -32,7 +36,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.uploads import thumbnail_path_for
 from app.modules.catalog.models import RetailProduct
-from app.modules.importer.models import ImportJob
 from app.modules.recipes.models import Recipe
 
 #: Podkatalog tymczasowy (TTL w `transfer/service.py`), raportowany osobno.
@@ -91,11 +94,10 @@ def expand_references(paths: Iterable[str | None]) -> set[str]:
 
 
 async def collect_references(session: AsyncSession) -> set[str]:
-    """Jedyne zapytania do bazy: kolumny ze ścieżkami plików w trzech tabelach."""
+    """Jedyne zapytania do bazy: kolumny ze ścieżkami plików w dwóch tabelach."""
     recipe_paths = (await session.execute(select(Recipe.photo_path))).scalars().all()
     retail_paths = (await session.execute(select(RetailProduct.photo_path))).scalars().all()
-    pdf_paths = (await session.execute(select(ImportJob.file_path))).scalars().all()
-    return expand_references((*recipe_paths, *retail_paths, *pdf_paths))
+    return expand_references((*recipe_paths, *retail_paths))
 
 
 def classify(files: Iterable[FileEntry], references: set[str]) -> UploadsReport:

@@ -9,7 +9,7 @@ uruchomień, nigdy „powinno przejść".
 
 | Poziom | Narzędzie | Zakres | Uruchomienie |
 |---|---|---|---|
-| Backend unit | pytest | silnik nutrition, konwersje jednostek, shopping engine, parser PDF — czyste funkcje, bez DB | `task test-unit` (sekundy) |
+| Backend unit | pytest | silnik nutrition, konwersje jednostek, shopping engine, raport DRY-RUN transferu — czyste funkcje, bez DB | `task test-unit` (sekundy) |
 | Backend integration | pytest + PG (compose test) | serwisy + DB: scope, blokady usuwania, kaskady, migracje | `task test-int` |
 | Backend API | pytest + httpx AsyncClient | kontrakty HTTP, auth, CSRF, RBAC, kody błędów | `task test-api` |
 | Frontend unit/component | vitest + @vue/test-utils | composables, formatters, komponenty krytyczne (ProductPicker, AmountInput, NutritionBar) | `task fe-test` |
@@ -48,29 +48,16 @@ w transakcji z rollbackiem; migracje aplikowane raz na sesję testową.
    DOKŁADNEGO zbioru kluczy odpowiedzi i 429 po 60 żądaniach/min) oraz
    `tests/api/shopping/test_shopping_lists_api.py` (macierz uprawnień listy,
    sortowanie wg profilu sklepu, 409 przy usuwaniu użytego sklepu).
-10. **Import PDF**: korpus = 8 realnych PDF-ów w `data/source_pdfs/`
-    (testy parsera na plikach, snapshoty wyników); anomalie z 01_PDF_AUDIT
-    jako nazwane przypadki testowe; walidacja krzyżowa z
-    `data/reference/prototype.db` (84 przepisy / 592 składniki — parser
-    musi osiągnąć ≥ tę kompletność). **Pokryte w BATCH_15**:
-    `tests/unit/test_pdf_parser.py` (regexy i maszyna stanów na wyciętych
-    tekstach), `tests/integration/test_pdf_corpus.py` (24 dni / 96 posiłków /
-    642 wiersze / 178 nazw / 24 sumy kontrolne + cztery nazwane anomalie §5.1),
-    `tests/integration/test_prototype_crosscheck.py` (101 ≥ 84 przepisy,
-    629 ≥ 592 składniki; różnice RAPORTOWANE w wyjściu testu, nie zamiatane)
-    oraz `tests/api/test_import_api.py` (sniffing, limit, anty-IDOR
-    i niezmiennik „zero encji domenowych"). Testy korpusowe są `integration`,
-    mimo że nie dotykają bazy: czytają dysk i uruchamiają pdfplumber, więc nie
-    mieszczą się w kontrakcie `unit` (§1). **Uzupełnione w BATCH_16**: liczby
-    korpusu urosły do **662 wierszy / 185 nazw** (decyzja D20 rozszerzyła
-    kontrakt §3.2 o dwa warianty wiersza), doszły `tests/unit/
-    {test_unit_weights_median,test_kcal_validation,test_approve_gate,
-    test_ai_parsing}.py`, `tests/integration/{test_import_review_flow,
-    test_import_approve,test_import_ai_assist}.py` (round-trip zatwierdzenia na
-    realnym `dieta.pdf`) i `tests/api/test_import_review_api.py`.
-    **Testy AI nie robią ANI JEDNEGO realnego wywołania**: mock siedzi na
-    `anthropic.AsyncAnthropic`, więc przechodzi się całą ścieżkę produkcyjną
-    (prompt → wymuszony schemat → walidacja → zapis), a nie samą dataclassę.
+10. **Kopia danych rodziny (transfer)**: round-trip eksport → CZYSTA baza →
+    import (`tests/integration/test_transfer_roundtrip.py`), kolizje i rollback
+    (`test_transfer_collisions.py`), granice zakresu i macierz uprawnień
+    (`tests/api/test_transfer_api.py`), a sam raport DRY-RUN — jako funkcja
+    CZYSTA — w `tests/unit/test_transfer_serializer.py`. Dwa niezmienniki,
+    które trzeba trzymać testem, bo psują się cicho: **raport obiecuje
+    dokładnie to, co utworzy zapis** (`to_create == created`, dług U21) oraz
+    **kopia rodziny nie niesie prywatnych encji innych członków** (D26).
+    Import jadłospisów PDF razem z całym swoim pakietem testów (korpus,
+    parser, review, AI) został usunięty w BATCH_20 — decyzja **D25**.
 
 ## 3. E2E (Playwright) — utrzymywany mały i stabilny
 
@@ -85,14 +72,10 @@ Core flows (rozbudowywane w batchach, które je dostarczają):
    Publiczny link otwiera się w OSOBNYM kontekście przeglądarki
    (`browser.newContext()` — bez `storageState`), inaczej test przechodziłby
    także wtedy, gdy strona publiczna po cichu korzysta z cookies sesji.
-4. Import PDF: upload dieta.pdf → review (gołąbki 7 porcji!) → zatwierdzenie
-   → przepis widoczny. Dwa specy: `import-upload.spec.ts` (B15, do raportu
-   odczytu) i `import-review-flow.spec.ts` (B16, od review do przepisu
-   w katalogu). Ten drugi seeduje ROZSTRZYGNIĘCIA przez API — klikanie ośmiu
-   pickerów po kolei testowałoby cierpliwość Playwrighta, a nie aplikację —
-   i sprząta przepis oraz produkty po id z odpowiedzi. **Zatwierdzony job
-   zostaje**: `DELETE /import/jobs/{id}` świadomie nie przyjmuje statusów
-   rozstrzygniętych, a spec rozpoznaje swój job po różnicy id, nie po liście.
+4. Kopia danych rodziny: pobranie kopii → wczytanie TEGO SAMEGO pliku →
+   raport kolizji → wczytanie → podsumowanie (`transfer.spec.ts`). Spec jedzie
+   po `data-testid`, więc przemianowanie sekcji na „Kopia danych rodziny"
+   (B20) go nie dotyka.
 Konwencje: selektory `data-testid`, bez sleepów (expect z timeoutem),
 seed przez API, nie przez UI.
 

@@ -26,7 +26,8 @@ Kontrakt:
 
 Bez uwierzytelnienia i bez szczegółów infrastruktury: żadnych ścieżek, hostów,
 numerów rewizji ani liczb bajtów — wyłącznie `ok`/`fail`/`skipped` (07_SECURITY).
-Pusty `ANTHROPIC_API_KEY` jest poprawną konfiguracją prod i NIE jest checkiem.
+Checkiem jest to, co może paść w RUNTIME (baza, migracje, dysk); ustawienie
+opcjonalnej funkcji checkiem nie jest — instalacja bez niej działa poprawnie.
 """
 
 from __future__ import annotations

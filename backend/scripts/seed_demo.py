@@ -95,7 +95,7 @@ class DemoProduct:
     fiber_100: Decimal | None = None
     sugars_100: Decimal | None = None
     glycemic_index: Decimal | None = None
-    #: Etykieta jednostki domowej → gramy na jednostkę (01_PDF_AUDIT §5.2).
+    #: Etykieta jednostki domowej → gramy na jednostkę (ADR-005).
     unit_weights: tuple[tuple[str, str], ...] = field(default_factory=tuple)
 
     @property
@@ -258,7 +258,7 @@ DEMO_PRODUCTS: tuple[DemoProduct, ...] = (
         fiber_100=_d("2.50"),
         glycemic_index=_d("70.0"),
         # Ta sama łyżka waży w audycie PDF 5, 12 albo 15 g — demo pokazuje jedną
-        # ustaloną wartość, edytowalną przy produkcie (01_PDF_AUDIT §5.2).
+        # ustaloną wartość, edytowalną przy produkcie (pomiar z BATCH_04).
         unit_weights=(("łyżka", "12.00"), ("szklanka", "130.00")),
     ),
     # Dwa produkty świadomie NIEZWERYFIKOWANE i bez wartości — tak wygląda

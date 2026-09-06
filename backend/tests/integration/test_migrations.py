@@ -92,10 +92,6 @@ EXPECTED_TABLES = {
     "shopping_generations",
     "shopping_lists",
     "shopping_list_items",
-    "import_jobs",
-    "staged_recipes",
-    "staged_ingredients",
-    "import_issues",
 }
 
 
@@ -108,7 +104,7 @@ def test_upgrade_downgrade_upgrade_na_czystej_bazie(
 
     command.upgrade(alembic_config, "head")
     after_upgrade = _current_revision(test_database_url)
-    assert after_upgrade == "0015"
+    assert after_upgrade == "0016"
 
     command.downgrade(alembic_config, "base")
     assert _current_revision(test_database_url) is None
@@ -140,15 +136,9 @@ EXPECTED_ENUM_TYPES = (
     "measure_kind",
     "verification_status",
     "entity_scope",
-    "recipe_source",
     "amount_unit",
     "shopping_round_mode",
     "shopping_generation_status",
-    "import_job_status",
-    "staged_recipe_resolution",
-    "import_match_kind",
-    "import_issue_kind",
-    "import_issue_severity",
 )
 
 

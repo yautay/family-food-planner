@@ -225,7 +225,7 @@ class CanonicalProduct(TimestampMixin, Base):
 
 
 class ProductUnitWeight(TimestampMixin, Base):
-    """Przelicznik jednostki domowej produktu (ADR-005, 01_PDF_AUDIT §5.2).
+    """Przelicznik jednostki domowej produktu (ADR-005).
 
     `unit_label` zapisywany jest już znormalizowany (`units.normalize_unit_label`),
     inaczej UNIQUE nie zablokowałby pary „Łyżka" / „łyżka ".
@@ -250,7 +250,9 @@ class ProductUnitWeight(TimestampMixin, Base):
     unit_label: Mapped[str] = mapped_column(Text, nullable=False)
     grams_per_unit: Mapped[Decimal] = mapped_column(Numeric(8, 2), nullable=False)
     source: Mapped[str | None] = mapped_column(Text, nullable=True)
-    #: Liczba próbek, z których policzono medianę (importer B15/16 ją podbija).
+    #: Liczba próbek, z których policzono medianę. Dziś ustawia ją WYŁĄCZNIE
+    #: formularz produktu (`POST /products/{id}/unit-weights` wysyła 1) —
+    #: mechanizm zbierania próbek odszedł razem z importerem PDF (D25).
     samples_count: Mapped[int] = mapped_column(
         Integer, nullable=False, default=1, server_default="1"
     )

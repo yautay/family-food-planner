@@ -38,8 +38,7 @@ refactoring/quality). **Wynik: 0 trafień** — brak czegokolwiek do instalacji.
 |---|---|---|
 | `/code-review` | **REQUIRED (review)** | przegląd poprawności diffu przed commitem batcha i w Review batchach; nie dubluje niczego |
 | `/security-review` | **REQUIRED (review)** | audyt bezpieczeństwa zmian; obowiązkowy w batchach dotykających auth/tokenów/uploadów i we WSZYSTKICH Review |
-| `anthropic-skills:pdf` | **REQUIRED (B15/B16)** | poprawne wzorce pdfplumber/pypdf przy pracy nad importerem |
-| `claude-api` | **REQUIRED (B16)** | aktualne id modeli, parametry i wzorce Anthropic SDK dla AI-asysty importera — bez niego model pisze integrację z pamięci |
+| `anthropic-skills:pdf`, `claude-api` | **WYKREŚLONE (B20)** | jedyny konsument — importer jadłospisów — został usunięty decyzją D25; aplikacja nie czyta PDF-ów ani nie woła żadnego API modelu |
 | `skill-creator` | **RECOMMENDED (B01, R1–R4)** | poprawna struktura/triggering project skilli przy ich tworzeniu i aktualizacji |
 | `/simplify` | OPTIONAL | sprzątanie po większych batchach; nie zastępuje /code-review |
 | `anthropic-skills:xlsx` | OPTIONAL | doraźne analizy danych; poza pętlą implementacji |
@@ -83,8 +82,6 @@ Minimalny zestaw dla projektu. Project skille żyją w `.claude/skills/`
 | SKILL-SEC | `.claude/skills/pasnik-security` | project | sesje/CSRF/scope/tokeny publiczne/uploady/logi/sekrety |
 | SKILL-REVIEW | `/code-review` (wbudowany) | builtin | przegląd poprawności diffu |
 | SKILL-SECREV | `/security-review` (wbudowany) | builtin | audyt bezpieczeństwa zmian |
-| SKILL-PDF | `anthropic-skills:pdf` (wbudowany) | builtin | praca z PDF (pdfplumber/pypdf) |
-| SKILL-API | `claude-api` (wbudowany) | builtin | integracja z Anthropic SDK (B16) |
 | SKILL-CREATOR | `skill-creator` (wbudowany) | builtin | tworzenie/aktualizacja project skilli |
 
 ## 4. Manifest — kiedy używać / kiedy nie
@@ -93,12 +90,10 @@ Minimalny zestaw dla projektu. Project skille żyją w `.claude/skills/`
 |---|---|---|---|---|---|
 | SKILL-BE | REQUIRED | backend | każdy batch dotykający `backend/**` | batch czysto FE/ops | ładowany na start sesji |
 | SKILL-FE | REQUIRED | frontend | każdy batch dotykający `frontend/src/**` | batch czysto BE/ops | zawiera design tokens i wzorce UX |
-| SKILL-CALC | REQUIRED | obliczenia | batche z logiką ilości/wartości/agregacji (B04–B07, B10, B13, B15) | CRUD bez obliczeń | najostrzejsze reguły projektu (Decimal!) |
-| SKILL-SEC | REQUIRED | security | batche dotykające auth/scope/tokenów/uploadów/deploy (B02, B03, B11, B14, B16, B17, B18) | czysty UI bez danych wrażliwych | uzupełnia, nie zastępuje SKILL-SECREV |
+| SKILL-CALC | REQUIRED | obliczenia | batche z logiką ilości/wartości/agregacji (B04–B07, B10, B13) | CRUD bez obliczeń | najostrzejsze reguły projektu (Decimal!) |
+| SKILL-SEC | REQUIRED | security | batche dotykające auth/scope/tokenów/uploadów/deploy (B02, B03, B11, B14, B17, B18, B20) | czysty UI bez danych wrażliwych | uzupełnia, nie zastępuje SKILL-SECREV |
 | SKILL-REVIEW | REQUIRED | review | koniec KAŻDEGO batcha przed commitem + Review batche | — | krok 11 master prompta |
 | SKILL-SECREV | REQUIRED | review | batche z sekcją Review Skills zawierającą SKILL-SECREV + wszystkie R1–R4 | zwykłe batche UI bez powierzchni ataku | |
-| SKILL-PDF | REQUIRED | importer | B15, B16 | wszędzie indziej | |
-| SKILL-API | REQUIRED | importer AI | B16 (kod wołający Anthropic API) | wszędzie indziej | id modeli/parametry zawsze z tego skilla, nie z pamięci |
 | SKILL-CREATOR | RECOMMENDED | meta | B01 (tworzenie skilli), R1–R4 (aktualizacja) | implementacja funkcji | |
 | /simplify | OPTIONAL | quality | po dużych batchach (B10, B16) na życzenie | zamiast /code-review | |
 | paczki społecznościowe (FastAPI/Vue z marketplace'ów) | REJECTED | — | — | zawsze | kolizje z ADR-003/007, niezweryfikowane utrzymanie, dublują docs |
@@ -125,11 +120,12 @@ Minimalny zestaw dla projektu. Project skille żyją w `.claude/skills/`
 | 12 PWA/offline | SKILL-FE | SKILL-SEC (cache treści) | SKILL-REVIEW |
 | 13 statystyki | SKILL-FE, SKILL-CALC | SKILL-BE | SKILL-REVIEW |
 | 14 eksport/import | SKILL-BE, SKILL-SEC | SKILL-FE | SKILL-REVIEW, SKILL-SECREV |
-| 15 PDF ekstrakcja | SKILL-BE, SKILL-PDF | SKILL-CALC | SKILL-REVIEW |
-| 16 PDF review+AI | SKILL-BE, SKILL-FE, SKILL-PDF, SKILL-API | SKILL-SEC | SKILL-REVIEW, SKILL-SECREV |
+| ~~15 PDF ekstrakcja~~ | wycofany przez B20 (D25) | — | — |
+| ~~16 PDF review+AI~~ | wycofany przez B20 (D25) | — | — |
 | R4 | SKILL-REVIEW, SKILL-SECREV, wszystkie 4 project skille | SKILL-CREATOR | — |
 | 17 hardening | SKILL-BE, SKILL-SEC | — | SKILL-REVIEW, SKILL-SECREV |
 | 18 deployment | SKILL-SEC | SKILL-BE | SKILL-SECREV |
+| 20 usunięcie importu PDF | SKILL-BE, SKILL-FE, SKILL-SEC | — | SKILL-REVIEW, SKILL-SECREV |
 
 Review Skills = używane na diffie PRZED commitem batcha (nie podczas
 pisania kodu). Required = ładowane na starcie sesji, po lekturze karty.
@@ -169,7 +165,8 @@ NIE kopiują całych dokumentów architektury.
 - Podbicie wersji frameworka (major FastAPI/Vue/Tailwind) ⇒ obowiązkowy
   re-review dotkniętego skilla PRZED kolejnym batchem z jego obszaru;
   odnotować nową datę `verified`.
-- Skille wbudowane (SKILL-REVIEW/SECREV/PDF/API) aktualizuje Anthropic —
+- Skille wbudowane (SKILL-REVIEW, SKILL-SECREV, SKILL-CREATOR) aktualizuje ich
+  dostawca —
   nie wymagają naszej pielęgnacji; przy dziwnych rekomendacjach obowiązuje
   hierarchia z §1.
 

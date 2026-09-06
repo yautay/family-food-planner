@@ -8,7 +8,7 @@ Migracja DANYCH, oddzielona od schematu i idempotentna (03_DATABASE §1):
 `ON CONFLICT (name) DO NOTHING` pozwala ją bezpiecznie powtórzyć na bazie,
 w której kategorie już są.
 
-Skład słownika (02_DOMAIN §4.3): lista dietetyczki z 01_PDF_AUDIT §5.5
+Skład słownika (02_DOMAIN §4.3): lista kategorii z jadłospisów dietetyczki
 uzupełniona o kategorie wymagane przez wymagania (pieczywo, suche/strączkowe,
 makarony-ryż-kasze, puszki-słoiki). Dwie decyzje o nakładaniu się znaczeń:
 

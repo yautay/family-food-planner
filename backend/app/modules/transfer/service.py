@@ -85,6 +85,7 @@ from app.modules.transfer.importer import (
     decisions_by_key,
     display_name,
     mark_blocked,
+    merge_index_key,
     natural_key,
     open_archive,
     parent_blocked,
@@ -488,7 +489,13 @@ class TransferService:
             document, available = await run_in_threadpool(self._read_archive, archive_path)
             self._assert_scope_allowed(actor, document.scope)
             existing = await self._existing_index(actor, document.scope)
-            result = analyze(document, existing=existing, archive_photos=available)
+            result = analyze(
+                document,
+                existing=existing,
+                archive_photos=available,
+                actor_user_id=actor.id,
+                actor_household_id=actor.household_id,
+            )
         except Exception:
             archive_path.unlink(missing_ok=True)
             raise
@@ -531,13 +538,21 @@ class TransferService:
     async def _existing_index(
         self, actor: User, scope: TransferScope
     ) -> dict[str, dict[str, ExistingEntity]]:
-        """Nazwy, które JUŻ są w bazie — materiał do wykrywania kolizji.
+        """Wiersze, które JUŻ są w bazie — materiał raportu i decyzji importu.
 
-        Słowniki globalne (kategorie, sklepy, tagi, produkty) mają klucze
-        unikalne w całej instancji, więc szukamy w całej tabeli. Encje ze scope
-        (przepisy, szablony) porównujemy z tym, co NALEŻY do importującego —
-        „kolizja" z cudzym prywatnym przepisem nie jest kolizją, bo baza pozwala
-        obu istnieć obok siebie.
+        Dwie rodziny kluczy w jednej mapie (żadna sekcja nie ma obu naraz):
+
+        1. **klucz NATURALNY** (`Section.key`) — kolizje nazw. Słowniki globalne
+           (kategorie, sklepy, tagi, produkty) mają klucze unikalne w całej
+           instancji, więc szukamy w całej tabeli; encje ze scope (przepisy,
+           szablony) porównujemy z tym, co NALEŻY do importującego — „kolizja"
+           z cudzym prywatnym przepisem nie jest kolizją, bo baza pozwala obu
+           istnieć obok siebie;
+        2. **klucz SCALANIA** (`Section.merge_key`, BATCH_20) — wiersze, których
+           `apply` nie utworzy, bo scali je z istniejącym (`plan_days`) albo
+           pominie `ON CONFLICT DO NOTHING`. Bez tego raport DRY-RUN zawyżał
+           `to_create` (dług U21), a scalenie dnia planu przechodziło
+           w milczeniu (decyzja **D24**).
         """
         index: dict[str, dict[str, ExistingEntity]] = {}
 
@@ -549,6 +564,24 @@ class TransferService:
             ).all()
             index[model.__tablename__] = {
                 str(row[1]): ExistingEntity(id=row[0], name=str(row[2])) for row in rows
+            }
+
+        async def merge_index(section: Section) -> None:
+            """Wiersze, po których `apply` SCALI albo pominie wiersz z pliku.
+
+            Klucz to wartości kolumn `merge_key` W IDENTYFIKATORACH TEJ BAZY —
+            dokładnie to, co `importer.merge_lookup_key` policzy dla wiersza
+            z pliku po przetłumaczeniu jego referencji. Zapytanie idzie po CAŁEJ
+            tabeli, bo zawężenie robią same identyfikatory: klucz dnia planu
+            zawiera `owner_user_id`, więc trafi wyłącznie w dni importującego.
+            """
+            assert section.merge_key is not None  # gwarantuje wołający
+            model = section.model
+            key_columns = [getattr(model, column) for column in section.merge_key]
+            pk_column = getattr(model, section.pk) if section.pk else key_columns[0]
+            rows = (await self._session.execute(select(pk_column, *key_columns))).all()
+            index[section.name] = {
+                merge_index_key(row[1:]): ExistingEntity(id=row[0], name="") for row in rows
             }
 
         await global_index(ProductCategory, "name", "name")
@@ -570,6 +603,10 @@ class TransferService:
             index[model.__tablename__] = {
                 row.name: ExistingEntity(id=row.id, name=row.name) for row in rows
             }
+
+        for section in sections_for(scope):
+            if section.merge_key is not None:
+                await merge_index(section)
         return index
 
     # --- import: apply ---------------------------------------------------------------

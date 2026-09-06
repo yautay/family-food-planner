@@ -69,3 +69,31 @@ def test_odrzuca_nieznane_srodowisko(monkeypatch: pytest.MonkeyPatch, tmp_path: 
         load_settings()
 
     assert "app_env" in str(excinfo.value).lower()
+
+
+def test_ustawienia_wycofanego_importu_nie_wracaja_po_cichu(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """`Settings` nie zna już ustawień importera PDF (D25, BATCH_20).
+
+    Test istnieje po to, żeby usunięte pole nie wróciło razem ze skopiowanym
+    fragmentem konfiguracji: `Settings` ma `extra="ignore"`, więc klucz zostawiony
+    w czyimś lokalnym `.env` niczego nie wywróci i nikt by nie zauważył, że kod
+    znowu go czyta.
+    """
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@localhost:5432/pasnik")
+    monkeypatch.setenv("SECRET_KEY", "sekret")
+
+    settings = load_settings()
+
+    wycofane = {
+        "pdf_max_upload_mb",
+        "pdf_parse_timeout_s",
+        "anthropic_api_key",
+        "anthropic_model",
+        "anthropic_max_tokens",
+        "anthropic_timeout_s",
+    }
+    assert wycofane.isdisjoint(type(settings).model_fields)
+    assert not any(hasattr(settings, name) for name in wycofane)

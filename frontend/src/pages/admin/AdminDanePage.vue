@@ -2,7 +2,7 @@
 /**
  * Dane instancji (`/admin/dane`) — eksport i import CAŁEJ instancji (BATCH_14).
  *
- * Wariant administracyjny różni się od sekcji „Twoje dane" w Ustawieniach
+ * Wariant administracyjny różni się od sekcji „Kopia danych rodziny" w Ustawieniach
  * wyłącznie ZAKRESEM (`scope=instance`): plik niesie także konta i rodziny.
  * Dialog importu jest ten sam — endpoint rozpoznaje zakres z nagłówka pliku,
  * więc drugi komponent tylko rozjechałby się z pierwszym.

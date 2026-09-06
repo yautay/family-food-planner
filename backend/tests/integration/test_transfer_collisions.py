@@ -261,7 +261,19 @@ async def test_import_wlasnego_eksportu_reuzywa_dnia_planu_i_nie_tyka_jego_posil
     exported = await service.export(
         author, scope=TransferScope.USER, app_version="test", now=utcnow()
     )
-    import_id, _ = await service.dry_run(author, filename="e.zip", data=exported.path.read_bytes())
+    import_id, report = await service.dry_run(
+        author, filename="e.zip", data=exported.path.read_bytes()
+    )
+
+    # D24: scalenie nie może przejść w milczeniu — raport DRY-RUN je WYMIENIA,
+    # a `to_create` nie obiecuje ani dnia, ani jego posiłków (dług U21).
+    assert [w for w in report.warnings if "scalony" in w] == [
+        "1 dzień planu zostanie scalony z tym, co już masz — "
+        "posiłki, które już tam są, zostaną nietknięte."
+    ]
+    assert "plan_days" not in report.to_create
+    assert "plan_meals" not in report.to_create
+
     summary = await service.apply(author, import_id=import_id, decisions=[])
 
     assert summary.reused["plan_days"] == 1
@@ -270,3 +282,46 @@ async def test_import_wlasnego_eksportu_reuzywa_dnia_planu_i_nie_tyka_jego_posil
     # ani nie zniknął, ani nie doszedł jego duplikat.
     assert await _count(db_session, PlanMeal) == 1
     assert "plan_meals" not in summary.created
+
+
+async def test_raport_dry_run_obiecuje_dokladnie_to_co_utworzy_apply(
+    db_session: AsyncSession, settings: Settings
+) -> None:
+    """Dług U21: `to_create` z DRY-RUN = `created` z `apply`, sekcja po sekcji.
+
+    Do BATCH_20 raport liczył każdy wiersz z pliku, którego nie rozpoznał po
+    kluczu NATURALNYM — a sekcje idempotentne (`ON CONFLICT DO NOTHING`) i dzień
+    planu (scalany po UNIQUE) klucza naturalnego nie mają. Import własnej kopii
+    na żywą bazę pokazywał więc liczby, których zapis nie realizował: użytkownik
+    czytał „powstanie 12 rzeczy", a powstawało zero.
+
+    Test celowo NIE zawęża się do jednej sekcji — porównuje CAŁE słowniki, więc
+    złapie też sekcję dołożoną w przyszłości bez klucza scalania.
+    """
+    author = await factories.create_user(db_session, email="autor@example.com")
+    category = await factories.create_category(db_session, name="Warzywa")
+    cebula = await factories.create_product(db_session, category=category, name="Cebula")
+    await factories.create_unit_weight(db_session, product=cebula, unit_label="łyżka")
+    recipe = await factories.create_recipe(db_session, owner=author, name="Zupa cebulowa")
+    await factories.create_ingredient(
+        db_session, recipe=recipe, product=cebula, amount=Decimal("300.000")
+    )
+    await factories.create_rating(db_session, recipe=recipe, user=author, rating=4)
+    await factories.create_goal(db_session, user=author, valid_from=date(2030, 1, 1))
+    day = await factories.create_plan_day(db_session, owner=author, day=date(2030, 6, 1))
+    await factories.create_plan_meal(db_session, plan_day=day, name="Obiad")
+
+    service = _service(db_session, settings)
+    exported = await service.export(
+        author, scope=TransferScope.USER, app_version="test", now=utcnow()
+    )
+    import_id, report = await service.dry_run(
+        author, filename="e.zip", data=exported.path.read_bytes()
+    )
+    summary = await service.apply(author, import_id=import_id, decisions=[])
+
+    assert report.to_create == summary.created, (
+        "Raport DRY-RUN obiecał co innego, niż utworzył zapis (U21)."
+    )
+    # Import własnej kopii na własne konto nie tworzy NICZEGO — wszystko już jest.
+    assert report.to_create == {}

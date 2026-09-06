@@ -81,24 +81,6 @@ async def test_zdjecie_wariantu_sklepowego_31_w_minucie_daje_429(
     assert statuses[-1] == 429
 
 
-async def test_import_pdf_11_w_minucie_daje_429(
-    db_client: AsyncClient, db_session: AsyncSession
-) -> None:
-    user = await create_user(db_session)
-    await login(db_client, user.email)
-
-    statuses = await _hammer(
-        db_client,
-        "POST",
-        f"{API}/import/pdf",
-        times=FILE_LIMIT + 1,
-        files=_files("j.pdf", "application/pdf"),
-    )
-
-    assert statuses[:FILE_LIMIT] == [422] * FILE_LIMIT
-    assert statuses[-1] == 429
-
-
 async def test_import_paczki_transferu_11_w_minucie_daje_429(
     db_client: AsyncClient, db_session: AsyncSession
 ) -> None:
@@ -122,12 +104,12 @@ async def test_odpowiedz_429_ma_ksztalt_kontraktu(
 ) -> None:
     user = await create_user(db_session)
     await login(db_client, user.email)
-    files = _files("j.pdf", "application/pdf")
+    files = _files("e.zip", "application/zip")
     for _ in range(FILE_LIMIT):
-        await db_client.post(f"{API}/import/pdf", files=files, headers=csrf_headers(db_client))
+        await db_client.post(f"{API}/transfer/import", files=files, headers=csrf_headers(db_client))
 
     response = await db_client.post(
-        f"{API}/import/pdf", files=files, headers=csrf_headers(db_client)
+        f"{API}/transfer/import", files=files, headers=csrf_headers(db_client)
     )
 
     assert response.status_code == 429

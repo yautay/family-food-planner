@@ -261,4 +261,21 @@ describe('UstawieniaPage', () => {
     expect(wrapper.find('[data-testid="category-order-editor"]').exists()).toBe(true)
     expect(storesApi.fetchCategoryOrder).toHaveBeenCalledWith(5)
   })
+
+  it('pokazuje sekcję „Kopia danych rodziny" z pobraniem, wczytaniem i skutkiem własności', async () => {
+    // D25 przemianowało „Twoje dane" na kopię rodziny, a D26 każe POWIEDZIEĆ
+    // wprost, do kogo należy to, co z kopii powstanie — bez tego zdania
+    // użytkownik odtwarzający instancję nie wie, czemu przepisy współdomownika
+    // mają po imporcie jego nazwisko przy właścicielu.
+    const wrapper = await mountPage()
+
+    expect(wrapper.text()).toContain('Kopia danych rodziny')
+    expect(wrapper.get('[data-testid="transfer-export"]').text()).toBe(
+      'Pobierz kopię danych rodziny',
+    )
+    expect(wrapper.get('[data-testid="transfer-import-open"]').text()).toBe('Wczytaj kopię')
+    expect(wrapper.get('[data-testid="transfer-ownership"]').text()).toContain(
+      'będzie należeć do Twojego konta',
+    )
+  })
 })

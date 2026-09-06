@@ -194,6 +194,41 @@ def open_archive(path: Path) -> zipfile.ZipFile:
     return archive
 
 
+@dataclass
+class IdMap:
+    """Mapa stary→nowy identyfikator: z pliku na bazę docelową.
+
+    Buduje ją sekcja po sekcji `apply`, ale używa jej też raport DRY-RUN —
+    kolumny `merge_key` bywają kluczami obcymi, więc bez tego tłumaczenia
+    raport nie umiałby sprawdzić, czy wiersz już w bazie jest (BATCH_20).
+
+    `users` i `households` mają FALLBACK na konto wykonujące import: plik
+    użytkownika nie niesie tych sekcji, a wiersze i tak trzymają identyfikatory
+    z instancji źródłowej. Bez fallbacku import USERA próbowałby wstawić encje
+    z cudzym `owner_user_id`, czyli dokładnie to, czego zabrania §Security karty.
+    """
+
+    actor_user_id: int
+    actor_household_id: int | None
+    maps: dict[str, dict[Any, Any]] = field(default_factory=dict)
+
+    def record(self, section: str, old: Any, new: Any) -> None:
+        self.maps.setdefault(section, {})[old] = new
+
+    def get(self, section: str, old: Any) -> Any | None:
+        """Nowy identyfikator albo `None`, gdy referencja nie ma pokrycia."""
+        if old is None:
+            return None
+        mapped = self.maps.get(section, {}).get(old)
+        if mapped is not None:
+            return mapped
+        if section == "users":
+            return self.actor_user_id
+        if section == "households":
+            return self.actor_household_id
+        return None
+
+
 # --- raport dry-run ------------------------------------------------------------------
 
 
@@ -205,8 +240,15 @@ class ExistingEntity:
     name: str
 
 
-#: Sekcja → {klucz naturalny → istniejący wiersz}. Buduje to `service.py`.
+#: Sekcja → {klucz → istniejący wiersz}. Buduje to `service.py`. Kluczem jest
+#: albo klucz NATURALNY sekcji (`Section.key` — kolizje nazw), albo klucz
+#: SCALANIA (`Section.merge_key` — wiersze, które `apply` scali albo pominie).
+#: Żadna sekcja nie ma obu naraz, więc jedna mapa wystarcza na oba przypadki.
 ExistingIndex = Mapping[str, Mapping[str, ExistingEntity]]
+
+#: Separator części klucza złożonego. Znak sterujący, żeby wartość kolumny
+#: („Wołowina|mielona") nie mogła udać granicy między kolumnami.
+KEY_SEPARATOR = "\x1f"
 
 
 def natural_key(section: Section, row: Mapping[str, Any]) -> str | None:
@@ -215,6 +257,38 @@ def natural_key(section: Section, row: Mapping[str, Any]) -> str | None:
         return None
     value = row.get(section.key)
     return None if value is None else str(value)
+
+
+def merge_index_key(values: Iterable[Any]) -> str:
+    """Wartości kolumn `merge_key` → jeden klucz mapy. Jedno miejsce na obie strony."""
+    return KEY_SEPARATOR.join("" if value is None else str(value) for value in values)
+
+
+def merge_lookup_key(section: Section, row: Mapping[str, Any], id_map: IdMap) -> str | None:
+    """Klucz scalania wiersza Z PLIKU wyrażony w identyfikatorach BAZY DOCELOWEJ.
+
+    Kolumny `merge_key` bywają kluczami obcymi (`product_id`, `user_id`), a plik
+    niesie w nich identyfikatory instancji ŹRÓDŁOWEJ — bez przetłumaczenia ich
+    przez `id_map` porównanie z bazą nie znaczyłoby nic.
+
+    `None` = wiersza nie da się dopasować do niczego, co już jest, bo jego
+    rodzic dopiero powstanie w tym imporcie. Taki wiersz na pewno zostanie
+    utworzony i tak ma go policzyć raport.
+    """
+    if section.merge_key is None:
+        return None
+    references = section_references(section)
+    parts: list[Any] = []
+    for column in section.merge_key:
+        target = references.get(column)
+        if target is None:
+            parts.append(row.get(column))
+            continue
+        mapped = id_map.get(target, row.get(column))
+        if mapped is None:
+            return None
+        parts.append(mapped)
+    return merge_index_key(parts)
 
 
 def display_name(section: Section, row: Mapping[str, Any]) -> str:
@@ -264,24 +338,54 @@ def mark_blocked(section: Section, row: Mapping[str, Any], blocked: dict[str, se
         blocked.setdefault(section.name, set()).add(source_id)
 
 
+def merged_days_warning(count: int) -> str:
+    """Zbiorcze ostrzeżenie o scalanych dniach planu (decyzja **D24**).
+
+    Zbiorcze, nie per dzień: raport ma być czytelny na telefonie, a lista
+    kilkudziesięciu dat niczego nie dodaje — po imporcie widać je w planie.
+    Odmiana liczebnika jest wypisana, bo to tekst dla człowieka (D3: PL, bez
+    warstwy i18n, więc nie ma komu jej policzyć za nas).
+    """
+    if count == 1:
+        phrase = "1 dzień planu zostanie scalony"
+    elif 2 <= count % 10 <= 4 and not 12 <= count % 100 <= 14:
+        phrase = f"{count} dni planu zostaną scalone"
+    else:
+        phrase = f"{count} dni planu zostanie scalonych"
+    return f"{phrase} z tym, co już masz — posiłki, które już tam są, zostaną nietknięte."
+
+
 def analyze(
     document: ExportFile,
     *,
     existing: ExistingIndex,
     archive_photos: Iterable[str],
+    actor_user_id: int,
+    actor_household_id: int | None,
 ) -> DryRunResult:
     """Policz raport DRY-RUN. Funkcja czysta — nie zapisuje ani nie czyta bazy.
 
     Liczby są liczone dla decyzji DOMYŚLNYCH (`USE_EXISTING` przy każdej kolizji),
     bo tak samo zachowa się `apply`, gdy użytkownik niczego nie zmieni — łącznie
-    z pomijaniem dzieci reużytego rodzica (D22).
+    z pomijaniem dzieci reużytego rodzica (D22) i z wierszami, które `apply`
+    scali albo pominie po `merge_key` (D24 + dług U21, BATCH_20).
+
+    `actor_*` nie łamią czystości: to dane WEJŚCIOWE konta wykonującego import,
+    potrzebne `IdMap` dokładnie tak samo jak w `apply` — plik użytkownika nie
+    niesie sekcji `users`, a wiersze i tak trzymają identyfikatory z instancji
+    źródłowej.
     """
     available = set(archive_photos)
     to_create: dict[str, int] = {}
     collisions: list[CollisionRead] = []
     warnings: list[str] = []
     missing_photos = 0
+    merged_days = 0
     blocked: dict[str, set[Any]] = {}
+    # Tłumaczenie identyfikatorów z pliku na te z bazy — wypełniane wierszami,
+    # które import ROZPOZNAŁ jako już istniejące. Wiersz dopiero tworzony nie ma
+    # jeszcze id, więc jego dzieci trafiają do `to_create` i to jest poprawne.
+    id_map = IdMap(actor_user_id=actor_user_id, actor_household_id=actor_household_id)
 
     for section in sections_for(document.scope):
         rows = document.data.get(section.name) or []
@@ -297,12 +401,33 @@ def analyze(
                 path = row.get(section.photo)
                 if path and str(path) not in available:
                     missing_photos += 1
+
             key = natural_key(section, row)
+            if key is None and section.merge_key is not None:
+                # Sekcja bez kolizji, ale z UNIQUE-iem: `apply` scali ją
+                # (`plan_days`) albo pominie (`ON CONFLICT DO NOTHING`).
+                # W obu razach NIC nie powstaje i raport ma to powiedzieć.
+                merge_key = merge_lookup_key(section, row, id_map)
+                hit = section_existing.get(merge_key) if merge_key is not None else None
+                if hit is None:
+                    creating += 1
+                    continue
+                mark_blocked(section, row, blocked)
+                if section.pk is not None:
+                    id_map.record(section.name, row.get(section.pk), hit.id)
+                if section.name == "plan_days":
+                    merged_days += 1
+                continue
+
             match = section_existing.get(key) if key is not None else None
             if match is None:
                 creating += 1
                 continue
             mark_blocked(section, row, blocked)
+            if section.pk is not None:
+                # Domyślną decyzją jest „użyj istniejącego", więc dzieci i klucze
+                # scalania mają się rozwiązywać na TEN wiersz — jak w `apply`.
+                id_map.record(section.name, row.get(section.pk), match.id)
             if section.auto_reuse:
                 warnings.append(
                     f"„{display_name(section, row)}” już istnieje — użyto istniejącego wpisu."
@@ -326,6 +451,8 @@ def analyze(
         if creating:
             to_create[section.name] = creating
 
+    if merged_days:
+        warnings.append(merged_days_warning(merged_days))
     if missing_photos:
         warnings.append(
             f"W archiwum brakuje {missing_photos} zdjęć — te pozycje powstaną bez zdjęcia."
@@ -343,37 +470,6 @@ def analyze(
 
 
 # --- przygotowanie wierszy do zapisu --------------------------------------------------
-
-
-@dataclass
-class IdMap:
-    """Mapa stary→nowy identyfikator, budowana sekcja po sekcji podczas apply.
-
-    `users` i `households` mają FALLBACK na konto wykonujące import: plik
-    użytkownika nie niesie tych sekcji, a wiersze i tak trzymają identyfikatory
-    z instancji źródłowej. Bez fallbacku import USERA próbowałby wstawić encje
-    z cudzym `owner_user_id`, czyli dokładnie to, czego zabrania §Security karty.
-    """
-
-    actor_user_id: int
-    actor_household_id: int | None
-    maps: dict[str, dict[Any, Any]] = field(default_factory=dict)
-
-    def record(self, section: str, old: Any, new: Any) -> None:
-        self.maps.setdefault(section, {})[old] = new
-
-    def get(self, section: str, old: Any) -> Any | None:
-        """Nowy identyfikator albo `None`, gdy referencja nie ma pokrycia."""
-        if old is None:
-            return None
-        mapped = self.maps.get(section, {}).get(old)
-        if mapped is not None:
-            return mapped
-        if section == "users":
-            return self.actor_user_id
-        if section == "households":
-            return self.actor_household_id
-        return None
 
 
 DEAD_REFERENCE = (

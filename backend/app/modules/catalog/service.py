@@ -59,7 +59,6 @@ from app.modules.catalog.models import (
 from app.modules.catalog.naming import normalize_name
 from app.modules.catalog.nutrition_adapter import ProductNutrition, nutrition_for
 from app.modules.catalog.schemas import ProductSort
-from app.modules.catalog.unit_weights import merge_samples
 from app.modules.catalog.units import PIECE_LABEL, canonical_unit_label, normalize_unit_label
 
 PRODUCT_NOT_FOUND = "Nie znaleziono produktu o podanym identyfikatorze."
@@ -501,95 +500,6 @@ class CatalogService:
             payload={"name": product.name, "category_id": category_id},
         )
         return product
-
-    async def find_by_name(self, name: str) -> CanonicalProduct | None:
-        """Produkt o tym kluczu tożsamości (`naming.normalize_name`) albo `None`.
-
-        Wejście dla importera: przed założeniem produktu z surowej nazwy trzeba
-        sprawdzić, czy pod tym kluczem coś już nie stoi — także wiersz
-        ZARCHIWIZOWANY, bo UNIQUE go nie odróżnia.
-        """
-        return await self._find_by_normalized_name(normalize_name(name))
-
-    async def record_unit_weight_samples(
-        self,
-        product_id: int,
-        *,
-        actor: User,
-        samples: Mapping[str, Sequence[Decimal]],
-        source: str,
-    ) -> list[ProductUnitWeight]:
-        """Dołóż próbki przeliczników jednostek domowych; BEZ commita.
-
-        Reguła łączenia i jej aproksymacja: `catalog/unit_weights.py`.
-
-        **Czego ta metoda nie rusza**: wierszy o innym `source` niż podany.
-        Przelicznik wpisany ręcznie (przez człowieka w UI albo przez ADMIN-a)
-        jest decyzją, a nie pomiarem — import nie ma prawa jej nadpisać
-        (Implementation Notes karty BATCH_16: „wpisów `source='manual'` NIE
-        nadpisywać"). Rozszerzamy tę ochronę na wiersze BEZ źródła, bo dziś
-        powstają właśnie tak: z ręki, przez `POST /products/{id}/unit-weights`.
-        """
-        touched: list[ProductUnitWeight] = []
-        existing_rows = {
-            row.unit_label: row
-            for row in (
-                await self._session.execute(
-                    select(ProductUnitWeight).where(ProductUnitWeight.product_id == product_id)
-                )
-            )
-            .scalars()
-            .all()
-        }
-
-        for raw_label, values in samples.items():
-            if not values:
-                continue
-            label = canonical_unit_label(raw_label)
-            if label == PIECE_LABEL:
-                # „szt." nie jest jednostką domową — mostkiem szt. → g jest
-                # `piece_weight_g` produktu (ADR-005), nie ten wiersz.
-                continue
-            row = existing_rows.get(label)
-            if row is not None and row.source != source:
-                continue
-
-            median, count = merge_samples(
-                list(values),
-                existing_median=row.grams_per_unit if row is not None else None,
-                existing_count=row.samples_count if row is not None else 0,
-            )
-            if row is None:
-                row = ProductUnitWeight(
-                    product_id=product_id,
-                    unit_label=label,
-                    grams_per_unit=median,
-                    source=source,
-                    samples_count=count,
-                )
-                self._session.add(row)
-                action = AuditAction.PRODUCT_UNIT_WEIGHT_CREATE
-            else:
-                row.grams_per_unit = median
-                row.samples_count = count
-                action = AuditAction.PRODUCT_UNIT_WEIGHT_UPDATE
-
-            self._audit.record(
-                action=action,
-                entity_type=AuditEntity.PRODUCT,
-                entity_id=product_id,
-                actor_id=actor.id,
-                payload={
-                    "unit_label": label,
-                    "grams_per_unit": format(median, "f"),
-                    "samples_count": count,
-                    "source": source,
-                },
-            )
-            touched.append(row)
-
-        await self._session.flush()
-        return touched
 
     async def update_product(
         self, product_id: int, *, actor: User, changes: Mapping[str, Any]

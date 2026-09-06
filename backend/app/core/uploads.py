@@ -31,8 +31,8 @@ from PIL import Image, UnidentifiedImageError
 
 from app.core.errors import AppError, NotFoundError, PayloadTooLargeError
 
-#: Domyślny limit obrazu z 07_SECURITY §6 (PDF-y importu mają własny limit
-#: w B15). Instancja przestawia go zmienną `IMAGE_MAX_UPLOAD_MB` (BATCH_17) —
+#: Domyślny limit obrazu z 07_SECURITY §6 (paczka transferu ma własny limit,
+#: B14). Instancja przestawia go zmienną `IMAGE_MAX_UPLOAD_MB` (BATCH_17) —
 #: serwisy przekazują `max_bytes` do `save_image`, ta stała jest wartością
 #: domyślną i punktem odniesienia testów.
 DEFAULT_IMAGE_MAX_MB = 10
@@ -41,16 +41,21 @@ MAX_IMAGE_BYTES = DEFAULT_IMAGE_MAX_MB * 1024 * 1024
 #: Ścieżki w bazie są WZGLĘDNE, a URL powstaje wyłącznie tutaj — dzięki temu
 #: żaden moduł nie skleja go po swojemu i nie wystawi ścieżki z dysku.
 UPLOADS_URL_PREFIX = "/uploads"
-#: Podkatalogi uploadów, których endpoint `/uploads/*` NIE serwuje.
-#: `transfer` trzyma paczki eksportu/importu — KOMPLET danych jednego konta.
-#: `/uploads/{path}` sprawdza wyłącznie sesję (jak dla zdjęć), więc bez tej
-#: bariery każdy zalogowany użytkownik, który poznałby `import_id`, pobrałby
-#: cudzy eksport. Zdjęcia z importu (`transfer-import`) są zwykłymi zdjęciami
-#: i muszą pozostać serwowane — prywatny jest sam katalog paczek.
-#: `import-pdf` (BATCH_15) trzyma wgrane jadłospisy: dokument zdrowotny jednej
-#: osoby, z imieniem i nazwiskiem pacjenta na stronie tytułowej. Endpoint
-#: `/uploads/*` nie sprawdza właściciela pliku, więc katalog musi być zamknięty.
-PRIVATE_SUBDIRS = ("transfer", "import-pdf")
+#: Podkatalogi uploadów, które endpoint `/uploads/*` W OGÓLE serwuje —
+#: ALLOWLISTA, nie lista zakazanych (odwrócone w BATCH_20).
+#: Dokładnie te trzy katalogi zapisują dziś serwisy: `recipes` (zdjęcia
+#: przepisów, B05), `retail` (zdjęcia wariantów sklepowych, B09) i
+#: `transfer-import` (zdjęcia rozpakowane z paczki, B14). Paczki transferu
+#: (`transfer/`) świadomie NIE są tu wymienione: to KOMPLET danych jednego
+#: konta, a `/uploads/{path}` sprawdza wyłącznie sesję, więc każdy zalogowany,
+#: który poznałby `import_id`, pobrałby cudzy eksport.
+#: Lista zakazanych była pułapką: plik pozostawiony w katalogu, o którym kod
+#: już nie wie (np. po wycofaniu funkcji), stawał się pobieralny dla dowolnego
+#: zalogowanego konta. Przy allowliście katalog nieznany kodowi jest ZAMKNIĘTY
+#: z definicji, a `task uploads-report` pokazuje jego pliki jako sieroty.
+#: **Nowy podkatalog uploadów = wpis TUTAJ w tym samym batchu** — bez niego
+#: zdjęcia z niego nie wyświetlą się w ogóle.
+SERVED_SUBDIRS = ("recipes", "retail", "transfer-import")
 
 #: Dłuższy bok miniatury; jakość JPEG dobrana wg proporcji rozmiar/wygląd.
 THUMBNAIL_MAX_PX = 512
@@ -168,9 +173,9 @@ def resolve_upload_path(path: str, *, uploads_root: Path) -> Path:
     if candidate.is_absolute() or ".." in candidate.parts:
         raise NotFoundError(FILE_NOT_FOUND_MESSAGE)
     # `lower()`: na systemie plików bez rozróżniania wielkości liter (Windows,
-    # macOS) `Transfer/...` trafia w ten sam plik co `transfer/...` — porównanie
+    # macOS) `Recipes/...` trafia w ten sam plik co `recipes/...` — porównanie
     # musi być niezależne od systemu (ustalenie REVIEW R4 pkt 8).
-    if candidate.parts and candidate.parts[0].lower() in PRIVATE_SUBDIRS:
+    if len(candidate.parts) < 2 or candidate.parts[0].lower() not in SERVED_SUBDIRS:
         raise NotFoundError(FILE_NOT_FOUND_MESSAGE)
 
     root = uploads_root.resolve()

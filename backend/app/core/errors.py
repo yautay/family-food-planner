@@ -145,12 +145,13 @@ class GoneError(AppError):
 
 
 class ServiceUnavailableError(AppError):
-    """503 — funkcja istnieje, ale ta instancja jej nie ma włączonej (BATCH_16).
+    """503 — funkcja istnieje, ale ta instancja jej nie ma włączonej.
 
-    Pierwszy konsument: AI-asysta importu PDF. Brak `ANTHROPIC_API_KEY` to
-    świadomie wspierany tryb pracy (ADR-011), a nie awaria ani błąd żądania —
-    stąd 503 z komunikatem, co użytkownik może zrobić zamiast tego, a nie 404
-    (endpoint istnieje) ani 500 (nic się nie zepsuło).
+    Dla funkcji wyłączonej konfiguracją instalacji: endpoint istnieje (więc nie
+    404), nic się nie zepsuło (więc nie 500), a użytkownik ma dostać komunikat,
+    co może zrobić zamiast tego. Pierwszym konsumentem była AI-asysta review
+    importu (B16, wycofana w BATCH_20 razem z importerem); klasa zostaje jako
+    część kontraktu błędów `core` — 04_API §1 wymienia 503 w tabeli statusów.
     """
 
     status_code = 503

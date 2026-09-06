@@ -17,7 +17,6 @@ Czego w pliku ŚWIADOMIE NIE MA (ustalenia REVIEW R3 i 07_SECURITY):
   logowania (ADR-010) w pliku, który ląduje w mailu i w kopii zapasowej, jest
   wyciekiem niezależnie od tego, jak nieciekawa jest lista,
 - `created_at`/`updated_at` (poza `audit_entries`, gdzie czas JEST treścią),
-- `recipes.import_job_id` — job importu PDF nie jest przenoszony (B15).
 """
 
 from __future__ import annotations
@@ -107,8 +106,14 @@ class Section:
     #: cel na datę). Ma w bazie UNIQUE, którego reużyty rodzic już spełnia, więc
     #: import wstawia go `ON CONFLICT DO NOTHING` i nie potrzebuje jego id.
     idempotent: bool = False
-    #: Kolumny UNIQUE, po których wiersz SCALA SIĘ z istniejącym zamiast wywalać
-    #: import.
+    #: Kolumny UNIQUE wiersza — jedna deklaracja obsługująca DWA zastosowania
+    #: (BATCH_20): `apply` scala po nich wiersz z istniejącym zamiast wywalać
+    #: import (`plan_days`) albo pomija go `ON CONFLICT DO NOTHING` (sekcje
+    #: `idempotent`), a raport DRY-RUN sprawdza po nich, czy wiersz JUŻ jest
+    #: w bazie — bez tego `to_create` obiecywałoby wiersze, których `apply`
+    #: nie utworzy (dług U21), a scalane dni planu przechodziłyby w milczeniu
+    #: (decyzja **D24**). Sekcja `idempotent` MUSI mieć `merge_key` równy
+    #: swojemu UNIQUE-owi z bazy — inaczej raport ją zawyży.
     merge_key: tuple[str, ...] | None = None
     #: Kolumna referencji do RODZICA KOMPOZYCJI — tego jednego wiersza, którego
     #: częścią jest ta sekcja (ADR-012: FK `ON DELETE CASCADE` rodzic→dziecko).
@@ -180,6 +185,7 @@ SECTIONS: tuple[Section, ...] = (
         columns=("unit_label", "grams_per_unit", "source", "samples_count"),
         references={"product_id": "canonical_products"},
         idempotent=True,
+        merge_key=("product_id", "unit_label"),
         parent="product_id",
     ),
     Section(
@@ -188,6 +194,7 @@ SECTIONS: tuple[Section, ...] = (
         columns=("amount_per_100",),
         references={"product_id": "canonical_products", "nutrient_code": "nutrients"},
         idempotent=True,
+        merge_key=("product_id", "nutrient_code"),
         parent="product_id",
     ),
     Section(
@@ -236,6 +243,7 @@ SECTIONS: tuple[Section, ...] = (
         columns=("valid_from", "kcal", "protein_g", "fat_g", "carbs_g"),
         references={"user_id": "users"},
         idempotent=True,
+        merge_key=("user_id", "valid_from"),
     ),
     Section(
         name="recipes",
@@ -247,7 +255,6 @@ SECTIONS: tuple[Section, ...] = (
             "prep_time_min",
             "difficulty",
             "photo_path",
-            "source",
             "is_archived",
         ),
         key="name",
@@ -274,6 +281,7 @@ SECTIONS: tuple[Section, ...] = (
         columns=("rating",),
         references={"recipe_id": "recipes", "user_id": "users"},
         idempotent=True,
+        merge_key=("recipe_id", "user_id"),
         parent="recipe_id",
     ),
     Section(

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * Ustawienia użytkownika (`/ustawienia`): „Moja rodzina", „Cele żywieniowe",
- * „Sklepy" (BATCH_09), „Progi statusów" (D9) i „Twoje dane" (BATCH_14).
+ * „Sklepy" (BATCH_09), „Progi statusów" (D9) i „Kopia danych rodziny" (B14/B20).
  *
  * Stan serwera trzyma TanStack Query (ADR-007): komponent nie kopiuje rodziny,
  * profili ani celów do własnych ref-ów. Do Pinia należy wyłącznie sesja.
@@ -252,7 +252,7 @@ const previewStatus = computed(() =>
   thresholdsValid.value ? statusFor(1800, 2000, parsedThresholds.value) : null,
 )
 
-// --- Twoje dane: eksport i import (BATCH_14, 02_DOMAIN §11) ---------------------
+// --- Kopia danych rodziny: pobranie i wczytanie (B14, D25/D26) ------------------
 
 const transferOpen = ref(false)
 const transferError = ref<string | null>(null)
@@ -620,7 +620,7 @@ const saveThresholds = useMutation({
     <!-- Sklepy i profile kolejności kategorii (BATCH_09) — sekcja własnego komponentu. -->
     <SklepySection />
 
-    <!-- Twoje dane (BATCH_14): eksport logiczny i import z raportem dry-run. -->
+    <!-- Kopia danych rodziny (B14, nazwa z D25): pobranie i wczytanie ze scaleniem. -->
     <Card class="rounded-xl">
       <CardHeader>
         <CardTitle>{{ transferTexts.sectionTitle }}</CardTitle>
@@ -661,6 +661,9 @@ const saveThresholds = useMutation({
         </div>
 
         <p class="text-muted-foreground text-xs">{{ transferTexts.exportHint }}</p>
+        <p class="text-muted-foreground text-xs" data-testid="transfer-ownership">
+          {{ transferTexts.ownershipNote }}
+        </p>
         <p v-if="exportedFilename" class="text-sm" data-testid="transfer-export-done">
           {{ transferTexts.exportDone(exportedFilename) }}
         </p>

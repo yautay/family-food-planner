@@ -51,8 +51,7 @@ family-food-planner/
         planning/
         pantry/
         shopping/    # engine.py (czysty) + service.py (I/O) + router.py
-        importer/
-        transfer/
+        transfer/     # kopia danych rodziny i instancji (ADR-016)
         audit/
       main.py        # composition root: create_app() — brak app na poziomie modułu
     migrations/      # Alembic: env.py + versions/0001_initial.py (pusta)
@@ -73,9 +72,6 @@ family-food-planner/
     e2e/             # Playwright (login.spec.ts)
   docker/            # Dockerfile (target dev), compose.dev.yml,
                      #   compose.prod.yml (B18)
-  data/
-    source_pdfs/     # 8 PDF-ów dietetyczki (wejście importera + testy)
-    reference/       # prototype.db — TYLKO referencja walidacyjna importera
   docs/              # architektura, ADR, implementation-plan
   .claude/skills/    # project skille pasnik-* (03_AI_SKILLS)
   Taskfile.yml       # jedyne źródło komend dev (task help)
@@ -94,7 +90,6 @@ moduł wyłącznie przez service.
 | Backend | Python 3.13, FastAPI, SQLAlchemy 2.0 (async), Alembic, Pydantic v2, Uvicorn | uv jako package manager; driver psycopg 3 async (ADR-015) |
 | Hasła/sesje | argon2-cffi, sesje server-side w PG, cookie HttpOnly | ADR-003, bez JWT |
 | Rate limit | slowapi | login + endpointy publiczne |
-| PDF | pdfplumber (ekstrakcja), anthropic SDK (asysta mapowania) | ADR-011 |
 | Obrazy | Pillow (walidacja + miniatury) | |
 | Logi | structlog → stdout (JSON w prod) | zbiera Docker |
 | Frontend | Vue 3 + TypeScript + Vite + Pinia + Tailwind CSS 4 | bez Nuxta |

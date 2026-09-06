@@ -103,27 +103,10 @@ P      /public/lists/{token}               — GET treść + PATCH check pozycji
                                              (`checked_at` jw.; rate limit,
                                              zero PII, 410 po expiry)
 
-U      POST /import/pdf                    — upload PDF → job (multipart, 25 MB,
-                                             sniffing `%PDF`); parsowanie SYNCHRONICZNE,
-                                             odpowiedź 201 z `parse_report` — DOSTARCZONE w B15
-U      GET  /import/jobs                   — lista własnych importów (?limit&offset)
-U      GET  /import/jobs/{id}              — szczegóły + `parse_report`; cudzy job 404
-U      DELETE /import/jobs/{id}            — usuwa job, staging i plik (tylko
-                                             uploaded/parsed/failed; inaczej 409)
-U      GET  /import/jobs/{id}/staged       — stan review: dania, składniki, uwagi,
-                                             blokady, `ai_available` — DOSTARCZONE w B16
-U      POST /import/jobs/{id}/resolve      — decyzje review (mapowania, porcje,
-                                             scalenia, zamknięcie uwag); pierwsze
-                                             wywołanie przestawia job na `in_review`
-U      POST /import/jobs/{id}/ai-suggest   — propozycje AI; 503 bez klucza API,
-                                             limit 10/min (ADR-011, D5)
-U      POST /import/jobs/{id}/approve      — tworzy przepisy/produkty/przeliczniki;
-                                             409 z `details.blockers` przy blokadach
-U      POST /import/jobs/{id}/reject       — kasuje staging i plik, job → `rejected`
-U      POST /transfer/export               — eksport własnych danych → ZIP
-A      POST /transfer/export?scope=instance — pełny eksport instancji → ZIP
+U      POST /transfer/export               — kopia danych rodziny → ZIP
+A      POST /transfer/export?scope=instance — kopia całej instancji → ZIP
 U/A    POST /transfer/import               — upload ZIP → raport DRY-RUN
-U/A    POST /transfer/import/{id}/apply    — zastosowanie z decyzjami kolizji
+U/A    POST /transfer/import/{id}/apply    — wczytanie z decyzjami kolizji
 A      /audit                              — przegląd dziennika
 GET    /health                             — bez auth: {status, version}
 ```
@@ -133,37 +116,6 @@ UNVERIFIED); edycja wartości odżywczych i statusu weryfikacji: ADMIN.
 **Fizyczne usunięcie produktu kanonicznego: wyłącznie ADMIN** (D13) i tylko
 gdy produkt jest nieużywany — inaczej 409 z `details.used_in`. USER dostaje 403
 z podpowiedzią archiwizacji. Mutacje `/categories`: ADMIN; odczyt: każdy.
-
-### Review importu PDF (stan faktyczny, BATCH_16)
-
-Pięć endpointów wyżej obsługuje JEDEN ekran i mają wspólne własności, których
-mapa nie mieści:
-
-1. **`resolve` i `staged` zwracają TEN SAM kształt** (`StagedJobResponse`):
-   job, dania ze składnikami i uwagami, uwagi całego pliku, lista blokad
-   i flaga `ai_available`. Dzięki temu każda decyzja to jedno żądanie, po
-   którym UI ma komplet stanu — bez dociągania i bez liczenia czegokolwiek
-   po swojej stronie.
-2. **`blockers` w odpowiedzi to dokładnie to, co `approve` odesłałby w 409.**
-   Jedna lista, dwa miejsca użycia — nieczynny przycisk nie może obiecywać
-   czegoś innego niż serwer.
-3. **Kalorie są PER POSIŁEK** (`recipes[].meal`): `pdf_kcal` w jadłospisie
-   opisuje posiłek, a posiłek bywa dwudaniowy (01_PDF_AUDIT §3.1, errata §9.1).
-   Pole `reason` niesie powód, dla którego wyliczenie nie było możliwe
-   (brak mapowań, produkty bez wartości) — zamiast fałszywego rozjazdu.
-4. **`ai-suggest` jest idempotentne i nieinwazyjne**: nadpisuje wyłącznie
-   propozycje (`suggested_product_id`, `match_kind`, `confidence`) składników
-   BEZ potwierdzenia. Mapowanie zatwierdzone przez człowieka jest nietykalne
-   (ADR-011). Brak `ANTHROPIC_API_KEY` ⇒ **503** z kodem `service_unavailable`
-   i komunikatem po polsku — to wspierany tryb pracy, nie awaria.
-5. **Statusy rozstrzygnięte zamykają ścieżkę**: `resolve`/`ai-suggest`/
-   `approve`/`reject` na jobie `approved` albo `rejected` dają **409**.
-   `GET /staged` działa dalej — zatwierdzony staging zostaje jako metadane
-   walidacyjne (03_DATABASE §12).
-
-Scope przepisów wybiera się RAZ dla całego joba (`POST /approve` z polem
-`scope`), nie per danie — piętnaście selectów na jednym ekranie nie dodałoby
-niczego poza klikaniem.
 
 ### Cykl życia dnia planu (stan faktyczny, ustalenie REVIEW R3)
 
@@ -202,7 +154,7 @@ w bazie nie ma i nie będzie ani jednej kolumny z wynikiem (niezmiennik
 - Zakres: `from <= to`, maksimum **92 dni**; przekroczenie to 422
   `validation_error`. Endpoint jest read-only, więc GET nie potrzebuje CSRF.
 
-### Format eksportu transfer v1 (stan faktyczny BATCH_14)
+### Format kopii danych — transfer v1 (stan faktyczny BATCH_14/BATCH_20)
 
 Plik eksportu to **ZIP** z dwoma rodzajami wpisów — i niczym więcej (każdy inny
 wpis import odrzuca, 07_SECURITY §6):
@@ -242,7 +194,7 @@ może być materiałem do credential stuffingu — po imporcie instancji ADMIN n
 hasła przez `PATCH /admin/users/{id}`), `sessions`, `shopping_lists.public_token`
 i `token_revoked` (żywy token dostępu bez logowania, ADR-010 — lista wraca bez
 linku i udostępnia się ją ponownie), `created_at`/`updated_at` poza
-`audit_entries`, `recipes.import_job_id` (job importu PDF nie jest przenoszony).
+`audit_entries`.
 
 **Zakres `user`** obejmuje encje NALEŻĄCE do konta (`ScopedQuery.owned_condition`
 — przynależność, nie widoczność, więc ADMIN nie dostaje tu całej instancji) plus
@@ -260,7 +212,11 @@ imporcie tworzyłaby pozycje z identyfikatorami instancji źródłowej.
 sprzątanym po `apply` i po 24 h) i zwraca `{import_id, to_create: {sekcja: liczba},
 collisions: [{entity, source_id, name, existing_id, existing_name, default}],
 warnings, photos}` — **bez ani jednego zapisu w bazie**, także bez wpisu
-w dzienniku. Kolizje wykrywane są po kluczu naturalnym: `normalized_name`
+w dzienniku. `to_create` liczy WYŁĄCZNIE wiersze, które `apply` naprawdę
+utworzy: wiersz scalany po `UNIQUE` i wiersz wchodzący `ON CONFLICT DO NOTHING`
+są z niego wyłączone, a dzieci reużytego rodzica pomijane (BATCH_20 domknął tu
+dług **U21** — raport zawyżał liczby przy wczytywaniu kopii na żywą bazę).
+Kolizje wykrywane są po kluczu naturalnym: `normalized_name`
 (produkty), `name` (kategorie, sklepy, tagi, rodziny), `code` (składniki
 odżywcze), `email` (konta) oraz `name` w obrębie encji NALEŻĄCYCH do
 importującego (przepisy, szablony). Kolizja e-maila i kodu składnika nie ma
@@ -275,7 +231,10 @@ drodze są kasowane ręcznie. Paczka należy do konta, które ją wgrało — cu
 `transfer.import` w dzienniku (liczby i decyzje, nigdy treść encji).
 
 Trzy zachowania przy powtórnym imporcie WŁASNEGO pliku na to samo konto:
-`plan_days` **scala się** z istniejącym dniem po `UNIQUE(owner_user_id, day)`;
+`plan_days` **scala się** z istniejącym dniem po `UNIQUE(owner_user_id, day)`
+— i raport MÓWI to wprost, zbiorczym ostrzeżeniem w rodzaju „3 dni planu
+zostaną scalone z tym, co już masz — posiłki, które już tam są, zostaną
+nietknięte" (decyzja **D24**; bez dat, bo te widać po wczytaniu);
 wiersze niosące FAKT o encji nadrzędnej (`product_unit_weights`,
 `product_nutrient_values`, `recipe_ratings`, `user_nutrition_goals`) wchodzą
 `ON CONFLICT DO NOTHING`; a **zawartość wiersza REUŻYTEGO zostaje nietknięta**

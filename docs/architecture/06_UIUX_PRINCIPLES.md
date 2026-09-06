@@ -103,7 +103,7 @@ Realizacja: `src/api/pagination.ts` + `components/domain/LoadMoreButton.vue`
    chipsy tagów + szukajka; serce = ulubione (tag systemowy). Filtrów czasu,
    trudności i oceny UI świadomie NIE MA, choć API je przyjmuje — rewizja
    wymaga decyzji właściciela (ustalenie B19). Lista jest paginowana wzorcem
-   z §3.6 (strona 50): import ośmiu jadłospisów daje 103 dania.
+   z §3.6 (strona 50): realny katalog rodziny to ponad sto dań.
 3. **Przepis szczegół** — hero zdjęcie, meta (czas, trudność, typ, kcal),
    taby: Składniki / Przygotowanie / Wartości odżywcze; regulacja liczby
    porcji przelicza składniki i wartości na żywo.
@@ -112,13 +112,13 @@ Realizacja: `src/api/pagination.ts` + `components/domain/LoadMoreButton.vue`
    zastosuj szablon/cykl.
 5. **Lista zakupów** — sekcje per kategoria w kolejności profilu sklepu,
    pozycje z dużym checkboxem, ilością i plakietką resztki; panel akcji:
-   udostępnij (link/QR/systemowe share), drukuj, eksport PDF later.
+   udostępnij (link/QR/systemowe share), drukuj, zapis do PDF later.
    Stan po BATCH_11: sklep wybiera się NA LIŚCIE (`StorePicker` z create-in-context)
    i zmiana od razu przesortowuje sekcje; nagłówki sekcji są sticky; odhaczenie
    jest optimistic z rollbackiem i komunikatem przy błędzie; pozycje „mam już
    w domu" są wyszarzone na końcu swojej sekcji; panel akcji ma dodatkowo
    „Przyjmij zakupy do spiżarni" (dialog potwierdzenia) i „Usuń listę" (dialog
-   z konsekwencjami). Eksport PDF pozostaje „later".
+   z konsekwencjami). Zapis listy do PDF pozostaje „later".
 6. **Spiżarnia** — grid/lista z filtrem kategorii i sortowaniem po dacie
    ważności; produkty bliskie przeterminowania wyróżnione. Paginacja wzorcem
    z §3.6, ale strona jest WIĘKSZA (100): spiżarnia to inwentarz przeglądany

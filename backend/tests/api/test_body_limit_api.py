@@ -8,7 +8,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.factories import create_user
+from tests.factories import create_recipe, create_user
 from tests.helpers import API, csrf_headers, login
 
 pytestmark = pytest.mark.api
@@ -64,36 +64,41 @@ async def test_zadanie_ponizej_sufitu_dociera_do_aplikacji(client: AsyncClient) 
     assert response.status_code == 422
 
 
-async def test_upload_pdf_ma_wyzszy_sufit_niz_reszta_api(
+async def test_upload_paczki_ma_wyzszy_sufit_niz_reszta_api(
     db_client: AsyncClient, db_session: AsyncSession
 ) -> None:
-    """3 MB na `/import/pdf` mija middleware (limit 25 MB + margines) i pada dopiero
-    na sniffingu treści (422) — czyli sufit per endpoint działa."""
+    """3 MB na `/transfer/import` mija middleware (limit 100 MB + margines) i pada
+    dopiero na sniffingu treści (422) — czyli sufit per endpoint działa."""
     user = await create_user(db_session)
     await login(db_client, user.email)
 
     response = await db_client.post(
-        f"{API}/import/pdf",
-        files={"file": ("nie-pdf.pdf", b"\x00" * (3 * MIB), "application/pdf")},
+        f"{API}/transfer/import",
+        files={"file": ("nie-zip.zip", b"\x00" * (3 * MIB), "application/zip")},
         headers=csrf_headers(db_client),
     )
 
     assert response.status_code == 422
 
 
-async def test_upload_pdf_ponad_limit_plus_margines_dostaje_413(
+async def test_upload_zdjecia_ponad_limit_plus_margines_dostaje_413(
     db_client: AsyncClient, db_session: AsyncSession
 ) -> None:
-    """Ciało ponad 25 MB + 1 MB marginesu → 413 z komunikatem o limicie 25 MB."""
+    """Ciało ponad 10 MB + 1 MB marginesu → 413 z komunikatem o limicie 10 MB.
+
+    Sufit sprawdzamy na zdjęciu, a nie na paczce transferu: 101 MB ciała
+    w teście API to 101 MB w pamięci procesu, a sama reguła jest ta sama.
+    """
     user = await create_user(db_session)
+    recipe = await create_recipe(db_session, owner=user)
     await login(db_client, user.email)
 
     response = await db_client.post(
-        f"{API}/import/pdf",
-        files={"file": ("duzy.pdf", b"\x00" * (26 * MIB + 1024), "application/pdf")},
+        f"{API}/recipes/{recipe.id}/photo",
+        files={"file": ("duze.jpg", b"\x00" * (11 * MIB + 1024), "image/jpeg")},
         headers=csrf_headers(db_client),
     )
 
     assert response.status_code == 413
     assert response.json()["error"]["code"] == "payload_too_large"
-    assert "25 MB" in response.json()["error"]["message"]
+    assert "10 MB" in response.json()["error"]["message"]

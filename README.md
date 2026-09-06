@@ -4,7 +4,7 @@ Prywatna, rodzinna aplikacja do planowania żywienia: przepisy, kalorie
 i makroskładniki (+ indeks/ładunek glikemiczny), plany dnia i tygodnia,
 skalowanie porcji dla rodziny, spiżarnia, inteligentne listy zakupowe
 (tury, opakowania, resztki, QR, linki publiczne), PWA z listą offline,
-import planów żywieniowych z PDF.
+kopia danych rodziny do pliku i z powrotem.
 
 **Stan: faza blueprint (2026-08-16). Implementacja nie została rozpoczęta.**
 
@@ -28,10 +28,7 @@ Deployment: Docker Compose na Odroid H2, za istniejącym reverse proxy.
 ```
 docs/architecture/        01–09: przegląd, domena, DB, API, frontend, UX,
                           security, testy, deployment+backup
-docs/adr/                 ADR-001…014 — trwałe decyzje techniczne
-docs/implementation-plan/ master plan, audyt PDF, rejestr decyzji (D),
-                          AI skills, PROGRESS, master prompt, batches/
-data/source_pdfs/         8 PDF-ów dietetyczki (wejście importera + testy)
-data/reference/           prototype.db — referencja walidacyjna importera
-                          (dane z poprzedniego prototypu; NIE seed)
+docs/adr/                 ADR-001…016 — trwałe decyzje techniczne
+docs/implementation-plan/ master plan, rejestr decyzji (D), AI skills,
+                          PROGRESS, master prompt, batches/
 ```

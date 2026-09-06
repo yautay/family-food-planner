@@ -28,7 +28,6 @@ from app.core.scope import Scope
 from app.modules.catalog.models import MeasureKind
 from app.modules.catalog.units import AmountUnit
 from app.modules.nutrition.schemas import NutritionRead
-from app.modules.recipes.models import RecipeSource
 
 __all__ = [
     "NutritionRead",
@@ -142,7 +141,6 @@ class RecipeSummary(BaseModel):
     base_servings: int
     prep_time_min: int | None
     difficulty: int | None
-    source: RecipeSource
     is_archived: bool
     photo_url: str | None
     photo_thumb_url: str | None

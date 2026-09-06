@@ -35,7 +35,7 @@ pytestmark = pytest.mark.unit
 
 MASS_PRODUCT = ProductMeasure(measure_kind=MeasureKind.MASS)
 VOLUME_PRODUCT = ProductMeasure(measure_kind=MeasureKind.VOLUME)
-#: Cebula z audytu PDF (01_PDF_AUDIT §5.2): sztuka waży 105 g.
+#: Cebula ze zmierzonego jadłospisu (BATCH_04): sztuka waży 105 g.
 PIECE_PRODUCT = ProductMeasure(measure_kind=MeasureKind.PIECE, piece_weight_g=Decimal("105.00"))
 #: Mąka pszenna: łyżka bywa 5, 12 albo 15 g — tu wpis produktu mówi 12.
 FLOUR = ProductMeasure(
@@ -120,7 +120,7 @@ def test_sztuki_dla_produktu_nieliczonego_w_sztukach_sa_odrzucane() -> None:
 def test_jednostki_domowe_przeliczaja_sie_przez_przelicznik_produktu(
     quantity: Decimal, unit: str, expected: Decimal
 ) -> None:
-    """Gramatura jednostki domowej jest własnością produktu (01_PDF_AUDIT §5.2)."""
+    """Gramatura jednostki domowej jest własnością produktu (ADR-005)."""
     assert normalize_amount(quantity, unit, FLOUR) == NormalizedAmount(expected, AmountUnit.GRAM)
 
 
@@ -296,7 +296,7 @@ def test_wyszukiwanie_przelicznika_ignoruje_zapis_etykiety() -> None:
     ],
 )
 def test_normalizacja_nazwy_produktu_zbija_spacje_i_wielkosc_liter(raw: str, expected: str) -> None:
-    """Duplikaty z audytu PDF (01_PDF_AUDIT §5.3) muszą dawać ten sam klucz."""
+    """Warianty zapisu tej samej nazwy muszą dawać ten sam klucz tożsamości."""
     assert normalize_name(raw) == expected
 
 
