@@ -1,5 +1,11 @@
 # BATCH_15 — PDF_IMPORT_EXTRACTION
 
+> **WYCOFANE przez BATCH_20 (decyzja D25, 2026-09-06).** Batch został
+> wykonany i zamknięty 2026-08-29, ale właściciel polecił usunąć importer PDF
+> w całości; kod, testy, dane i dokumenty opisane niżej NIE istnieją już
+> w repo po B20. Karta zostaje jako zapis historyczny (reguła D23) — nie
+> jest instrukcją do wykonania ani opisem stanu faktycznego.
+
 Klasa: PLAT · Zależności: BATCH_05 (przepisy + silnik nutrition); zalecane
 wykonanie po R3 (D2: importer nie później niż po R3) · Bramki decyzji: brak
 · Rozmiar: **L** (sekwencyjnie — NIE równolegle z B12–B14).

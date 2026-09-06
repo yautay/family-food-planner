@@ -1,5 +1,12 @@
 # BATCH_16 — PDF_IMPORT_REVIEW_AND_AI
 
+> **WYCOFANE przez BATCH_20 (decyzja D25, 2026-09-06).** Batch został
+> wykonany i zamknięty 2026-08-29, ale właściciel polecił usunąć importer PDF
+> w całości (razem z AI-asystą i kluczem Anthropic); kod, testy, dane
+> i dokumenty opisane niżej NIE istnieją już w repo po B20. Karta zostaje
+> jako zapis historyczny (reguła D23) — nie jest instrukcją do wykonania ani
+> opisem stanu faktycznego.
+
 Klasa: PLAT · Zależności: BATCH_15 (staging + parser), BATCH_04 (katalog,
 ProductPicker) · Bramki decyzji: **D5 — ZATWIERDZONA** (2026-08-16: wolno
 wysyłać treść PDF do Claude API; klucz server-side; AI tylko proponuje)

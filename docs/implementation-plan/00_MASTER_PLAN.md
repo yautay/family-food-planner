@@ -8,17 +8,21 @@ Metodyka: adaptacja sprawdzonego procesu netQArnera (jeden batch = jedna
 
 Paśnik = prywatna aplikacja rodzinna: produkty kanoniczne → przepisy →
 planowanie dni/tygodni → kalorie/makro/ŁG → spiżarnia → silnik zakupowy →
-listy (mobile/print/QR/link publiczny) → PWA/offline → import PDF diet →
-produkcja na Odroid H2 (Docker Compose, za istniejącym reverse proxy).
+listy (mobile/print/QR/link publiczny) → PWA/offline → kopia danych rodziny
+(eksport/import ze scaleniem) → produkcja na Odroid H2 (Docker Compose, za
+istniejącym reverse proxy). Import PDF diet był filarem planu do 2026-09-06
+(B15–B16 wykonane), po czym właściciel polecił go usunąć w całości (D25, B20).
 
 Stack (twardy): FastAPI + SQLAlchemy + Alembic + Pydantic + PostgreSQL;
 Vue 3 + TS + Vite + Tailwind + Pinia + shadcn-vue; Playwright + pytest.
 Architektura: modularny monolit (ADR-001). UI wyłącznie PL (D3).
 
 Kluczowa konsekwencja decyzji D2 (czysty start danych): aplikacja rusza
-z pustą bazą — treść wchodzi ręcznie (inline create) oraz przez **PDF
-importer**, który jest pełnoprawnym filarem planu (B15–B16), z wiążącym
-kontraktem w `01_PDF_AUDIT.md`.
+z pustą bazą — treść wchodzi ręcznie (inline create) albo z **kopii danych
+rodziny** (transfer, B14). Do 2026-09-06 drugą drogą był PDF importer
+(B15–B16, kontrakt `01_PDF_AUDIT.md`); decyzją **D25** zostaje usunięty
+w całości przez **B20**, a treść wniesiona nim do bazy zostaje jako zwykłe
+przepisy i produkty.
 
 ## 2. Dokumenty programu
 
@@ -26,7 +30,7 @@ kontraktem w `01_PDF_AUDIT.md`.
 |---|---|
 | `docs/architecture/01…09_*.md` | architektura: przegląd, domena, DB, API, frontend, UX, security, testy, deployment/backup |
 | `docs/adr/ADR-001…015` | trwałe decyzje techniczne (nie podejmować ponownie!) |
-| `docs/implementation-plan/01_PDF_AUDIT.md` | zmierzony kontrakt importera PDF |
+| `docs/implementation-plan/01_PDF_AUDIT.md` | zmierzony kontrakt importera PDF — **kasowany przez B20 (D25)**; po B20 dostępny tylko w historii gita |
 | `docs/implementation-plan/02_DECISIONS.md` | rejestr decyzji właściciela (D-numery, bramki batchy) |
 | `docs/implementation-plan/03_AI_SKILLS.md` | skille/narzędzia AI używane przy implementacji |
 | `docs/implementation-plan/PROGRESS.md` | status batchy + dziennik „o czym muszą wiedzieć następne batche" |
@@ -58,12 +62,13 @@ Batch identyfikowany NAZWĄ (nie „X z N" — plan może się zmieniać).
 | 12 | PWA_AND_OFFLINE | PLAT | 11, R3 | — |
 | 13 | STATISTICS | PLAT | 06, R3 (równolegle z 12) | — |
 | 14 | IMPORT_EXPORT | PLAT | R3 (wszystkie encje core) | — |
-| 15 | PDF_IMPORT_EXTRACTION | PLAT | 05 (zalecane po R3) | — |
-| 16 | PDF_IMPORT_REVIEW_AND_AI | PLAT | 15, 04 | D5 (zatwierdzona) |
+| 15 | PDF_IMPORT_EXTRACTION | PLAT | 05 (zalecane po R3) | — (wykonany; **WYCOFANY przez B20**, D25) |
+| 16 | PDF_IMPORT_REVIEW_AND_AI | PLAT | 15, 04 | D5 (zatwierdzona; wykonany; **WYCOFANY przez B20**, D25) |
 | R4 | REVIEW_PRE_PRODUCTION | REV | wszystkie 01–16 | — |
 | 19 | FIX_LIST_PAGINATION | FIX | R4 (ustalenie P1; przed 18) | — |
 | 17 | PRODUCTION_HARDENING | PROD | R4 | — |
-| 18 | PRODUCTION_DEPLOYMENT_AND_OPERATIONS | PROD | 17, **19** | **D6, D7** |
+| 20 | REMOVE_PDF_IMPORT_AND_FAMILY_BACKUP | PLAT | 17, R4 (transfer po D22); **przed 18** | **D25** (zatwierdzona 2026-09-06); D26 = rekomendacja, nie blokuje |
+| 18 | PRODUCTION_DEPLOYMENT_AND_OPERATIONS | PROD | 17, **19**, **20** | **D6, D7** |
 
 ## 4. Graf zależności
 
@@ -88,6 +93,9 @@ flowchart LR
     B12 & B13 & B14 & B16 --> R4{{R4 review}}
     R4 --> B17[17 hardening] --> B18[18 deployment]
     R4 --> B19[19 fix paginacja list] --> B18
+    B17 --> B20[20 usunięcie importera PDF + kopia danych rodziny] --> B18
+    B14 -.transfer.-> B20
+    B16 -.wycofany przez.-> B20
 ```
 
 ## 5. Kolejność wykonania i równoległość
@@ -102,6 +110,14 @@ z migracją `alembic heads` musi zwracać jedną głowę.
 Minimalny zestaw „aplikacja używalna na co dzień": B01–B11 (plan + zakupy).
 B15–B16 dowożą treść (przepisy z diet) — bez nich baza jest pusta poza
 wpisami ręcznymi, dlatego NIE odkładać ich za B17/B18.
+
+**Korekta kolejności 2026-09-06 (D25)**: R4 → B19 → B17 → **B20** → B18.
+B20 (usunięcie importera PDF, transfer jako jedyna kopia danych) wchodzi
+PRZED wdrożeniem, bo po nim ta sama zmiana wymagałaby migracji na żywej
+instancji i czyszczenia `pasnik.env`; sekwencyjnie (dotyka `main.py`,
+`router.ts`, `navigation.ts`, migracji i schematu). Zdanie o „ręcznym
+imporcie ośmiu jadłospisów" niżej jest historią — import został wykonany,
+a jego wyniki zostają w bazie jako zwykłe przepisy i produkty.
 
 **Kolejność po REVIEW R4, USTALONA PRZEZ WŁAŚCICIELA (2026-09-05)**:
 R4 → **B19** → ręczny import ośmiu jadłospisów → **B17** → B18. Batch 19 to
@@ -201,8 +217,9 @@ planowania / zakupy / przed produkcją).
 
 | Ryzyko | Mitygacja |
 |---|---|
-| Pusta baza po starcie (D2) zniechęca do używania | inline create wszędzie (B04+), importer PDF nie później niż po R3, seed demo do testów (nie do produkcji) |
-| Rozjazd wyliczeń kcal vs oczekiwania z PDF | silnik czysty + snapshoty PDF jako metadane walidacyjne + issue przy >10% |
+| Pusta baza po starcie (D2) zniechęca do używania | inline create wszędzie (B04+), seed demo do testów (nie do produkcji); treść wniesiona importerem PDF przed jego wycofaniem (D25) zostaje w bazie; odtwarzanie i przenoszenie treści = kopia danych rodziny (B14/B20) |
+| Rozjazd wyliczeń kcal vs oczekiwania z PDF | **ryzyko wygasło z D25** (importer usunięty przez B20); prawdą są wartości wyliczane z produktów kanonicznych |
+| Usuwanie feature'u zostawia martwe sploty (config, limity, enumy, docs) | B20: grep-sweep jako kryterium akceptacji (AC 4), allowlista serwowanych podkatalogów uploadów, test dryfu modeli |
 | Zaklikana obsługa (antyteza celu) | 06_UIUX §2 jako kryterium review każdego batcha UI |
 | Model porcji rodzinnych komplikuje prosty przypadek | prosty mnożnik domyślny; rozkład rodzinny opcjonalny (02_DOMAIN §7) |
 | Offline sync psuje stan checkboxów | ADR-009: LWW per pozycja + testy scenariuszy offline |
@@ -230,9 +247,9 @@ planowania / zakupy / przed produkcją).
 | Lista zakupowa: mobile, druk, QR, share, token publiczny, expiry | 11 |
 | PWA + offline lista | 12 |
 | Statystyki | 13 |
-| Import/eksport (JSON/ZIP, własność danych) | 14 |
-| PDF importer (pipeline, review, AI-asysta) | 15, 16 |
-| Audit log | 03 (fundament), 04/14/16 (zapisy) |
+| Import/eksport (JSON/ZIP, własność danych) → **kopia danych rodziny ze scaleniem (jedyny import/eksport, D25)** | 14, **20** |
+| PDF importer (pipeline, review, AI-asysta) | 15, 16 — **wycofane przez 20 (D25, 2026-09-06)** |
+| Audit log | 03 (fundament), 04/14 (zapisy; wpisy `import.*` z 16 zostają w dzienniku jako tekst historyczny) |
 | Produkcja: secrets/health/backup/restore/update/rollback | 17, 18 |
 
 ## 12. Zmiany planu

@@ -30,7 +30,8 @@ commit wykonany). Kolumna „Blokery" = zależności + decyzje z 02_DECISIONS.
 | R4 REVIEW_PRE_PRODUCTION | [x] | — | `batch(R4)` na master (hash wpisać po push) |
 | 19 FIX_LIST_PAGINATION | [x] | — | `batch(19)` na master (hash wpisać po push) |
 | 17 PRODUCTION_HARDENING | [x] | — | `batch(17)` na master (hash wpisać po push) |
-| 18 PRODUCTION_DEPLOYMENT_AND_OPERATIONS | [ ] | — (17 i 19 DONE; D6 i D7 zatwierdzone 2026-09-05) | |
+| 20 REMOVE_PDF_IMPORT_AND_FAMILY_BACKUP | [ ] | — (D25 zatwierdzone 2026-09-06; D26 = rekomendacja, nie blokuje; B17 i R4 DONE) | |
+| 18 PRODUCTION_DEPLOYMENT_AND_OPERATIONS | [ ] | **B20** (od 2026-09-06 — usunięcie importera PDF musi wejść PRZED wdrożeniem); 17 i 19 DONE; D6 i D7 zatwierdzone 2026-09-05 | |
 
 ## Dziennik
 
@@ -41,6 +42,66 @@ zmiany dotykające przyszłych batchy trzeba wpisać do ich kart
 (00_MASTER_PLAN §8); dziennik to indeks, nie schowek.
 
 ---
+
+**2026-09-06 — DECYZJA WŁAŚCICIELA D25: importer PDF do usunięcia W CAŁOŚCI;
+jedynym importem/eksportem zostaje transfer jako „kopia danych rodziny".
+Nowy batch BATCH_20 wchodzi PRZED B18.**
+
+Właściciel polecił usunąć całą funkcjonalność importu PDF i zostawić jeden
+mechanizm wymiany danych: kopię danych rodziny (produkty, przeliczniki
+jednostek, przepisy, posiłki planu, szablony, spiżarnia, tury, listy) z
+ponownym wgraniem ze SCALENIEM. Martwy kod ma zniknąć całkowicie. Plan
+zmieniony w tym commicie: karta
+`batches/BATCH_20_REMOVE_PDF_IMPORT_AND_FAMILY_BACKUP.md`, tabela §3 i graf
+§4 w 00_MASTER_PLAN, zależność B18 rozszerzona o B20, D25 zatwierdzone,
+D21 zamknięte jako bezprzedmiotowe, D26 (semantyka „rodzina") jako
+rekomendacja bez blokady.
+
+**Rzeczy, o których musi wiedzieć B20 (i każdy po nim):**
+
+1. **Analiza wykazała, że transfer z B14/R4 JUŻ JEST kopią danych rodziny
+   w sensie zakresu** — `owned_condition` bierze własne encje + wszystkie
+   encje rodziny o `scope=household` + spiżarnię rodziny + profile, a 30 sekcji
+   formatu v1 obejmuje produkty, `product_unit_weights` („miary"),
+   `plan_meals` („posiłki"), przepisy, szablony, spiżarnię i listy. B20 NIE
+   pisze nowego eksportu: przemianowuje sekcję „Twoje dane" na „Kopia danych
+   rodziny", dopowiada w UI konsekwencję własności (D26: wszystko z kopii
+   należy do konta, które ją wczytuje) i domyka **D24 + U21** (raport
+   DRY-RUN wymienia scalane dni planu i liczy `to_create` dokładnie) — obie
+   rzeczy mają jeden mechanizm: indeks istniejących wierszy podawany do
+   czystego `analyze`.
+2. **Ślad importera jest szeroki i zinwentaryzowany w karcie** — 3924 linie
+   modułu, 3810 linii testów, 2243 linie frontendu, 12,6 MB danych w repo,
+   5 dokumentów, splotów w `core/` sześć (deps, config, body_limit,
+   uploads.PRIVATE_SUBDIRS, uploads_report, ratelimits-komentarz), w domenie
+   pięć (audit enumy, `RecipeSource`/`import_job_id`/`create_imported_recipe`,
+   `record_unit_weight_samples` + `catalog/unit_weights.py`, komentarz w
+   `transfer/serializer.py`, komentarze w `seed_demo`). Kryterium „całkowicie"
+   to grep-sweep z Acceptance Criteria 4 karty — trafienia dozwolone wyłącznie
+   w historii (PROGRESS, 02_DECISIONS, karty batchy, ADR-011 SUPERSEDED,
+   migracje 0006/0014/0015/0016).
+3. **Pułapka nazw**: `backend/app/modules/transfer/importer.py` to importer
+   PACZKI TRANSFERU i ZOSTAJE. Kasujemy moduł `importer` (PDF), nie plik
+   `importer.py` transferu.
+4. **Jedyne miejsce, w którym usuwanie może POGORSZYĆ bezpieczeństwo**:
+   `resolve_upload_path` pracuje na liście ZAKAZANYCH podkatalogów, więc
+   zdjęcie `import-pdf` z `PRIVATE_SUBDIRS` przy plikach zostawionych na
+   dysku zrobiłoby z jadłospisów (nazwisko pacjenta na stronie tytułowej)
+   pliki pobieralne dla każdego zalogowanego. Karta rekomenduje odwrócenie
+   na allowlistę serwowanych podkatalogów + ręczne skasowanie
+   `backend/data/uploads/import-pdf/` na dev (13 plików); test 404 w obu
+   wariantach jest obowiązkowy.
+5. **`recipes.source` i `recipe_source` też wypadają** — po usunięciu
+   importera jedyną wartością byłoby `manual`, frontend pola nie czyta.
+   `product_unit_weights.source` (wolny tekst wpisywany także w formularzu
+   produktu) i `samples_count` ZOSTAJĄ — mają konsumenta poza importerem.
+6. **Dane w bazie dev nie giną**: przepisy i produkty wniesione importerem to
+   zwykłe encje; migracja `0016` kasuje tylko kolumny wiążące je ze stagingiem.
+   Stage 0 karty każe spisać liczności przed i porównać po.
+7. **Produkcji jeszcze nie ma** (B18 po B20), więc migracja destrukcyjna
+   dotyczy wyłącznie baz dev/test. B18 dostaje korekty: bez `PDF_*`/
+   `ANTHROPIC_*` w `pasnik.env`, limit ciała w Caddy tylko dla paczki 100 MB,
+   `OPERATIONS.md` bez `/import`.
 
 **2026-09-05 — BATCH_17 (PRODUCTION_HARDENING) — warunek 3 werdyktu R4 ZAMKNIĘTY;
 B18 ma komplet wejść.**

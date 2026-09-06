@@ -1,8 +1,20 @@
 # BATCH_18 — PRODUCTION_DEPLOYMENT_AND_OPERATIONS
 
-Klasa: PROD · Zależności: B17 + B19 · Bramki decyzji **D6 i D7 —
-ZATWIERDZONE 2026-09-05**, patrz „Ustalenia REVIEW R4" niżej ·
-Szacunek rozmiaru: L
+Klasa: PROD · Zależności: B17 + B19 + **B20** (od 2026-09-06, D25) · Bramki
+decyzji **D6 i D7 — ZATWIERDZONE 2026-09-05**, patrz „Ustalenia REVIEW R4"
+niżej · Szacunek rozmiaru: L
+
+> **Korekta planu 2026-09-06 (D25, BATCH_20)**: importer PDF zostaje usunięty
+> PRZED wdrożeniem, a jedynym importem/eksportem jest transfer („kopia danych
+> rodziny"). Dla tej karty znaczy to: (1) `pasnik.env` i lista zmiennych BEZ
+> `PDF_MAX_UPLOAD_MB`, `PDF_PARSE_TIMEOUT_S`, `ANTHROPIC_*`; (2) w ustaleniu
+> D7 pkt 4 (limit ciała żądania w Caddy) zostaje wyłącznie „paczka transferu
+> 100 MB" — „PDF 25 MB" jest nieaktualne; (3) wzmianki o ręcznym imporcie
+> jadłospisów w Context to historia (import wykonany przed B20);
+> (4) `docs/OPERATIONS.md` nie opisuje `/import`; (5) restore drill z
+> transferem logicznym — bez zmian. Szczegóły edytuje B20 w tej karcie
+> (Cross-Batch Impact karty B20); do tego czasu czytaj tę kartę z powyższą
+> poprawką.
 
 ## Goal
 
