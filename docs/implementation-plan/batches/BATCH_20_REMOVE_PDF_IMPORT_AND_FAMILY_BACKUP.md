@@ -795,14 +795,24 @@ Dokumentacja:
    wewnątrz `` `PK` `` (artefakt sprzed tego batcha) — zniknęły przy
    przepisaniu tej sekcji, ale warto sprawdzić resztę dokumentów.
 
-**Do zrobienia przez WŁAŚCICIELA poza repo**
+**Rzeczy po stronie WŁAŚCICIELA — stan na 2026-09-12, nic nie zostało otwarte**
 
-1. Usunąć z lokalnego `.env` klucze `PDF_MAX_UPLOAD_MB`, `PDF_PARSE_TIMEOUT_S`
-   i `ANTHROPIC_*` — `Settings` ma `extra="ignore"`, więc start nie pada, ale
-   zostawione kłamią o konfiguracji instalacji.
-2. Skasować katalog `backend/data/uploads/import-pdf/` (13 plików, 18,9 MB,
-   dane osobowe). Agent go NIE ruszył — to dane, nie artefakt builda, a karta
-   dopuszcza kasowanie tylko po jawnej zgodzie w tej samej sesji.
-   Stan przed: `task uploads-report` wymienia dokładnie te 13 plików jako
-   osierocone i nikt ich nie pobierze (allowlista `/uploads/*`).
+1. ~~Usunąć z lokalnego `.env` klucze `PDF_MAX_UPLOAD_MB`, `PDF_PARSE_TIMEOUT_S`
+   i `ANTHROPIC_*`~~ — **BEZPRZEDMIOTOWE**: właściciel sprawdził i tych kluczy
+   w jego `.env` po prostu nie ma. Były w `.env.example` (szablon), a `Settings`
+   miało dla nich wartości domyślne, więc instalacja nigdy nie musiała ich
+   ustawiać. Punkt powstał na zapas, bez wglądu w plik (odczyt `.env` jest
+   w środowisku agenta zablokowany uprawnieniami).
+2. **Katalog `backend/data/uploads/import-pdf/` ZOSTAJE — decyzja właściciela
+   z 2026-09-12: „niech sobie leży".** 13 plików, 18,9 MB, jadłospisy jednej
+   osoby. **Nie proponuj kasowania po raz kolejny** — pytanie zostało zadane
+   dwa razy i zamknięte. Dwie konsekwencje, które trzeba znać, a nie naprawiać:
+   (a) `task uploads-report` będzie je wymieniał jako 13 osieroconych plików
+   i **to jest poprawny wynik**, nie sygnał do sprzątania (D10: komenda
+   raportuje, człowiek decyduje); (b) runbook backupu z **B18** archiwizuje
+   katalog uploadów w CAŁOŚCI, więc te pliki pojadą do każdej kopii zapasowej
+   — jeśli kopie mają trafiać poza dom (off-device, cudzy dysk), to jest moment
+   na przypomnienie właścicielowi o punkcie (b), a nie na usunięcie plików.
+   Pobrać ich nikt nie pobierze: allowlista `core/uploads.SERVED_SUBDIRS`
+   zamyka ten katalog dla `/uploads/*`.
 3. ~~Rozstrzygnąć D27 i D28~~ — zrobione 2026-09-06, obie NIE.

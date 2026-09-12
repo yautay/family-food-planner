@@ -165,6 +165,13 @@ Wymagane lektury przed startem:
   uploadów i backupów; `task uploads-report` / `python -m app.cli
   uploads-report` (w kontenerze: `docker compose exec app python -m app.cli
   uploads-report`) wypisuje pliki bez referencji — nic nie kasuje.
+  **Na maszynie dev raport pokaże 13 osieroconych PDF-ów (18,9 MB)
+  w `uploads/import-pdf/` — to NIE jest usterka do naprawienia.** Katalog
+  został po wycofanym imporcie jadłospisów (B20, D25), a właściciel świadomie
+  zdecydował (2026-09-12), że pliki zostają. Runbook ma o nich wspomnieć
+  w JEDNYM miejscu: backup archiwizuje katalog uploadów w całości, więc jeśli
+  kopie mają trafiać poza dom, właściciel powinien wiedzieć, że jadą razem
+  z nimi. Nie kasuj ich i nie proponuj kasowania.
 - Cookies w prod mają prefiks `__Host-` (`__Host-pasnik_session`,
   `__Host-csrf_token`) — wymaga `Secure`, czyli HTTPS na proxy; po HTTP
   logowanie w prod NIE ZADZIAŁA (przeglądarka odrzuci cookie). Smoke

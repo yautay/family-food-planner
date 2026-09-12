@@ -89,12 +89,16 @@ Baza dev bez zmian w treści: `recipes` 5, `canonical_products` 22,
    sekretem w konfiguracji jest hasło bazy w `DATABASE_URL`. Nowa integracja
    wychodząca na zewnątrz = decyzja właściciela, nie „dopisanie zmiennej"
    (07_SECURITY §7).
-6. **Właściciel ma dwie rzeczy do zrobienia poza repo** (agent ich nie tyka):
-   skasować z lokalnego `.env` klucze `PDF_MAX_UPLOAD_MB`, `PDF_PARSE_TIMEOUT_S`
-   i `ANTHROPIC_*` (`Settings` ma `extra="ignore"`, więc start nie pada — ale
-   zostawione kłamią o konfiguracji) oraz usunąć katalog
-   `backend/data/uploads/import-pdf/` (13 plików, dane osobowe; do tego czasu
-   `task uploads-report` pokazuje je jako sieroty i nikt ich nie pobierze).
+6. **Sprzątanie po importerze poza repo — ZAMKNIĘTE 2026-09-12, nic nie wisi.**
+   Kluczy `PDF_*`/`ANTHROPIC_*` w lokalnym `.env` właściciela nigdy nie było
+   (siedziały w `.env.example`, a `Settings` miało wartości domyślne).
+   **Katalog `backend/data/uploads/import-pdf/` ZOSTAJE** — decyzja właściciela:
+   13 plików, 18,9 MB, „niech sobie leży". Nie proponuj kasowania po raz
+   kolejny. Skutki, które trzeba znać, a nie naprawiać: `task uploads-report`
+   wymienia je jako osierocone i **to jest poprawny wynik** (D10 — komenda
+   raportuje, człowiek decyduje), a backup z B18 archiwizuje katalog uploadów
+   w całości, więc pliki pojadą do kopii zapasowych. Pobrać ich nikt nie
+   pobierze: allowlista `core/uploads.SERVED_SUBDIRS` zamyka ten katalog.
 7. **Sprzątanie E2E nie obejmuje tur, generacji ani list zakupowych** (nowy
    dług, zmierzony w tym batchu): `cleanupE2eData` kasuje po prefiksie `E2E `,
    a `shopping-generate.spec.ts` tworzy tury „Niedziela"/„Środa" i listy
