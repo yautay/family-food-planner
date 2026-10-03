@@ -5,6 +5,12 @@ Granice odpowiedzialności (ADR-008, karta B05):
 - **Widoczność** — wyłącznie `ScopedQuery` (`_RECIPES`); cudzy przepis to 404,
   edycję treści HOUSEHOLD ma każdy członek rodziny, `assert_can_manage`
   obowiązuje TYLKO zmianę scope i usunięcie.
+- **Zakres `global`** (BATCH_21, D32) — przepis widoczny dla każdego zalogowanego
+  (`allow_global=True` w `_RECIPES`), a tworzony, edytowany, fotografowany,
+  przenoszony między zakresami, archiwizowany i usuwany WYŁĄCZNIE przez ADMIN-a.
+  Rolę sprawdzamy jawnie, nie przez `owner_user_id`. Zwykły użytkownik dostaje
+  własną kopię (`copy_recipe`); obniżenie zakresu przepisu używanego przez inne
+  rodziny to 409 z `used_in`.
 - **Ilości** — każda pozycja składnika przechodzi przez `catalog/units.py`
   przy zapisie; nieprzeliczalna ilość wysadza CAŁY zapis (422) i nic nie
   trafia do bazy (niezmiennik 02_DOMAIN §13.1).
@@ -35,11 +41,19 @@ from app.core.deletion import (
     UsedInRef,
     assert_deletable,
     conflict_from_integrity_error,
+    used_in_details,
 )
-from app.core.errors import AppError, ConflictError, NotFoundError
-from app.core.scope import NO_HOUSEHOLD_MESSAGE, Scope, ScopedQuery
-from app.core.uploads import delete_image, save_image
-from app.modules.accounts.models import User
+from app.core.errors import AppError, ConflictError, ForbiddenError, NotFoundError
+from app.core.scope import (
+    GLOBAL_ADMIN_ONLY_MESSAGE,
+    NO_HOUSEHOLD_MESSAGE,
+    RecipeScope,
+    Scope,
+    ScopedQuery,
+)
+from app.core.uploads import copy_image, delete_image, save_image
+from app.modules.accounts.models import User, UserRole
+from app.modules.audit.service import AuditAction, AuditEntity, AuditService
 from app.modules.catalog.models import CanonicalProduct, ProductUnitWeight
 from app.modules.catalog.nutrition_adapter import measure_for, nutrition_for
 from app.modules.catalog.service import register_product_reference_finder
@@ -81,6 +95,17 @@ INGREDIENT_PRODUCT_NOT_FOUND = (
     "ponownie."
 )
 NO_PHOTO_MESSAGE = "Ten przepis nie ma zdjęcia."
+GLOBAL_CREATE_ADMIN_ONLY = (
+    "Przepisy dostępne dla wszystkich rodzin publikuje wyłącznie administrator. "
+    "Zapisz przepis jako prywatny albo rodzinny."
+)
+ARCHIVE_ADMIN_ONLY = "Przepisy archiwizuje wyłącznie administrator."
+RECIPE_USED_BY_OTHER_FAMILIES = (
+    "Przepis jest używany w planach lub szablonach innych rodzin, więc nie można zawęzić "
+    "jego widoczności. Zarchiwizuj go zamiast tego — zniknie z list, ale istniejące plany "
+    "dalej się policzą."
+)
+COPY_SUFFIX = " (kopia)"
 MEASURE_KIND_MISMATCH = (
     "ilość składnika zapisano w jednostce niezgodnej z obecnym sposobem liczenia produktu — "
     "popraw składnik w przepisie"
@@ -93,7 +118,20 @@ _AMOUNT_QUANTUM = Decimal("0.001")
 #: Kwant średniej oceny w odpowiedziach (gwiazdki z jednym miejscem po przecinku).
 _RATING_QUANTUM = Decimal("0.1")
 
-_RECIPES = ScopedQuery(Recipe, not_found_message=RECIPE_NOT_FOUND)
+
+def recipe_visibility_query(not_found_message: str) -> ScopedQuery[Recipe]:
+    """JEDYNA fabryka `ScopedQuery` dla przepisów — widzi także zakres `global` (D32).
+
+    Moduł, który waliduje widoczność przepisu (plan, szablony), woła tę funkcję
+    zamiast składać własne `ScopedQuery(Recipe, …)`: pominięta flaga `allow_global`
+    kończyłaby się po cichu tym, że lista pokazuje przepis globalny, a dodanie go
+    do planu obcej rodziny daje 422. Wyjątek: transfer czyta wyłącznie
+    `select_owned` (przynależność) i ma własne zapytanie BEZ flagi.
+    """
+    return ScopedQuery(Recipe, not_found_message=not_found_message, allow_global=True)
+
+
+_RECIPES = recipe_visibility_query(RECIPE_NOT_FOUND)
 
 
 class RecipeValidationError(AppError):
@@ -123,6 +161,22 @@ def unregister_recipe_reference_finder(finder: RecipeReferenceFinder) -> None:
     """Wyrejestruj licznik — testy sprzątają po sobie."""
     if finder in _RECIPE_REFERENCE_FINDERS:
         _RECIPE_REFERENCE_FINDERS.remove(finder)
+
+
+#: Licznik użyć przepisu przez wiersze SPOZA wskazanego grona (użytkownik + jego
+#: rodzina): `(session, recipe_id, keep_household_id, keep_owner_id)`. Rejestrują go
+#: moduły z dniami planu i szablonami; używa go obniżenie zakresu z `global` (D32).
+RecipeForeignUseFinder = Callable[
+    [AsyncSession, int, int | None, int], Awaitable[Sequence[UsedInRef]]
+]
+
+_RECIPE_FOREIGN_USE_FINDERS: list[RecipeForeignUseFinder] = []
+
+
+def register_recipe_foreign_use_finder(finder: RecipeForeignUseFinder) -> None:
+    """Zarejestruj licznik użyć przepisu spoza wskazanego grona (wołane przy imporcie modułu)."""
+    if finder not in _RECIPE_FOREIGN_USE_FINDERS:
+        _RECIPE_FOREIGN_USE_FINDERS.append(finder)
 
 
 @dataclass(frozen=True)
@@ -222,6 +276,7 @@ class RecipesService:
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
+        self._audit = AuditService(session)
         settings = get_settings()
         self._uploads_root = Path(settings.uploads_dir)
         self._image_max_bytes = settings.image_max_upload_mb * 1024 * 1024
@@ -244,7 +299,7 @@ class RecipesService:
         prep_time_max: int | None = None,
         difficulty_max: int | None = None,
         rating_min: int | None = None,
-        scope: Scope | None = None,
+        scope: RecipeScope | None = None,
         include_archived: bool = False,
     ) -> tuple[list[RecipeView], int]:
         """Lista widocznych przepisów z filtrami widoku 2 (karta B05).
@@ -342,7 +397,12 @@ class RecipesService:
         Nieprzeliczalna ilość któregokolwiek składnika wysadza całość PRZED
         commitem: w bazie nie powstaje ani przepis, ani żaden składnik
         (02_DOMAIN §13.1).
+
+        Zakres `global` tworzy wyłącznie ADMIN (403 dla USER-a); przepis dostaje
+        wtedy `household_id = NULL` (`ownership_for_create`, CHECK z `0018`).
         """
+        if payload.scope == RecipeScope.GLOBAL and actor.role is not UserRole.ADMIN:
+            raise ForbiddenError(GLOBAL_CREATE_ADMIN_ONLY)
         recipe = Recipe(
             name=payload.name,
             instructions=payload.instructions,
@@ -356,6 +416,14 @@ class RecipesService:
 
         self._session.add_all(await self._build_ingredients(recipe.id, payload.ingredients))
         await self._replace_tags(recipe.id, payload.tag_ids)
+        if recipe.scope == RecipeScope.GLOBAL:
+            self._audit.record(
+                action=AuditAction.RECIPE_GLOBAL_CREATE,
+                entity_type=AuditEntity.RECIPE,
+                entity_id=recipe.id,
+                actor_id=actor.id,
+                payload={"name": recipe.name},
+            )
         await self._session.commit()
         return await self.recipe_detail(actor, recipe.id)
 
@@ -366,20 +434,16 @@ class RecipesService:
         stare `id` pozycji nie są zachowywane — rozstrzygnięcie z karty B05).
 
         Edycja treści HOUSEHOLD nie wymaga `assert_can_manage` (rodzina sobie
-        ufa); wymaga go WYŁĄCZNIE zmiana scope.
+        ufa); wymaga go WYŁĄCZNIE zmiana scope. Przepis `global` edytuje (treść,
+        zdjęcie i zakres) wyłącznie ADMIN — 403 dla USER-a, bo przepis jest widoczny.
         """
         recipe = await _RECIPES.get_or_404(self._session, recipe_id, actor)
+        _RECIPES.assert_can_edit_content(recipe, actor)
 
-        if payload.scope is not recipe.scope:
-            _RECIPES.assert_can_manage(recipe, actor)
-            if payload.scope is Scope.HOUSEHOLD and recipe.household_id is None:
-                # Wiersz mógł powstać, zanim właściciel dostał rodzinę —
-                # uzupełniamy household WŁAŚCICIELA, nie edytującego.
-                owner = await self._session.get(User, recipe.owner_user_id)
-                if owner is None or owner.household_id is None:
-                    raise ConflictError(NO_HOUSEHOLD_MESSAGE)
-                recipe.household_id = owner.household_id
-            recipe.scope = payload.scope
+        previous_scope = recipe.scope
+        previous_owner_id = recipe.owner_user_id
+        if payload.scope != previous_scope:
+            await self._change_scope(recipe, payload.scope, actor)
 
         recipe.name = payload.name
         recipe.instructions = payload.instructions
@@ -392,16 +456,244 @@ class RecipesService:
         )
         self._session.add_all(await self._build_ingredients(recipe.id, payload.ingredients))
         await self._replace_tags(recipe.id, payload.tag_ids)
+        if RecipeScope.GLOBAL in (previous_scope, recipe.scope):
+            self._audit.record(
+                action=AuditAction.RECIPE_GLOBAL_UPDATE,
+                entity_type=AuditEntity.RECIPE,
+                entity_id=recipe.id,
+                actor_id=actor.id,
+                payload={
+                    "name": recipe.name,
+                    "scope_before": previous_scope.value,
+                    "scope_after": recipe.scope.value,
+                    # Obniżenie z `global` przekazuje przepis wykonującemu ADMIN-owi —
+                    # dziennik zachowuje, czyj był przedtem.
+                    "owner_before": previous_owner_id,
+                    "owner_after": recipe.owner_user_id,
+                },
+            )
         await self._session.commit()
         return await self.recipe_detail(actor, recipe.id)
 
+    async def _change_scope(self, recipe: Recipe, target: RecipeScope, actor: User) -> None:
+        """Zmiana zakresu przepisu — jedyne miejsce, które przestawia `scope`.
+
+        Reguły (D32):
+
+        - zmianę robi właściciel albo ADMIN (`assert_can_manage`; dla `global`
+          wyłącznie ADMIN), a wejście do `global` i wyjście z niego — wyłącznie
+          ADMIN, także gdy przepis jest jego własnością,
+        - wejście do `global` zeruje `household_id` (CHECK `global_without_household`),
+        - wyjście z `global` przekazuje przepis ADMIN-owi wykonującemu akcję
+          (`owner_user_id` i `household_id` = jego), bo przepis globalny nie ma
+          rodziny, do której mógłby wrócić; bez rodziny ADMIN-a zakres `household`
+          jest niemożliwy (409). Gdy inne rodziny albo konta używają przepisu
+          w planach lub szablonach — 409 z `used_in`: po zawężeniu zniknąłby im
+          z pickerów, a ich szablony dostałyby `DEAD_RECIPES`.
+        """
+        _RECIPES.assert_can_manage(recipe, actor)
+        leaving_global = recipe.scope == RecipeScope.GLOBAL
+        if (target == RecipeScope.GLOBAL or leaving_global) and actor.role is not UserRole.ADMIN:
+            raise ForbiddenError(GLOBAL_ADMIN_ONLY_MESSAGE)
+
+        if target == RecipeScope.GLOBAL:
+            recipe.household_id = None
+        elif leaving_global:
+            ScopedQuery.assert_scope_allowed(actor, target)
+            keep_household_id = actor.household_id if target == RecipeScope.HOUSEHOLD else None
+            # Blokada wiersza przepisu: wstawienie pozycji planu z FK do niego bierze
+            # `FOR KEY SHARE`, więc trwający zapis obcej rodziny albo skończy się PRZED
+            # naszym sprawdzeniem (i je zablokuje), albo poczeka na commit. Zamyka to
+            # wyścig „sprawdzone → ktoś dodał → przestawione" poza oknem samego
+            # sprawdzenia widoczności po stronie wstawiającego.
+            await self._session.execute(
+                select(Recipe.id).where(Recipe.id == recipe.id).with_for_update()
+            )
+            await self._assert_unused_outside(
+                recipe.id, keep_household_id=keep_household_id, keep_owner_id=actor.id
+            )
+            recipe.owner_user_id = actor.id
+            recipe.household_id = actor.household_id
+        elif target == RecipeScope.HOUSEHOLD and recipe.household_id is None:
+            # Wiersz mógł powstać, zanim właściciel dostał rodzinę —
+            # uzupełniamy household WŁAŚCICIELA, nie edytującego.
+            owner = await self._session.get(User, recipe.owner_user_id)
+            if owner is None or owner.household_id is None:
+                raise ConflictError(NO_HOUSEHOLD_MESSAGE)
+            recipe.household_id = owner.household_id
+        recipe.scope = target
+
+    async def _assert_unused_outside(
+        self, recipe_id: int, *, keep_household_id: int | None, keep_owner_id: int
+    ) -> None:
+        """409 z `used_in`, gdy przepis jest użyty przez wiersze spoza wskazanego grona."""
+        references: list[UsedInRef] = []
+        for finder in _RECIPE_FOREIGN_USE_FINDERS:
+            references.extend(
+                await finder(self._session, recipe_id, keep_household_id, keep_owner_id)
+            )
+        if references:
+            raise ConflictError(
+                RECIPE_USED_BY_OTHER_FAMILIES,
+                details=used_in_details(references[:USED_IN_LIMIT]),
+            )
+
+    async def set_archived(
+        self, recipe_id: int, *, actor: User, archived: bool
+    ) -> RecipeDetailView:
+        """Archiwizacja i przywrócenie — wyłącznie ADMIN (D32 pkt 7).
+
+        Zużyty przepis `global` nie da się usunąć (FK RESTRICT + liczniki
+        „używane w"), więc archiwizacja jest jedynym sposobem jego wycofania:
+        znika z list i pickerów, a istniejące plany i szablony dalej go liczą.
+        Przepis niewidoczny dla wywołującego to 404, widoczny — 403 dla USER-a.
+        """
+        recipe = await _RECIPES.get_or_404(self._session, recipe_id, actor)
+        if actor.role is not UserRole.ADMIN:
+            raise ForbiddenError(ARCHIVE_ADMIN_ONLY)
+
+        recipe.is_archived = archived
+        self._audit.record(
+            action=AuditAction.RECIPE_ARCHIVE if archived else AuditAction.RECIPE_UNARCHIVE,
+            entity_type=AuditEntity.RECIPE,
+            entity_id=recipe.id,
+            actor_id=actor.id,
+            payload={"name": recipe.name, "scope": recipe.scope.value},
+        )
+        await self._session.commit()
+        return await self.recipe_detail(actor, recipe_id)
+
+    async def copy_recipe(
+        self, recipe_id: int, *, actor: User, scope: Scope | None
+    ) -> RecipeDetailView:
+        """„Kopiuj do mojej rodziny": własna, edytowalna kopia widocznego przepisu (D32 pkt 6).
+
+        Kopia dostaje składniki (wiersze przepisane jak są, bez ponownej
+        normalizacji — dryf `measure_kind` nie może wywrócić kopiowania), tagi
+        i WŁASNY plik zdjęcia (`copy_image`: nowa ścieżka, bo usunięcie i
+        podmiana zdjęcia kasują plik). Ocen NIE kopiujemy. Właścicielem jest
+        wywołujący; zakres z żądania (`private`/`household`), domyślnie
+        `household` dla członka rodziny. Nazwa dostaje sufiks „(kopia)", gdy
+        wywołujący ma już przepis o takiej nazwie — nazwy nie są unikalne, ale
+        kopia i oryginał mają dać się odróżnić na liście.
+        """
+        source = await _RECIPES.get_or_404(self._session, recipe_id, actor)
+        target_scope = scope or (
+            Scope.HOUSEHOLD if actor.household_id is not None else Scope.PRIVATE
+        )
+        ownership = ScopedQuery.ownership_for_create(actor, target_scope)  # 409 bez rodziny
+
+        ingredients = (
+            (
+                await self._session.execute(
+                    select(RecipeIngredient)
+                    .where(RecipeIngredient.recipe_id == source.id)
+                    .order_by(RecipeIngredient.position, RecipeIngredient.id)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        tag_ids = list(
+            (
+                await self._session.execute(
+                    select(recipe_tags.c.tag_id).where(recipe_tags.c.recipe_id == source.id)
+                )
+            ).scalars()
+        )
+        name = await self._copy_name(source.name, actor)
+
+        saved = None
+        if source.photo_path:
+            saved = await run_in_threadpool(
+                copy_image,
+                source.photo_path,
+                uploads_root=self._uploads_root,
+                subdir=PHOTO_SUBDIR,
+                max_bytes=self._image_max_bytes,
+            )
+        try:
+            recipe = Recipe(
+                name=name,
+                instructions=source.instructions,
+                base_servings=source.base_servings,
+                prep_time_min=source.prep_time_min,
+                difficulty=source.difficulty,
+                photo_path=saved.path if saved is not None else None,
+                **ownership,
+            )
+            self._session.add(recipe)
+            await self._session.flush()
+            self._session.add_all(
+                RecipeIngredient(
+                    recipe_id=recipe.id,
+                    product_id=item.product_id,
+                    display_qty=item.display_qty,
+                    display_unit=item.display_unit,
+                    amount=item.amount,
+                    amount_unit=item.amount_unit,
+                    note=item.note,
+                    position=item.position,
+                )
+                for item in ingredients
+            )
+            if tag_ids:
+                await self._session.execute(
+                    insert(recipe_tags),
+                    [{"recipe_id": recipe.id, "tag_id": tag_id} for tag_id in sorted(tag_ids)],
+                )
+            await self._session.commit()
+        except Exception:
+            # Plik nie cofa się z transakcją — bez tego nieudana kopia zostawiłaby
+            # sierotę na dysku (`task uploads-report` pokazałby ją dopiero potem).
+            await self._session.rollback()
+            if saved is not None:
+                await run_in_threadpool(delete_image, saved.path, uploads_root=self._uploads_root)
+            raise
+        return await self.recipe_detail(actor, recipe.id)
+
+    async def _copy_name(self, name: str, actor: User) -> str:
+        """Nazwa kopii: bez zmian, dopóki wywołujący nie ma przepisu o tej nazwie."""
+        # Tylko nazwy zaczynające się od oryginału — kolizje i sufiksy „(kopia N)"
+        # to wyłącznie one; bez tego każda kopia skanowałaby wszystkie przepisy konta.
+        taken = {
+            existing.casefold()
+            for existing in (
+                await self._session.execute(
+                    _RECIPES.select_owned(actor)
+                    .where(Recipe.name.istartswith(name, autoescape=True))
+                    .with_only_columns(Recipe.name)
+                )
+            ).scalars()
+        }
+        if name.casefold() not in taken:
+            return name
+        candidate = f"{name}{COPY_SUFFIX}"
+        counter = 2
+        while candidate.casefold() in taken:
+            candidate = f"{name}{COPY_SUFFIX[:-1]} {counter})"
+            counter += 1
+        return candidate
+
     async def delete_recipe(self, recipe_id: int, *, actor: User) -> None:
-        """Usunięcie: właściciel/ADMIN; przepis w użyciu → 409 z `used_in` (ADR-012)."""
+        """Usunięcie: właściciel/ADMIN; przepis w użyciu → 409 z `used_in` (ADR-012).
+
+        Przepis `global` usuwa wyłącznie ADMIN (`assert_can_manage`); używany
+        przez KTÓRĄKOLWIEK rodzinę daje 409 — jedyne wycofanie to archiwizacja.
+        """
         recipe = await _RECIPES.get_or_404(self._session, recipe_id, actor)
         _RECIPES.assert_can_manage(recipe, actor)
         assert_deletable(RECIPE_IN_USE, await self.recipe_references(recipe_id))
 
         photo_path = recipe.photo_path
+        if recipe.scope == RecipeScope.GLOBAL:
+            self._audit.record(
+                action=AuditAction.RECIPE_GLOBAL_DELETE,
+                entity_type=AuditEntity.RECIPE,
+                entity_id=recipe.id,
+                actor_id=actor.id,
+                payload={"name": recipe.name},
+            )
         await self._session.execute(delete(Recipe).where(Recipe.id == recipe_id))
         try:
             await self._session.commit()
@@ -580,8 +872,10 @@ class RecipesService:
     # --- zdjęcie --------------------------------------------------------------------
 
     async def set_photo(self, recipe_id: int, *, actor: User, data: bytes) -> RecipeDetailView:
-        """Upload zdjęcia (pipeline 07_SECURITY §6). Edycja treści — może każdy członek."""
+        """Upload zdjęcia (pipeline 07_SECURITY §6). Edycja treści — może każdy członek,
+        a przepis `global` — wyłącznie ADMIN (403)."""
         recipe = await _RECIPES.get_or_404(self._session, recipe_id, actor)
+        _RECIPES.assert_can_edit_content(recipe, actor)
 
         # Pillow jest CPU-bound — poza pętlą zdarzeń (ADR-015).
         saved = await run_in_threadpool(
@@ -602,6 +896,7 @@ class RecipesService:
     async def delete_photo(self, recipe_id: int, *, actor: User) -> RecipeDetailView:
         """Usunięcie zdjęcia; przepis bez zdjęcia → 404 (nie ma czego usuwać)."""
         recipe = await _RECIPES.get_or_404(self._session, recipe_id, actor)
+        _RECIPES.assert_can_edit_content(recipe, actor)
         if not recipe.photo_path:
             raise NotFoundError(NO_PHOTO_MESSAGE)
 

@@ -30,6 +30,8 @@ sesji: `docs/implementation-plan/implementation_prompt.md`.
 - kopiowanie stanu serwera do Pinia — stan serwera żyje w TanStack Query
   (ADR-007),
 - endpoint zasobu bez testu macierzy uprawnień/scope (08_TESTING §4),
+- zakres `global` dla czegokolwiek poza przepisami — wspólny `Scope` ma DWIE
+  wartości, a trzecią (`global`) ma wyłącznie `RecipeScope` (D32, ADR-006 aneks),
 - warstwa i18n — UI wyłącznie po polsku (D3, ADR-007),
 - sekrety w plikach śledzonych; `.env` nigdy w repo (07_SECURITY §7),
 - migracja z numerem „zarezerwowanym" — numer = pierwszy wolny,
@@ -112,6 +114,8 @@ Dołożone w BATCH_03 i BATCH_04 (też fundament — nie pisz tego od nowa):
   `assert_can_manage`, `assert_scope_allowed`, `ownership_for_create`).
   Własny filtr widoczności w serwisie = błąd review; cudza encja to **404**.
   Typ enumowy `entity_scope` tworzy migracja PIERWSZEJ tabeli ze scope (B05).
+  Od B21 także `RecipeScope`, `ScopedQuery(allow_global=True)` i
+  `assert_can_edit_content` — patrz blok „Dołożone w BATCH_21".
 - `app/core/deletion.py` — kontrakt 409: `UsedInRef`, `assert_deletable`,
   `conflict_from_integrity_error` (`details.used_in`). Moduł z FK do
   `canonical_products` rejestruje licznik referencji przez
@@ -146,7 +150,9 @@ Dołożone w BATCH_05 (też fundament):
   `register_recipe_reference_finder(finder)`: moduł z FK do `recipes`
   (plan B06, szablony B07) rejestruje licznik, inaczej 409 bez `used_in`.
 - Enumy `entity_scope` i `amount_unit` istnieją od migracji `0006` — kolejne
-  tabele ze scope/ilością używają `postgresql.ENUM(..., create_type=False)`.
+  tabele ze scope/ilością używają `postgresql.ENUM(..., create_type=False)`
+  (z `Scope`, dwuwartościowym; `entity_scope` ma od `0017` trzecią wartość
+  `global`, ale używa jej WYŁĄCZNIE `recipes` przez `RecipeScope`).
 
 Dołożone w BATCH_10 (też fundament):
 
@@ -350,6 +356,42 @@ Dołożone (i ZDJĘTE) w BATCH_20 — decyzja D25, ADR-016:
   (D3), więc polską gramatykę robimy sami.
 - Teksty transferu mówią **„kopia danych rodziny"**, nie „eksport/import"
   (`lib/texts.ts::transfer`); w kodzie i API nazwy techniczne zostają.
+
+Dołożone w BATCH_21 (zakres `global` dla przepisów — D32, ADR-006 aneks):
+
+- **Dwa enumy, jeden typ PG.** `core/scope.py::Scope` (`private`, `household`) obsługuje
+  KAŻDĄ encję ze scope poza przepisem; `RecipeScope` (+ `global`) — tylko `Recipe`
+  (`Recipe.scope` nadpisuje kolumnę mixina własnym `RECIPE_SCOPE_ENUM`). Nowa encja
+  ze scope używa `Scope` i NIE dziedziczy `global`; jej model niesie
+  `no_global_scope_check_constraint()` (mixin dokłada go sam, własny `__table_args__`
+  musi to zrobić jawnie).
+- `ScopedQuery(Recipe, …, allow_global=True)` dopisuje `global` do `visible_condition`
+  (NIGDY do `owned_condition` — na nim stoi eksport D26) i wymaga ROLI ADMIN w
+  `assert_can_edit_content`/`assert_can_manage`. **Każde `ScopedQuery(Recipe, …)` poza
+  transferem MUSI mieć flagę** — pilnuje tego `tests/unit/test_recipe_scope.py`. Odmowa
+  to 403 (przepis widoczny); rolę sprawdza się jawnie, nie przez `owner_user_id`.
+- **`is` na granicy `Scope`/`RecipeScope` nie działa** (różne obiekty, `StrEnum` równa się
+  po wartości) — porównuj `==`. `RecipesService` ma jedno miejsce przestawiające zakres:
+  `_change_scope` (awans zeruje `household_id`; obniżenie przekazuje przepis ADMIN-owi
+  i jest blokowane 409 `used_in` przez `register_recipe_foreign_use_finder` — planowanie
+  rejestruje licznik dni i szablonów SPOZA grona, `core/scope.py::outside_audience_condition`).
+- Nowe akcje: `POST /recipes/{id}/copy` (`copy_recipe` + `core/uploads.copy_image`: kopia
+  pliku przez pełny pipeline, NIGDY wspólna ścieżka), `POST|DELETE /recipes/{id}/archive`
+  (ADMIN); audyt `recipe.global_*` i `recipe.archive|unarchive`.
+- **Transfer:** `service._settle_global_recipe` (import obcina `global`, kopia INSTANCJI
+  zachowuje je tylko dla właściciela-ADMIN-a), `_as_actors_copy` (eksport użytkownika
+  dołącza przepisy globalne wskazane przez plany/szablony jako migawkę, nie wiersz ORM),
+  `importer.validate_row_scope` (nieznany zakres = 422 także w DRY-RUN),
+  `coerce_value` (nieznany enum = 422, nie `ValueError`).
+- **Migracje `0017` (`ADD VALUE`, `autocommit_block`) i `0018` (CHECK-i) to DWIE rewizje**
+  i tak ma zostać: nowej wartości enuma nie wolno użyć w transakcji, która ją dodała,
+  a `env.py` robi całe `upgrade head` w jednej. `ADD VALUE` jest NIEODWRACALNE
+  (`downgrade` = no-op). Test dwustopniowy w `test_migrations.py` jest obowiązkowy dla
+  każdej przyszłej migracji dodającej wartość enuma.
+- Frontend: `RecipeScope` (z `generated.ts`, NIE `Scope`) w `api/recipes.ts` i
+  `queryKeys.ts`; opcja „Wszyscy" w edytorze tylko dla ADMIN-a, przepis globalny dla
+  USER-a jest w edytorze tylko do odczytu, a w szczególe `recipe-copy` zamiast
+  `recipe-edit`/`recipe-delete`; odznaka zakresu na karcie (`recipe-scope-badge-{id}`).
 
 Testy: `tests/{unit,integration,api}/` (pakiet — z `__init__.py`), markery
 `unit`/`integration`/`api` (wymagane — bez markera test nie wejdzie do

@@ -25,6 +25,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 from uuid import uuid4
 
@@ -36,7 +37,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
 
 from app.core.errors import ConflictError, ForbiddenError, NotFoundError
-from app.core.scope import HouseholdScopedQuery, Scope, ScopedQuery
+from app.core.scope import HouseholdScopedQuery, RecipeScope, Scope, ScopedQuery
 from app.core.security import generate_token, hash_password
 from app.core.uploads import DEFAULT_IMAGE_MAX_MB, delete_image, save_image
 from app.modules.accounts.models import User, UserRole
@@ -132,6 +133,8 @@ IMPORT_CONFLICT = (
     "albo cel żywieniowy od tego samego dnia). Nic nie zostało zapisane."
 )
 
+# BEZ `allow_global`: transfer czyta wyłącznie `select_owned` (przynależność, nie widoczność).
+# Przepisy globalne dołącza do eksportu użytkownika jawne zapytanie w `_collect_user` (D32).
 _RECIPES = ScopedQuery(Recipe, not_found_message="Nie znaleziono przepisu.")
 _PLAN_DAYS = ScopedQuery(PlanDay, not_found_message="Nie znaleziono dnia planu.")
 _DAY_TEMPLATES = ScopedQuery(DayTemplate, not_found_message="Nie znaleziono szablonu.")
@@ -163,7 +166,14 @@ def coerce_value(column: sa.Column[Any], value: Any) -> Any:
         return None
     kind = column.type
     if isinstance(kind, sa.Enum) and kind.enum_class is not None:
-        return kind.enum_class(value)
+        try:
+            return kind.enum_class(value)
+        except ValueError as exc:
+            # Plik z wartością spoza enuma (np. `global` w dniu planu) to plik
+            # niezgodny z formatem — 422 po polsku, nie 500 z `ValueError`.
+            raise TransferValidationError(
+                f"Wartość „{value}” w kolumnie {column.name} jest niedozwolona."
+            ) from exc
     if isinstance(kind, sa.Numeric) and not isinstance(kind, sa.Float):
         try:
             return Decimal(str(value))
@@ -282,7 +292,54 @@ class TransferService:
         async def fetch(statement: sa.Select[Any]) -> list[Any]:
             return list((await session.execute(statement)).scalars().all())
 
-        recipes = await fetch(_RECIPES.select_owned(actor).order_by(Recipe.id))
+        days = await fetch(_PLAN_DAYS.select_owned(actor).order_by(PlanDay.id))
+        day_ids = [row.id for row in days]
+        meals = await fetch(
+            select(PlanMeal).where(PlanMeal.plan_day_id.in_(day_ids)).order_by(PlanMeal.id)
+        )
+        meal_ids = [row.id for row in meals]
+        items = await fetch(
+            select(PlanMealItem)
+            .where(PlanMealItem.plan_meal_id.in_(meal_ids))
+            .order_by(PlanMealItem.id)
+        )
+        day_templates = await fetch(_DAY_TEMPLATES.select_owned(actor).order_by(DayTemplate.id))
+        week_templates = await fetch(_WEEK_TEMPLATES.select_owned(actor).order_by(WeekTemplate.id))
+        cycles = await fetch(_CYCLES.select_owned(actor).order_by(WeekCycle.id))
+
+        # Przepisy: WŁASNE (`owned_condition`) + przepisy GLOBALNE (D32), do których
+        # odwołują się plany i szablony tego konta. Bez nich pozycje planu z cudzym
+        # przepisem globalnym wypadałyby z pliku po cichu, a po wczytaniu na czystą
+        # instancję plan byłby dziurawy. `owned_condition` NIE jest rozszerzane —
+        # dołączamy wyłącznie przepisy `global` wskazane przez te encje, nie „wszystkie
+        # widoczne" (granica D26: kopia rodziny nie jest kopią katalogu instancji).
+        referenced_recipe_ids = {row.recipe_id for row in items if row.recipe_id is not None}
+        for template in day_templates:
+            referenced_recipe_ids |= _payload_recipe_ids(template.payload)
+        for template in week_templates:
+            for entry in template.payload.get("days") or []:
+                referenced_recipe_ids |= _payload_recipe_ids(entry.get("day") or {})
+
+        owned_recipes = await fetch(_RECIPES.select_owned(actor).order_by(Recipe.id))
+        extra_ids = referenced_recipe_ids - {row.id for row in owned_recipes}
+        global_recipes = (
+            await fetch(
+                select(Recipe)
+                .where(Recipe.id.in_(extra_ids), Recipe.scope == RecipeScope.GLOBAL)
+                .order_by(Recipe.id)
+            )
+            if extra_ids
+            else []
+        )
+        # Także WŁASNY przepis globalny ADMIN-a wychodzi jako kopia obcięta do
+        # `household`/`private`: plik użytkownika nigdy nie niesie `global`.
+        recipes = sorted(
+            [
+                _as_actors_copy(row, actor) if row.scope == RecipeScope.GLOBAL else row
+                for row in [*owned_recipes, *global_recipes]
+            ],
+            key=lambda row: row.id,
+        )
         recipe_ids = [row.id for row in recipes]
         ingredients = await fetch(
             select(RecipeIngredient)
@@ -306,17 +363,6 @@ class TransferService:
             .order_by(RecipeRating.id)
         )
 
-        days = await fetch(_PLAN_DAYS.select_owned(actor).order_by(PlanDay.id))
-        day_ids = [row.id for row in days]
-        meals = await fetch(
-            select(PlanMeal).where(PlanMeal.plan_day_id.in_(day_ids)).order_by(PlanMeal.id)
-        )
-        meal_ids = [row.id for row in meals]
-        items = await fetch(
-            select(PlanMealItem)
-            .where(PlanMealItem.plan_meal_id.in_(meal_ids))
-            .order_by(PlanMealItem.id)
-        )
         # Pozycja planu może wskazywać przepis, którego JUŻ nie widać: członek
         # rodziny przestawił swój przepis na `private` PO tym, jak trafił do
         # cudzego planu (FK RESTRICT trzyma pozycję przy życiu). Taka pozycja nie
@@ -331,10 +377,6 @@ class TransferService:
             .where(PlanItemServing.plan_meal_item_id.in_(item_ids))
             .order_by(PlanItemServing.id)
         )
-
-        day_templates = await fetch(_DAY_TEMPLATES.select_owned(actor).order_by(DayTemplate.id))
-        week_templates = await fetch(_WEEK_TEMPLATES.select_owned(actor).order_by(WeekTemplate.id))
-        cycles = await fetch(_CYCLES.select_owned(actor).order_by(WeekCycle.id))
 
         pantry = await fetch(_PANTRY.select_own_household(actor).order_by(PantryItem.id))
         profiles = await fetch(self._profiles_statement(actor).order_by(MemberProfile.id))
@@ -639,6 +681,7 @@ class TransferService:
                         section,
                         row,
                         actor=actor,
+                        instance_import=document.scope is TransferScope.INSTANCE,
                         archive_path=archive_path,
                         available=available,
                         existing=existing,
@@ -717,6 +760,7 @@ class TransferService:
         row: Mapping[str, Any],
         *,
         actor: User,
+        instance_import: bool,
         archive_path: Path,
         available: set[str],
         existing: Mapping[str, Mapping[str, ExistingEntity]],
@@ -777,6 +821,10 @@ class TransferService:
                 f"Konto {values.get('email')} powstało bez hasła — ustaw je w sekcji Użytkownicy."
             )
 
+        if section.name == "recipes" and values.get("scope") == RecipeScope.GLOBAL:
+            await self._settle_global_recipe(
+                values, instance_import=instance_import, warnings=warnings
+            )
         self._apply_section_quirks(section, values, id_map=id_map, warnings=warnings)
         if section.name == "week_cycles" and not values.get("template_ids"):
             warnings.append(f"Pominięto cykl „{display_name(section, row)}” — brak szablonów.")
@@ -848,6 +896,38 @@ class TransferService:
             taken.setdefault(section.name, set()).add(key)
         return "created"
 
+    async def _settle_global_recipe(
+        self, values: dict[str, Any], *, instance_import: bool, warnings: list[str]
+    ) -> None:
+        """Przepis `global` z pliku: zostaje globalny tylko w kopii INSTANCJI (D32 pkt 8).
+
+        Plik jest DANYMI WEJŚCIOWYMI — ręcznie edytowany `export.json` z
+        `"scope":"global"` nie może dać zwykłemu użytkownikowi przepisu
+        widocznego dla każdej rodziny. Dlatego:
+
+        - kopia danych RODZINY (`scope=user`), nawet wczytywana przez ADMIN-a,
+          zawsze obcina `global` do zakresu `household` (importujący ma rodzinę)
+          albo `private` — przepis należy wtedy do konta wczytującego,
+        - kopia INSTANCJI (tylko ADMIN ją wczyta) zachowuje `global` wyłącznie
+          wtedy, gdy ZMAPOWANY właściciel przepisu jest ADMIN-em; inaczej
+          przepis wraca do rodziny swojego właściciela jako `household`
+          (albo `private`, gdy właściciel jej nie ma).
+        """
+        owner_id = values.get("owner_user_id")
+        owner = await self._session.get(User, owner_id) if owner_id is not None else None
+        if instance_import and owner is not None and owner.role is UserRole.ADMIN:
+            values["household_id"] = None  # CHECK `global_without_household`
+            return
+
+        household_id = owner.household_id if owner is not None else None
+        values["household_id"] = household_id
+        values["scope"] = RecipeScope.HOUSEHOLD if household_id is not None else RecipeScope.PRIVATE
+        warnings.append(
+            f"Przepis „{values.get('name', '')}” był dostępny dla wszystkich rodzin — "
+            "po wczytaniu jest kopią "
+            + ("Twojej rodziny." if household_id is not None else "prywatną.")
+        )
+
     @staticmethod
     def _rename_copy(section: Section, values: dict[str, Any], taken: set[str]) -> str:
         """„Utwórz kopię": nazwa z sufiksem „(import)" i spójny klucz naturalny."""
@@ -875,7 +955,12 @@ class TransferService:
         """Wyjątki formatu, których nie da się opisać kolumnami sekcji."""
         # Bez rodziny scope HOUSEHOLD jest niedozwolony (CHECK w bazie), więc
         # import na konto bez rodziny zapisuje encje jako prywatne.
-        if section.scoped and values.get("household_id") is None:
+        # Wyjątek: przepis `global` (D32) NIE ma rodziny z definicji — zostaje.
+        if (
+            section.scoped
+            and values.get("household_id") is None
+            and values.get("scope") != RecipeScope.GLOBAL
+        ):
             values["scope"] = Scope.PRIVATE
         if section.name == "day_templates":
             values["payload"] = remap_template_payload(
@@ -937,6 +1022,33 @@ def _drop_dangling_generations(data: dict[str, list[dict[str, Any]]]) -> None:
     for row in data.get("shopping_lists", []):
         if row.get("generation_id") not in known:
             row["generation_id"] = None
+
+
+def _as_actors_copy(recipe: Recipe, actor: User) -> Any:
+    """Przepis `global` w postaci, w jakiej trafia do pliku użytkownika (D32).
+
+    To MIGAWKA, nie wiersz ORM: zakres jest obcięty do `household` (albo `private`,
+    gdy konto nie ma rodziny), a właścicielem jest eksportujący — po wczytaniu
+    przepis i tak należy do konta wczytującego, więc nie ma sensu ujawniać w pliku
+    identyfikatora administratora. Obiektu ORM nie wolno tu mutować: sesja
+    mogłaby zapisać zmianę zakresu przepisu globalnego dla CAŁEJ instancji.
+    """
+    data = {column.key: getattr(recipe, column.key) for column in Recipe.__table__.columns}
+    data["owner_user_id"] = actor.id
+    data["household_id"] = actor.household_id
+    data["scope"] = RecipeScope.HOUSEHOLD if actor.household_id is not None else RecipeScope.PRIVATE
+    return SimpleNamespace(**data)
+
+
+def _payload_recipe_ids(payload: Mapping[str, Any]) -> set[int]:
+    """Identyfikatory przepisów wskazane w payloadzie szablonu dnia."""
+    found: set[int] = set()
+    for meal in payload.get("meals") or []:
+        for item in meal.get("items") or []:
+            recipe_id = item.get("recipe_id")
+            if isinstance(recipe_id, int):
+                found.add(recipe_id)
+    return found
 
 
 def _payload_product_ids(payload: Mapping[str, Any]) -> set[int]:

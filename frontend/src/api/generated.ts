@@ -532,8 +532,43 @@ export interface paths {
         /** Pełna podmiana przepisu (składniki wymieniane kompletem) */
         put: operations["update_recipe_api_v1_recipes__recipe_id__put"];
         post?: never;
-        /** Usunięcie przepisu (właściciel/ADMIN; 409 gdy używany) */
+        /** Usunięcie przepisu (właściciel/ADMIN; `global` tylko ADMIN; 409 gdy używany) */
         delete: operations["delete_recipe_api_v1_recipes__recipe_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recipes/{recipe_id}/copy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Kopiuj do mojej rodziny: własna kopia widocznego przepisu (także globalnego) */
+        post: operations["copy_recipe_api_v1_recipes__recipe_id__copy_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recipes/{recipe_id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Archiwizacja przepisu (ADMIN) — znika z list, plany dalej się liczą */
+        post: operations["archive_recipe_api_v1_recipes__recipe_id__archive_post"];
+        /** Przywrócenie przepisu z archiwum (ADMIN) */
+        delete: operations["unarchive_recipe_api_v1_recipes__recipe_id__archive_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -3032,6 +3067,18 @@ export interface components {
             ratings_count: number;
         };
         /**
+         * RecipeCopyRequest
+         * @description Body `POST /recipes/{id}/copy` — gdzie ma wylądować KOPIA wywołującego.
+         *
+         *     Celowo `Scope` (dwie wartości), nie `RecipeScope`: kopia jest zawsze
+         *     własnością wywołującego, więc `global` odrzuca już walidacja (422).
+         *     Brak pola = `household`, gdy wywołujący ma rodzinę, w przeciwnym razie
+         *     `private`.
+         */
+        RecipeCopyRequest: {
+            scope?: components["schemas"]["Scope"] | null;
+        };
+        /**
          * RecipeDetail
          * @description Szczegóły (widok 3): instrukcja, składniki i nutrition x mnożnik porcji.
          */
@@ -3040,7 +3087,7 @@ export interface components {
             id: number;
             /** Name */
             name: string;
-            scope: components["schemas"]["Scope"];
+            scope: components["schemas"]["RecipeScope"];
             /** Owner User Id */
             owner_user_id: number;
             /** Base Servings */
@@ -3160,12 +3207,23 @@ export interface components {
             /** Difficulty */
             difficulty?: number | null;
             /** @default private */
-            scope: components["schemas"]["Scope"];
+            scope: components["schemas"]["RecipeScope"];
             /** Ingredients */
             ingredients?: components["schemas"]["RecipeIngredientInput"][];
             /** Tag Ids */
             tag_ids?: number[];
         };
+        /**
+         * RecipeScope
+         * @description Zakres PRZEPISU: `Scope` + `global` (widoczny dla każdego zalogowanego, D32).
+         *
+         *     `StrEnum` porównuje się jak string, więc `RecipeScope.HOUSEHOLD == Scope.HOUSEHOLD`
+         *     — ale NIE używaj `is` na granicy tych dwóch enumów (`is` porównuje tożsamość
+         *     członków, a to są różne obiekty); wszędzie, gdzie scope przepisu może być
+         *     którymkolwiek z nich, porównuj przez `==`.
+         * @enum {string}
+         */
+        RecipeScope: "private" | "household" | "global";
         /**
          * RecipeSummary
          * @description Przepis na liście (widok 2): karta z kcal/porcję, oceną i tagami.
@@ -3175,7 +3233,7 @@ export interface components {
             id: number;
             /** Name */
             name: string;
-            scope: components["schemas"]["Scope"];
+            scope: components["schemas"]["RecipeScope"];
             /** Owner User Id */
             owner_user_id: number;
             /** Base Servings */
@@ -3456,7 +3514,10 @@ export interface components {
         RoundMode: "all" | "durable_plus_fresh_window" | "fresh_only";
         /**
          * Scope
-         * @description Zakres widoczności encji współdzielnej (ADR-006).
+         * @description Zakres widoczności encji współdzielnej (ADR-006) — DWIE wartości.
+         *
+         *     Nie dodawaj tu `GLOBAL`: dla przepisów jest `RecipeScope` (D32), a wspólny
+         *     enum wpuściłby `global` do dni planu, szablonów, tur, generacji i list.
          * @enum {string}
          */
         Scope: "private" | "household";
@@ -5866,7 +5927,7 @@ export interface operations {
                 prep_time_max?: number | null;
                 difficulty_max?: number | null;
                 rating_min?: number | null;
-                scope?: components["schemas"]["Scope"] | null;
+                scope?: components["schemas"]["RecipeScope"] | null;
                 include_archived?: boolean;
             };
             header?: never;
@@ -6013,6 +6074,103 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    copy_recipe_api_v1_recipes__recipe_id__copy_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                recipe_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["RecipeCopyRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecipeDetail"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    archive_recipe_api_v1_recipes__recipe_id__archive_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                recipe_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecipeDetail"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    unarchive_recipe_api_v1_recipes__recipe_id__archive_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                recipe_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecipeDetail"];
+                };
             };
             /** @description Błąd */
             default: {

@@ -13,7 +13,7 @@ from functools import lru_cache
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.scope import HouseholdScopedQuery, Scope, ScopedQuery
+from app.core.scope import HouseholdScopedQuery, RecipeScope, Scope, ScopedQuery
 from app.core.security import generate_token, hash_password, session_expires_at, utcnow
 from app.modules.accounts.models import Session, User, UserRole
 from app.modules.catalog.models import (
@@ -300,7 +300,7 @@ async def create_recipe(
     *,
     owner: User,
     name: str = "Gołąbki",
-    scope: Scope = Scope.PRIVATE,
+    scope: Scope | RecipeScope = Scope.PRIVATE,
     instructions: str = "",
     base_servings: int = 1,
     prep_time_min: int | None = None,

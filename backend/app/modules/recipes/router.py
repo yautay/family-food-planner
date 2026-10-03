@@ -14,18 +14,19 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Query, Request, UploadFile, status
+from fastapi import APIRouter, Body, Depends, File, Query, Request, UploadFile, status
 from slowapi import Limiter
 
 from app.core.deps import CurrentUser, get_recipes_service
 from app.core.ratelimits import PHOTO_UPLOAD_RATE_LIMIT
-from app.core.scope import Scope
+from app.core.scope import RecipeScope
 from app.core.uploads import image_urls
 from app.modules.nutrition.schemas import nutrition_read
 from app.modules.nutrition.types import NutritionValues
 from app.modules.recipes.schemas import (
     RatingRequest,
     RatingResponse,
+    RecipeCopyRequest,
     RecipeDetail,
     RecipeIngredientRead,
     RecipeListResponse,
@@ -122,7 +123,7 @@ def build_recipes_router(limiter: Limiter) -> APIRouter:
         prep_time_max: Annotated[int | None, Query(ge=1, le=6000)] = None,
         difficulty_max: Annotated[int | None, Query(ge=1, le=10)] = None,
         rating_min: Annotated[int | None, Query(ge=1, le=5)] = None,
-        scope: Scope | None = None,
+        scope: RecipeScope | None = None,
         include_archived: bool = False,
     ) -> RecipeListResponse:
         views, total = await service.list_recipes(
@@ -176,10 +177,52 @@ def build_recipes_router(limiter: Limiter) -> APIRouter:
     ) -> RecipeDetail:
         return _to_detail(await service.update_recipe(recipe_id, actor=user, payload=payload))
 
+    @router.post(
+        "/{recipe_id}/copy",
+        response_model=RecipeDetail,
+        status_code=status.HTTP_201_CREATED,
+        summary="Kopiuj do mojej rodziny: własna kopia widocznego przepisu (także globalnego)",
+    )
+    @limiter.limit(PHOTO_UPLOAD_RATE_LIMIT)
+    async def copy_recipe(
+        request: Request,
+        recipe_id: int,
+        user: CurrentUser,
+        service: ServiceDep,
+        payload: Annotated[RecipeCopyRequest | None, Body()] = None,
+    ) -> RecipeDetail:
+        # Limit jak przy zdjęciach: kopia powiela plik zdjęcia na dysku, więc
+        # pętla `curl` z przejętej sesji zapełniałaby magazyn (07_SECURITY §6).
+        return _to_detail(
+            await service.copy_recipe(
+                recipe_id, actor=user, scope=payload.scope if payload else None
+            )
+        )
+
+    @router.post(
+        "/{recipe_id}/archive",
+        response_model=RecipeDetail,
+        summary="Archiwizacja przepisu (ADMIN) — znika z list, plany dalej się liczą",
+    )
+    async def archive_recipe(
+        recipe_id: int, user: CurrentUser, service: ServiceDep
+    ) -> RecipeDetail:
+        return _to_detail(await service.set_archived(recipe_id, actor=user, archived=True))
+
+    @router.delete(
+        "/{recipe_id}/archive",
+        response_model=RecipeDetail,
+        summary="Przywrócenie przepisu z archiwum (ADMIN)",
+    )
+    async def unarchive_recipe(
+        recipe_id: int, user: CurrentUser, service: ServiceDep
+    ) -> RecipeDetail:
+        return _to_detail(await service.set_archived(recipe_id, actor=user, archived=False))
+
     @router.delete(
         "/{recipe_id}",
         status_code=status.HTTP_204_NO_CONTENT,
-        summary="Usunięcie przepisu (właściciel/ADMIN; 409 gdy używany)",
+        summary="Usunięcie przepisu (właściciel/ADMIN; `global` tylko ADMIN; 409 gdy używany)",
     )
     async def delete_recipe(recipe_id: int, user: CurrentUser, service: ServiceDep) -> None:
         await service.delete_recipe(recipe_id, actor=user)

@@ -12,6 +12,7 @@ import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { PAGE_SIZE, usePaginatedList } from '@/api/pagination'
+import type { RecipeScope } from '@/api/recipes'
 import { fetchRecipes, fetchTags } from '@/api/recipes'
 import type { RecipesFilters } from '@/api/queryKeys'
 import { queryKeys } from '@/api/queryKeys'
@@ -25,6 +26,15 @@ const router = useRouter()
 const search = ref('')
 const debouncedSearch = refDebounced(search, 250)
 const selectedTagIds = ref<number[]>([])
+/** `null` = wszystkie zakresy (brak parametru `scope`). */
+const selectedScope = ref<RecipeScope | null>(null)
+
+const SCOPE_FILTERS: readonly { value: RecipeScope | null; label: string }[] = [
+  { value: null, label: texts.scopeFilterAll },
+  { value: 'global', label: texts.scopeLabels.global },
+  { value: 'household', label: texts.scopeLabels.household },
+  { value: 'private', label: texts.scopeLabels.private },
+]
 
 const tags = useQuery({ queryKey: queryKeys.tags.all, queryFn: fetchTags })
 
@@ -33,6 +43,7 @@ const filters = computed<RecipesFilters>(() => ({
   limit: PAGE_SIZE,
   q: debouncedSearch.value.trim() || undefined,
   tag: selectedTagIds.value.length ? [...selectedTagIds.value] : undefined,
+  scope: selectedScope.value ?? undefined,
 }))
 
 const recipes = usePaginatedList({
@@ -43,7 +54,10 @@ const recipes = usePaginatedList({
 const items = recipes.items
 const isEmpty = computed(() => !recipes.isPending.value && items.value.length === 0)
 const isFiltering = computed(
-  () => debouncedSearch.value.trim().length > 0 || selectedTagIds.value.length > 0,
+  () =>
+    debouncedSearch.value.trim().length > 0 ||
+    selectedTagIds.value.length > 0 ||
+    selectedScope.value !== null,
 )
 
 function toggleTag(tagId: number): void {
@@ -83,6 +97,26 @@ function openRecipe(id: number): void {
           </RouterLink>
         </Button>
       </div>
+
+      <!-- Filtr zakresu: „Wszystkie / Dla wszystkich / Rodzinne / Prywatne" (D32). -->
+      <ul class="flex flex-wrap gap-2" :aria-label="texts.scopeFilterLabel">
+        <li v-for="option in SCOPE_FILTERS" :key="option.value ?? 'all'">
+          <button
+            type="button"
+            class="min-h-11 rounded-lg border px-3 text-sm"
+            :class="
+              selectedScope === option.value
+                ? 'border-primary bg-primary text-primary-foreground'
+                : 'border-border bg-card hover:bg-muted'
+            "
+            :aria-pressed="selectedScope === option.value"
+            :data-testid="`recipes-scope-${option.value ?? 'all'}`"
+            @click="selectedScope = option.value"
+          >
+            {{ option.label }}
+          </button>
+        </li>
+      </ul>
 
       <!-- Chipsy tagów: filtr AND — każde kliknięcie zawęża (06_UIUX §4.2). -->
       <ul v-if="tags.data.value?.items.length" class="flex flex-wrap gap-2" aria-label="Tagi">

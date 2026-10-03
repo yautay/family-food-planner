@@ -38,10 +38,12 @@ import { Input } from '@/components/ui/input'
 import type { IngredientDraft, RecipeFormValues } from '@/lib/schemas/recipe'
 import { isIngredientDraftValid, recipeFormSchema } from '@/lib/schemas/recipe'
 import { common, recipes as texts } from '@/lib/texts'
+import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
 const router = useRouter()
 const queryClient = useQueryClient()
+const auth = useAuthStore()
 
 const recipeId = computed(() => {
   const raw = route.params.id
@@ -57,6 +59,16 @@ const recipe = useQuery({
 const tags = useQuery({ queryKey: queryKeys.tags.all, queryFn: fetchTags })
 
 const actionError = ref<string | null>(null)
+
+/**
+ * Przepis `global` (D32) edytuje wyłącznie ADMIN. Zwykły użytkownik, który wejdzie
+ * tu z linku, widzi formularz tylko do odczytu z podpowiedzią — zapis i tak
+ * skończyłby się 403, więc nie pozwalamy go nawet wysłać. Zakres „Wszyscy" w
+ * selekcie dostaje tylko ADMIN (albo przepis, który już jest globalny).
+ */
+const globalReadOnly = computed(
+  () => isEdit.value && recipe.data.value?.scope === 'global' && !auth.isAdmin,
+)
 
 // --- pola proste (vee-validate + zod) -------------------------------------------
 
@@ -395,11 +407,22 @@ function onPhotoChange(event: Event): void {
               id="recipe-scope"
               v-model="scope"
               class="border-border bg-card min-h-11 rounded-lg border px-3 text-sm"
+              :disabled="globalReadOnly"
               data-testid="recipe-scope"
             >
               <option value="private">{{ texts.scopePrivate }}</option>
               <option value="household">{{ texts.scopeHousehold }}</option>
+              <option v-if="auth.isAdmin || scope === 'global'" value="global">
+                {{ texts.scopeGlobal }}
+              </option>
             </select>
+            <p
+              v-if="scope === 'global'"
+              class="text-muted-foreground text-sm"
+              data-testid="recipe-scope-hint"
+            >
+              {{ globalReadOnly ? texts.globalReadOnlyHint : texts.scopeGlobalHint }}
+            </p>
           </div>
 
           <div class="grid gap-2 md:col-span-2">
@@ -566,6 +589,7 @@ function onPhotoChange(event: Event): void {
                 type="file"
                 accept="image/*"
                 class="sr-only"
+                :disabled="globalReadOnly"
                 data-testid="recipe-photo-input"
                 @change="onPhotoChange"
               />
@@ -591,7 +615,7 @@ function onPhotoChange(event: Event): void {
       <Button
         type="submit"
         class="min-h-11 justify-self-start"
-        :disabled="save.isPending.value"
+        :disabled="save.isPending.value || globalReadOnly"
         data-testid="recipe-submit"
       >
         {{ common.save }}

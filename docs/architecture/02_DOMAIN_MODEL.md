@@ -48,7 +48,10 @@ Encje współdzielne (Recipe, DayPlan/WeekPlan, szablony, listy zakupowe,
 spiżarnia) mają scope:
 
 - `PRIVATE` — widzi tylko właściciel (owner_user_id),
-- `HOUSEHOLD` — widzą wszyscy członkowie rodziny właściciela.
+- `HOUSEHOLD` — widzą wszyscy członkowie rodziny właściciela,
+- `GLOBAL` — **wyłącznie przepisy** (D32, ADR-006 aneks): widzi go każdy zalogowany
+  użytkownik każdej rodziny, a zarządza nim tylko ADMIN. Pozostałe encje mają
+  dwa zakresy powyżej.
 
 Reguły:
 
@@ -69,6 +72,14 @@ Reguły:
    dodanie nowego produktu (inline create) może wykonać USER — produkt
    dostaje status weryfikacji `UNVERIFIED` (§4.9).
 4. Produkty sklepowe (retail) — globalne, edytowalne przez USER.
+5. **Przepis `GLOBAL` (D32)**: nie należy do rodziny (`household_id` NULL); odczyt —
+   każdy zalogowany (lista, wyszukiwarka, picker planu, szczegół); tworzenie, edycja
+   treści i zdjęcia, zmiana zakresu z/na `GLOBAL`, archiwizacja i usunięcie — wyłącznie
+   ADMIN (403 dla USER-a, sprawdzane po ROLI, nie po `owner_user_id`). Użytkownik może
+   „skopiować do mojej rodziny” — dostaje własny, edytowalny przepis (składniki, tagi,
+   własny plik zdjęcia, bez ocen). Plany, szablony, cykle i listy zakupów używają
+   przepisu globalnego bezpośrednio. Obniżenie zakresu, gdy używają go inne rodziny, to
+   409; zużyty przepis wycofuje się archiwizacją (nie znika z istniejących planów).
 
 ## 4. Catalog
 
@@ -158,8 +169,9 @@ gdy w wyliczeniu biorą udział produkty UNVERIFIED lub bez kompletu wartości.
 - **Tag**: słownik globalny, płaski; przypisanie N:M. Seed: śniadanie,
   obiad, kolacja, szybkie, warzywne, do lunchboxa, do zamrożenia, dzieci
   lubią. Filtrowanie list przepisów po tagach = wymaganie twarde.
-- **Rating**: ocena 1–5 na parę (przepis, user), średnia per rodzina
-  widoczna na karcie. Bez komentarzy/socialu.
+- **Rating**: ocena 1–5 na parę (przepis, user), średnia widoczna na karcie —
+  dla przepisu `GLOBAL` liczona ze WSZYSTKICH rodzin (UI nie pokazuje, czyje to
+  oceny). Bez komentarzy/socialu.
 - Wartości odżywcze przepisu NIE są przechowywane — zawsze wyliczane
   (silnik §6) per **1 porcja bazowa** = suma(składniki)/base_servings.
 
@@ -351,6 +363,11 @@ Jedyny import i eksport aplikacji (ADR-016).
   planu zostaną scalone…"), a `to_create` liczy wyłącznie wiersze, których
   `apply` naprawdę utworzy — sekcje idempotentne (`ON CONFLICT DO NOTHING`)
   i wiersze scalane są z niego wyłączone.
+- **Przepisy `GLOBAL` w transferze** (D32): plik rodziny (`scope=user`) nigdy ich nie
+  niesie jako globalnych — przepisy globalne wskazane przez plany i szablony konta
+  dołączają się jako kopie rodziny, a import obcina `global` do `household`/`private`
+  (ręcznie edytowany plik nie daje USER-owi przepisu dla wszystkich rodzin). Kopia
+  instancji zachowuje `global`, o ile zmapowany właściciel jest ADMIN-em.
 - **Po wczytaniu wszystko należy do konta, które wczytało** (D26): plik rodziny
   nie niesie sekcji `users`, więc przepis współdomownika dostaje nowego
   właściciela, choć zostaje widoczny dla rodziny przez `scope=household`.

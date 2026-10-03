@@ -162,6 +162,36 @@ def delete_image(path: str, *, uploads_root: Path) -> None:
             continue
 
 
+def copy_image(
+    path: str, *, uploads_root: Path, subdir: str, max_bytes: int = MAX_IMAGE_BYTES
+) -> SavedImage | None:
+    """Skopiuj obraz do NOWEGO pliku (przez pełny pipeline `save_image`).
+
+    Dwa przepisy nigdy nie współdzielą `photo_path`: usunięcie i podmiana
+    zdjęcia kasują plik, więc wspólna ścieżka pozwalałaby jednej rodzinie
+    skasować zdjęcie drugiej (kopiowanie przepisu `global`, BATCH_21, D32).
+    Kopia przechodzi re-encode i generuje własną miniaturę — nie ma drogi
+    na dysk poza pipeline'em z 07_SECURITY §6.
+
+    Zwraca `None`, gdy pliku źródłowego nie ma ALBO nie przechodzi sniffingu
+    (zdjęcie mogło zniknąć lub się uszkodzić na dysku, a kopiowanie przepisu nie ma
+    się z tego powodu wywracać ani karać kopiującego 422 za cudzy plik). Funkcja
+    jest synchroniczna — woła się ją przez `run_in_threadpool`.
+    """
+    try:
+        source = resolve_upload_path(path, uploads_root=uploads_root)
+    except NotFoundError:
+        return None
+    if not source.is_file():
+        return None
+    try:
+        return save_image(
+            source.read_bytes(), uploads_root=uploads_root, subdir=subdir, max_bytes=max_bytes
+        )
+    except (InvalidUploadError, UploadTooLargeError):
+        return None
+
+
 def resolve_upload_path(path: str, *, uploads_root: Path) -> Path:
     """Ścieżka względna → bezpieczna ścieżka absolutna wewnątrz katalogu uploadów.
 

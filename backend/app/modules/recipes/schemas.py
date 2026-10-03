@@ -24,7 +24,7 @@ from typing import Annotated
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from app.core.schemas import DecimalString
-from app.core.scope import Scope
+from app.core.scope import RecipeScope, Scope
 from app.modules.catalog.models import MeasureKind
 from app.modules.catalog.units import AmountUnit
 from app.modules.nutrition.schemas import NutritionRead
@@ -33,6 +33,7 @@ __all__ = [
     "NutritionRead",
     "RatingRequest",
     "RatingResponse",
+    "RecipeCopyRequest",
     "RecipeDetail",
     "RecipeIngredientInput",
     "RecipeIngredientRead",
@@ -126,7 +127,9 @@ class RecipePayload(BaseModel):
     base_servings: int = Field(default=1, ge=1, le=100)
     prep_time_min: int | None = Field(default=None, ge=1, le=6000)
     difficulty: int | None = Field(default=None, ge=1, le=10)
-    scope: Scope = Scope.PRIVATE
+    #: `global` (widoczny dla każdego zalogowanego) może nadać wyłącznie ADMIN —
+    #: serwis zwraca 403 dla USER-a, bo przepis jest wtedy widoczny (D32).
+    scope: RecipeScope = RecipeScope.PRIVATE
     ingredients: list[RecipeIngredientInput] = Field(default_factory=list, max_length=100)
     tag_ids: list[int] = Field(default_factory=list, max_length=50)
 
@@ -136,7 +139,7 @@ class RecipeSummary(BaseModel):
 
     id: int
     name: str
-    scope: Scope
+    scope: RecipeScope
     owner_user_id: int
     base_servings: int
     prep_time_min: int | None
@@ -152,6 +155,18 @@ class RecipeSummary(BaseModel):
     nutrition: NutritionRead
     created_at: datetime
     updated_at: datetime
+
+
+class RecipeCopyRequest(BaseModel):
+    """Body `POST /recipes/{id}/copy` — gdzie ma wylądować KOPIA wywołującego.
+
+    Celowo `Scope` (dwie wartości), nie `RecipeScope`: kopia jest zawsze
+    własnością wywołującego, więc `global` odrzuca już walidacja (422).
+    Brak pola = `household`, gdy wywołujący ma rodzinę, w przeciwnym razie
+    `private`.
+    """
+
+    scope: Scope | None = None
 
 
 class RecipeDetail(RecipeSummary):

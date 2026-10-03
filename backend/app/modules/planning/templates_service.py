@@ -31,11 +31,11 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Any
 
-from sqlalchemy import Select, delete, func, select
+from sqlalchemy import ColumnElement, Select, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deletion import USED_IN_LIMIT, UsedInRef, assert_deletable
-from app.core.scope import Scope, ScopedQuery
+from app.core.scope import Scope, ScopedQuery, outside_audience_condition
 from app.modules.accounts.models import User
 from app.modules.catalog.models import CanonicalProduct
 from app.modules.catalog.service import register_product_reference_finder
@@ -52,7 +52,11 @@ from app.modules.planning.schemas import (
 from app.modules.planning.sequences import cycle_week_plan, is_week_start
 from app.modules.planning.service import DayView, PlanningService, PlanValidationError
 from app.modules.recipes.models import Recipe
-from app.modules.recipes.service import register_recipe_reference_finder
+from app.modules.recipes.service import (
+    recipe_visibility_query,
+    register_recipe_foreign_use_finder,
+    register_recipe_reference_finder,
+)
 
 DAY_TEMPLATE_NOT_FOUND = "Nie znaleziono szablonu dnia."
 WEEK_TEMPLATE_NOT_FOUND = "Nie znaleziono szablonu tygodnia."
@@ -82,7 +86,8 @@ WEEK_TEMPLATE_IN_USE = "Ten szablon tygodnia jest używany w cyklu — najpierw 
 #: payload szablonu byłby obejściem scope: użytkownik mógłby wpisać `recipe_id`
 #: cudzego PRYWATNEGO przepisu, zinstancjonować szablon i odczytać jego nazwę
 #: oraz wartości odżywcze przez `GET /plan/days` (ustalenie /security-review).
-_VISIBLE_RECIPES = ScopedQuery(Recipe, not_found_message=DEAD_RECIPES)
+# Fabryka z recipes: przepis `global` (D32) wolno wpisać w szablon dowolnej rodziny.
+_VISIBLE_RECIPES = recipe_visibility_query(DEAD_RECIPES)
 
 _DAY_TEMPLATES = ScopedQuery(DayTemplate, not_found_message=DAY_TEMPLATE_NOT_FOUND)
 _WEEK_TEMPLATES = ScopedQuery(WeekTemplate, not_found_message=WEEK_TEMPLATE_NOT_FOUND)
@@ -679,33 +684,58 @@ def _week_contains(field: str, entity_id: int) -> dict[str, Any]:
 
 
 def _templates_using(
-    model: type[DayTemplate] | type[WeekTemplate], pattern: dict[str, Any]
+    model: type[DayTemplate] | type[WeekTemplate],
+    pattern: dict[str, Any],
+    *extra: ColumnElement[bool],
 ) -> Select[tuple[int, str]]:
     return (
         select(model.id, model.name)
         # `.contains()` na kolumnie JSONB to dokładnie operator `@>` — jedyny
         # containment, który potrafi użyć indeksu `jsonb_path_ops` (ADR-012).
-        .where(model.payload.contains(pattern))
+        .where(model.payload.contains(pattern), *extra)
         .order_by(model.name, model.id)
         .limit(USED_IN_LIMIT)
     )
 
 
 async def _references_in_templates(
-    session: AsyncSession, field: str, entity_id: int
+    session: AsyncSession,
+    field: str,
+    entity_id: int,
+    *,
+    outside: tuple[int | None, int] | None = None,
 ) -> list[UsedInRef]:
-    """Szablony dnia i tygodnia, w których payload wskazuje encję o tym id."""
+    """Szablony dnia i tygodnia, w których payload wskazuje encję o tym id.
+
+    `outside=(household_id, owner_id)` zawęża wynik do szablonów SPOZA tego grona
+    (blokada obniżenia zakresu przepisu `global`, D32).
+    """
     references: list[UsedInRef] = []
 
+    def audience(model: type[DayTemplate] | type[WeekTemplate]) -> tuple[ColumnElement[bool], ...]:
+        if outside is None:
+            return ()
+        return (
+            outside_audience_condition(
+                model, keep_household_id=outside[0], keep_owner_id=outside[1]
+            ),
+        )
+
     day_rows = (
-        await session.execute(_templates_using(DayTemplate, _day_contains(field, entity_id)))
+        await session.execute(
+            _templates_using(DayTemplate, _day_contains(field, entity_id), *audience(DayTemplate))
+        )
     ).all()
     references.extend(
         UsedInRef(type="day_template", id=int(row[0]), name=row[1]) for row in day_rows
     )
 
     week_rows = (
-        await session.execute(_templates_using(WeekTemplate, _week_contains(field, entity_id)))
+        await session.execute(
+            _templates_using(
+                WeekTemplate, _week_contains(field, entity_id), *audience(WeekTemplate)
+            )
+        )
     ).all()
     references.extend(
         UsedInRef(type="week_template", id=int(row[0]), name=row[1]) for row in week_rows
@@ -722,6 +752,19 @@ async def _templates_using_recipe(session: AsyncSession, recipe_id: int) -> Sequ
     zostawiając szablon wskazujący w pustkę (ADR-012).
     """
     return await _references_in_templates(session, "recipe_id", recipe_id)
+
+
+async def _templates_using_recipe_outside(
+    session: AsyncSession, recipe_id: int, keep_household_id: int | None, keep_owner_id: int
+) -> Sequence[UsedInRef]:
+    """Szablony spoza wskazanego grona z tym przepisem w payloadzie (D32).
+
+    Szablon wskazujący przepis `global` po jego zawężeniu dostałby
+    `DEAD_RECIPES` przy instancjacji, więc taki szablon blokuje obniżenie zakresu.
+    """
+    return await _references_in_templates(
+        session, "recipe_id", recipe_id, outside=(keep_household_id, keep_owner_id)
+    )
 
 
 async def _templates_using_product(session: AsyncSession, product_id: int) -> Sequence[UsedInRef]:
@@ -774,5 +817,6 @@ async def _templates_in_household(session: AsyncSession, household_id: int) -> S
 # Rejestracja przy imporcie modułu — dokładamy WŁASNE liczniki obok tych z planu
 # (`_plans_using_recipe`/`_plans_using_product`), nie ruszając istniejących.
 register_recipe_reference_finder(_templates_using_recipe)
+register_recipe_foreign_use_finder(_templates_using_recipe_outside)
 register_product_reference_finder(_templates_using_product)
 register_household_reference_finder(_templates_in_household)

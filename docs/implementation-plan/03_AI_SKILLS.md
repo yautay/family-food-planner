@@ -38,7 +38,7 @@ refactoring/quality). **Wynik: 0 trafień** — brak czegokolwiek do instalacji.
 |---|---|---|
 | `/code-review` | **REQUIRED (review)** | przegląd poprawności diffu przed commitem batcha i w Review batchach; nie dubluje niczego |
 | `/security-review` | **REQUIRED (review)** | audyt bezpieczeństwa zmian; obowiązkowy w batchach dotykających auth/tokenów/uploadów i we WSZYSTKICH Review |
-| `anthropic-skills:pdf`, `claude-api` | **WYKREŚLONE (B20)** | jedyny konsument — importer jadłospisów — został usunięty decyzją D25; aplikacja nie czyta PDF-ów ani nie woła żadnego API modelu |
+| `anthropic-skills:pdf`, `claude-api` | **WYKREŚLONE (B20)** | jedyny konsument — importer jadłospisów — został usunięty decyzją D25; aplikacja nie czyta PDF-ów ani nie woła żadnego API modelu. **D31 (2026-10-03)**: `anthropic-skills:pdf` wraca jako **RECOMMENDED wyłącznie w B22**, dla narzędzia deweloperskiego `/pdf-extract` działającego POZA runtime aplikacji (sesja agenta czyta PDF, aplikacja nadal nie) |
 | `skill-creator` | **RECOMMENDED (B01, R1–R4)** | poprawna struktura/triggering project skilli przy ich tworzeniu i aktualizacji |
 | `/simplify` | OPTIONAL | sprzątanie po większych batchach; nie zastępuje /code-review |
 | `anthropic-skills:xlsx` | OPTIONAL | doraźne analizy danych; poza pętlą implementacji |
@@ -83,6 +83,7 @@ Minimalny zestaw dla projektu. Project skille żyją w `.claude/skills/`
 | SKILL-REVIEW | `/code-review` (wbudowany) | builtin | przegląd poprawności diffu |
 | SKILL-SECREV | `/security-review` (wbudowany) | builtin | audyt bezpieczeństwa zmian |
 | SKILL-CREATOR | `skill-creator` (wbudowany) | builtin | tworzenie/aktualizacja project skilli |
+| SKILL-PDFX | `.claude/skills/pdf-extract` (powstaje w B22, D31) | project (dev-tool) | procedura `/pdf-extract`: wyciąg z PDF-a jadłospisu, scalenia, weryfikacja, paczka transferu; NIE jest skillem implementacyjnym aplikacji — uruchamia go właściciel, nie batch |
 
 ## 4. Manifest — kiedy używać / kiedy nie
 
@@ -91,7 +92,7 @@ Minimalny zestaw dla projektu. Project skille żyją w `.claude/skills/`
 | SKILL-BE | REQUIRED | backend | każdy batch dotykający `backend/**` | batch czysto FE/ops | ładowany na start sesji |
 | SKILL-FE | REQUIRED | frontend | każdy batch dotykający `frontend/src/**` | batch czysto BE/ops | zawiera design tokens i wzorce UX |
 | SKILL-CALC | REQUIRED | obliczenia | batche z logiką ilości/wartości/agregacji (B04–B07, B10, B13) | CRUD bez obliczeń | najostrzejsze reguły projektu (Decimal!) |
-| SKILL-SEC | REQUIRED | security | batche dotykające auth/scope/tokenów/uploadów/deploy (B02, B03, B11, B14, B17, B18, B20) | czysty UI bez danych wrażliwych | uzupełnia, nie zastępuje SKILL-SECREV |
+| SKILL-SEC | REQUIRED | security | batche dotykające auth/scope/tokenów/uploadów/deploy (B02, B03, B11, B14, B17, B18, B20, B21, B22) | czysty UI bez danych wrażliwych | uzupełnia, nie zastępuje SKILL-SECREV |
 | SKILL-REVIEW | REQUIRED | review | koniec KAŻDEGO batcha przed commitem + Review batche | — | krok 11 master prompta |
 | SKILL-SECREV | REQUIRED | review | batche z sekcją Review Skills zawierającą SKILL-SECREV + wszystkie R1–R4 | zwykłe batche UI bez powierzchni ataku | |
 | SKILL-CREATOR | RECOMMENDED | meta | B01 (tworzenie skilli), R1–R4 (aktualizacja) | implementacja funkcji | |
@@ -126,6 +127,8 @@ Minimalny zestaw dla projektu. Project skille żyją w `.claude/skills/`
 | 17 hardening | SKILL-BE, SKILL-SEC | — | SKILL-REVIEW, SKILL-SECREV |
 | 18 deployment (LXC + ansistrano, D29) | SKILL-SEC | SKILL-BE | SKILL-REVIEW, SKILL-SECREV |
 | 20 usunięcie importu PDF | SKILL-BE, SKILL-FE, SKILL-SEC | — | SKILL-REVIEW, SKILL-SECREV |
+| 21 zakres global przepisów (D32) | SKILL-BE, SKILL-FE, SKILL-SEC | — | SKILL-REVIEW, SKILL-SECREV |
+| 22 narzędzie `/pdf-extract` (D31) | SKILL-BE, SKILL-CALC, SKILL-SEC | SKILL-CREATOR, `anthropic-skills:pdf` | SKILL-REVIEW, SKILL-SECREV |
 
 Review Skills = używane na diffie PRZED commitem batcha (nie podczas
 pisania kodu). Required = ładowane na starcie sesji, po lekturze karty.

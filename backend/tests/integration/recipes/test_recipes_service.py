@@ -13,7 +13,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import ConflictError
-from app.core.scope import Scope
+from app.core.scope import RecipeScope, Scope
 from app.modules.catalog.models import MeasureKind, VerificationStatus
 from app.modules.catalog.service import CatalogService
 from app.modules.catalog.units import AmountUnit, UnitConversionError
@@ -248,7 +248,7 @@ async def test_zmiana_scope_na_household_wymaga_rodziny(db_session: AsyncSession
         await service.update_recipe(
             recipe.id,
             actor=owner,
-            payload=RecipePayload(name=recipe.name, scope=Scope.HOUSEHOLD),
+            payload=RecipePayload(name=recipe.name, scope=RecipeScope.HOUSEHOLD),
         )
 
 

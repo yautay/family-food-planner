@@ -26,6 +26,26 @@ obowiązuje jednakowo.
 
 Typ enumowy `entity_scope` powstaje w migracji PIERWSZEJ produkcyjnej tabeli
 ze scope (`recipes`, BATCH_05) — BATCH_03 tworzy tylko sam mechanizm.
+
+**Zakres `global` (BATCH_21, D32) dotyczy WYŁĄCZNIE przepisów.** Typ w bazie ma
+trzy wartości (`private`, `household`, `global`), ale kod ma DWA enumy:
+`Scope` (dwie wartości — dla wszystkich encji współdzielnych) i `RecipeScope`
+(trzy — tylko `Recipe`). Dzięki temu nikt nie wyśle `scope:"global"` dla dnia
+planu ani listy zakupów (walidacja Pydantica), a CHECK `scope_not_global`
+zamyka tę furtkę także w bazie. Widoczność `global` dopisuje do
+`visible_condition` wyłącznie `ScopedQuery(..., allow_global=True)`; w
+`owned_condition` jej NIE MA — na przynależności stoi eksport „kopii danych
+rodziny" (D26), który nie ma wciągać przepisów całej instancji.
+
+| operacja na przepisie `global` | USER | ADMIN |
+|---|---|---|
+| odczyt                         | OK (każdy zalogowany) | OK |
+| edycja treści, zdjęcie, zmiana scope, usunięcie, archiwizacja | 403 | OK |
+| „kopiuj do mojej rodziny"      | OK | OK |
+
+Odmowa to 403, nie 404 — przepis jest widoczny (cudzy PRYWATNY nadal 404).
+Rolę sprawdza się jawnie (`user.role is ADMIN`), nie przez `owner_user_id`:
+zdegradowany były admin jest nadal właścicielem wiersza i nie może go ruszać.
 """
 
 from __future__ import annotations
@@ -54,10 +74,28 @@ from app.modules.accounts.models import User, UserRole
 
 
 class Scope(StrEnum):
-    """Zakres widoczności encji współdzielnej (ADR-006)."""
+    """Zakres widoczności encji współdzielnej (ADR-006) — DWIE wartości.
+
+    Nie dodawaj tu `GLOBAL`: dla przepisów jest `RecipeScope` (D32), a wspólny
+    enum wpuściłby `global` do dni planu, szablonów, tur, generacji i list.
+    """
 
     PRIVATE = "private"
     HOUSEHOLD = "household"
+
+
+class RecipeScope(StrEnum):
+    """Zakres PRZEPISU: `Scope` + `global` (widoczny dla każdego zalogowanego, D32).
+
+    `StrEnum` porównuje się jak string, więc `RecipeScope.HOUSEHOLD == Scope.HOUSEHOLD`
+    — ale NIE używaj `is` na granicy tych dwóch enumów (`is` porównuje tożsamość
+    członków, a to są różne obiekty); wszędzie, gdzie scope przepisu może być
+    którymkolwiek z nich, porównuj przez `==`.
+    """
+
+    PRIVATE = "private"
+    HOUSEHOLD = "household"
+    GLOBAL = "global"
 
 
 #: Typ enumowy w PG współdzielony przez modele — jedna definicja nazw.
@@ -72,8 +110,22 @@ SCOPE_ENUM = postgresql.ENUM(
     values_callable=lambda enum: [member.value for member in enum],
 )
 
+#: Ten sam typ PG (`entity_scope`), ale z Pythonowym enumem o trzech wartościach —
+#: używa go wyłącznie `Recipe.scope` (BATCH_21, D32). `create_type=False` z tego
+#: samego powodu co `SCOPE_ENUM`: cykl życia typu należy do migracji.
+RECIPE_SCOPE_ENUM = postgresql.ENUM(
+    RecipeScope,
+    name="entity_scope",
+    create_type=False,
+    values_callable=lambda enum: [member.value for member in enum],
+)
+
 #: Nazwa CHECK-a pilnującego spójności scope na poziomie bazy (03_DATABASE §4).
 SCOPE_CHECK_NAME = "scope_requires_household"
+#: CHECK-i z migracji `0018` (BATCH_21): `global` poza przepisami niemożliwe,
+#: a przepis `global` nie należy do rodziny.
+SCOPE_NOT_GLOBAL_CHECK_NAME = "scope_not_global"
+GLOBAL_WITHOUT_HOUSEHOLD_CHECK_NAME = "global_without_household"
 
 NO_HOUSEHOLD_MESSAGE = (
     "Nie należysz do żadnej rodziny, więc nie możesz udostępnić tego rodzinie. "
@@ -81,6 +133,10 @@ NO_HOUSEHOLD_MESSAGE = (
 )
 DEFAULT_FORBIDDEN_MESSAGE = (
     "Tylko właściciel wpisu (albo administrator) może zmienić jego widoczność lub go usunąć."
+)
+GLOBAL_ADMIN_ONLY_MESSAGE = (
+    "Przepisami dostępnymi dla wszystkich rodzin zarządza wyłącznie administrator. "
+    "Użyj „Kopiuj do mojej rodziny”, żeby dostać własny, edytowalny przepis."
 )
 
 
@@ -94,6 +150,31 @@ def scope_check_constraint() -> CheckConstraint:
     return CheckConstraint(
         f"scope <> '{Scope.HOUSEHOLD.value}' OR household_id IS NOT NULL",
         name=SCOPE_CHECK_NAME,
+    )
+
+
+def no_global_scope_check_constraint() -> CheckConstraint:
+    """CHECK: `scope <> 'global'` — dla każdej encji współdzielnej POZA przepisami.
+
+    Typ `entity_scope` ma od migracji `0017` wartość `global`, a pozostałe
+    siedem tabel ze scope jej nie obsługuje (D32). Pydantic i enum `Scope`
+    zamykają to w kodzie; CHECK zamyka SQL.
+    """
+    return CheckConstraint(
+        f"scope <> '{RecipeScope.GLOBAL.value}'",
+        name=SCOPE_NOT_GLOBAL_CHECK_NAME,
+    )
+
+
+def global_without_household_check_constraint() -> CheckConstraint:
+    """CHECK przepisu: `scope='global'` ⇒ `household_id IS NULL` (D32 pkt 3).
+
+    Przepis globalny nie należy do rodziny. Adres rodziny admina blokowałby jej
+    usunięcie, a przy obniżeniu zakresu przepis wpadłby po cichu do tej rodziny.
+    """
+    return CheckConstraint(
+        f"scope <> '{RecipeScope.GLOBAL.value}' OR household_id IS NULL",
+        name=GLOBAL_WITHOUT_HOUSEHOLD_CHECK_NAME,
     )
 
 
@@ -138,7 +219,7 @@ class ScopedMixin:
 
     @declared_attr.directive
     def __table_args__(cls) -> tuple[Any, ...]:
-        return (scope_check_constraint(),)
+        return (scope_check_constraint(), no_global_scope_check_constraint())
 
 
 class ScopedQuery[ScopedT: ScopedMixin]:
@@ -164,10 +245,16 @@ class ScopedQuery[ScopedT: ScopedMixin]:
         *,
         not_found_message: str,
         forbidden_message: str = DEFAULT_FORBIDDEN_MESSAGE,
+        allow_global: bool = False,
     ) -> None:
+        """`allow_global=True` — TYLKO dla przepisów (D32): encje `scope='global'`
+        są wtedy widoczne dla każdego zalogowanego (`visible_condition`), a ich
+        zmianę (`assert_can_manage`) ma wyłącznie ADMIN.
+        """
         self._model = model
         self._not_found_message = not_found_message
         self._forbidden_message = forbidden_message
+        self._allow_global = allow_global
 
     # --- odczyt ---------------------------------------------------------------
 
@@ -199,6 +286,10 @@ class ScopedQuery[ScopedT: ScopedMixin]:
             # ADMIN widzi wszystko (02_DOMAIN §2); mutacje i tak przechodzą
             # przez `assert_can_manage`, więc to nie jest obejście reguł.
             return true()
+        if self._allow_global:
+            # D32: przepis `global` widzi każdy zalogowany. Warunek jest TUTAJ,
+            # a nie w `owned_condition` — na przynależności stoi eksport rodziny.
+            return or_(self.owned_condition(user), self._model.scope == RecipeScope.GLOBAL)
         return self.owned_condition(user)
 
     def select_visible(self, user: User) -> Select[tuple[ScopedT]]:
@@ -220,36 +311,84 @@ class ScopedQuery[ScopedT: ScopedMixin]:
 
     # --- mutacje --------------------------------------------------------------
 
+    def assert_can_edit_content(self, entity: ScopedT, user: User) -> None:
+        """Edycja TREŚCI (nie zakresu): dla encji `global` wyłącznie ADMIN (D32).
+
+        Dla zwykłych encji nic nie sprawdza — rodzina sobie ufa (02_DOMAIN §3.1
+        pkt 2). Odmowa to 403, nie 404: encja `global` jest widoczna dla każdego.
+        """
+        if (
+            self._allow_global
+            and entity.scope == RecipeScope.GLOBAL.value
+            and user.role is not UserRole.ADMIN
+        ):
+            raise ForbiddenError(GLOBAL_ADMIN_ONLY_MESSAGE)
+
     def assert_can_manage(self, entity: ScopedT, user: User) -> None:
         """Zmiana scope i usunięcie: właściciel albo ADMIN (02_DOMAIN §3.1 pkt 2).
 
         Zwykła edycja treści encji HOUSEHOLD tego nie wymaga — rodzina sobie ufa,
         a kto zmienił, zapisuje audit log.
+
+        Encja `global` (tylko przy `allow_global`) należy do administracji, nie
+        do autora: rolę sprawdzamy JAWNIE, bo zdegradowany były admin jest nadal
+        `owner_user_id` wiersza i nie ma prawa go ruszać.
         """
-        if user.role is UserRole.ADMIN or entity.owner_user_id == user.id:
+        if user.role is UserRole.ADMIN:
+            return
+        self.assert_can_edit_content(entity, user)
+        if entity.owner_user_id == user.id:
             return
         raise ForbiddenError(self._forbidden_message)
 
     @staticmethod
-    def assert_scope_allowed(user: User, scope: Scope) -> None:
-        """Użytkownik bez rodziny nie może nadać scope HOUSEHOLD (03_DATABASE §4)."""
-        if scope is Scope.HOUSEHOLD and user.household_id is None:
+    def assert_scope_allowed(user: User, scope: Scope | RecipeScope) -> None:
+        """Użytkownik bez rodziny nie może nadać scope HOUSEHOLD (03_DATABASE §4).
+
+        Porównanie przez `==`, nie `is`: przepis niesie `RecipeScope`, a jego
+        `HOUSEHOLD` to inny obiekt niż `Scope.HOUSEHOLD` (StrEnum równa się po
+        wartości). Z `is` użytkownik bez rodziny dostawał 500 z CHECK-a zamiast 409.
+        """
+        if scope == Scope.HOUSEHOLD and user.household_id is None:
             raise ConflictError(NO_HOUSEHOLD_MESSAGE)
 
     @staticmethod
-    def ownership_for_create(user: User, scope: Scope) -> dict[str, Any]:
+    def ownership_for_create(user: User, scope: Scope | RecipeScope) -> dict[str, Any]:
         """Kolumny wzorca scope dla nowo tworzonej encji (po walidacji `scope`).
 
         `household_id` zapisujemy także dla PRIVATE — dzięki temu późniejsza
         zmiana scope na HOUSEHOLD nie wymaga zgadywania rodziny. Konsekwencja
         przenosin między rodzinami jest świadoma i opisana w ADR-006.
+        Wyjątek: `global` (D32) — przepis nie należy do rodziny, więc
+        `household_id` jest NULL (CHECK `global_without_household`). Prawo do
+        utworzenia `global` sprawdza WOŁAJĄCY (rola), nie ta funkcja.
         """
         ScopedQuery.assert_scope_allowed(user, scope)
         return {
             "owner_user_id": user.id,
-            "household_id": user.household_id,
+            "household_id": None if scope == RecipeScope.GLOBAL else user.household_id,
             "scope": scope,
         }
+
+
+def outside_audience_condition(
+    model: Any, *, keep_household_id: int | None, keep_owner_id: int
+) -> ColumnElement[bool]:
+    """Wiersze encji ze scope, które NIE należą do wskazanego grona (D32).
+
+    „Grono" to jeden użytkownik (`keep_owner_id`) i — gdy podano — jego rodzina
+    (`keep_household_id`). Konsument: blokada obniżenia zakresu przepisu `global`
+    (04_API): jeśli po obniżeniu przepis zostaje wyłącznie dla grona, żaden
+    wiersz spoza niego nie może go używać, bo przepis zniknąłby mu z widoku.
+    Wiersz bez rodziny (`household_id IS NULL`) jest „spoza" rodziny zawsze.
+    """
+    outside: ColumnElement[bool] = model.owner_user_id != keep_owner_id
+    if keep_household_id is None:
+        return outside
+    return and_(
+        outside,
+        or_(model.household_id.is_(None), model.household_id != keep_household_id),
+    )
 
 
 # --- wariant „zawsze household" (spiżarnia, B08) -------------------------------------

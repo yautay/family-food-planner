@@ -13,7 +13,8 @@ import type { MeasureKind } from '@/api/catalog'
 import { isValidDecimal } from '@/lib/decimal'
 import { recipes as texts } from '@/lib/texts'
 
-export const RECIPE_SCOPES = ['private', 'household'] as const
+/** Zakresy przepisu — 3 wartości (D32); inne encje (plan, szablony…) mają tylko 2. */
+export const RECIPE_SCOPES = ['private', 'household', 'global'] as const
 
 /** Pole całkowite opcjonalne: pusty string = „nie podano" (API dostaje null). */
 function optionalInt(max: number, message: string) {

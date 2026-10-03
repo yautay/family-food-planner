@@ -125,7 +125,8 @@ Stan faktyczny (BATCH_04, migracje `0004` + `0005`):
 ## 4. Wzorzec scope (wspólny dla recipes/planning/shopping)
 
 Kolumny: `owner_user_id FK→users RESTRICT`, `household_id FK→households
-NULL`, `scope ENUM(private,household)`. Zapytania „widoczne dla mnie":
+NULL`, `scope ENUM(private,household)` (typ `entity_scope` ma od `0017` trzecią
+wartość `global` — wyłącznie dla `recipes`, patrz ostatni punkt poniżej). Zapytania „widoczne dla mnie":
 
 ```sql
 WHERE owner_user_id = :uid
@@ -153,6 +154,18 @@ Stan faktyczny (BATCH_03, `backend/app/core/scope.py`):
   produkcyjnej tabeli ze scope (`recipes`, BATCH_05); BATCH_03 dostarczył sam
   mechanizm i macierz testów na encji testowej `scoped_notes` (tworzonej
   wyłącznie w bazie testowej, nigdy migracją).
+- **Zakres `global` — tylko przepisy (BATCH_21, D32).** Typ `entity_scope` ma trzy
+  wartości (`private`, `household`, `global`; `ALTER TYPE … ADD VALUE` w migracji `0017`,
+  poza transakcją migracji — `autocommit_block`, bo nowej wartości nie wolno użyć przed
+  commitem), ale kod ma dwa enumy: `Scope` (7 tabel) i `RecipeScope` (`recipes`).
+  Migracja `0018` dokłada CHECK-i: `ck_recipes_global_without_household`
+  (`scope <> 'global' OR household_id IS NULL`) oraz `ck_<tabela>_scope_not_global`
+  (`scope <> 'global'`) dla `plan_days`, `day_templates`, `week_templates`, `week_cycles`,
+  `shopping_round_configs`, `shopping_generations`, `shopping_lists`. Widoczność `global`
+  dopisuje do `visible_condition` wyłącznie `ScopedQuery(Recipe, …, allow_global=True)` —
+  nigdy `owned_condition` (podstawa eksportu D26). Własny `__table_args__` modelu ze scope
+  niesie `scope_check_constraint()` i `no_global_scope_check_constraint()` (przepis:
+  `global_without_household_check_constraint()` zamiast drugiego).
 - **Spiżarnia stoi obok tego wzorca, nie w nim** (BATCH_08): jest zawsze domowa,
   więc kolumny `scope` nie ma, a widoczność liczy `HouseholdScopedQuery` —
   szczegóły i uzasadnienie w §7.
@@ -180,6 +193,12 @@ recipe_ratings (id, recipe_id FK CASCADE, user_id FK CASCADE,
 
 Stan faktyczny (BATCH_05, migracje `0006` + `0007`):
 
+- **Zakres `global` (BATCH_21, D32)**: `recipes.scope` używa typu `entity_scope` z
+  Pythonowym enumem `RecipeScope` (3 wartości). Przepis globalny ma `household_id = NULL`
+  (CHECK z `0018`), więc licznik rodziny (`_recipes_in_household`) go nie widzi i nie
+  blokuje usunięcia rodziny admina. Migracja `0017` (`ADD VALUE`) jest NIEODWRACALNA —
+  `downgrade` to no-op: po cofnięciu wiersze z `global` są nieczytelne dla starego kodu,
+  więc przed cofnięciem zmień ich zakres albo przywróć dump z deployu (ADR-017).
 - Migracja `0006` tworzy dwa typy enumowe, które przetrwały do dziś:
   **`entity_scope`** (pierwsza produkcyjna tabela ze scope — 03 §4)
   i **`amount_unit`** (reużyją go planning/pantry/shopping przez

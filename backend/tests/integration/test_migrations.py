@@ -15,6 +15,7 @@ from alembic.autogenerate import compare_metadata
 from alembic.config import Config
 from alembic.runtime.migration import MigrationContext
 from sqlalchemy import create_engine, inspect, text
+from sqlalchemy.exc import IntegrityError
 
 # Import rejestru modeli: bez niego `Base.metadata` nie zna tabel i porównanie
 # ze schematem raportowałoby usunięcie wszystkiego (app/models.py, BATCH_01).
@@ -104,7 +105,7 @@ def test_upgrade_downgrade_upgrade_na_czystej_bazie(
 
     command.upgrade(alembic_config, "head")
     after_upgrade = _current_revision(test_database_url)
-    assert after_upgrade == "0016"
+    assert after_upgrade == "0018"
 
     command.downgrade(alembic_config, "base")
     assert _current_revision(test_database_url) is None
@@ -215,3 +216,125 @@ def test_modele_nie_dryfuja_od_schematu_po_migracjach(
         "Modele rozjechały się ze schematem migracji — uzupełnij model albo "
         f"dopisz migrację: {differences}"
     )
+
+
+# --- BATCH_21: wartość `global` i jej CHECK-i (D32) ---------------------------------------
+
+
+def _entity_scope_values(url: str) -> list[str]:
+    """Wartości typu `entity_scope` w kolejności deklaracji."""
+    engine = create_engine(normalize_database_url(url))
+    try:
+        with engine.connect() as connection:
+            rows = connection.execute(
+                text(
+                    "SELECT e.enumlabel FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid "
+                    "WHERE t.typname = 'entity_scope' ORDER BY e.enumsortorder"
+                )
+            ).fetchall()
+    finally:
+        engine.dispose()
+    return [str(row[0]) for row in rows]
+
+
+def test_entity_scope_ma_trzy_wartosci_po_head(
+    alembic_config: Config, test_database_url: str
+) -> None:
+    """Po `head` typ ma `private`, `household`, `global` — i tylko je."""
+    command.upgrade(alembic_config, "head")
+
+    assert _entity_scope_values(test_database_url) == ["private", "household", "global"]
+
+
+def test_migracja_0017_na_istniejacej_bazie_z_wierszami(
+    alembic_config: Config, test_database_url: str
+) -> None:
+    """Test DWUSTOPNIOWY: odtwarza produkcję (0016 → COMMIT → head), nie „od zera".
+
+    `migrations/env.py` wykonuje całe `upgrade head` w JEDNEJ transakcji, a w PG
+    nowej wartości enuma nie wolno użyć przed commitem, który ją dodał. Test z
+    samego `upgrade head` od zera tego nie złapie (typ utworzony w tej samej
+    transakcji bywa z ograniczenia zwolniony), więc tu baza NAJPIERW staje na
+    `0016` z prawdziwymi wierszami i dopiero potem dostaje `0017`+`0018` — dokładnie
+    tak, jak ją dostanie produkcja. Jeśli `0017` straci `autocommit_block` albo CHECK
+    wejdzie do tej samej rewizji co `ADD VALUE`, ten test pada na „unsafe use of
+    new value".
+    """
+    command.downgrade(alembic_config, "base")
+    command.upgrade(alembic_config, "0016")
+    assert _current_revision(test_database_url) == "0016"
+    assert _entity_scope_values(test_database_url) == ["private", "household"]
+
+    engine = create_engine(normalize_database_url(test_database_url))
+    try:
+        with engine.begin() as connection:  # COMMIT przed migracją
+            connection.execute(
+                text(
+                    "INSERT INTO households (name) VALUES ('Rodzina migracji'); "
+                    "INSERT INTO users (email, password_hash, display_name, role, household_id) "
+                    "SELECT 'migracja@example.com', 'x', 'Migracja', 'user', id FROM households; "
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO recipes (owner_user_id, household_id, scope, name) "
+                    "SELECT u.id, u.household_id, 'household', 'Przepis rodzinny' FROM users u"
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO recipes (owner_user_id, household_id, scope, name) "
+                    "SELECT u.id, u.household_id, 'private', 'Przepis prywatny' FROM users u"
+                )
+            )
+
+        command.upgrade(alembic_config, "head")
+        assert _current_revision(test_database_url) == "0018"
+        assert _entity_scope_values(test_database_url) == ["private", "household", "global"]
+
+        with engine.begin() as connection:
+            survivors = connection.execute(
+                text("SELECT name, scope::text FROM recipes ORDER BY name")
+            ).fetchall()
+            assert [tuple(row) for row in survivors] == [
+                ("Przepis prywatny", "private"),
+                ("Przepis rodzinny", "household"),
+            ]
+            # Nowa wartość jest użyteczna po migracji: przepis globalny bez rodziny.
+            connection.execute(
+                text(
+                    "INSERT INTO recipes (owner_user_id, household_id, scope, name) "
+                    "SELECT id, NULL, 'global', 'Przepis wspólny' FROM users"
+                )
+            )
+
+        # CHECK-i z 0018 działają na realnych wierszach.
+        with pytest.raises(IntegrityError), engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO recipes (owner_user_id, household_id, scope, name) "
+                    "SELECT id, household_id, 'global', 'Globalny z rodziną' FROM users"
+                )
+            )
+        with pytest.raises(IntegrityError), engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO plan_days (owner_user_id, household_id, scope, day) "
+                    "SELECT id, NULL, 'global', DATE '2030-01-01' FROM users"
+                )
+            )
+
+        # Downgrade do 0016 przechodzi (0017 = no-op; wartość enuma zostaje).
+        with engine.begin() as connection:
+            connection.execute(text("DELETE FROM recipes WHERE scope::text = 'global'"))
+        command.downgrade(alembic_config, "0016")
+        assert _current_revision(test_database_url) == "0016"
+        assert _entity_scope_values(test_database_url) == ["private", "household", "global"]
+        command.upgrade(alembic_config, "head")
+        assert _current_revision(test_database_url) == "0018"
+    finally:
+        with engine.begin() as connection:
+            connection.execute(text("DELETE FROM recipes"))
+            connection.execute(text("DELETE FROM users"))
+            connection.execute(text("DELETE FROM households"))
+        engine.dispose()

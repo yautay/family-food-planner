@@ -14,6 +14,8 @@
  * nie mają.
  */
 
+import type { RecipeScope } from '@/api/recipes'
+
 export interface AdminUsersFilters {
   limit: number
   offset?: number
@@ -34,7 +36,7 @@ export interface RecipesFilters {
   prep_time_max?: number
   difficulty_max?: number
   rating_min?: number
-  scope?: 'private' | 'household'
+  scope?: RecipeScope
   include_archived?: boolean
 }
 

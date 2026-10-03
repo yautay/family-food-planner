@@ -6,6 +6,13 @@ egzekwuje wyłącznie `ScopedQuery` w serwisie. Migracja tego modułu tworzy typ
 enumowy `entity_scope`; kolejne tabele ze scope (B06+) używają
 `postgresql.ENUM(..., create_type=False)`.
 
+**Przepis jako JEDYNA encja ma zakres `global`** (BATCH_21, D32): kolumna `scope`
+jest tu nadpisana własnym enumem `RecipeScope` (trzy wartości), a `Scope`
+pozostałych siedmiu tabel zostaje dwuwartościowy. Przepis `global` ma
+`household_id IS NULL` (CHECK `global_without_household`), widzi go każdy
+zalogowany, a zarządza nim wyłącznie ADMIN (`ScopedQuery(allow_global=True)`
+i jawne kontrole roli w `recipes/service.py`).
+
 Składnik przechowuje DWIE ilości (ADR-005, 02_DOMAIN §5):
 
 - `display_qty` + `display_unit` — to, co wpisał użytkownik („2 x łyżka"),
@@ -42,7 +49,13 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base, TimestampMixin
-from app.core.scope import ScopedMixin, scope_check_constraint
+from app.core.scope import (
+    RECIPE_SCOPE_ENUM,
+    RecipeScope,
+    ScopedMixin,
+    global_without_household_check_constraint,
+    scope_check_constraint,
+)
 from app.modules.catalog.units import AmountUnit
 
 __all__ = [
@@ -73,6 +86,10 @@ class Recipe(TimestampMixin, ScopedMixin, Base):
     __table_args__ = (
         # Własne __table_args__ MUSZĄ zawierać CHECK-a wzorca scope (karta B05).
         scope_check_constraint(),
+        # D32: przepis `global` nie należy do rodziny (migracja 0018). Nie ma tu
+        # `no_global_scope_check_constraint()` — przepisy są jedyną encją, która
+        # MOŻE być globalna.
+        global_without_household_check_constraint(),
         CheckConstraint("base_servings >= 1", name="base_servings_positive"),
         CheckConstraint(
             "difficulty IS NULL OR (difficulty >= 1 AND difficulty <= 10)",
@@ -88,6 +105,16 @@ class Recipe(TimestampMixin, ScopedMixin, Base):
         ),
     )
 
+    #: Przepis ma TRZY zakresy (`RecipeScope`, D32); reszta encji ze `ScopedMixin`
+    #: ma dwa (`Scope`). Ten sam typ PG `entity_scope`, inny enum po stronie
+    #: Pythona — nadpisanie kolumny z mixina własną definicją. `type: ignore`,
+    #: bo mypy widzi niekompatybilny typ atrybutu bazowego (`Mapped[Scope]`).
+    scope: Mapped[RecipeScope] = mapped_column(  # type: ignore[assignment]
+        RECIPE_SCOPE_ENUM,
+        nullable=False,
+        default=RecipeScope.PRIVATE,
+        server_default=RecipeScope.PRIVATE.value,
+    )
     name: Mapped[str] = mapped_column(Text, nullable=False)
     instructions: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
     #: Na ile porcji jest przepis — mianownik wszystkich wartości „per porcja".

@@ -124,6 +124,9 @@ wynikiem, nie jednorazowe zielone.
 | odczyt HOUSEHOLD | 401 | 404 | 200 | 200 | 200 |
 | edycja HOUSEHOLD | 401 | 404 | 200 | 200 | 200 |
 | zmiana scope / delete | 401 | 404 | 403 | 200 | 200 |
+| odczyt przepisu `global` (D32) | 401 | 200 | 200 | 200 | 200 |
+| tworzenie / edycja treści / zdjęcie / zmiana scope / delete / archiwizacja przepisu `global` | 401 | 403 | 403 | 403 (także zdegradowany były admin) | 200 |
+| `POST /recipes/{id}/copy` (przepis widoczny) | 401 | 201 | 201 | 201 | 201 |
 | nutrition produktu (edycja) | 401 | 403 | 403 | 403 | 200 |
 | `measure_kind` / `piece_weight_g` produktu (D15) | 401 | 403 | 403 | 403 | 200 |
 | sklepy i produkty sklepowe (CRUD) | 401 | 200 | 200 | 200 | 200 |
@@ -144,6 +147,20 @@ i różne prawa ZAPISU. Dla sklepów i produktów sklepowych USER może wszystko
 odżywcze i weryfikacja (ADMIN), usunięcie produktu (D13) oraz sposób liczenia
 i waga sztuki (D15). Testy: `tests/api/catalog/test_stores_api.py`,
 `tests/api/catalog/test_retail_api.py`, `tests/api/test_products.py::test_d15_*`.
+
+**Przepisy `global` (BATCH_21, D32).** Trzy ostatnie wiersze macierzy dowodzą kodami HTTP
+`tests/api/recipes/test_recipes_global_api.py` (wiersz „zdegradowany były admin" asercjonuje
+rolę, nie `owner_user_id`), a użycie przez obcą rodzinę — `test_recipes_global_usage_api.py`
+(plan, szablon dnia, cykl, lista zakupów). `scope=global` poza przepisami: 422 dla dnia planu,
+szablonów i cykli (API), a dla wszystkich ośmiu tabel — CHECK-i w bazie
+(`tests/integration/recipes/test_global_scope_db.py`). **Migracja ma test DWUSTOPNIOWY**
+(`tests/integration/test_migrations.py::test_migracja_0017_na_istniejacej_bazie_z_wierszami`):
+baza staje na `0016` z wierszami, COMMIT, dopiero potem `upgrade head` — odtwarza produkcję,
+bo test jednoprzebiegowy od zera nie wykryje błędu „nowa wartość enuma użyta w tej samej
+transakcji" (typ utworzony w tej samej transakcji bywa z ograniczenia zwolniony).
+Strażnik `tests/unit/test_recipe_scope.py` pilnuje, żeby każde `ScopedQuery(Recipe, …)` poza
+transferem miało `allow_global=True`, a E2E `recipe-global.spec.ts` przechodzi cały flow
+(ADMIN publikuje → USER innej rodziny widzi, planuje, kopiuje, edytuje kopię).
 
 Macierz jest udowodniona raz, na poziomie mechanizmu: BATCH_03 dostarczył
 `tests/integration/test_scope_matrix.py` na encji testowej `ScopedNote`

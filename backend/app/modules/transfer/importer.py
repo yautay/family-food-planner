@@ -27,6 +27,7 @@ from typing import Any
 from pydantic import ValidationError
 
 from app.core.errors import AppError
+from app.core.scope import RecipeScope, Scope
 from app.core.uploads import UploadTooLargeError
 from app.modules.transfer.schemas import (
     COPY_SUFFIX,
@@ -355,6 +356,44 @@ def merged_days_warning(count: int) -> str:
     return f"{phrase} z tym, co już masz — posiłki, które już tam są, zostaną nietknięte."
 
 
+UNKNOWN_SCOPE = (
+    "Plik zawiera nieznany zakres widoczności „{value}” w sekcji {section} — import przerwany."
+)
+
+
+def validate_row_scope(section: Section, row: Mapping[str, Any]) -> None:
+    """Zakres wiersza musi być wartością, którą ta sekcja zna (422, nie `ValueError`).
+
+    Przepisy znają `private`/`household`/`global` (D32), reszta encji ze scope
+    tylko `private`/`household` — `global` w pliku dla dnia planu, szablonu, tury,
+    generacji albo listy to plik niezgodny z formatem, a nie „obcięty do rodziny".
+    Sprawdzenie jest CZYSTE i wspólne dla raportu DRY-RUN i dla zapisu: bez tego
+    raport meldowałby sukces, a `apply` wywracał się dopiero na `coerce_value`.
+    """
+    if not section.scoped or "scope" not in row:
+        return
+    allowed = RecipeScope if section.name == "recipes" else Scope
+    value = row["scope"]
+    if value is not None and (
+        not isinstance(value, str) or value not in {member.value for member in allowed}
+    ):
+        raise TransferValidationError(UNKNOWN_SCOPE.format(value=value, section=section.name))
+
+
+def global_recipes_warning(count: int) -> str:
+    """Ostrzeżenie DRY-RUN: przepisy „dla wszystkich" wchodzą jako kopie importującego (D32)."""
+    if count == 1:
+        phrase = "1 przepis był dostępny dla wszystkich rodzin"
+    elif 2 <= count % 10 <= 4 and not 12 <= count % 100 <= 14:
+        phrase = f"{count} przepisy były dostępne dla wszystkich rodzin"
+    else:
+        phrase = f"{count} przepisów było dostępnych dla wszystkich rodzin"
+    return (
+        f"{phrase} — po wczytaniu staną się Twoimi kopiami (rodzinnymi albo prywatnymi). "
+        "Wspólne przepisy dla wszystkich rodzin publikuje wyłącznie administrator."
+    )
+
+
 def analyze(
     document: ExportFile,
     *,
@@ -381,6 +420,7 @@ def analyze(
     warnings: list[str] = []
     missing_photos = 0
     merged_days = 0
+    global_recipes = 0
     blocked: dict[str, set[Any]] = {}
     # Tłumaczenie identyfikatorów z pliku na te z bazy — wypełniane wierszami,
     # które import ROZPOZNAŁ jako już istniejące. Wiersz dopiero tworzony nie ma
@@ -394,6 +434,13 @@ def analyze(
         section_existing = existing.get(section.name, {})
         creating = 0
         for row in rows:
+            validate_row_scope(section, row)
+            if (
+                section.name == "recipes"
+                and document.scope is TransferScope.USER
+                and row.get("scope") == RecipeScope.GLOBAL.value
+            ):
+                global_recipes += 1
             if parent_blocked(section, row, blocked):
                 mark_blocked(section, row, blocked)
                 continue
@@ -453,6 +500,8 @@ def analyze(
 
     if merged_days:
         warnings.append(merged_days_warning(merged_days))
+    if global_recipes:
+        warnings.append(global_recipes_warning(global_recipes))
     if missing_photos:
         warnings.append(
             f"W archiwum brakuje {missing_photos} zdjęć — te pozycje powstaną bez zdjęcia."

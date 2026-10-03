@@ -32,6 +32,8 @@ commit wykonany). Kolumna „Blokery" = zależności + decyzje z 02_DECISIONS.
 | 17 PRODUCTION_HARDENING | [x] | — | `batch(17)` na master (hash wpisać po push) |
 | 20 REMOVE_PDF_IMPORT_AND_FAMILY_BACKUP | [x] | — | `batch(20)` na master (hash wpisać po push) |
 | 18 PRODUCTION_DEPLOYMENT_AND_OPERATIONS | [ ] | — (17, 19 i **20** DONE; D6 i D7 zatwierdzone 2026-09-05; **D29** zatwierdzone 2026-10-03 — karta przepisana na LXC + ansistrano) | |
+| 21 GLOBAL_RECIPE_SCOPE | [x] | — (20 DONE; D32 wdrożone) | `batch(21)` na master (hash wpisać po push; brak remote'a — repo bez upstreamu) |
+| 22 PDF_EXTRACT_TOOL | [ ] | — (21 DONE; D31/D32 zatwierdzone). **D33 OPEN** (rekomendacja: paczka `global` jako `scope=instance`) — rozstrzygnąć przed startem | |
 
 ## Dziennik
 
@@ -40,6 +42,83 @@ co weszło + **„rzeczy, o których muszą wiedzieć następne batche"**
 (odstępstwa, nowe kontrakty, pułapki). Wpis NIE zastępuje propagacji —
 zmiany dotykające przyszłych batchy trzeba wpisać do ich kart
 (00_MASTER_PLAN §8); dziennik to indeks, nie schowek.
+
+---
+
+**2026-10-03 — BATCH_21 (GLOBAL_RECIPE_SCOPE) — przepis może mieć zakres `global`:
+widzi go każdy zalogowany, zarządza wyłącznie ADMIN (D32, ADR-006 aneks).**
+
+Migracje **`0017`** (`ALTER TYPE entity_scope ADD VALUE 'global'` w `autocommit_block`)
+i **`0018`** (CHECK-i) — dwie rewizje, head = `0018`. `RecipeScope` (3 wartości) tylko dla
+`Recipe`, `Scope` zostaje dwuwartościowy (OpenAPI i `generated.ts` to potwierdzają).
+Nowe: `POST /recipes/{id}/copy`, `POST|DELETE /recipes/{id}/archive`, `core.uploads.copy_image`,
+blokada obniżenia zakresu 409 `used_in`, obcięcie `global` przy imporcie, dołączanie
+przepisów globalnych do eksportu użytkownika, frontend (odznaka, filtr, „Wszyscy" dla ADMIN-a,
+„Kopiuj do mojej rodziny"). Baza dev przed i po: `recipes` 5 × `private`; `upgrade` 0016→0018
+wykonany realnie na bazie dev z wierszami. Testy (`task check` zielony): unit 491, integration 284, api 443,
+vitest 407; E2E 20/20 dwa razy z rzędu (nowy `recipe-global.spec.ts`; jeden wcześniejszy przebieg
+padł na niezwiązanym `offline-lista.spec.ts` tuż po przeładowaniu stacku i nie powtórzył się).
+
+**Rzeczy, o których muszą wiedzieć następne batche:**
+
+1. **`ADD VALUE` jest NIEODWRACALNE i musi być OSOBNĄ rewizją.** `env.py` robi całe
+   `upgrade head` w jednej transakcji, a nowej wartości enuma nie wolno użyć przed commitem.
+   Test jednoprzebiegowy od zera tego nie łapie — obowiązuje dwustopniowy
+   (`test_migracja_0017_na_istniejacej_bazie_z_wierszami`; sprawdzony: bez `autocommit_block`
+   pada na „unsafe use of new value").
+2. **`ScopedQuery(Recipe, …)` składa JEDNA fabryka** `recipes.service.recipe_visibility_query`
+   (z `allow_global=True`); planowanie i szablony jej używają. Transfer ma własne zapytanie BEZ
+   flagi (`select_owned`). Strażnik: `tests/unit/test_recipe_scope.py`.
+3. **`is` na granicy `Scope`/`RecipeScope` nie działa** — porównuj `==` (z `is` użytkownik bez
+   rodziny dostawał 500 z CHECK-a zamiast 409).
+4. **D33 (OPEN)**: import `scope=user` przez ADMIN-a OBCINA `global` (karta B21: „dla `scope=user`
+   w ogóle"). Dla **B22** znaczy to, że paczka z przepisami globalnymi musi być kopią INSTANCJI
+   (`scope=instance`, właściciel = konto ADMIN-a z sekcji `users`). Karta B22 zaktualizowana.
+5. **B18**: migracje `0017`/`0018` jadą na produkcję tym samym deployem (dump → migracja);
+   wzmianka o nieodwracalności w karcie B18 (runbook `deploy/README.md` jest nieśledzoną pracą B18,
+   więc tam jej nie dopisano).
+6. Repo nie ma remote'a ani upstreamu — `git push` z polecenia wykonawczego był niewykonalny;
+   commit zostaje lokalny.
+
+---
+
+**2026-10-03 — DECYZJE WŁAŚCICIELA D31 i D32: komenda `/pdf-extract` oraz zakres
+`global` dla przepisów. Karty B21 i B22 napisane; kodu jeszcze nie ma.**
+
+Właściciel zlecił narzędzie, które z jadłospisu PDF dietetyka wyciąga produkty
+i przepisy, proponuje scalenia produktów (z uwzględnieniem tych z wcześniejszych
+wersji), weryfikuje obliczenia i generuje wsad do bazy, oraz chce, żeby wgrane
+przepisy były dostępne dla każdej rodziny. Rozstrzygnięcia: **D31** — narzędzie
+deweloperskie POZA runtime aplikacji (skill `/pdf-extract` + `backend/scripts/
+pdf_extract/`), wynik = PACZKA TRANSFERU (nie SQL), D25/ADR-016 bez zmian dla
+produktu; **D32** — przepisy dostają trzeci zakres `global` (tylko przepisy,
+tylko ADMIN zarządza). Kolejność: **B21 → B22**, B18 niezależny.
+
+**Rzeczy, o których muszą wiedzieć B21, B22 i B18:**
+
+1. **B21 zmienia model uprawnień**: `RecipeScope` (3 wartości) tylko dla
+   `Recipe`, wspólny `Scope` zostaje z dwiema (inaczej każdy USER mógłby
+   wysłać `global` dla listy zakupów); migracje `0017` (`ADD VALUE` w
+   `autocommit_block`) i `0018` (CHECK-i) są osobnymi rewizjami, a `ADD VALUE`
+   jest NIEODWRACALNE. Test z jednej transakcji od zera nie wykryje błędu
+   „nowa wartość w tej samej transakcji” — obowiązkowy test dwustopniowy.
+2. **Luki zapisu i transferu znalezione w przeglądzie wpływu**: edycja treści
+   przepisu nie ma dziś kontroli ról (dla `global` edytowałby każdy), import
+   transferu klonuje `scope` z pliku (eskalacja przez ręcznie edytowany
+   `export.json`), a eksport użytkownika po cichu gubi pozycje planu z cudzym
+   przepisem. Wszystko ma pokrycie w karcie B21.
+3. **`normalize_amount` odrzuca „Sztuka” dla produktu spoza `PIECE`** nawet przy
+   istniejącym przeliczniku — surowy SQL/paczka z takim składnikiem wchodziłby do
+   bazy, a pierwsza edycja w UI dawałaby 422. Generator B22 zamienia takie
+   składniki na gramy (D31 pkt 8).
+4. **Wersja `0001` danych dietetyka już istnieje jako szkic**:
+   `data/diet-imports/0001-dieta-2000/spec.draft.json` (44 produkty po
+   zatwierdzonych scaleniach, 12 przepisów, 68 składników; gramy po produktach
+   zgodne z listą zakupów z PDF-a). Wartości odżywcze to KOMPROMIS z tabel
+   internetowych, wszystkie `unverified`. Sumy dnia policzone na gramach z PDF-a
+   mieszczą się w ±3% — B22 ma je przeliczyć prawdziwym silnikiem.
+5. **Prywatność (D27)**: `docs/dieta.pdf` (imię i nazwisko na okładce) jest teraz
+   w `.gitignore` razem z `/data/source_pdfs/`; PDF-y nie wchodzą do gita.
 
 ---
 

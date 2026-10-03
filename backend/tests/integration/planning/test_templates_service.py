@@ -21,7 +21,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import ConflictError
-from app.core.scope import Scope
+from app.core.scope import RecipeScope, Scope
 from app.modules.accounts.models import User
 from app.modules.catalog.models import CanonicalProduct, VerificationStatus
 from app.modules.catalog.service import CatalogService
@@ -785,7 +785,7 @@ async def test_instancjacja_odrzuca_przepis_ktory_przestal_byc_widoczny(
     )
 
     # Właściciel przepisu chowa go przed rodziną.
-    recipe.scope = Scope.PRIVATE
+    recipe.scope = RecipeScope.PRIVATE
     await db_session.commit()
 
     with pytest.raises(PlanValidationError):

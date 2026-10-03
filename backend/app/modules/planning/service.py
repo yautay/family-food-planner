@@ -35,7 +35,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deletion import USED_IN_LIMIT, UsedInRef
 from app.core.errors import AppError, NotFoundError
-from app.core.scope import Scope, ScopedQuery
+from app.core.scope import Scope, ScopedQuery, outside_audience_condition
 from app.modules.accounts.models import User
 from app.modules.catalog.models import CanonicalProduct, ProductUnitWeight
 from app.modules.catalog.nutrition_adapter import measure_for, nutrition_for
@@ -88,6 +88,8 @@ from app.modules.recipes.models import Recipe
 from app.modules.recipes.service import (
     RecipePortion,
     RecipesService,
+    recipe_visibility_query,
+    register_recipe_foreign_use_finder,
     register_recipe_reference_finder,
 )
 
@@ -119,7 +121,8 @@ RANGE_TOO_LONG = f"Zakres dat jest zbyt szeroki — maksimum {MAX_RANGE_DAYS} dn
 
 _DAYS = ScopedQuery(PlanDay, not_found_message=DAY_NOT_FOUND)
 #: Widoczność przepisu przy DODAWANIU pozycji — ten sam mechanizm, co w recipes.
-_VISIBLE_RECIPES = ScopedQuery(Recipe, not_found_message=RECIPE_NOT_AVAILABLE)
+# Fabryka z recipes: przepis `global` (D32) można dodać do planu dowolnej rodziny.
+_VISIBLE_RECIPES = recipe_visibility_query(RECIPE_NOT_AVAILABLE)
 
 
 class PlanValidationError(AppError):
@@ -1300,13 +1303,15 @@ def _used_in_days(rows: Iterable[tuple[int, date, str | None]]) -> list[UsedInRe
     ]
 
 
-def _days_using(condition: ColumnElement[bool]) -> Select[tuple[int, date, str | None]]:
+def _days_using(
+    *conditions: ColumnElement[bool],
+) -> Select[tuple[int, date, str | None]]:
     """Zapytanie „dni planu, w których użyto wskazanej encji" (wspólne dla obu rejestrów)."""
     return (
         select(PlanDay.id, PlanDay.day, PlanDay.title)
         .join(PlanMeal, PlanMeal.plan_day_id == PlanDay.id)
         .join(PlanMealItem, PlanMealItem.plan_meal_id == PlanMeal.id)
-        .where(condition)
+        .where(*conditions)
         .distinct()
         .order_by(PlanDay.day, PlanDay.id)
         .limit(USED_IN_LIMIT)
@@ -1320,6 +1325,27 @@ async def _plans_using_recipe(session: AsyncSession, recipe_id: int) -> Sequence
     zamiast listy „Używane w: Plan dnia 17.08.2026" (karta B06 §Context).
     """
     rows = (await session.execute(_days_using(PlanMealItem.recipe_id == recipe_id))).all()
+    return _used_in_days((int(row[0]), row[1], row[2]) for row in rows)
+
+
+async def _plans_using_recipe_outside(
+    session: AsyncSession, recipe_id: int, keep_household_id: int | None, keep_owner_id: int
+) -> Sequence[UsedInRef]:
+    """Dni planu spoza wskazanego grona, w których jest ten przepis (D32).
+
+    Blokuje obniżenie zakresu przepisu `global`: po zawężeniu przepis zniknąłby
+    z widoku właścicielom tych dni.
+    """
+    rows = (
+        await session.execute(
+            _days_using(
+                PlanMealItem.recipe_id == recipe_id,
+                outside_audience_condition(
+                    PlanDay, keep_household_id=keep_household_id, keep_owner_id=keep_owner_id
+                ),
+            )
+        )
+    ).all()
     return _used_in_days((int(row[0]), row[1], row[2]) for row in rows)
 
 
@@ -1352,5 +1378,6 @@ async def _plan_days_in_household(session: AsyncSession, household_id: int) -> S
 # Rejestracja przy imporcie modułu: każdy proces budujący aplikację
 # (create_app → deps → PlanningService) ma oba liczniki wpięte automatycznie.
 register_recipe_reference_finder(_plans_using_recipe)
+register_recipe_foreign_use_finder(_plans_using_recipe_outside)
 register_product_reference_finder(_plans_using_product)
 register_household_reference_finder(_plan_days_in_household)

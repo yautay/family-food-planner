@@ -46,7 +46,7 @@ from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base, TimestampMixin
-from app.core.scope import ScopedMixin, scope_check_constraint
+from app.core.scope import ScopedMixin, no_global_scope_check_constraint, scope_check_constraint
 from app.modules.catalog.units import AmountUnit
 from app.modules.recipes.models import AMOUNT_UNIT_ENUM
 
@@ -72,6 +72,7 @@ class PlanDay(TimestampMixin, ScopedMixin, Base):
     __table_args__ = (
         # Własne __table_args__ MUSZĄ zawierać CHECK-a wzorca scope (karta B06).
         scope_check_constraint(),
+        no_global_scope_check_constraint(),
         # Jeden dzień planu na użytkownika i datę (03_DATABASE §6) — próba
         # utworzenia drugiego kończy się 409, nie drugim równoległym planem.
         UniqueConstraint("owner_user_id", "day", name="uq_plan_days_owner_user_id_day"),
@@ -232,6 +233,7 @@ class DayTemplate(TimestampMixin, ScopedMixin, Base):
     __table_args__ = (
         # Własne __table_args__ MUSZĄ zawierać CHECK-a wzorca scope (03_DATABASE §4).
         scope_check_constraint(),
+        no_global_scope_check_constraint(),
         Index(
             "ix_day_templates_payload_gin",
             "payload",
@@ -255,6 +257,7 @@ class WeekTemplate(TimestampMixin, ScopedMixin, Base):
     __tablename__ = "week_templates"
     __table_args__ = (
         scope_check_constraint(),
+        no_global_scope_check_constraint(),
         Index(
             "ix_week_templates_payload_gin",
             "payload",

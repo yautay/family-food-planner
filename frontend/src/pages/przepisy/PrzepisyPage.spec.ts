@@ -108,3 +108,29 @@ describe('PrzepisyPage — paginacja', () => {
     expect(wrapper.find('[data-testid="recipes-load-more"]').exists()).toBe(false)
   })
 })
+
+describe('PrzepisyPage — filtr zakresu (D32)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    fetchTags.mockResolvedValue({ items: [], total: 0 })
+    fetchRecipes.mockResolvedValue({ items: ALL.slice(0, 3), total: 3 })
+  })
+
+  it('domyślnie bez parametru scope, a wybór chipsa zawęża zapytanie', async () => {
+    const wrapper = await mountPage()
+    expect(fetchRecipes.mock.calls[0]?.[0]).not.toHaveProperty('scope', 'global')
+
+    await wrapper.get('[data-testid="recipes-scope-global"]').trigger('click')
+    await flushPromises()
+
+    expect(fetchRecipes).toHaveBeenLastCalledWith(expect.objectContaining({ scope: 'global' }))
+    expect(wrapper.get('[data-testid="recipes-scope-global"]').attributes('aria-pressed')).toBe(
+      'true',
+    )
+
+    await wrapper.get('[data-testid="recipes-scope-all"]').trigger('click')
+    await flushPromises()
+
+    expect(fetchRecipes.mock.lastCall?.[0].scope).toBeUndefined()
+  })
+})

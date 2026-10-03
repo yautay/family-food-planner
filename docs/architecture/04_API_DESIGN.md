@@ -57,10 +57,15 @@ U      /retail-products/{id}/photo         — PUT (multipart) / DELETE zdjęcia
 U      /tags
 
 U      /recipes                            — CRUD, filtry: tag, tekst, czas,
-                                             trudność, ocena, scope
+                                             trudność, ocena, scope (private|household|global);
+                                             `scope=global` w POST/PUT tylko ADMIN (403 dla USER)
 U      /recipes/{id}/rating                — PUT własnej oceny
 GET    /recipes/{id}?servings=2.5          — nutrition per porcja × mnożnik
-U      /recipes/{id}/photo                 — POST (multipart) / DELETE zdjęcia
+U      /recipes/{id}/photo                 — POST (multipart) / DELETE zdjęcia;
+                                             dla przepisu `global` tylko ADMIN
+U      /recipes/{id}/copy                  — POST „kopiuj do mojej rodziny" (201; body
+                                             opcjonalne {scope: private|household})
+A      /recipes/{id}/archive               — POST archiwizuj / DELETE przywróć (403 dla USER)
 GET    /uploads/{path}                     — serving uploadów; POZA /api/v1,
                                              wymaga sesji (07_SECURITY §6)
 
@@ -177,7 +182,7 @@ szablony i cykle → spiżarnia → tury → generacje → listy → dziennik (t
 `instance`). Test `test_referencje_wskazuja_sekcje_wczesniejsza_w_kolejnosci`
 pilnuje, że żadna referencja nie wskazuje sekcji wchodzącej PÓŹNIEJ.
 
-Trzy reguły treści:
+Cztery reguły treści:
 
 1. **ID w pliku to referencje WEWNĘTRZNE.** Import nigdy ich nie wstawia — buduje
    mapę stary→nowy. Referencja bez pokrycia w tym samym pliku przerywa import
@@ -188,6 +193,18 @@ Trzy reguły treści:
    `member_profile_id`) i `week_cycles.template_ids` remapuje import, bo baza
    ich nie pilnuje. Pozycja, której nie da się przemapować, WYPADA z payloadu
    razem z ostrzeżeniem w raporcie.
+
+4. **Przepisy `global` w pliku (BATCH_21, D32).** Plik `scope=user` NIGDY nie niesie
+   `scope: "global"`: przepisy globalne, do których odwołują się plany i szablony konta,
+   dołączają się do sekcji `recipes` jako **kopie rodziny** (zakres obcięty do `household`
+   albo `private`, właściciel = eksportujący; inne przepisy globalne nie wchodzą —
+   `owned_condition` bez zmian). Dzięki temu pozycje planu z cudzym przepisem nie wypadają
+   z pliku po cichu. **Import** obcina `global` do `household` (importujący ma rodzinę) albo
+   `private` — zawsze dla pliku `scope=user` (także gdy wczytuje go ADMIN), z ostrzeżeniem
+   w raporcie; plik `scope=instance` (tylko ADMIN go wczyta) zachowuje `global` wyłącznie
+   dla przepisu, którego zmapowany właściciel jest ADMIN-em (inaczej wraca do rodziny
+   właściciela). Wartość scope spoza znanych dla sekcji (`global` w dniu planu, „wszyscy")
+   to **422**, nie 500; sprawdza ją już DRY-RUN.
 
 **Czego w pliku nie ma i nie będzie**: `users.password_hash` (plik eksportu nie
 może być materiałem do credential stuffingu — po imporcie instancji ADMIN nadaje
@@ -324,6 +341,33 @@ milczące, czy stać się jawną decyzją przy kolizji.
    6 = niedziela (jak `date.weekday()`), `null` = tura bez ustalonego dnia.
    `GET /shopping/round-configs` przy PUSTEJ konfiguracji zasiewa edytowalny
    preset z 02_DOMAIN §9.2 (seed danych, nie hardcode).
+2c-quater. **Przepisy `global` (BATCH_21, D32).** Przepis ma trzy zakresy
+   (`RecipeScope`: `private`, `household`, `global`); wszystkie inne encje ze scope
+   — dwa (`Scope`). Komponent `Scope` w OpenAPI zostaje dwuwartościowy, więc `scope:
+   "global"` w dniu planu, szablonie dnia/tygodnia i cyklu to **422** (a tury, generacje
+   i listy w ogóle nie przyjmują scope z wejścia). Przepis `global` widzi KAŻDY zalogowany
+   (lista, `?q=`, `?scope=global`, szczegół, picker planu); **tworzy, edytuje treść
+   i zdjęcie, zmienia zakres z/na `global`, archiwizuje i usuwa wyłącznie ADMIN** —
+   sprawdzany po ROLI, nie po `owner_user_id` (zdegradowany były admin dostaje 403).
+   Odmowa to **403**, nie 404, bo przepis jest widoczny; cudzy PRYWATNY przepis zostaje 404.
+   - `POST /recipes/{id}/copy` (każdy zalogowany, widzący przepis; limit jak przy zdjęciach,
+     bo kopia powiela plik): nowy przepis należy do wywołującego, `scope` z body
+     (`private`/`household`; `global` → 422; domyślnie `household` dla członka rodziny,
+     inaczej `private`; `household` bez rodziny → 409). Kopiowane są składniki (wiersze
+     jak są), tagi i **własny plik zdjęcia** (nowa ścieżka — usunięcie zdjęcia kopii nie
+     kasuje pliku oryginału); ocen nie ma. Nazwa dostaje sufiks „ (kopia)" / „ (kopia 2)",
+     gdy wywołujący ma już przepis o takiej nazwie (nazwy nie są unikalne).
+   - `POST|DELETE /recipes/{id}/archive` — archiwizacja (`is_archived`) tylko ADMIN; zarchiwizowany
+     przepis znika z list (`include_archived=true` go pokazuje), ale istniejące plany i szablony
+     dalej go liczą. Konwencja jak `/products/{id}/archive`.
+   - Zmiana zakresu przez `PUT`: awans do `global` zeruje `household_id`; obniżenie przekazuje
+     przepis ADMIN-owi wykonującemu akcję (`owner_user_id` i `household_id` = jego) i jest
+     blokowane **409 z `details.used_in`**, gdy używają go dni planu albo szablony spoza grona
+     ADMIN-a (jego rodziny dla `household`, tylko on sam dla `private`).
+   - `DELETE` używanego przepisu `global` (przez którąkolwiek rodzinę) → 409 `used_in`.
+   - `avg_rating` przepisu `global` to średnia ze wszystkich rodzin.
+   - Audyt: `recipe.global_create|global_update|global_delete` oraz `recipe.archive|unarchive`
+     (payload: id, nazwa, zakres przed/po — nigdy treść).
 2d. Data bez zapisanego planu to 200 z pustym dniem (`id: null`), nie 404:
    otwarcie kalendarza na wolnej dacie jest normalną sytuacją, a nie błędem.
    Ten sam wyjątek NIE dotyczy pojedynczych encji (przepis, produkt) — tam

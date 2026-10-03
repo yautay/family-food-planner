@@ -23,7 +23,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
-from app.core.scope import Scope
+from app.core.scope import RecipeScope, Scope
 from app.core.security import utcnow
 from app.core.uploads import save_image
 from app.modules.accounts.models import User
@@ -391,7 +391,7 @@ async def test_pozycja_planu_z_niewidocznym_przepisem_nie_psuje_pliku(
     await factories.create_plan_item(db_session, meal=meal, recipe=shared)
 
     # Właściciel przepisu zabiera go rodzinie — pozycja planu zostaje (RESTRICT).
-    shared.scope = Scope.PRIVATE
+    shared.scope = RecipeScope.PRIVATE
     await db_session.commit()
 
     service = TransferService(db_session, uploads_dir=settings.uploads_dir, max_zip_mb=100)

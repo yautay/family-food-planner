@@ -2421,7 +2421,7 @@
             "schema": {
               "anyOf": [
                 {
-                  "$ref": "#/components/schemas/Scope"
+                  "$ref": "#/components/schemas/RecipeScope"
                 },
                 {
                   "type": "null"
@@ -2619,7 +2619,7 @@
         "tags": [
           "recipes"
         ],
-        "summary": "Usunięcie przepisu (właściciel/ADMIN; 409 gdy używany)",
+        "summary": "Usunięcie przepisu (właściciel/ADMIN; `global` tylko ADMIN; 409 gdy używany)",
         "operationId": "delete_recipe_api_v1_recipes__recipe_id__delete",
         "parameters": [
           {
@@ -2635,6 +2635,147 @@
         "responses": {
           "204": {
             "description": "Successful Response"
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/recipes/{recipe_id}/copy": {
+      "post": {
+        "tags": [
+          "recipes"
+        ],
+        "summary": "Kopiuj do mojej rodziny: własna kopia widocznego przepisu (także globalnego)",
+        "operationId": "copy_recipe_api_v1_recipes__recipe_id__copy_post",
+        "parameters": [
+          {
+            "name": "recipe_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Recipe Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/RecipeCopyRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecipeDetail"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/recipes/{recipe_id}/archive": {
+      "post": {
+        "tags": [
+          "recipes"
+        ],
+        "summary": "Archiwizacja przepisu (ADMIN) — znika z list, plany dalej się liczą",
+        "operationId": "archive_recipe_api_v1_recipes__recipe_id__archive_post",
+        "parameters": [
+          {
+            "name": "recipe_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Recipe Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecipeDetail"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "recipes"
+        ],
+        "summary": "Przywrócenie przepisu z archiwum (ADMIN)",
+        "operationId": "unarchive_recipe_api_v1_recipes__recipe_id__archive_delete",
+        "parameters": [
+          {
+            "name": "recipe_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Recipe Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecipeDetail"
+                }
+              }
+            }
           },
           "default": {
             "description": "Błąd",
@@ -10126,6 +10267,23 @@
         ],
         "title": "RatingResponse"
       },
+      "RecipeCopyRequest": {
+        "properties": {
+          "scope": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Scope"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "title": "RecipeCopyRequest",
+        "description": "Body `POST /recipes/{id}/copy` — gdzie ma wylądować KOPIA wywołującego.\n\nCelowo `Scope` (dwie wartości), nie `RecipeScope`: kopia jest zawsze\nwłasnością wywołującego, więc `global` odrzuca już walidacja (422).\nBrak pola = `household`, gdy wywołujący ma rodzinę, w przeciwnym razie\n`private`."
+      },
       "RecipeDetail": {
         "properties": {
           "id": {
@@ -10137,7 +10295,7 @@
             "title": "Name"
           },
           "scope": {
-            "$ref": "#/components/schemas/Scope"
+            "$ref": "#/components/schemas/RecipeScope"
           },
           "owner_user_id": {
             "type": "integer",
@@ -10471,7 +10629,7 @@
             "title": "Difficulty"
           },
           "scope": {
-            "$ref": "#/components/schemas/Scope",
+            "$ref": "#/components/schemas/RecipeScope",
             "default": "private"
           },
           "ingredients": {
@@ -10498,6 +10656,16 @@
         "title": "RecipePayload",
         "description": "Jeden model wejścia dla POST (create) i PUT (pełna podmiana — 04_API §1).\n\nŚwiadomie BEZ pustych podklas per metoda: dwa bit-identyczne schematy\nw OpenAPI maskowałyby, który jest „prawdziwy\", i podwajały diff\n`generated.ts` (ustalenie review B05)."
       },
+      "RecipeScope": {
+        "type": "string",
+        "enum": [
+          "private",
+          "household",
+          "global"
+        ],
+        "title": "RecipeScope",
+        "description": "Zakres PRZEPISU: `Scope` + `global` (widoczny dla każdego zalogowanego, D32).\n\n`StrEnum` porównuje się jak string, więc `RecipeScope.HOUSEHOLD == Scope.HOUSEHOLD`\n— ale NIE używaj `is` na granicy tych dwóch enumów (`is` porównuje tożsamość\nczłonków, a to są różne obiekty); wszędzie, gdzie scope przepisu może być\nktórymkolwiek z nich, porównuj przez `==`."
+      },
       "RecipeSummary": {
         "properties": {
           "id": {
@@ -10509,7 +10677,7 @@
             "title": "Name"
           },
           "scope": {
-            "$ref": "#/components/schemas/Scope"
+            "$ref": "#/components/schemas/RecipeScope"
           },
           "owner_user_id": {
             "type": "integer",
@@ -11370,7 +11538,7 @@
           "household"
         ],
         "title": "Scope",
-        "description": "Zakres widoczności encji współdzielnej (ADR-006)."
+        "description": "Zakres widoczności encji współdzielnej (ADR-006) — DWIE wartości.\n\nNie dodawaj tu `GLOBAL`: dla przepisów jest `RecipeScope` (D32), a wspólny\nenum wpuściłby `global` do dni planu, szablonów, tur, generacji i list."
       },
       "ShareCreateRequest": {
         "properties": {

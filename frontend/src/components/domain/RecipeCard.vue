@@ -20,6 +20,20 @@ const avgRating = computed(() =>
   props.recipe.avg_rating === null ? null : formatDecimal(props.recipe.avg_rating),
 )
 const missingTooltip = computed(() => props.recipe.nutrition.missing.join(', '))
+
+/**
+ * Odznaka zakresu (D32): nazwy przepisów mogą się powtarzać, więc kopia i jej
+ * oryginał wyglądałyby na liście identycznie. Status zawsze kolor + tekst.
+ */
+const SCOPE_BADGE_CLASSES = {
+  global: 'bg-primary/15 text-primary',
+  household: 'bg-muted text-muted-foreground',
+  private: 'border-border text-muted-foreground border',
+} as const
+const scopeBadge = computed(() => ({
+  label: texts.scopeLabels[props.recipe.scope],
+  classes: SCOPE_BADGE_CLASSES[props.recipe.scope],
+}))
 </script>
 
 <template>
@@ -49,6 +63,13 @@ const missingTooltip = computed(() => props.recipe.nutrition.missing.join(', '))
 
     <div class="grid gap-2 p-3 pt-1">
       <h3 class="truncate font-medium">{{ recipe.name }}</h3>
+      <p
+        class="justify-self-start rounded-lg px-2 py-0.5 text-xs"
+        :class="scopeBadge.classes"
+        :data-testid="`recipe-scope-badge-${recipe.id}`"
+      >
+        {{ scopeBadge.label }}
+      </p>
 
       <p class="text-muted-foreground flex flex-wrap items-center gap-3 text-sm tabular-nums">
         <span v-if="recipe.prep_time_min" class="inline-flex items-center gap-1">

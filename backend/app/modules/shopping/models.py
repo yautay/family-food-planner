@@ -55,7 +55,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base, TimestampMixin
-from app.core.scope import ScopedMixin, scope_check_constraint
+from app.core.scope import ScopedMixin, no_global_scope_check_constraint, scope_check_constraint
 from app.modules.catalog.units import AmountUnit
 from app.modules.recipes.models import AMOUNT_UNIT_ENUM
 from app.modules.shopping.engine import RoundMode
@@ -108,6 +108,7 @@ class ShoppingRoundConfig(TimestampMixin, ScopedMixin, Base):
     __table_args__ = (
         # Własne `__table_args__` MUSZĄ nieść CHECK-a wzorca scope (03_DATABASE §4).
         scope_check_constraint(),
+        no_global_scope_check_constraint(),
         CheckConstraint(
             "shopping_weekday IS NULL OR (shopping_weekday >= 0 AND shopping_weekday <= 6)",
             name="shopping_weekday_in_week",
@@ -138,6 +139,7 @@ class ShoppingGeneration(TimestampMixin, ScopedMixin, Base):
     __tablename__ = "shopping_generations"
     __table_args__ = (
         scope_check_constraint(),
+        no_global_scope_check_constraint(),
         CheckConstraint("date_from <= date_to", name="date_range_ordered"),
     )
 
@@ -170,6 +172,7 @@ class ShoppingList(TimestampMixin, ScopedMixin, Base):
     __tablename__ = "shopping_lists"
     __table_args__ = (
         scope_check_constraint(),
+        no_global_scope_check_constraint(),
         UniqueConstraint("public_token", name="uq_shopping_lists_public_token"),
     )
 

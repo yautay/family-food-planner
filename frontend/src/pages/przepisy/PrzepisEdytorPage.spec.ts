@@ -1,5 +1,6 @@
 import { VueQueryPlugin } from '@tanstack/vue-query'
 import { flushPromises, mount } from '@vue/test-utils'
+import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import PrzepisEdytorPage from './PrzepisEdytorPage.vue'
@@ -62,6 +63,8 @@ const CEBULA = {
 }
 
 function mountEditor() {
+  // Edytor czyta rolę z `useAuthStore` (opcja zakresu Wszyscy tylko dla ADMIN-a).
+  setActivePinia(createPinia())
   return mount(PrzepisEdytorPage, {
     global: { plugins: [VueQueryPlugin], stubs: { RouterLink: true } },
   })

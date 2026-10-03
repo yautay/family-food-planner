@@ -28,6 +28,7 @@ class AuditEntity(StrEnum):
     MEMBER_PROFILE = "member_profile"
     PRODUCT = "product"
     PRODUCT_CATEGORY = "product_category"
+    RECIPE = "recipe"
     #: Transfer nie ma własnej encji — wpis opisuje OPERACJĘ na zbiorze danych
     #: (02_DOMAIN §12: „eksport/import"), więc `entity_id` zostaje puste.
     TRANSFER = "transfer"
@@ -67,6 +68,15 @@ class AuditAction(StrEnum):
     # nigdy treści przenoszonych encji (07_SECURITY §8).
     TRANSFER_EXPORT = "transfer.export"
     TRANSFER_IMPORT = "transfer.import"
+
+    # Przepisy: dziennik obejmuje operacje na przepisach GLOBALNYCH (BATCH_21, D32)
+    # — to jedyne przepisy, których zmiana dotyka każdej rodziny — oraz
+    # archiwizację. Payload: id, nazwa i zmiana zakresu; nigdy treść przepisu.
+    RECIPE_GLOBAL_CREATE = "recipe.global_create"
+    RECIPE_GLOBAL_UPDATE = "recipe.global_update"
+    RECIPE_GLOBAL_DELETE = "recipe.global_delete"
+    RECIPE_ARCHIVE = "recipe.archive"
+    RECIPE_UNARCHIVE = "recipe.unarchive"
 
     CATEGORY_CREATE = "product_category.create"
     CATEGORY_UPDATE = "product_category.update"

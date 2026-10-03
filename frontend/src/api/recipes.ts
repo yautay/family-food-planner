@@ -16,7 +16,9 @@ export type NutritionRead = components['schemas']['NutritionRead']
 export type RatingResponse = components['schemas']['RatingResponse']
 export type Tag = components['schemas']['TagRead']
 export type TagList = components['schemas']['TagListResponse']
-export type RecipeScope = components['schemas']['Scope']
+/** Zakres PRZEPISU (3 wartości) — NIE `Scope` (2 wartości, reszta encji; D32). */
+export type RecipeScope = components['schemas']['RecipeScope']
+export type RecipeCopyScope = components['schemas']['Scope']
 
 export interface RecipeFilters {
   limit: number
@@ -51,6 +53,23 @@ export function updateRecipe(id: number, payload: RecipePayload): Promise<Recipe
 
 export function deleteRecipe(id: number): Promise<void> {
   return apiFetch<void>(`/recipes/${id}`, { method: 'DELETE' })
+}
+
+/** „Kopiuj do mojej rodziny": własna, edytowalna kopia widocznego przepisu (D32). */
+export function copyRecipe(id: number, scope?: RecipeCopyScope): Promise<RecipeDetail> {
+  return apiFetch<RecipeDetail>(`/recipes/${id}/copy`, {
+    method: 'POST',
+    json: scope === undefined ? {} : { scope },
+  })
+}
+
+/** Archiwizacja przepisu — wyłącznie ADMIN; plany dalej go liczą. */
+export function archiveRecipe(id: number): Promise<RecipeDetail> {
+  return apiFetch<RecipeDetail>(`/recipes/${id}/archive`, { method: 'POST' })
+}
+
+export function unarchiveRecipe(id: number): Promise<RecipeDetail> {
+  return apiFetch<RecipeDetail>(`/recipes/${id}/archive`, { method: 'DELETE' })
 }
 
 export function rateRecipe(id: number, rating: number): Promise<RatingResponse> {

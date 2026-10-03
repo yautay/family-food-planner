@@ -12,7 +12,14 @@ import { Clock, Star } from '@lucide/vue'
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
-import { deleteRecipe, fetchRecipe, rateRecipe } from '@/api/recipes'
+import {
+  archiveRecipe,
+  copyRecipe,
+  deleteRecipe,
+  fetchRecipe,
+  rateRecipe,
+  unarchiveRecipe,
+} from '@/api/recipes'
 import { ApiError } from '@/api/client'
 import { queryKeys } from '@/api/queryKeys'
 import { Button } from '@/components/ui/button'
@@ -40,8 +47,22 @@ const detail = computed(() => recipe.data.value ?? null)
 const activeTab = ref<'ingredients' | 'instructions' | 'nutrition'>('ingredients')
 const actionError = ref<string | null>(null)
 
+const isGlobal = computed(() => detail.value?.scope === 'global')
+
+/**
+ * Edycja treści, zdjęcie i usunięcie. Przepis `global` (D32) należy do ADMIN-a —
+ * także gdy zwykły użytkownik figuruje jako `owner_user_id` (zdegradowany admin);
+ * backend i tak odmówi (403), UI tylko nie kusi.
+ */
+const canEdit = computed(() => detail.value !== null && (!isGlobal.value || auth.isAdmin))
 const canManage = computed(
-  () => detail.value !== null && (auth.isAdmin || detail.value.owner_user_id === auth.user?.id),
+  () =>
+    detail.value !== null &&
+    (auth.isAdmin || (!isGlobal.value && detail.value.owner_user_id === auth.user?.id)),
+)
+/** „Kopiuj do mojej rodziny" — dla cudzych i globalnych; własny przepis kopiować nie ma po co. */
+const canCopy = computed(
+  () => detail.value !== null && (isGlobal.value || detail.value.owner_user_id !== auth.user?.id),
 )
 
 function changeServings(step: number): void {
@@ -65,6 +86,31 @@ const remove = useMutation({
   onSuccess: async () => {
     await queryClient.invalidateQueries({ queryKey: queryKeys.recipes.all })
     await router.push({ name: 'przepisy' })
+  },
+  onError: (error: unknown) => {
+    actionError.value = error instanceof ApiError ? error.message : common.unexpectedError
+  },
+})
+
+const copy = useMutation({
+  mutationFn: () => copyRecipe(recipeId.value),
+  onSuccess: async (copied) => {
+    actionError.value = null
+    await queryClient.invalidateQueries({ queryKey: queryKeys.recipes.all })
+    queryClient.setQueryData(queryKeys.recipes.detail(copied.id, '1'), copied)
+    await router.push({ name: 'przepis-szczegol', params: { id: copied.id } })
+  },
+  onError: (error: unknown) => {
+    actionError.value = error instanceof ApiError ? error.message : common.unexpectedError
+  },
+})
+
+const toggleArchive = useMutation({
+  mutationFn: () =>
+    detail.value?.is_archived ? unarchiveRecipe(recipeId.value) : archiveRecipe(recipeId.value),
+  onSuccess: async () => {
+    actionError.value = null
+    await queryClient.invalidateQueries({ queryKey: queryKeys.recipes.all })
   },
   onError: (error: unknown) => {
     actionError.value = error instanceof ApiError ? error.message : common.unexpectedError
@@ -128,6 +174,13 @@ const TABS = [
         <div class="flex flex-wrap items-start justify-between gap-3">
           <div class="grid gap-1">
             <h1 class="text-2xl font-semibold" data-testid="recipe-name">{{ detail.name }}</h1>
+            <p
+              class="text-muted-foreground justify-self-start text-sm"
+              data-testid="recipe-scope-badge"
+            >
+              {{ texts.scopeLabels[detail.scope] }}
+              <span v-if="detail.is_archived"> · {{ texts.archived }}</span>
+            </p>
             <p class="text-muted-foreground flex flex-wrap items-center gap-3 text-sm tabular-nums">
               <span v-if="detail.prep_time_min" class="inline-flex items-center gap-1">
                 <Clock class="size-4" aria-hidden="true" />
@@ -153,14 +206,36 @@ const TABS = [
             </ul>
           </div>
 
-          <div class="flex gap-2">
-            <Button as-child variant="outline" class="min-h-11">
+          <div class="flex flex-wrap gap-2">
+            <Button
+              v-if="canCopy"
+              type="button"
+              variant="outline"
+              class="min-h-11"
+              :disabled="copy.isPending.value"
+              data-testid="recipe-copy"
+              @click="copy.mutate()"
+            >
+              {{ copy.isPending.value ? texts.copying : texts.copyToMyHousehold }}
+            </Button>
+            <Button v-if="canEdit" as-child variant="outline" class="min-h-11">
               <RouterLink
                 :to="{ name: 'przepis-edycja', params: { id: detail.id } }"
                 data-testid="recipe-edit"
               >
                 {{ common.edit }}
               </RouterLink>
+            </Button>
+            <Button
+              v-if="auth.isAdmin"
+              type="button"
+              variant="ghost"
+              class="min-h-11"
+              :disabled="toggleArchive.isPending.value"
+              :data-testid="detail.is_archived ? 'recipe-unarchive' : 'recipe-archive'"
+              @click="toggleArchive.mutate()"
+            >
+              {{ detail.is_archived ? texts.unarchiveAction : texts.archiveAction }}
             </Button>
             <Button
               v-if="canManage"

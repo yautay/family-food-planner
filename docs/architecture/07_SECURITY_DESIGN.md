@@ -122,6 +122,22 @@ publiczne linki i błędami aplikacyjnymi (IDOR/XSS/CSRF/upload).
   Konsekwencja dla batchy: każda nowa encja ze `ScopedMixin` dziedziczy to
   zachowanie automatycznie i MA je zaasercjonować w macierzy uprawnień
   (wzorzec: `tests/api/recipes/test_recipes_api.py::test_d16_admin_widzi_cudze_przepisy_na_sciezkach_uzytkownika`).
+- **Przepisy `global` (D32, BATCH_21): rola, nie własność.** Przepis o zakresie `global`
+  widzi każdy zalogowany, a zmienia wyłącznie ADMIN: `ScopedQuery(..., allow_global=True)`
+  dopisuje `global` do widoczności i wymaga roli w `assert_can_edit_content` /
+  `assert_can_manage`. NIE wolno polegać na `owner_user_id == user.id` — zdegradowany były
+  admin jest nadal właścicielem wiersza i dostaje 403. Odmowa to 403 (przepis jest widoczny),
+  cudzy PRYWATNY przepis zostaje 404. Wyjątek od „ADMIN edytuje wszystko" nie istnieje —
+  ADMIN może tu wszystko, USER nic poza kopiowaniem.
+- **Eskalacja przez transfer jest zamknięta po stronie IMPORTU:** ręcznie edytowany
+  `export.json` z `"scope":"global"` nie daje nie-ADMIN-owi przepisu globalnego — import
+  obcina zakres do `household`/`private` (także gdy plik `scope=user` wczytuje ADMIN),
+  a `global` zachowuje wyłącznie kopia instancji dla właściciela-ADMIN-a. Wartość spoza
+  enuma to 422. Testy: `tests/integration/test_transfer_global.py`.
+- **Dwa enumy to granica bezpieczeństwa:** wspólny `Scope` nie ma `global`, więc walidacja
+  Pydantica odrzuca go dla dni planu, szablonów, cykli (422), a CHECK `scope_not_global`
+  zamyka tę furtkę także dla surowego SQL-a. Nowa encja ze scope używa `Scope` i NIE
+  dziedziczy `global`.
 - Testy anty-IDOR obowiązkowe w każdym batchu z nowym zasobem: user B nie
   odczyta/nie zmieni zasobu usera A (macierz w 08_TESTING §4).
 
@@ -231,6 +247,15 @@ Dotyczy zdjęć (przepisy/produkty) i **paczek kopii danych** (transfer, B14):
   ze wszystkim, co w nim zostało. Katalog paczek (`transfer/`) świadomie nie
   jest serwowany — to KOMPLET danych jednego konta. **Nowy podkatalog uploadów
   = wpis w allowliście w tym samym batchu**;
+- **Autoryzacja zdjęć to sesja + allowlista podkatalogów — BEZ sprawdzenia, czyj to
+  przepis** (stan faktyczny, D32): zdjęcie dowolnego przepisu (także cudzego prywatnego)
+  odczyta każdy zalogowany, który zna jego ścieżkę. Jedyną barierą jest jej
+  nieodgadywalność (`uuid4().hex`), a nie autoryzacja per zasób. Zakres `global` tego nie
+  pogarsza, ale to jest świadomie przyjęte ograniczenie — per-przepisowa autoryzacja
+  `/uploads/*` jest poza zakresem B21. **Kopiowanie przepisu** (`core.uploads.copy_image`)
+  przechodzi przez ten sam pipeline `save_image` (re-encode, miniatura, nowa losowa nazwa)
+  i nigdy nie współdzieli ścieżki z oryginałem; endpoint `/recipes/{id}/copy` ma limit tempa
+  jak upload zdjęcia;
 - obrazy re-enkodowane przez Pillow (strip EXIF, usunięcie payloadów),
   miniatury generowane;
 - **archiwum transferu** (BATCH_14, `transfer/importer.py`) przechodzi kontrolę

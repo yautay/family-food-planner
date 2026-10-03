@@ -135,6 +135,16 @@ export const products = {
   backToList: 'Wróć do listy',
 } as const
 
+/**
+ * Etykiety zakresu przepisu — JEDNO źródło dla odznaki na karcie, szczegółu, chipsów
+ * filtra i selecta w edytorze (D32). Zmiana nazwy zakresu to edycja tu, nigdzie indziej.
+ */
+const recipeScopeLabels = {
+  global: 'Dla wszystkich',
+  household: 'Rodzinny',
+  private: 'Prywatny',
+} as const
+
 export const recipes = {
   title: 'Przepisy',
   subtitle: 'Przepisy Twoje i Twojej rodziny. Wartości odżywcze liczą się zawsze na porcję.',
@@ -156,8 +166,22 @@ export const recipes = {
   instructionsLabel: 'Przygotowanie',
   prepTimeLabel: 'Czas przygotowania (min)',
   scopeLabel: 'Widoczność',
-  scopePrivate: 'Prywatny',
-  scopeHousehold: 'Rodzinny',
+  scopeLabels: recipeScopeLabels,
+  scopePrivate: recipeScopeLabels.private,
+  scopeHousehold: recipeScopeLabels.household,
+  // Zakres „global" (D32): przepis widoczny dla KAŻDEJ rodziny, zarządzany przez ADMIN-a.
+  scopeGlobal: 'Wszyscy',
+  scopeGlobalHint:
+    'Przepis zobaczą wszystkie rodziny, a edytować go będzie mógł tylko administrator.',
+  scopeFilterLabel: 'Widoczność przepisów',
+  scopeFilterAll: 'Wszystkie',
+  globalReadOnlyHint:
+    'Ten przepis jest wspólny dla wszystkich rodzin i edytuje go tylko administrator. ' +
+    'Użyj „Kopiuj do mojej rodziny”, żeby dostać własną, edytowalną kopię.',
+  copyToMyHousehold: 'Kopiuj do mojej rodziny',
+  copying: 'Kopiuję…',
+  archiveAction: 'Archiwizuj',
+  unarchiveAction: 'Przywróć z archiwum',
   ingredientsTitle: 'Składniki',
   ingredientsEmpty: 'Brak składników. Dodaj pierwszy składnik.',
   addIngredient: 'Dodaj składnik',

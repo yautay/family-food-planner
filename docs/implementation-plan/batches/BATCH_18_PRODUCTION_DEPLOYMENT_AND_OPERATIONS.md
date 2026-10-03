@@ -241,8 +241,15 @@ na PRAWDZIWEJ domenie: (1) `GET /manifest.webmanifest` → 200,
 
 ## Database / migrations
 
-- Brak zmian schematu. Pierwsza migracja produkcyjna i każda kolejna =
+- Brak zmian schematu w TYM batchu. Pierwsza migracja produkcyjna i każda kolejna =
   hook `before-symlink` po dumpie (ADR-017 pkt 6), NIGDY start aplikacji.
+  **B21 (przepisy `global`) dokłada migracje `0017` i `0018`**, które jadą tym samym
+  deployem: `0017` to `ALTER TYPE entity_scope ADD VALUE` (w `autocommit_block`,
+  wykonalne rolą `ffp_user` jako właścicielem typu) i jest **NIEODWRACALNE** —
+  `downgrade` to no-op, a wiersze z `scope='global'` po cofnięciu do `0016` są
+  nieczytelne dla starego kodu. Rollback release'u PO migracji `0017` = restore dumpu
+  z deployu albo zmiana zakresu tych wierszy przed cofnięciem; runbook
+  (`deploy/README.md`, rozdział rollback) ma to jedno zdanie nazwać wprost.
 - Baza `ffp_db`/rola `ffp_user` — istniejące, nie tworzymy ani nie zmieniamy
   ich atrybutów; jedyne DDL poza migracjami to `CREATE/DROP DATABASE
   ffp_db_drill` superuserem (drill, wykonuje właściciel).
