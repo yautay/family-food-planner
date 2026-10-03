@@ -1,6 +1,7 @@
 # 03 — Projekt bazy danych
 
-PostgreSQL 17 (kontener, dane na bind mount hosta — ADR-002). SQLAlchemy 2.0
+PostgreSQL 16 na produkcji (istniejący klaster `postgres-apps`, osobna baza
+aplikacji — D29, ADR-017; dev/test w kontenerze compose). SQLAlchemy 2.0
 declarative + Alembic. Konwencje: nazwy tabel `snake_case` l.mn., PK `id`
 (BIGINT identity), `created_at`/`updated_at` (timestamptz, UTC) wszędzie,
 FK z jawnym `ON DELETE`. Ilości i wartości odżywcze: `NUMERIC` (nigdy float).
@@ -416,8 +417,8 @@ zostawiają wpis w `audit_entries`.
 
 ## 11. Storage plików
 
-Uploady (zdjęcia przepisów/produktów, paczki kopii danych) na bind mount
-`/data/uploads` (ADR-002), ścieżki względne w DB, nazwy losowe
+Uploady (zdjęcia przepisów/produktów, paczki kopii danych) w katalogu `UPLOADS_DIR`
+(prod: `/opt/pasnik/shared/uploads` poza release'ami — ADR-017; dev: wolumen), ścieżki względne w DB, nazwy losowe
 (`uuid4().hex + rozszerzenie po sniffingu typu`), oryginalna nazwa tylko
 w metadanych. Miniatury generowane przy uploadzie (Pillow), obok oryginału.
 

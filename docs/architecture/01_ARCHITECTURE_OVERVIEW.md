@@ -3,7 +3,8 @@
 Paśnik — prywatna, rodzinna aplikacja do planowania
 żywienia, przepisów, kalorii/makro, spiżarni i inteligentnych list
 zakupowych. Mała liczba użytkowników, dostęp publiczny przez Internet
-(istniejący reverse proxy), hosting: Odroid H2, Docker + Docker Compose.
+(istniejący reverse proxy), hosting: kontener LXC (Incus) na Odroidzie,
+wdrażany ansistrano; dev na Docker Compose (D29, ADR-017).
 
 ## 1. Decyzja główna: modularny monolit (ADR-001)
 
@@ -12,20 +13,19 @@ backend. Zero mikroserwisów, zero brokerów, zero Redis — skala tego nie
 uzasadnia, a każdy dodatkowy proces to koszt operacyjny na Odroidzie.
 
 ```
-┌──────────────────────────── Odroid H2 ───────────────────────────┐
-│  reverse proxy (istniejący, TLS)                                  │
-│      │ https://pasnik.<domena>                                       │
-│      ▼                                                            │
-│  ┌─ kontener app ────────────────────────────┐  ┌─ kontener db ─┐ │
-│  │ Uvicorn + FastAPI                          │  │ PostgreSQL 17 │ │
-│  │  /api/v1/*  → routery modułów              │──│               │ │
-│  │  /*         → SPA dist (StaticFiles)       │  └───────┬───────┘ │
-│  │  /uploads/* → pliki (auth-gated)           │          │         │
-│  └───────┬────────────────────────────────────┘          │         │
-│     bind mount /srv/pasnik/uploads          bind mount /srv/pasnik/pgdata│
-│     bind mount /srv/pasnik/backups  ◄─ pg_dump + kopia uploads        │
-└────────────────────────────────────────────────────────────────────┘
+┌── 192.168.2.121 ──────────────────┐     ┌── Odroid 192.168.2.111 (Incus) ─────────────┐
+│ Caddy (TLS, pasnik.cpt-sztos.com) │────►│ proxy device :<port> ─► LXC `pasnik`         │
+│                                   │     │  systemd: Uvicorn + FastAPI (User=pasnik)    │
+│ postgres-apps (PG 16, Docker)     │◄────│   /api/v1/*  → routery modułów               │
+│   baza ffp_db (współdzielony      │     │   /*         → SPA dist (release)            │
+│   klaster z netQArnerem)          │     │   /uploads/* → pliki (auth-gated)            │
+└───────────────────────────────────┘     │  /opt/pasnik/shared/{uploads,backups}        │
+                                          │  pasnik-backup.timer ─ pg_dump + tar uploads │
+                                          └──────────────────────────────────────────────┘
 ```
+
+Produkcja od decyzji D29 (ADR-017): kontener LXC wdrażany ansistrano, baza
+w istniejącym klastrze `postgres-apps` — szczegóły w 09_DEPLOYMENT.
 
 ## 2. Struktura repozytorium
 
@@ -70,8 +70,9 @@ family-food-planner/
       lib/           # utils.ts (cn), texts.ts (B02+)
       main.ts · router.ts · App.vue
     e2e/             # Playwright (login.spec.ts)
-  docker/            # Dockerfile (target dev), compose.dev.yml,
-                     #   compose.prod.yml (B18)
+  docker/            # Dockerfile (dev + prod do testu obrazu), compose.dev.yml,
+                     #   compose.test.yml, backup/ (skrypty backupu)
+  deploy/            # (B18) Ansible + ansistrano, provision LXC
   docs/              # architektura, ADR, implementation-plan
   .claude/skills/    # project skille pasnik-* (03_AI_SKILLS)
   Taskfile.yml       # jedyne źródło komend dev (task help)
@@ -119,8 +120,8 @@ moduł wyłącznie przez service.
 
 Każdy batch utrzymuje: konfigurację wyłącznie przez env (pydantic-settings,
 `.env.example` aktualizowany), migracje odtwarzalne, `/api/v1/health`
-(healthcheck compose), logowanie strukturalne, sekrety poza repo. Finalny
-deployment (compose.prod, proxy, backup/restore, update/rollback) —
+(healthcheck), logowanie strukturalne, sekrety poza repo. Finalny
+deployment (LXC + ansistrano, proxy, backup/restore, update/rollback) —
 BATCH_17/18 po Review 4, na bazie rzeczywistej aplikacji.
 
 ## 6. Czego świadomie NIE budujemy

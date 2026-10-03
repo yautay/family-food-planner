@@ -2,6 +2,13 @@
 
 Status: ACCEPTED (2026-08-16)
 
+> **Doprecyzowane przez ADR-017 (2026-10-03, D29)**: decyzja rdzeniowa —
+> backend serwuje `/api/v1/*`, SPA i `/uploads/*` z jednego originu — obowiązuje
+> bez zmian. Na produkcji zmienia się wyłącznie OPAKOWANIE: zamiast obrazu
+> z `dist` w środku jest katalog release w LXC (`frontend/dist` budowany
+> lokalnie, `SPA_DIST_DIR` ustawiony w `pasnik.env`), a rollback przełącza
+> symlink, nie tag obrazu.
+
 ## Kontekst
 Prod = Odroid za istniejącym reverse proxy. Do rozstrzygnięcia: osobny
 kontener nginx dla statyk czy serwowanie z FastAPI.

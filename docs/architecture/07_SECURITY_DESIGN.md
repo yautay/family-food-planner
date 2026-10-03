@@ -250,7 +250,10 @@ Wyłącznie env (pydantic-settings): `DATABASE_URL`, `SECRET_KEY`, limity
 `DISK_MIN_FREE_MB`, `SPA_DIST_DIR`, `LOG_LEVEL`, `UVICORN_WORKERS`,
 `FORWARDED_ALLOW_IPS` (komplet z opisem: `.env.example`).
 `.env` w .gitignore od pierwszego commita; `.env.example` z placeholderami.
-W prod: plik env na hoście `chmod 600` lub docker secrets.
+W prod (D29, ADR-017): `/etc/pasnik/pasnik.env` w kontenerze LXC, `root:pasnik`
+0640 (czyta go systemd i grupa usługi, nikt inny), renderowany przez Ansible
+RAZ (`force: false`, `no_log`); sekrety w vaulcie Ansible poza repozytorium.
+Hasło roli dla backupu — osobny `PGPASSFILE` 0600 użytkownika `pasnik`.
 
 **Od BATCH_20 aplikacja nie ma ANI JEDNEGO klucza do usługi zewnętrznej**:
 D25 wycofało import jadłospisów razem z jego kluczem API, więc jedynym
@@ -272,9 +275,13 @@ prod uruchamia uvicorna z `--proxy-headers`, a lista zaufanych adresów to
 połączenia z tych adresów mogą podstawić adres klienta — dla pozostałych
 nagłówek jest ignorowany, więc klient nie ominie limitu logowania własnym
 `X-Forwarded-For`. Podmieniony `scope["client"]` widzą jednocześnie slowapi
-(`get_remote_address`) i `sessions.ip` (`accounts/router.py`). B18 wpisuje
-adres bramy sieci compose (albo `*`, bo port aplikacji jest opublikowany
-WYŁĄCZNIE na loopbacku hosta — wtedy jedynym nadawcą i tak jest Caddy).
+(`get_remote_address`) i `sessions.ip` (`accounts/router.py`). Od D29
+Caddy (192.168.2.121) łączy się z aplikacją po LAN przez proxy device Incusa
+na 192.168.2.111, więc `*` jest NIEDOPUSZCZALNE — każdy, kto dosięgnie portu,
+podstawiłby sobie adres. B18 wpisuje `192.168.2.121` (proxy device
+`nat=true`, który zachowuje adres źródłowy) i zamyka port na .111 ufw dla
+wszystkiego poza .121; wariant awaryjny `127.0.0.1` (proxy device bez `nat`)
+tylko z ufw jako jedyną barierą i odnotowanym odstępstwem (09 §1).
 
 Skan repo: `task secrets-scan` (gitleaks w kontenerze). Konfiguracja
 `.gitleaks.toml` (od review R2, 2026-08-21) zachowuje WSZYSTKIE domyślne
@@ -308,8 +315,13 @@ z tracebackiem. Zweryfikowane grepem po realnym logu obrazu prod w B17
 
 - `uv lock` + `npm lockfile`; podbicia zależności przy Review batchach
   (`pip-audit` / `npm audit` jako krok Review).
-- PG: osobny user aplikacyjny bez SUPERUSER; port nie wystawiony poza
-  sieć docker compose; hasło z env.
+- PG: osobny user aplikacyjny bez SUPERUSER; hasło z env. Od D29 baza żyje
+  we WSPÓŁDZIELONYM klastrze `postgres-apps` (192.168.2.121:5432, wystawiony
+  w LAN): rola `ffp_user` = właściciel wyłącznie `ffp_db`, bez `SUPERUSER`,
+  `CREATEDB`, `CREATEROLE`; uwierzytelnianie `scram-sha-256`. `pg_hba` klastra
+  wpuszcza dziś każdy adres z hasłem — zawężenie do adresu LXC jest
+  REKOMENDACJĄ dla operatora klastra (dotyka innych lokatorów), nie warunkiem
+  wdrożenia. Backup i restore działają PER BAZA — nigdy na całym klastrze.
 
 ## 10. Checklisty bezpieczeństwa w procesie
 

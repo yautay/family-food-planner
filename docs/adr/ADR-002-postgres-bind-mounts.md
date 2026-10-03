@@ -1,6 +1,12 @@
 # ADR-002 — PostgreSQL w Dockerze, dane na bind mounts, Alembic
 
-Status: ACCEPTED (2026-08-16)
+Status: SUPERSEDED przez ADR-017 (2026-10-03)
+
+> Produkcja nie stoi na compose: decyzja właściciela **D29** przeniosła ją do
+> kontenera LXC wdrażanego ansistrano, a bazę do istniejącego klastra
+> `postgres-apps` (PG 16). Zasady „migracje jawne, nie przy starcie" i
+> „numer migracji = pierwszy wolny" obowiązują dalej — ADR-017 pkt 6–7.
+> Treść poniżej zostaje jako zapis, na czym stała ta decyzja.
 
 ## Kontekst
 Wymóg: lifecycle kontenera ≠ lifecycle danych; trwałe dane (DB, zdjęcia,

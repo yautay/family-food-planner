@@ -33,7 +33,7 @@ sesji: `docs/implementation-plan/implementation_prompt.md`.
 - warstwa i18n — UI wyłącznie po polsku (D3, ADR-007),
 - sekrety w plikach śledzonych; `.env` nigdy w repo (07_SECURITY §7),
 - migracja z numerem „zarezerwowanym" — numer = pierwszy wolny,
-  `down_revision` z `alembic heads` (ADR-002),
+  `down_revision` z `alembic heads` (ADR-017 pkt 7, dawniej ADR-002),
 - ręczne interfejsy TS dla odpowiedzi API — typy pochodzą z `task fe-types`,
 - biblioteki wykresów — wykresy to własne SVG (ADR-013).
 
@@ -316,7 +316,9 @@ Dołożone w BATCH_17 (też fundament — nie pisz tego od nowa):
   czyta sam uvicorn), `docker/compose.test.yml`, `docker/backup/{backup,
   restore,cron-loop,drill}.sh`, retencja `backend/scripts/backup_prune.py`
   (stdlib only — jest kopiowany do obrazu backupu). Oba obrazy pracują jako
-  UID 10001. compose.prod, Caddy i runbooki → B18.
+  UID 10001. Obraz prod i `compose.test.yml` to od D29 (ADR-017) LOKALNY test
+  obrazu, nie droga na produkcję: produkcja = LXC + ansistrano (`deploy/`),
+  Caddy i runbooki → B18.
 
 Dołożone (i ZDJĘTE) w BATCH_20 — decyzja D25, ADR-016:
 

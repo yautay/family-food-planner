@@ -124,7 +124,7 @@ Minimalny zestaw dla projektu. Project skille żyją w `.claude/skills/`
 | ~~16 PDF review+AI~~ | wycofany przez B20 (D25) | — | — |
 | R4 | SKILL-REVIEW, SKILL-SECREV, wszystkie 4 project skille | SKILL-CREATOR | — |
 | 17 hardening | SKILL-BE, SKILL-SEC | — | SKILL-REVIEW, SKILL-SECREV |
-| 18 deployment | SKILL-SEC | SKILL-BE | SKILL-SECREV |
+| 18 deployment (LXC + ansistrano, D29) | SKILL-SEC | SKILL-BE | SKILL-REVIEW, SKILL-SECREV |
 | 20 usunięcie importu PDF | SKILL-BE, SKILL-FE, SKILL-SEC | — | SKILL-REVIEW, SKILL-SECREV |
 
 Review Skills = używane na diffie PRZED commitem batcha (nie podczas

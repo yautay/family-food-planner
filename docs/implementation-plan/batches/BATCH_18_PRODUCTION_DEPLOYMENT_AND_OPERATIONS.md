@@ -1,427 +1,428 @@
 # BATCH_18 — PRODUCTION_DEPLOYMENT_AND_OPERATIONS
 
-Klasa: PROD · Zależności: B17 + B19 + **B20** (od 2026-09-06, D25) · Bramki
-decyzji **D6 i D7 — ZATWIERDZONE 2026-09-05**, patrz „Ustalenia REVIEW R4"
-niżej · Szacunek rozmiaru: L
+Klasa: PROD · Zależności: B17 + B19 + B20 · Bramki decyzji: **D6, D7
+(2026-09-05) i D29 (2026-10-03) — ZATWIERDZONE** · Szacunek rozmiaru: L
+(podział dozwolony: **18a** maszyna + deploy + smoke, **18b** backup + drill +
+`OPERATIONS.md`)
 
-> **Korekta wykonana 2026-09-06 przez BATCH_20 (D25)**: import jadłospisów
-> został usunięty PRZED wdrożeniem, a jedynym importem i eksportem jest
-> transfer — „kopia danych rodziny" (ADR-016). Treść tej karty jest już
-> poprawiona: lista zmiennych bez ustawień wycofanego importu, limit ciała
-> w Caddy tylko dla paczki 100 MB, `docs/OPERATIONS.md` nie opisuje `/import`.
-> Restore drill z transferem logicznym — bez zmian.
+> **Karta PRZEPISANA 2026-10-03 po decyzji D29** (ADR-017). Poprzednia wersja
+> zakładała `compose.prod.yml` z własnym `postgres:17` na hoście z Caddym (D12)
+> — nic z niej nie powstało na hoście. Teraz: kontener **LXC (Incus)** na
+> Odroidzie **192.168.2.111**, wdrożenie **Ansible + ansistrano** wg wzorca
+> `C:\dev\nc-tech-test-runner\deploy\`, baza w **istniejącym klastrze
+> `postgres-apps` (PG 16) na 192.168.2.121**. Ustalenia R4 dotyczące Caddy'ego,
+> PWA, D10 i drillu zostały przeniesione niżej bez zmian treści.
 
 ## Goal
 
-Aplikacja działa produkcyjnie na Odroidzie H2: `compose.prod.yml` za
-istniejącym reverse proxy pod domeną z D7, backup automatyczny z kopią
-off-device wg D6, **restore drill wykonany realnie**, procedury update/
-rollback sprawdzone, a `docs/OPERATIONS.md` zawiera runbooki pozwalające
-właścicielowi operować systemem bez tej sesji.
+Paśnik działa produkcyjnie pod `https://pasnik.cpt-sztos.com`: aplikacja jako
+usługa systemd w kontenerze LXC `pasnik` na .111, dane w bazie `ffp_db`
+klastra `postgres-apps` na .121, TLS na Caddym .121. Deploy i rollback jednym
+playbookiem z WSL, dump przed każdą migracją, backup nocny timerem systemd,
+kopia off-device wg D6, **restore drill wykonany realnie**, a `docs/OPERATIONS.md`
+pozwala właścicielowi operować systemem bez tej sesji.
 
 ## Context
 
-Po B17 istnieją: obraz prod tagowany wersją git, skrypty backup/restore
-(przećwiczone na compose testowym), healthcheck rozszerzony, konfiguracja
-w pełni przez env. NIE istnieją: compose.prod.yml, konfiguracja proxy, katalogi
-`/srv/pasnik/*` na Odroidzie, OPERATIONS.md. Ten batch częściowo pracuje na
-REALNYM hoście właściciela — kroki wykonywane na Odroidzie wymagają jego
-udziału/dostępu; agent przygotowuje komplet i prowadzi procedurę.
-
-**STOP-bramka — ZDJĘTA 2026-09-05**: D6 i D7 są ZATWIERDZONE (treść
-w `02_DECISIONS`, streszczenie w „Ustaleniach REVIEW R4" niżej), a domena
-`pasnik.cpt-sztos.com` potwierdzona przez właściciela. Gdyby któraś z tych
-decyzji wróciła kiedyś do statusu OPEN — obowiązuje implementation_prompt
-pkt 1e.
+Po B17 istnieją: healthcheck z treścią (`status`/`version`/`checks`), skrypty
+`backup.sh`/`restore.sh` + `backup_prune.py` (env-driven), konfiguracja
+w całości przez env, flagi uvicorna w `docker/entrypoint.sh`, obraz prod
+i stack testowy (zostają jako lokalny test obrazu — ADR-017). NIE istnieją:
+katalog `deploy/`, kontener LXC, unity systemd, `OPERATIONS.md`, blok Caddy
+dla aplikacji. Batch pracuje na REALNYCH hostach właściciela (.111 i .121) —
+kroki na hostach wykonuje albo potwierdza właściciel.
 
 Wymagane lektury przed startem:
 
-- `docs/implementation-plan/implementation_prompt.md` + karta w całości.
-- **`docs/architecture/09_DEPLOYMENT_AND_OPERATIONS.md` §1–6 — WIĄŻĄCY
-  w całości** (topologia, migracje jawne, backup, update/rollback,
-  środowiska, obserwowalność).
-- `docs/architecture/07_SECURITY_DESIGN.md` §3 (HSTS na proxy), §7
-  (pasnik.env chmod 600), §9 (db bez portów hosta).
-- `docs/implementation-plan/02_DECISIONS.md` — treść zatwierdzonych D6/D7
-  (+ D10 retencja, rekomendacja z R4).
-- Karta `BATCH_17` (Completion notes — faktyczne nazwy skryptów/targetów).
+- `implementation_prompt.md` + ta karta w całości.
+- **`docs/architecture/09_DEPLOYMENT_AND_OPERATIONS.md` — WIĄŻĄCY w całości**
+  (topologia, rozkład `/opt/pasnik`, migracje w hooku, backup, deploy/rollback,
+  env, journald).
+- **ADR-017** i **D29** (02_DECISIONS) — co zastąpiło D12/ADR-002 i dlaczego.
+- `docs/architecture/07_SECURITY_DESIGN.md` §3 (HSTS na proxy), §7 (env,
+  `FORWARDED_ALLOW_IPS`), §9 (rola bazy, współdzielony klaster).
+- 02_DECISIONS: D6, D7 (+ korekta celu proxy w D29), D10.
+- **Wzorzec** (czytać przed pisaniem czegokolwiek w `deploy/`):
+  `C:\dev\nc-tech-test-runner\deploy\**` (README, `group_vars/all.yml`,
+  `playbook-*.yml`, `tasks/*.yml`, `templates/*.j2`, `lxc/provision.sh`,
+  `lxc/create-incus.sh`), `docs\technical\{poc-lxc,deploy}.md` oraz
+  `docs\implementation-plan\13_DEBT_AND_OPERATOR_TASKS.md` (długi, których
+  NIE powielamy) i gałąź `feature/batch-10-observability` (poprawki
+  `--check --diff` i cytowania env). Dla kroków aplikacja + PostgreSQL:
+  `C:\dev\qa-test-toc\deploy-pre-prod\tasks\{after-update,before-symlink,restart-and-health,assert-external-infra}.yml`.
 
-**Ustalenia REVIEW R4 (2026-09-05) dla tego batcha:**
+**Inwentaryzacja klastra `postgres-apps` (2026-10-03, wykonał właściciel):**
+PostgreSQL **16.15** (obraz `postgres:16`, PGDG na Debianie 13), `listen_addresses
+= *`, port wystawiony na `192.168.2.121:5432`. Baza **`ffp_db`**, właściciel
+**`ffp_user`** (LOGIN, bez SUPERUSER/CREATEDB/CREATEROLE), pusta: schemat
+`public` (właściciel `pg_database_owner`) bez tabel, z rozszerzeń tylko
+`plpgsql`. `pg_hba`: `trust` wyłącznie lokalnie, `host all all all
+scram-sha-256` dla reszty. Inni lokatorzy: `netqarner` (210 MB, aplikacja
+netQArner) i `netqarner_db` (pozostałość). **Wnioski**: migracja `0004`
+założy `pg_trgm` rolą właściciela (rozszerzenie trusted); `backup.sh`/
+`restore.sh` działają na całej BAZIE bez zmian; drill potrzebuje bazy
+założonej przez superusera; hasło `ffp_user` zna właściciel — wchodzi do vaulta,
+nigdy do repo.
 
-1. **D6 i D7 ZATWIERDZONE 2026-09-05 — STOP-bramka decyzyjna tego batcha
-   ZDJĘTA.** Zależności od B17 i B19 zostają.
-   - **D6: kopia off-device jest RĘCZNA, na dysk zewnętrzny.** Do
-     `docs/OPERATIONS.md` wchodzi PROCEDURA, nie skrypt w cronie: co
-     skopiować, skąd, jak sprawdzić kompletność. Backup automatyczny
-     w `/srv/pasnik/backups` bez zmian. **Runbook musi powiedzieć wprost,
-     przed czym ta konfiguracja NIE chroni**: kopia na tym samym Odroidzie
-     ratuje przed pomyłką użytkownika, ale nie przed awarią dysku ani
-     kradzieżą sprzętu. Krok kopiowania zostawić jako miejsce do wypełnienia,
-     żeby dołożenie NAS-a albo chmury nie wymagało zmiany kodu.
-   - **D7: domena `pasnik.cpt-sztos.com`, proxy to Caddy jako USŁUGA
-     SYSTEMOWA na tym samym hoście** (nie nginx i nie kontener — pierwotna
-     rekomendacja zakładała nginksa i była błędna). TLS terminuje Caddy;
-     aplikacja słucha po HTTP na loopbacku, więc `APP_ENV=prod` i cookies
-     `Secure` działają poprawnie mimo braku TLS wewnątrz. DNS już wskazuje
-     na ten host, a ACME na nim działa (`charts`, `toc`, `seaweed-filler`
-     mają publiczne certyfikaty), więc `tls` nie wymaga żadnej dyrektywy
-     i docelowy blok jest krótki:
+**Ustalenia przeniesione z REVIEW R4 (treść bez zmian, korekta celu proxy):**
 
-     ```
-     pasnik.cpt-sztos.com {
-         encode zstd gzip
-         reverse_proxy 127.0.0.1:8081
-     }
-     ```
+1. **D6** — kopia off-device RĘCZNA na dysk zewnętrzny: do `OPERATIONS.md`
+   PROCEDURA (co, skąd, jak sprawdzić kompletność), nie skrypt. Runbook mówi
+   wprost, przed czym to NIE chroni (kopia tylko na .111 ≠ ochrona przed
+   awarią dysku czy kradzieżą). Krok kopiowania zostaje miejscem do
+   wypełnienia (NAS/chmura bez zmiany kodu).
+2. **D7** — domena `pasnik.cpt-sztos.com`, Caddy jako usługa systemowa na
+   **.121**, JEDEN `Caddyfile` bez `import`. Cel proxy od D29:
+   **`reverse_proxy 192.168.2.111:<APP_PORT>`** (nie loopback). Pułapki:
+   (a) blok `pasnik.cpt-sztos.com` JUŻ ISTNIEJE i serwuje landing
+   (`root * /srv/sftp/ftpuser/files/landing`) — PODMIENIAMY go, nie dopisujemy
+   drugiego; (b) port 8080 to Pi-hole (dotyczy .121; port na .111 potwierdzić
+   `ss -ltnp` na .111); (c) brak `import` — edycja w miejscu;
+   (d) **`log` zapisałby publiczny token listy** — nie włączamy, weryfikacja
+   grepem po realnym logu. Limit ciała: Caddy domyślnie nie ogranicza —
+   potwierdzić realnym wgraniem paczki 100 MB. HSTS: dołożyć z KRÓTKIM
+   `max-age`. Wzór: istniejący blok `toc.cpt-sztos.com`. Przeładowanie:
+   `caddy validate --config /etc/caddy/Caddyfile` → `systemctl reload caddy`.
+3. **D10** — bez automatu kasującego; runbook: zajętość
+   `/opt/pasnik/shared/uploads` (loguje `backup.sh`) + `uploads-report`.
+   **Na dev raport pokazuje 13 osieroconych PDF-ów w `uploads/import-pdf/` —
+   decyzja właściciela (2026-09-12): zostają. Nie proponuj kasowania.** Na
+   produkcji ich nie będzie (uploady startują puste), chyba że właściciel
+   przeniesie katalog z dev — wtedy jadą do backupów.
+4. **Drill obejmuje DRUGĄ ścieżkę**: kopia danych (transfer) → czysta baza →
+   import. Plik nie ma haseł ani tokenów publicznych, ale jest danymi
+   osobowymi. Po imporcie instancji hasła nadaje ADMIN (`create-admin` +
+   `PATCH /admin/users/{id}`).
+5. **Zimny start ~1,5 s** pierwszego żądania każdego workera — przyjęty
+   (09 §2), smoke nie mierzy czasu pierwszego żądania.
 
-     **Cztery pułapki, każda sprawdzona w realnym `Caddyfile` właściciela:**
-     (a) blok `pasnik.cpt-sztos.com` **JUŻ ISTNIEJE** i serwuje statyczny
-     landing (`root * /srv/sftp/ftpuser/files/landing`, commit `2a34e5e`) —
-     ten batch go PODMIENIA, nie dopisuje drugiego; dwa bloki na tę samą
-     domenę to błąd konfiguracji, nie nadpisanie.
-     (b) **Port 8080 zajmuje Pi-hole**, choć 09_DEPLOYMENT §1 podawał go jako
-     przykład — stąd 8081, do potwierdzenia `ss -ltnp` (zajęte są też 3000,
-     1880, 4173, 8013, 8888, 9000, 9101).
-     (c) `Caddyfile` jest JEDNYM plikiem bez dyrektywy `import`, więc
-     edytujemy go w miejscu; nie ma katalogu, do którego dałoby się wrzucić
-     osobny plik.
-     (d) **`log` dla tego bloku zapisałby publiczny token listy w pełnym
-     URI** (07_SECURITY §5 pkt 9) — albo go nie włączamy (tak ma większość
-     serwisów właściciela), albo filtrujemy pole; weryfikacja grepem po
-     realnym logu, nie po dokumentacji.
-     Dwie rzeczy do potwierdzenia, a nie ustawiania: limit rozmiaru ciała
-     (Caddy domyślnie NIE ogranicza, więc PDF 25 MB i paczka 100 MB
-     przechodzą) oraz HSTS (**nie jest ustawiony nigdzie** w konfiguracji
-     właściciela, a 07_SECURITY §3 przypisuje go proxy — dołożyć z KRÓTKIM
-     `max-age` na start, bo przeglądarka ten nagłówek zapamiętuje).
-     Wzorem jest istniejący blok `toc.cpt-sztos.com`. Szablon w repo:
-     **`docker/proxy/pasnik.Caddyfile.example`**. Przeładowanie:
-     `caddy validate --config /etc/caddy/Caddyfile` → `systemctl reload caddy`.
-     Domena **potwierdzona przez właściciela 2026-09-05**; w trakcie ustaleń
-     padło raz `…com.pl` i rozstrzygnął realny `Caddyfile` — odnotowane, żeby
-     nikt tego nie „poprawiał" z powrotem.
-2. **Nowa zależność: `BATCH_19_FIX_LIST_PAGINATION`.** Ustalenie P1 R4 — bez
-   niego ekrany list ucinają się po 50 pozycjach, a katalog rodziny to już
-   103 dania i 185 produktów (wniesione importem jadłospisów PRZED B20;
-   sam importer usunięty decyzją D25). Kolejność wobec B17 dowolna, ale
-   przed wdrożeniem. **ZROBIONE** — B19 na master.
-3. **D10 (retencja) — rekomendacja R4: bez automatu.** Do runbooka
-   operacyjnego zamiast crona kasującego dane: raport zajętości
-   `/srv/pasnik/uploads` (jedyna oś rosnąca bez ograniczenia) oraz komenda
-   „pliki bez referencji" z B17 §Ustalenia R4 pkt 4. Listy i plany zostają
-   — historia jest wartością, a `DELETE /shopping/lists/{id}` wystarcza do
-   ręcznego sprzątania.
-4. **Restore drill ma objąć DRUGĄ ścieżkę** (ustalenie B14, potwierdzone
-   pomiarem w R4): obok `pg_restore` przećwiczyć transfer logiczny —
-   eksport instancji → czysta baza → import. R4 wykonał go realnie na świeżo
-   zmigrowanej bazie: 24 sekcje wróciły co do wiersza, a `to_create` raportu
-   DRY-RUN zgadzało się z tym, co powstało. Plik eksportu **nie ma haseł ani
-   publicznych tokenów**, ale jest danymi osobowymi jak każdy backup.
-5. **Zimny start pierwszego żądania (~1,5 s)** — obserwacja z R2, nadal
-   aktualna. Po każdym `compose up -d` pierwszy `GET /plan/days` jest
-   wyraźnie wolniejszy niż kolejne (~30–50 ms na rozgrzanym procesie,
-   pomiar R4). Do świadomego przyjęcia w 09_DEPLOYMENT albo do rozgrzewki
-   w procedurze wdrożenia — nie jest to problem wydajności aplikacji.
+**Stan FAKTYCZNY, na którym batch stoi (nie pisać od nowa):**
 
-**Stan FAKTYCZNY po BATCH_17 (2026-09-05) — nazwy, których ten batch używa:**
-
-- Obrazy: `task build-prod` → `pasnik-app:<git describe --tags --always --dirty>`
-  + `:latest` oraz `pasnik-backup:<ta sama wersja>` + `:latest`
-  (`docker/Dockerfile` target `prod`, `docker/backup/Dockerfile`). Oba obrazy
-  pracują jako **UID/GID 10001** — `/srv/pasnik/uploads` i `/srv/pasnik/backups`
-  dostają `chown 10001:10001`, inaczej upload i dump padają na uprawnieniach.
-  `APP_VERSION` w obrazie = tag, więc `version` w health = wersja wdrożona.
-- Start: `docker/entrypoint.sh` (`UVICORN_WORKERS`, `LOG_LEVEL`,
-  `--proxy-headers`, `--timeout-worker-healthcheck 30`); zaufane proxy przez
-  `FORWARDED_ALLOW_IPS` (czyta sam uvicorn). **W compose połączenie od Caddy'ego
-  przychodzi z bramy sieci dockera, nie z 127.0.0.1** — wpisz adres bramy albo
-  `*` (port aplikacji tylko na loopbacku hosta). Bez tego limit `/auth/login`
-  jest globalny dla wszystkich kont.
-- Compose wzorcowy: `docker/compose.test.yml` (db bez portów + app + profil
-  `backup`) — `compose.prod.yml` powstaje przez podmianę wolumenów na bind
-  mounty `/srv/pasnik/*`, portu na `127.0.0.1:8081:8000` i `env_file`.
-  Healthcheck app dziedziczony z obrazu (sam kod HTTP; `degraded` = 200 —
-  09_DEPLOYMENT §2). Healthcheck db: `retries: 24`, `start_period: 30s`
-  (pierwszy `initdb` na wolnym dysku trwał ~60 s).
-- Backup: `docker/backup/backup.sh` (pg_dump -Fc + tar uploadów bez
-  `transfer/` + opcjonalnie `BACKUP_ENV_FILE` + sha256 + prune),
-  `docker/backup/restore.sh <dump> [tar] [--wipe-uploads]`,
-  `docker/backup/cron-loop.sh` (`BACKUP_AT`, `TZ`), retencja
-  `backend/scripts/backup_prune.py` (7 dni WSZYSTKIE zestawy + najnowszy z 4
-  tygodni ISO). Zestaw: `pasnik-<YYYYmmddTHHMMSSZ>.dump`,
-  `pasnik-<stempel>-uploads.tar.gz`, `[.env]`, `.sha256`; uprawnienia 600.
-  **Restore wymaga zatrzymanej app** (`compose stop app`) i kończy się
-  `alembic upgrade head` + start app + smoke — dokładnie tak robi
-  `docker/backup/drill.sh` (`task backup-drill`), który B18 powtarza na
-  Odroidzie jako restore drill.
-- Env nowe od B17 (komplet z opisem w `.env.example`): `UVICORN_WORKERS`,
-  `FORWARDED_ALLOW_IPS`, `DISK_MIN_FREE_MB`, `SPA_DIST_DIR` (obraz ustawia
-  sam), `IMAGE_MAX_UPLOAD_MB`, `REQUEST_MAX_BODY_MB`, `TRANSFER_MAX_ZIP_MB`,
-  `BACKUP_AT`, `BACKUP_KEEP_DAILY`, `BACKUP_KEEP_WEEKLY`, `BACKUP_ENV_FILE`,
-  `TZ`. `SECRET_KEY` nadal WYMAGANE (zarezerwowane, 07_SECURITY §7).
-  Po B20 w `pasnik.env` NIE MA już ustawień wycofanego importu jadłospisów
-  ani żadnego klucza do usługi zewnętrznej (D25).
-- Runbook backupu dostaje dwa konkrety z D10: `backup.sh` loguje `du -sh`
-  uploadów i backupów; `task uploads-report` / `python -m app.cli
-  uploads-report` (w kontenerze: `docker compose exec app python -m app.cli
-  uploads-report`) wypisuje pliki bez referencji — nic nie kasuje.
-  **Na maszynie dev raport pokaże 13 osieroconych PDF-ów (18,9 MB)
-  w `uploads/import-pdf/` — to NIE jest usterka do naprawienia.** Katalog
-  został po wycofanym imporcie jadłospisów (B20, D25), a właściciel świadomie
-  zdecydował (2026-09-12), że pliki zostają. Runbook ma o nich wspomnieć
-  w JEDNYM miejscu: backup archiwizuje katalog uploadów w całości, więc jeśli
-  kopie mają trafiać poza dom, właściciel powinien wiedzieć, że jadą razem
-  z nimi. Nie kasuj ich i nie proponuj kasowania.
-- Cookies w prod mają prefiks `__Host-` (`__Host-pasnik_session`,
-  `__Host-csrf_token`) — wymaga `Secure`, czyli HTTPS na proxy; po HTTP
-  logowanie w prod NIE ZADZIAŁA (przeglądarka odrzuci cookie). Smoke
-  produkcyjny robić przez domenę, nie przez `curl http://127.0.0.1:8081` z
-  cookie.
-- Użytkownik bazy jest dziś rolą bootstrapową (SUPERUSER) — B18 dodaje skrypt
-  `/docker-entrypoint-initdb.d/` z rolą `NOSUPERUSER` (09_DEPLOYMENT §5).
+- Flagi uvicorna i mapowanie `LOG_LEVEL` → `docker/entrypoint.sh`. Unit
+  systemd ma uruchamiać TĘ SAMĄ logikę — wydziel ją do skryptu w repo
+  (np. `deploy/files/pasnik-serve.sh`) albo wołaj `entrypoint.sh` z venv
+  release'u; NIE kopiuj flag w drugie miejsce.
+- `Settings.env_file=(".env","../.env")` względem katalogu roboczego —
+  w LXC konfiguracja przychodzi WYŁĄCZNIE z `EnvironmentFile`; w katalogu
+  release nie może leżeć żaden `.env` (guard w `after-update`).
+- `SPA_DIST_DIR`, `UPLOADS_DIR`, `APP_ENV`, `APP_VERSION` ustawiał obraz —
+  w LXC muszą przyjść z `pasnik.env` (+ `APP_VERSION` z pliku release).
+  `UPLOADS_DIR` ABSOLUTNY. `MIGRATIONS_DIR` w `core/health.py` liczony
+  względem pakietu — release musi zachować układ `backend/{app,migrations}`.
+- Cookies prod `__Host-*` wymagają HTTPS — smoke logowania przez domenę,
+  nie przez `curl http://…:8000`.
+- `python -m app.cli create-admin` czyta hasło z TTY (`getpass`) albo
+  `PASNIK_ADMIN_*`; idempotentne. `uploads-report` czyta `UPLOADS_DIR`.
 - Weryfikacja SW na realnej domenie: `node frontend/e2e/tools/sw-check.mjs
-  https://pasnik.cpt-sztos.com` (Playwright Chromium; wymaga
-  `node_modules` frontendu) — to samo narzędzie, którym B17 potwierdził
-  rejestrację SW na buildzie prod.
+  https://pasnik.cpt-sztos.com`.
 
-**Warunek z B12 (PWA, ADR-009) — HTTPS jest tu funkcjonalnością, nie ozdobą.**
-Przeglądarka rejestruje service workera WYŁĄCZNIE na `https://` (albo
-`localhost`), więc bez działającego TLS na reverse proxy lista zakupowa
-przestaje działać offline — cicho, bez błędu widocznego dla użytkownika.
-Do procedury i do healthchecku (09_DEPLOYMENT §2) dopisz trzy sprawdzenia po
-wdrożeniu, wykonywane na PRAWDZIWEJ domenie, nie na localhoście:
-
-1. `GET /manifest.webmanifest` → 200 z typem `application/manifest+json`,
-2. `GET /sw.js` → 200 z typem JavaScript i **bez agresywnego cache** (SW musi
-   dać się podmienić przy kolejnym wdrożeniu — inaczej użytkownicy zostaną
-   z poprzednią wersją aplikacji),
-3. w DevTools na urządzeniu mobilnym: „Application → Service Workers"
-   pokazuje aktywnego workera, a prompt instalacji jest dostępny.
-- ADR-002 (bind mounts, migracje w update), ADR-014 (jeden kontener app).
-- `docs/architecture/05_FRONTEND_ARCHITECTURE.md` §6 (PWA — acceptance).
-
-- **Ścieżka awaryjna obok `pg_dump` (BATCH_14)**: istnieje eksport LOGICZNY
-  (`POST /transfer/export` → ZIP z `export.json` + zdjęcia) i import z raportem
-  dry-run. Procedura restore ma go ĆWICZYĆ jako drugą drogę odzyskania danych —
-  backup fizyczny odtwarza instancję, transfer odtwarza DANE na czystej bazie
-  (i tylko on działa, gdy zmieni się wersja PostgreSQL). Uwaga operacyjna:
-  plik eksportu NIE zawiera haseł, więc po imporcie instancji hasła nadaje ADMIN
-  (`task create-admin` + `PATCH /admin/users/{id}`), a paczka transferu jest
-  danymi osobowymi jak backup — ten sam reżim przechowywania.
+**Warunek z B12 (PWA, ADR-009) — HTTPS jest funkcjonalnością.** Po wdrożeniu,
+na PRAWDZIWEJ domenie: (1) `GET /manifest.webmanifest` → 200,
+`application/manifest+json`; (2) `GET /sw.js` → 200, typ JavaScript, `no-cache`;
+(3) na telefonie: aktywny service worker i dostępny prompt instalacji.
 
 ## Stages
 
-1. **compose.prod.yml** (09 §1, wzór: `docker/compose.test.yml` z B17):
-   serwisy `app` (obraz `pasnik-app:<tag>`, port `127.0.0.1:8081:8000` —
-   8080 zajmuje Pi-hole, `env_file: /srv/pasnik/env/pasnik.env`,
-   `stop_grace_period: 30s`, `restart: unless-stopped`, healthcheck
-   z `/api/v1/health`) i `db` (postgres:17, **bez portów hosta**,
-   healthcheck pg_isready) + profil `backup` z B17. Bind mounts:
-   `/srv/pasnik/pgdata`, `/srv/pasnik/uploads`, `/srv/pasnik/backups`.
-   Weryfikacja lokalna: compose config + uruchomienie na maszynie dev
-   z katalogami zastępczymi.
-2. **Reverse proxy — CADDY (D7)**: PODMIANA istniejącego bloku
-   `pasnik.cpt-sztos.com` (dziś serwuje statyczny landing) na
-   `reverse_proxy 127.0.0.1:8081` — Caddy stoi na TYM SAMYM hoście, więc
-   loopback wystarcza, a port 8080 zajmuje Pi-hole.
-   Caddy sam wystawia i odnawia certyfikat oraz przekierowuje HTTP→HTTPS,
-   więc tego NIE konfigurujemy ręcznie; do sprawdzenia zostaje reszta:
-   **(a)** limit rozmiaru żądania — Caddy domyślnie NIE ogranicza ciała
-   (`request_body` jest opt-in), więc paczka kopii danych 100 MB przechodzi;
-   potwierdzić realnym wgraniem, nie założyć (limit 25 MB dla jadłospisu PDF
-   z ustalenia D7 pkt 4 jest po B20 bezprzedmiotowy);
-   **(b)** `Strict-Transport-Security`
-   — 07_SECURITY §3 przypisuje HSTS proxy, więc trzeba POTWIERDZIĆ, czy Caddy
-   w tej wersji dokłada go sam, a jeśli nie — ustawić jawnie; **(c)** nagłówki
-   `X-Forwarded-*` (Caddy ustawia je w `reverse_proxy` domyślnie) muszą być
-   po stronie aplikacji ZAUFANE tylko dla adresu proxy — patrz B17, punkt
-   „IP za reverse proxy"; **(d)** ewentualny cache statyk (ADR-014).
-   Plik w repo jako szablon (`docker/proxy/pasnik.Caddyfile.example`)
-   + krok instalacji w runbooku.
-3. **Runbook instalacji (Odroid)**: krok po kroku w OPERATIONS.md:
-   utworzenie katalogów `/srv/pasnik/*` z uprawnieniami, `pasnik.env`
-   (chmod 600, komplet zmiennych z `.env.example`), build/pull obrazu,
-   `docker compose run --rm app alembic upgrade head` (pierwsza migracja —
-   jawna, 09 §2), `task create-admin`, konfiguracja + reload Caddy'ego, smoke.
-4. **Wykonanie instalacji**: przeprowadzić procedurę na Odroidzie
-   (z właścicielem); aplikacja dostępna przez HTTPS na domenie z D7;
-   health `ok`; PWA instaluje się z produkcji.
-5. **Procedura update i rollback** (09 §4): skrypt/target `task deploy`:
-   backup → build/tag → `alembic upgrade head` → `compose up -d`;
-   rollback: `compose up` poprzedniego tagu + (gdy trzeba) restore z
-   backupu sprzed update; downgrade migracji tylko przetestowany.
-   Przećwiczyć update no-op i rollback na produkcji lub kopii.
-6. **Backup off-device (D6)**: krok kopiowania (rclone/rsync wg D6)
-   dołączony do backupu cron; konfiguracja remote wyłącznie w env/hoście
-   (nigdy w repo); weryfikacja, że kopia ląduje w celu i jest kompletna.
-7. **RESTORE DRILL (realnie!)**: na świeżym środowisku (inny katalog/
-   maszyna): przywróć env → `pg_restore` → uploads → migracje idempotentnie
-   → smoke (login, plan, lista, zdjęcie przepisu). Czas i wynik opisać
-   w OPERATIONS.md (sekcja „ostatni drill: data, czas, wynik").
-8. **OPERATIONS.md + domknięcie**: runbooki (patrz sekcja Backend/Ops);
-   aktualizacja 09_DEPLOYMENT do stanu faktycznego; PROGRESS.md;
-   commit `batch(18): ...`.
+**Część 18a — maszyna, deploy, smoke**
+
+1. **Parytet PostgreSQL 16**: `docker/compose.dev.yml` (`db`, `db-test`),
+   `docker/compose.test.yml` i `docker/backup/Dockerfile` → `postgres:16`.
+   `task check` zielony na 16 (w tym `pg_trgm`/`similarity()` w testach
+   wyszukiwania); odnotuj, czy coś zależało od 17. Baza dev wstaje pusta
+   (nowy wolumen danych) — odtworzenie: `task db-migrate` + `create-admin`
+   + `db-seed-demo`, zgoda właściciela na reset przed wykonaniem.
+2. **Maszyna — `deploy/lxc/`** (wzór: runner):
+   - `provision.sh` (root, idempotentny, kończy się selftestem
+     `/usr/local/sbin/pasnik-selftest`): Debian 13; pakiety `python3 rsync
+     openssh-server ca-certificates sudo curl` + **uv** w wersji z
+     `docker/Dockerfile` + **`postgresql-client-16` z repozytorium PGDG**;
+     użytkownicy `deploy` (hasło zablokowane, klucz operatora) i `pasnik`
+     (system, nologin); katalogi i uprawnienia wg 09 §1; sudoers
+     `/etc/sudoers.d/60-pasnik-deploy` (sprawdzony `visudo -cf`):
+     `systemctl daemon-reload` oraz `start|stop|restart|is-active` dla
+     `pasnik` i `start` dla `pasnik-backup`, plus `-u pasnik
+     /usr/local/bin/pasnik-cli`; sshd tylko klucze, root `prohibit-password`.
+     `deploy` NIE jest w grupie `sudo`.
+   - `create-incus.sh`: `incus launch images:debian/13 pasnik` z limitami,
+     statyczny IPv4 na `incusbr0`, proxy device SSH `0.0.0.0:2223→22` i
+     aplikacji `0.0.0.0:<APP_PORT>→8000` z **`nat=true`**, push + uruchomienie
+     `provision.sh`, snapshot `czysty`, `--recreate`. **Wypisuje odcisk klucza
+     hosta** (dług nr 4 runnera — pierwszy provision nie może akceptować
+     dowolnego klucza).
+   - `lxc/README.md`: kroki na hoście .111 — ufw (port aplikacji tylko
+     z 192.168.2.121, SSH 2223 z LAN), **utrwalone reguły `DOCKER-USER` dla
+     `incusbr0`** (`iptables-persistent` albo unit), sprawdzenie
+     `ss -ltnp` przed wyborem portów.
+3. **Ansible — `deploy/`** (układ 1:1 z runnerem): `ansible.cfg`,
+   `requirements.yml` (ansistrano.deploy 4.4.0, ansistrano.rollback 4.0.1,
+   ansible.posix ≥1.5.4), `inventories/prod/hosts.yml` (.111:2223,
+   `ansible_ssh_common_args` z osobnym plikiem kluczy hosta),
+   `group_vars/all.yml` (architektura + `ansistrano_*` + NAZWY sekretów
+   z sentinelem `CHANGE_ME`), `group_vars/prod.yml` (wartości nieskryte:
+   host bazy, nazwa bazy/roli, port, domena), `.gitignore` `deploy/.ansible/`.
+   Sekrety (`vault_db_password`, `vault_secret_key`) w vaulcie POZA repo:
+   `-e @~/pasnik-prod.yml --ask-vault-pass`, potrzebne tylko w provision.
+4. **Provision** (`playbook-provision.yml`, kanał root): `assert-machine`
+   (selftest, Python 3.13, `pg_dump --version` = 16, uprawnienia katalogów,
+   brak Dockera w LXC), szablony `pasnik.service`, `pasnik-backup.{service,timer}`,
+   `pasnik.env` (`force: "{{ force_env }}"`, domyślnie false; `no_log`;
+   asercja, że ŻADNA zmienna nie została `CHANGE_ME`), `PGPASSFILE` dla
+   `pasnik`, `/usr/local/bin/pasnik-cli`; `daemon-reload`, `enable` bez
+   startu (`current` jeszcze nie istnieje); wypis TODO dla operatora.
+   **Wzór unitu**: 09 §2 (User=pasnik, EnvironmentFile, hardening,
+   `ReadWritePaths` tylko na uploads). **`pasnik-cli`** uruchamia polecenie
+   jako `pasnik` w `current/backend` z TYM SAMYM środowiskiem co usługa
+   (`systemd-run --uid=pasnik --wait --pty -p EnvironmentFile=…` albo
+   równoważnie) — NIE przez `source` pliku env w bashu (dług nr 1 runnera).
+5. **Deploy** (`playbook-deploy.yml`, wzór 09 §4):
+   - pre-tasks (localhost): sentinel `CHANGE_ME`, `frontend/dist/index.html`
+     istnieje, plik wersji release = `git describe --tags --always --dirty`
+     i zgadza się ze znacznikiem w `frontend/dist` (stale-dist guard, wzór
+     TOC — vite stempluje wersję w build), `task secrets-scan` czysty;
+   - pre-tasks (root): selftest, `assert-external-infra` (`pg_isready
+     -h 192.168.2.121` + `select 1` rolą aplikacji z LXC);
+   - rsync: `--chmod=D755,F644`, `--delete-excluded`, wykluczenia runnera
+     + `frontend/node_modules`, `frontend/src`, `frontend/e2e`, `tests`,
+     `docker`, `docs`, `.env*`, `backend/data`, `deploy/.ansible`;
+   - `after-update.yml`: guard sekretów w release (najpierw kasuje release,
+     potem assert — wzór runnera), `uv sync --frozen --no-dev` w
+     `release/backend` z `UV_CACHE_DIR=shared/uv-cache`, import-smoke
+     `python -c "import app.main"`;
+   - `before-symlink.yml`: dump bazy przez `sudo systemctl start
+     pasnik-backup` (albo `pasnik-cli` z `backup.sh` — wybór uzasadnić)
+     i asercja nowego, niepustego zestawu; potem `pasnik-cli alembic upgrade
+     head` z NOWEGO release (przekazanie ścieżki release, bo `current` jeszcze
+     wskazuje stary);
+   - `restart-and-health.yml` (wspólny z rollbackiem): `sudo -n systemctl
+     restart pasnik` → `is-active` → `GET http://127.0.0.1:8000/api/v1/health`
+     z retry i **asercją na treść** `status == "ok"` oraz `version` = release;
+     `GET /api/docs` → 404; przy porażce `journalctl -u pasnik -n 50`
+     (kanał root). Wszystkie read-only taski z `check_mode: false`, a rola
+     ansistrano pomijana w `--check` (poprawka z gałęzi B10 runnera).
+   - Pierwszy deploy na pustą bazę: migracje `0001…head` + `pg_trgm`;
+     następnie `pasnik-cli python -m app.cli create-admin` interaktywnie.
+6. **Rollback** (`playbook-rollback.yml`): asercja ≥2 release,
+   `ansistrano.rollback`, `restart-and-health.yml`; runbook restore przy
+   rollbacku przez migrację (09 §4).
+7. **Caddy (.121)**: `deploy/templates/caddy-vhost.example.j2` renderowany
+   lokalnie/do pliku przykładowego; podmiana bloku w `/etc/caddy/Caddyfile`
+   wykonuje WŁAŚCICIEL wg D7 (wyżej).
+8. **Taskfile**: cienkie wrappery `task deploy`, `task rollback`,
+   `task provision` (wołają `wsl … ansible-playbook -i inventories/prod …`
+   w `deploy/`; `task deploy` zależy od `fe-build`). Opis wymagań operatora
+   (WSL, venv `ansible-core>=2.16,<2.18`, `ansible-galaxy install -r
+   requirements.yml`) w `deploy/README.md` i CLAUDE.md §3.
+9. **Wykonanie z właścicielem**: `create-incus.sh` → host .111 (ufw,
+   DOCKER-USER) → provision → deploy → create-admin → Caddy → smoke przez
+   HTTPS (login, plan dnia, generacja listy, publiczny link z telefonu,
+   upload zdjęcia, trzy sprawdzenia PWA) → deploy no-op → rollback → deploy.
+
+**Część 18b — backup, drill, dokumentacja**
+
+10. **Backup**: `backup.sh`/`restore.sh`/`backup_prune.py` uruchamiane
+    w LXC (lokalizację w repo wybrać i uzasadnić: zostają w `docker/backup/`
+    i są rsyncowane, albo przenosiny do `deploy/files/` z aktualizacją
+    stacku testowego); `pasnik-backup.timer` 03:00 `Persistent=true`;
+    przebieg realny (wymuszony `systemctl start` + nocny), prune nie usuwa
+    świeżych, wynik w journald.
+11. **Off-device (D6)**: procedura ręczna w `OPERATIONS.md` (`incus file
+    pull` na .111 → dysk zewnętrzny, weryfikacja `sha256sum -c`).
+12. **RESTORE DRILL (realnie)**: superuser `postgres-apps` zakłada
+    `ffp_db_drill` (właściciel `ffp_user`) → `restore.sh` z `PGDATABASE=ffp_db_drill`
+    → `alembic upgrade head` → release uruchomiony ręcznie na innym porcie
+    z `DATABASE_URL` drillu → health `ok` + smoke API → `DROP DATABASE
+    ffp_db_drill`. Druga ścieżka: kopia danych rodziny na czystą bazę
+    (ustalenie R4 pkt 4). Data, czasy, rozmiary → `OPERATIONS.md`.
+13. **Reboot .111**: restart hosta → LXC wstaje, usługa wstaje, health `ok`
+    (dowód utrwalenia `DOCKER-USER`).
+14. **Dokumentacja i domknięcie**: `docs/OPERATIONS.md`, `deploy/README.md`,
+    09_DEPLOYMENT do stanu faktycznego, CLAUDE.md (sekcja „Deploy" + zakaz
+    dotykania produkcji poza runbookami), PROGRESS, commit `batch(18): ...`.
 
 ## Database / migrations
 
-- Brak zmian schematu. Pierwsza migracja produkcyjna = jawny krok
-  runbooka (`compose run --rm app alembic upgrade head`), NIGDY auto-start
-  (ADR-002, 09 §2).
-- Update: backup automatycznie PRZED `alembic upgrade head` (krok skryptu).
-- Rollback z migracją w dół wyłącznie gdy downgrade przetestowany;
-  w wątpliwości — restore z backupu sprzed update (09 §4).
+- Brak zmian schematu. Pierwsza migracja produkcyjna i każda kolejna =
+  hook `before-symlink` po dumpie (ADR-017 pkt 6), NIGDY start aplikacji.
+- Baza `ffp_db`/rola `ffp_user` — istniejące, nie tworzymy ani nie zmieniamy
+  ich atrybutów; jedyne DDL poza migracjami to `CREATE/DROP DATABASE
+  ffp_db_drill` superuserem (drill, wykonuje właściciel).
+- Dev/test: `postgres:16` (Stage 1); `EXPECTED_ENUM_TYPES`/`EXPECTED_TABLES`
+  bez zmian.
 
 ## Backend / Operacje
 
-Brak nowych endpointów. Deliverables operacyjne:
+Brak nowych endpointów ani zmian w `app/`. Deliverables:
 
 | Artefakt | Treść |
 |---|---|
-| `docker/compose.prod.yml` | topologia 09 §1 (app+db+profil backup) |
-| `docker/proxy/pasnik.Caddyfile.example` | fragment `Caddyfile` wg D7 (Caddy, nie nginx) |
-| `scripts/deploy.sh` / `task deploy` | update: backup→build→migrate→up |
-| `scripts/rollback.sh` / `task rollback` | poprzedni tag + instrukcja restore |
-| `docs/OPERATIONS.md` | runbooki: instalacja, update, rollback, restore, backup off-device, dodanie użytkownika (create-admin/admin UI), diagnoza: nie wstaje / 500 / pełny dysk / degraded health; sekcja „ostatni restore drill" |
+| `deploy/lxc/{provision.sh,create-incus.sh,README.md}` | maszyna + host .111 |
+| `deploy/{ansible.cfg,requirements.yml,README.md}` | kontroler i runbook Ansible |
+| `deploy/inventories/prod/hosts.yml`, `deploy/group_vars/{all,prod}.yml` | środowisko |
+| `deploy/playbook-{provision,deploy,rollback}.yml` + `deploy/tasks/*.yml` | wzór 09 §4 |
+| `deploy/templates/{pasnik.service,pasnik-backup.service,pasnik-backup.timer,pasnik.env,pasnik-cli.sh,caddy-vhost.example}.j2` | runtime |
+| skrypt startu usługi (wydzielony z `docker/entrypoint.sh`) | jedno źródło flag uvicorna |
+| `Taskfile.yml` | `deploy`, `rollback`, `provision` |
+| `docs/OPERATIONS.md` | runbooki (niżej) |
 
-- OPERATIONS.md pisany dla właściciela-człowieka: komendy do wklejenia,
-  oczekiwany wynik każdego kroku, co zrobić gdy krok zawiedzie.
+`OPERATIONS.md` — dla właściciela-człowieka, komendy do wklejenia
+i oczekiwany wynik: instalacja od zera (Incus → provision → pierwszy deploy
+→ admin → Caddy), deploy, rollback (z migracją i bez), backup i restore,
+off-device, drill (sekcja „ostatni drill: data, czas, wynik"), dodanie
+użytkownika, rotacja hasła bazy (vault → `force_env` → restart), diagnoza:
+nie wstaje (`journalctl`), 500, `degraded` (baza na .121 / migracje / dysk),
+pełny dysk, LXC bez sieci po restarcie hosta (DOCKER-USER), zmiana klucza
+hosta po `--recreate`.
 
 ## Frontend
 
-- Brak zmian kodu. Weryfikacja z produkcji: PWA instalowalna (manifest,
-  ikony, standalone), lista zakupowa offline działa po pierwszym otwarciu,
-  publiczny link `/l/:token` działa przez HTTPS z telefonu.
+- Brak zmian kodu poza ewentualnym stemplem wersji w buildzie potrzebnym
+  do stale-dist guardu (jeśli build go nie ma — mała zmiana w
+  `vite.config.ts`, testowana `fe-build`).
+- Weryfikacja z produkcji: PWA instalowalna, lista offline po pierwszym
+  otwarciu, publiczny link `/l/:token` przez HTTPS z telefonu.
 
 ## Security
 
-- `pasnik.env` na hoście chmod 600; sekrety (SECRET_KEY, hasło DB, remote
-  backupu) NIGDY w repo — w repo tylko `.env.example` i szablon vhosta.
-  Po B20 aplikacja nie ma żadnego klucza do usługi zewnętrznej (D25).
-- `db` bez portów hosta; `app` wyłącznie na 127.0.0.1 (proxy terminuje
-  TLS; HSTS na proxy — 07 §3).
-- Backupy (lokalne i off-device) zawierają dane rodziny + env: uprawnienia
-  restrykcyjne, cel off-device prywatny (weryfikacja ACL w D6-remote).
-- Po instalacji: skan z zewnątrz (curl nagłówków przez domenę) — nagłówki
-  security obecne, `/api/v1/health` nie ujawnia infrastruktury, porty
-  poza 443/80 (proxy) niedostępne.
-- Hasło pierwszego admina ustawione interaktywnie przy create-admin,
-  nieobecne w historii shella (instrukcja w runbooku).
+- Sekrety (hasło `ffp_user`, `SECRET_KEY`) WYŁĄCZNIE w vaulcie poza repo
+  i w `/etc/pasnik/pasnik.env` (`root:pasnik` 0640) oraz `PGPASSFILE` 0600;
+  rsync i guard release'u wykluczają/odrzucają pliki sekretów.
+- Usługa jako `pasnik` z hardeningiem systemd; `deploy` ma sudo WYŁĄCZNIE na
+  wymienione `systemctl` i `pasnik-cli`; root tylko kluczem.
+- Port aplikacji na .111 osiągalny wyłącznie z .121 (ufw), weryfikacja
+  skanem z innej maszyny w LAN; `FORWARDED_ALLOW_IPS=192.168.2.121`
+  (`*` zabronione — 07 §7).
+- Baza: rola bez uprawnień poza `ffp_db`; zawężenie `pg_hba` do adresu
+  .111 — REKOMENDACJA w `OPERATIONS.md`, decyzja operatora klastra.
+- Publiczny token: zero w access logu Caddy'ego (log wyłączony), w journald
+  maskowany — grep po realnych logach po smoke z publicznym linkiem.
+- Hasło pierwszego admina interaktywnie (TTY przez `pasnik-cli`), nie
+  w historii shella ani w argumentach procesu.
+- `--check --diff` i każdy task z sekretem z `no_log: true` (dług nr 3
+  runnera).
 
 ## Skills
 
-Mapa ID → skill: `docs/implementation-plan/03_AI_SKILLS.md` §3. Required
-ładowane na starcie sesji (master prompt krok 1f); Review uruchamiane na
-diffie przed commitem (krok 11).
+Mapa ID → skill: `docs/implementation-plan/03_AI_SKILLS.md` §3.
 
 - **Required**: SKILL-SEC
 - **Recommended**: SKILL-BE
-- **Review**: SKILL-SECREV
+- **Review**: SKILL-SECREV, SKILL-REVIEW
 
 ## Tests
 
-- `task check` zielony (bez zmian logiki — regresja).
-- **Smoke produkcyjny po instalacji** (ręcznie, wynik w raporcie):
-  login przez HTTPS, plan dnia, generacja listy, publiczny link
-  z telefonu, upload zdjęcia, health `ok`.
-- **Restore drill** (Stage 7) — najważniejszy „test" batcha; wynik
-  i czas udokumentowane.
-- **Update no-op + rollback**: przećwiczone realnie (ta sama wersja →
-  deploy → rollback do tej samej wersji) — procedury działają.
-- **Backup automatyczny**: odczekać/wymusić przebieg crona na produkcji;
-  artefakty w `/srv/pasnik/backups` + kopia off-device obecna; prune nie
-  usuwa świeżych.
-- Healthcheck compose: zatrzymanie db → kontener app raportuje degraded,
-  compose restartuje wg polityki (obserwacja, opis).
+- `task check` zielony **na `postgres:16`**.
+- Nowy `tests/unit/test_deploy_config.py` (marker `unit`, wzór
+  `tests/test_deploy.py` runnera): wykluczenia rsync obejmują pliki sekretów
+  i `.env*`; każda zmienna wymagana przez `Settings` ma wpis w
+  `pasnik.env.j2`; szablon env nie zawiera wartości ze spacją ani
+  cudzysłowem; flagi uvicorna mają jedno źródło.
+- `ansible-playbook --syntax-check` dla trzech playbooków; `--check --diff`
+  deployu kończy się bez `failed`.
+- Realnie (wynik w Completion notes): provision, pierwszy deploy, smoke
+  HTTPS, deploy no-op, rollback, deploy z powrotem, backup wymuszony i nocny,
+  drill (obie ścieżki), reboot .111, skan portu z LAN, grep logów na token.
+- Zatrzymanie dostępu do bazy (np. ufw na .121 albo zła wartość w env na
+  chwilę w kopii) → health `degraded`, usługa żyje (obserwacja, opis).
 
 ## Acceptance Criteria
 
-1. Aplikacja działa na Odroidzie przez **HTTPS na domenie z D7**;
-   health `ok`; SPA, API i uploady serwowane przez kontener app.
-2. `db` niedostępna z zewnątrz hosta; `app` słucha tylko na 127.0.0.1.
-3. Backup automatyczny wykonuje się (cron, 03:00) i odkłada komplet
-   w `/srv/pasnik/backups` + **kopia off-device wg D6 istnieje w celu**.
-4. **Restore drill przeszedł realnie** — udokumentowany w OPERATIONS.md
-   (data, czas trwania, wynik smoke).
-5. Procedura update (backup→build→migrate→up) i rollback przećwiczone;
-   obrazy tagowane, poprzedni tag dostępny.
-6. **PWA instaluje się z produkcji** (telefon właściciela); publiczny
-   link listy działa bez logowania.
-7. `docs/OPERATIONS.md` kompletny: instalacja, update, rollback, restore,
-   backup off-device, dodanie użytkownika, diagnoza (nie wstaje / 500 /
-   pełny dysk) — każdy runbook z komendami i oczekiwanym wynikiem.
-8. W repo zero sekretów produkcyjnych (`git ls-files` + grep); pasnik.env
-   chmod 600 na hoście.
-9. PROGRESS.md: status + wpis; 09_DEPLOYMENT zgodny ze stanem faktycznym.
+1. `https://pasnik.cpt-sztos.com` działa; health `ok` z `version` = wdrożony
+   release; SPA, API i uploady serwowane przez usługę w LXC.
+2. Port aplikacji na .111 odpowiada wyłącznie dla .121; SSH do LXC tylko
+   kluczem; usługa NIE działa jako root.
+3. Deploy (dump → migracja → symlink → restart → health z treścią) i rollback
+   przećwiczone realnie; dump przed migracją istnieje w `shared/backups`.
+4. Backup nocny wykonał się z timera; komplet zestawu + prune; procedura
+   off-device wg D6 opisana i raz wykonana.
+5. **Restore drill przeszedł realnie** (pg_restore do `ffp_db_drill` + kopia
+   danych rodziny) — udokumentowany w `OPERATIONS.md`.
+6. Restart hosta .111 → aplikacja wraca sama i widzi bazę.
+7. PWA instaluje się z produkcji; publiczny link działa bez logowania; tokenu
+   nie ma w logach Caddy'ego ani journald.
+8. Zero sekretów w repo (`task secrets-scan` + grep); `pasnik.env` 0640
+   root:pasnik, `PGPASSFILE` 0600.
+9. `task check` zielony na PG 16; `OPERATIONS.md` kompletny; PROGRESS,
+   09_DEPLOYMENT i CLAUDE.md zgodne ze stanem faktycznym.
 
 ## Out of Scope
 
-- Zewnętrzny uptime-check (healthchecks.io) — decyzja właściciela przy
-  tym batchu, wpis do 02_DECISIONS jeśli odroczona (09 §6).
-- Loki/centralne logi, monitoring ponad `docker logs` (09 §6 — later).
-- 2FA (D8 FUTURE), retencja automatyczna list (D10 — wg decyzji).
+- Zmiany w klastrze `postgres-apps` (wersja, `pg_hba`, superuser) i w
+  netQArnerze — tylko rekomendacje.
+- Usunięcie obrazu prod / `compose.test.yml` / `task build-prod` — zostają
+  jako lokalny test obrazu do osobnej decyzji.
+- CI uruchamiające deploy; środowisko pre-prod/staging (inventory tylko `prod`).
+- Zewnętrzny uptime-check, Loki, 2FA (D8), retencja automatyczna (D10).
 - Jakiekolwiek zmiany funkcjonalne aplikacji.
 
 ## Expected files/modules
 
-- `docker/compose.prod.yml`, `docker/proxy/pasnik.Caddyfile.example`
-- `scripts/deploy.sh`, `scripts/rollback.sh` (lub targety Taskfile —
-  spójnie z B17; uzasadnić wybór)
-- `Taskfile.yml` (targety deploy/rollback/backup-offsite jeśli task)
-- `docs/OPERATIONS.md` (NOWY — jedyny dozwolony nowy dokument)
-- `docs/architecture/09_DEPLOYMENT_AND_OPERATIONS.md` (aktualizacja
-  do stanu faktycznego), `docs/implementation-plan/PROGRESS.md`
-- Na hoście (poza repo): `/srv/pasnik/{pgdata,uploads,backups,env/pasnik.env}`,
-  vhost proxy
+- `deploy/**` (tabela wyżej), `Taskfile.yml`, `.gitignore`
+- `docker/compose.dev.yml`, `docker/compose.test.yml`,
+  `docker/backup/Dockerfile` (PG 16), ewentualnie `docker/entrypoint.sh`
+  (wydzielenie skryptu startu)
+- `tests/unit/test_deploy_config.py`
+- `docs/OPERATIONS.md` (NOWY — jedyny dozwolony nowy dokument poza
+  `deploy/README.md` i `deploy/lxc/README.md`)
+- `docs/architecture/09_DEPLOYMENT_AND_OPERATIONS.md`, `CLAUDE.md`,
+  `docs/implementation-plan/PROGRESS.md`
+- Poza repo: kontener `pasnik` na .111 (`/opt/pasnik`, `/etc/pasnik`),
+  reguły ufw/DOCKER-USER na .111, blok Caddy na .121, vault operatora.
 
 ## Implementation Notes
 
-- Batch dotyka REALNEGO hosta — każdy krok na Odroidzie wykonywać z
-  właścicielem i potwierdzać wynik; nic „na ślepo". Kroki wymagające
-  fizycznego dostępu/sekretów wykonuje właściciel wg przygotowanych komend.
-- Restore drill NA INNYM środowisku niż produkcja (katalog `/srv/pasnik-drill`
-  albo maszyna dev) — nigdy nie nadpisywać produkcyjnych bind mounts.
-- Kolejność: compose.prod lokalnie → proxy szablon → instalacja → smoke →
-  update/rollback → backup off-device → drill → OPERATIONS.md. Dokument
-  operacyjny pisać RÓWNOLEGLE z wykonywaniem kroków (świeża pamięć).
-- Jeśli proxy właściciela różni się od założeń D7 (inny serwer, inne
-  konwencje vhostów) — dostosować szablon, odnotować w 02_DECISIONS/ADR
-  gdy trwałe.
-- Rozmiar L: jeśli sesja pęka, naturalny podział = instalacja+update
-  (część 1) / backup off-device+drill+OPERATIONS (część 2) — podział
-  zgłosić w PROGRESS, nie ciągnąć maratonu.
+- Każdy krok na hostach .111/.121 — z właścicielem; nic na ślepo. Dostęp
+  agenta: wyłącznie przez Ansible/SSH do LXC; host .111 i .121 obsługuje
+  właściciel wg komend z `lxc/README.md` i D7.
+- **Nie dotykaj `netqarner`, `netqarner_db` ani konfiguracji klastra.**
+  Dump i restore zawsze z jawnym `PGDATABASE`.
+- Kolejność 18a: PG16 lokalnie → `deploy/lxc` → `deploy/` (syntax/check)
+  → host + provision → deploy → smoke → rollback. 18b: backup → off-device →
+  drill → reboot → dokumenty. Podział zgłosić w PROGRESS.
+- Ansible ignoruje `ansible.cfg` z `/mnt/c` (WSL, katalog world-writable) —
+  komendy zawsze z `-i inventories/prod` (wzór runnera i TOC).
+- Port aplikacji i SSH na .111 potwierdzić `ss -ltnp` przed wpisaniem do
+  `group_vars/prod.yml` i `create-incus.sh`.
+- Jeśli `nat=true` proxy device nie zadziała (np. wymóg statycznego IP
+  koliduje z konfiguracją `incusbr0`), fallback z 09 §1 wymaga wpisu
+  w 02_DECISIONS — nie cichej zmiany.
 
 ## Cross-Batch Impact
 
-- Ostatni batch planu: dalsze prace = nowe karty wg szablonu (00 §12).
-- OPERATIONS.md staje się dokumentem żywym — każda przyszła zmiana
-  procedur operacyjnych aktualizuje go w tym samym commicie.
-- Odroczone decyzje operacyjne (uptime-check, retencja D10) → 02_DECISIONS.
-- CLAUDE.md/skill: dopisać zakaz dotykania produkcji poza procedurami
-  OPERATIONS.md (jeśli nie wynika już z treści).
+- Ostatni batch planu: dalsze prace = nowe karty (00 §12).
+- `OPERATIONS.md` i `deploy/` są żywe — każda zmiana konfiguracji
+  (nowa zmienna w `Settings`) = wpis w `pasnik.env.j2` w tym samym commicie
+  (pilnuje `test_deploy_config.py`); dopisać tę regułę do CLAUDE.md §4 obok
+  „nowa zmienna = wpis w `.env.example`".
+- Nowa migracja wymagająca uprawnień ponad właściciela bazy (np. nie-trusted
+  rozszerzenie) = niewykonalna na produkcji bez operatora klastra — reguła
+  do CLAUDE.md §6.
+- Odroczone decyzje operacyjne (uptime-check, zawężenie `pg_hba`, los obrazu
+  prod) → 02_DECISIONS.
 
 ## Implementation checklist
 
-- [ ] Bramki D6/D7 ZATWIERDZONE zweryfikowane w 02_DECISIONS (STOP jeśli nie)
-- [ ] compose.prod.yml wg 09 §1 (bind mounts, 127.0.0.1:8080, bez portów db,
-      stop_grace_period, unless-stopped, healthchecki)
-- [ ] Szablon vhosta proxy wg D7 (X-Forwarded-*, HSTS, limity body)
-- [ ] Runbook instalacji napisany, wykonany na Odroidzie, smoke przez HTTPS
-- [ ] Pierwsza migracja jawnie; create-admin wykonany bezpiecznie
-- [ ] deploy.sh (backup→build→migrate→up) + rollback.sh; przećwiczone
-- [ ] Backup cron na produkcji + kopia off-device wg D6 zweryfikowana
-- [ ] RESTORE DRILL wykonany i udokumentowany
-- [ ] PWA z produkcji zainstalowana; publiczny link z telefonu działa
-- [ ] OPERATIONS.md kompletny (wszystkie runbooki + diagnoza)
-- [ ] 09_DEPLOYMENT + PROGRESS zaktualizowane
+- [ ] D6, D7, D29 ZATWIERDZONE zweryfikowane w 02_DECISIONS
+- [ ] dev/test na `postgres:16`, `task check` zielony
+- [ ] `deploy/lxc/provision.sh` + `create-incus.sh` (odcisk klucza hosta) + README hosta
+- [ ] `deploy/` Ansible: inventory, group_vars, trzy playbooki, hooki, szablony
+- [ ] `pasnik-cli` bez `source` pliku env; jedno źródło flag uvicorna
+- [ ] `test_deploy_config.py`; `--syntax-check` i `--check --diff` czyste
+- [ ] Host .111: ufw, utrwalone DOCKER-USER, porty potwierdzone
+- [ ] Provision → pierwszy deploy → create-admin → Caddy → smoke HTTPS + PWA
+- [ ] Deploy no-op + rollback + deploy przećwiczone
+- [ ] Backup timer + przebieg realny; off-device wg D6
+- [ ] RESTORE DRILL (obie ścieżki) udokumentowany
+- [ ] Reboot .111 przeżyty
+- [ ] `OPERATIONS.md`, `deploy/README.md`, 09, CLAUDE.md, PROGRESS
 
 ## Verification checklist
 
 - [ ] `task check` zielony
 - [ ] Acceptance Criteria 1–9 odhaczone jedno po drugim
-- [ ] Zero sekretów w repo (grep); pasnik.env 600 na hoście
-- [ ] Skan nagłówków/portów z zewnątrz wykonany i opisany
-- [ ] `/code-review` zmian wykonany przed commitem
-- [ ] Commit `batch(18): ...`, `git status` czysty (pliki hosta poza repo)
+- [ ] Zero sekretów w repo; uprawnienia plików na serwerze sprawdzone `stat`
+- [ ] Skan portu z innej maszyny LAN + nagłówki przez domenę opisane
+- [ ] `/security-review` i `/code-review` na diffie przed commitem
+- [ ] Commit `batch(18): ...`, `git status` czysty
 
 ## Completion notes
 

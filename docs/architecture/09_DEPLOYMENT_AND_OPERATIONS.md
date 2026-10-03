@@ -1,229 +1,261 @@
 # 09 — Deployment, backup i operacje
 
-Docelowo: Odroid H2 (x86-64, Debian-family), Docker + Docker Compose
-(ustalone; NIE LXC), za istniejącym reverse proxy z TLS i domeną (D7: Caddy
-jako usługa systemowa hosta, `pasnik.cpt-sztos.com`). Ten dokument opisuje
-**stan faktyczny po BATCH_17** (obraz prod, healthcheck, backup/restore,
-konfiguracja) oraz założenia dla **BATCH_18** (compose.prod, proxy, runbooki).
+Docelowo (decyzja **D29**, ADR-017, 2026-10-03): **kontener LXC (Incus) `pasnik`
+na Odroidzie 192.168.2.111**, wdrażany **Ansible + ansistrano** wg wzorca
+`nc-tech-test-runner/deploy/`; baza w **istniejącym klastrze `postgres-apps`
+(PostgreSQL 16) na 192.168.2.121**; TLS i domena na Caddym hosta .121 (D7,
+`pasnik.cpt-sztos.com`). Docker na produkcji NIE występuje (D12 i ADR-002
+zastąpione). Ten dokument opisuje **stan faktyczny po BATCH_17** (healthcheck,
+skrypty backup/restore, konfiguracja przez env, obraz prod jako lokalny stos
+testowy) oraz założenia WIĄŻĄCE dla **BATCH_18** (maszyna, deploy, runbooki).
 
 ## 1. Topologia produkcyjna (założenia wiążące)
 
-- 2 kontenery: `app` (Uvicorn+FastAPI, serwuje też SPA i uploady)
-  i `db` (postgres:17). Opcjonalny profil `backup` (kontener z pętlą
-  cron — §3).
-- Sieć: tylko `app` wystawia port na localhost hosta; `db` bez portów.
-  **Port NIE MOŻE być 8080** (tak podawał ten dokument jako przykład): na
-  docelowym hoście `127.0.0.1:8080` zajmuje Pi-hole (`pihole.cpt-sztos.com`
-  w `Caddyfile` właściciela, ustalenie D7 z 2026-09-05). Zajęte są tam także
-  3000, 1880, 4173, 8013, 8888, 9000 i 9101. Proponowany port aplikacji:
-  **8081** — B18 potwierdza go `ss -ltnp` PRZED wpisaniem do compose,
-  bo lista usług na tym hoście może się zmienić.
-  Reverse proxy hosta (Caddy) kieruje na ten port.
-- **Lifecycle danych ≠ lifecycle kontenera** — bind mounts hosta:
-
 ```
-/srv/pasnik/pgdata    → /var/lib/postgresql/data
-/srv/pasnik/uploads   → /data/uploads      (zdjęcia + scratch kopii danych)
-/srv/pasnik/backups   → /backups           (dumpy + kopie uploads)
-/srv/pasnik/env/pasnik.env (chmod 600)        → env_file kontenera app
+Internet ─► Caddy na 192.168.2.121 (TLS, pasnik.cpt-sztos.com, D7)
+             └─► 192.168.2.111:<APP_PORT>      proxy device Incusa; ufw: tylko z .121
+                   └─► LXC `pasnik` (Debian 13, Python 3.13)
+                         systemd `pasnik.service` → uvicorn 0.0.0.0:8000, User=pasnik
+                         └─► 192.168.2.121:5432  postgres-apps (PG 16), baza ffp_db
+Operator (WSL, ansible-core) ─► 192.168.2.111:2223 ─► LXC:22   (proxy device SSH)
 ```
 
-  Kontenery `app` i `backup` pracują jako **UID/GID 10001** (użytkownik
-  `pasnik` w obu obrazach) — katalogi `uploads` i `backups` na hoście dostają
-  `chown 10001:10001`, inaczej upload zdjęcia i zapis dumpu kończą się
-  `Permission denied`. `pgdata` należy do użytkownika obrazu `postgres`
-  (bez zmian).
+- **Host LXC**: Odroid 192.168.2.111 z Incusem; obok stoi `nq-runner-poc`
+  (SSH :2222), więc Paśnik dostaje INNY port SSH (propozycja **2223**) i port
+  aplikacji, który B18 potwierdza `ss -ltnp` na .111 (propozycja **8081**).
+  Kontener na `incusbr0` (NAT), z zewnątrz osiągalny wyłącznie przez proxy
+  device'y. **Pułapka znana z runnera (dług O4)**: Docker na .111 ustawia
+  `iptables -P FORWARD DROP` i odcina NAT Incusa — reguły `DOCKER-USER`
+  dla `incusbr0` MUSZĄ być utrwalone, inaczej po restarcie hosta aplikacja
+  nie dosięgnie bazy.
+- **Proxy device aplikacji** w trybie `nat=true` (wymaga statycznego IPv4
+  kontenera): uvicorn widzi wtedy prawdziwy adres Caddy'ego (.121) i
+  `FORWARDED_ALLOW_IPS=192.168.2.121`. W trybie domyślnym (bez `nat`) Incus
+  łączy się z kontenerem z loopbacku, więc zaufany musiałby być `127.0.0.1`,
+  a jedyną barierą przed podrobionym `X-Forwarded-For` byłby ufw na .111 —
+  dopuszczalne wyłącznie jako odnotowane odstępstwo (§2 „Za proxy").
+- **Rozkład w LXC** (ansistrano):
 
-- **Obrazy (stan faktyczny B17)** — `docker/Dockerfile`, multi-stage:
-  `base` (zależności w `/opt/venv`, uv) → `dev` (hot reload) oraz
-  `frontend-build` (node:22, `vite build`) → **`prod`** (`base` bez grupy dev,
-  kod + migracje + `scripts/` + `dist` w `/app/static`, ADR-014; `USER
-  pasnik`; `HEALTHCHECK` pytonowym one-linerem po `/api/v1/health`;
-  start przez `docker/entrypoint.sh`: `uvicorn --workers $UVICORN_WORKERS
-  --proxy-headers --log-level $LOG_LEVEL`, bez `--reload`). Budowanie:
-  **`task build-prod`** → `pasnik-app:<git describe --tags --always --dirty>`
-  + `pasnik-app:latest` oraz `pasnik-backup:<ta sama wersja>` + `:latest`.
-  `APP_VERSION` wchodzi do obrazu jako build-arg (ta sama wartość co tag),
-  więc pole `version` w health = tag obrazu. `.dockerignore` w korzeniu repo
-  trzyma poza kontekstem `.env`, `backend/data`, testy, `node_modules`.
+```
+/opt/pasnik/releases/<ts>/       kod release + backend/.venv + frontend/dist   (deploy:deploy)
+/opt/pasnik/current -> releases/<ts>
+/opt/pasnik/shared/uploads       UPLOADS_DIR (zdjęcia + scratch kopii danych)   (pasnik, 0750)
+/opt/pasnik/shared/backups       BACKUP_DIR (dumpy + kopie uploads)             (pasnik, 0750)
+/opt/pasnik/shared/uv-cache      cache uv między release'ami                    (deploy)
+/etc/pasnik/pasnik.env           konfiguracja + sekrety (root:pasnik 0640)
+/etc/systemd/system/pasnik{,-backup}.{service,timer}
+```
+
+  **Lifecycle danych ≠ lifecycle aplikacji**: dane relacyjne żyją w klastrze
+  na .121, pliki w `shared/` — żaden release ich nie dotyka, a `keep_releases`
+  kasuje wyłącznie stare katalogi kodu.
+- **Użytkownicy LXC**: `root` (SSH tylko kluczem: provision, health), `deploy`
+  (właściciel `releases/`, hasło zablokowane, sudoers WYŁĄCZNIE na
+  `systemctl daemon-reload|start|stop|restart|is-active` dla `pasnik` i
+  `pasnik-backup` oraz `pasnik-cli` jako `pasnik`), `pasnik` (system,
+  nologin — z jego uprawnieniami działa aplikacja i backup).
+- **Release (stan docelowy B18)**: frontend budowany LOKALNIE (`task fe-build`)
+  i wysyłany jako `frontend/dist`; backend: `uv sync --frozen --no-dev` do
+  `backend/.venv` w katalogu release (serwer potrzebuje PyPI; cache uv
+  w `shared/`). Wersja = `git describe --tags --always --dirty` stemplowana
+  lokalnie do pliku w release (rsync NIE wysyła `.git`) i podawana usłudze
+  jako `APP_VERSION`, więc pole `version` w health = wdrożony release.
 - **Kontrakt cache SPA** (ADR-009, „trzy sprawdzenia" z karty B18):
   `assets/*` (hash w nazwie) → `Cache-Control: public, max-age=31536000,
   immutable`; `index.html`, `sw.js`, `workbox-*.js`, `manifest.webmanifest`
   → `no-cache`. `manifest.webmanifest` wychodzi z typem
   `application/manifest+json`. Nieznane `/api/*` i `/uploads/*` zwracają
-  kontraktowe 404 JSON, NIE `index.html` (`app/core/spa.py`).
+  kontraktowe 404 JSON, NIE `index.html` (`app/core/spa.py`). Bez zmian
+  względem obrazu — serwuje to sam backend (ADR-014).
+- **Obraz prod (stan faktyczny B17, NIE droga na produkcję)** — `docker/Dockerfile`
+  target `prod` + `task build-prod` → `pasnik-app:<git describe>` i
+  `pasnik-backup:<ta sama wersja>`, stack `docker/compose.test.yml`. Zostają
+  jako lokalne narzędzie testu „aplikacja jak na produkcji" (`task
+  test-stack-up`, `task backup-drill`), dopóki osobna decyzja ich nie usunie.
 
 ## 2. Start aplikacji, migracje, healthcheck
 
-- Kontener app przy starcie NIE migruje automatycznie; migracje uruchamia
-  jawny krok `docker compose run --rm app alembic upgrade head` w procedurze
-  update (świadoma decyzja: brak wyścigu i brak niespodzianek przy
-  restarcie).
-- `restart: unless-stopped`; graceful shutdown (Uvicorn) — compose
-  `stop_grace_period: 30s`; `entrypoint.sh` robi `exec`, więc SIGTERM trafia
-  w uvicorna (PID 1).
+- **Usługa** `pasnik.service`: `User=pasnik`, `WorkingDirectory=/opt/pasnik/current/backend`,
+  `EnvironmentFile=/etc/pasnik/pasnik.env`, `ExecStart` = uvicorn z venv
+  release'u z tymi samymi flagami co `docker/entrypoint.sh` (`app.main:create_app
+  --factory --host 0.0.0.0 --port 8000 --workers $UVICORN_WORKERS
+  --timeout-worker-healthcheck 30 --proxy-headers --no-server-header
+  --log-level …`), `Restart=on-failure`, `TimeoutStopSec=30` (graceful
+  shutdown uvicorna), hardening `NoNewPrivileges`, `ProtectSystem=strict`,
+  `ReadWritePaths=/opt/pasnik/shared/uploads`, `PrivateTmp`, `ProtectHome`.
+- Aplikacja przy starcie NIE migruje. Migrację wykonuje hook ansistrano
+  **przed** przełączeniem `current`: dump bazy → `alembic upgrade head`
+  z NOWEGO release (ADR-017 pkt 6). Świadoma decyzja: brak wyścigu między
+  workerami i brak niespodzianek przy restarcie.
 - **Healthcheck `GET /api/v1/health` (stan faktyczny B17, `app/core/health.py`)**:
 
   ```json
-  {"status": "ok|degraded", "version": "<tag>", "checks": {"db": "ok|fail", "migrations": "ok|fail|skipped", "disk": "ok|fail"}}
+  {"status": "ok|degraded", "version": "<release>", "checks": {"db": "ok|fail", "migrations": "ok|fail|skipped", "disk": "ok|fail"}}
   ```
 
   - `db` i `migrations` z JEDNEGO zapytania (`SELECT version_num FROM
     alembic_version`, limit 3 s): odpowiedź = baza żyje i wersja do porównania
-    z head skryptów w obrazie (liczony ze `migrations/versions`, bez `env.py`);
+    z head skryptów release'u (liczony ze `migrations/versions`, bez `env.py`);
     brak tabeli = baza żyje, `migrations: fail`; inny błąd/timeout = `db: fail`,
-    `migrations: skipped`. Jeden timeout mieści się w `--timeout 5s` HEALTHCHECK-u;
+    `migrations: skipped`.
   - `disk` — wolne miejsce na dysku katalogu uploadów ≥ `DISK_MIN_FREE_MB`
     (domyślnie 1024).
-  - **`degraded` to nadal HTTP 200.** Healthcheck Dockera/compose testuje
-    sam kod odpowiedzi: kontener, który odpowiada, jest `healthy` także
-    niezmigrowany — restart w pętli niczego by nie naprawił (migracje są
-    krokiem jawnym), a ukryłby przyczynę. `down` = brak odpowiedzi.
-    Operator czyta TREŚĆ: `curl -s 127.0.0.1:8081/api/v1/health`.
+  - **`degraded` to nadal HTTP 200.** Dlatego smoke po deployu MUSI czytać
+    TREŚĆ: `status == "ok"` i `version == <release>` — sam kod 200
+    przepuściłby nieudaną migrację albo odciętą bazę. Restart usługi przy
+    `degraded` niczego nie naprawia (baza jest na innym hoście, migracje są
+    krokiem jawnym), więc systemd go nie robi.
   - Bez uwierzytelnienia i bez szczegółów infrastruktury (żadnych ścieżek,
     hostów, numerów rewizji). Checkiem jest wyłącznie to, co może paść
     w RUNTIME (baza, migracje, dysk) — ustawienie opcjonalnej funkcji nim
     nie jest (07_SECURITY §7).
 - **Zimny start (obserwacja R2, potwierdzona R4) — świadomie przyjęty**:
-  pierwsze żądanie po starcie procesu (`GET /plan/days`) trwa ~1,5 s
-  (budowanie modeli Pydantica, plany zapytań PG), kolejne 30–50 ms. Przy
-  `UVICORN_WORKERS=2` dotyczy to pierwszego żądania KAŻDEGO workera. Rozgrzewki
-  w healthchecku nie ma: healthcheck ma być tani i pytać o stan, nie
-  o wydajność, a jednorazowe 1,5 s po `compose up` nie uzasadnia kodu.
+  pierwsze żądanie po starcie procesu trwa ~1,5 s, kolejne 30–50 ms; przy
+  `UVICORN_WORKERS=2` dotyczy pierwszego żądania KAŻDEGO workera. Rozgrzewki
+  w healthchecku nie ma.
 - **Rate limity a workery**: licznik slowapi jest w pamięci PROCESU, więc przy
   2 workerach realny sufit per IP to dwukrotność deklarowanej wartości
   (login 5/min → do 10/min; uploady 30/10 na minutę → 60/20). Twardą granicą
   logowania pozostaje blokada konta w bazie (07_SECURITY §2).
 - **Za proxy**: uvicorn startuje z `--proxy-headers`; zaufane adresy proxy to
   `FORWARDED_ALLOW_IPS` (uvicorn czyta zmienną sam, domyślnie `127.0.0.1`).
-  W compose połączenie od Caddy'ego przychodzi z bramy sieci dockera, nie
-  z loopbacku — B18 wpisuje adres bramy albo `*` (port aplikacji jest
-  opublikowany wyłącznie na 127.0.0.1 hosta, więc jedynym nadawcą jest
-  proxy). Bez tego wszystkie żądania mają IP proxy, a limit 5/min/IP na
-  `/auth/login` staje się limitem GLOBALNYM.
+  Docelowo `192.168.2.121` (proxy device `nat=true`, §1). Bez poprawnej
+  wartości wszystkie żądania mają IP proxy, a limit 5/min/IP na
+  `/auth/login` staje się limitem GLOBALNYM; ze zbyt szeroką (`*`) każdy, kto
+  dosięgnie portu na .111, podstawi sobie dowolny adres.
 
-## 3. Backup i restore (stan faktyczny B17)
+## 3. Backup i restore
 
-- **Co**: `pg_dump --format=custom --no-owner --no-privileges` + `tar.gz`
-  katalogu uploadów **bez scratcha `transfer/`** (TTL 24 h, nie są to dane)
-  + opcjonalnie kopia pliku env (`BACKUP_ENV_FILE`, domyślnie WYŁĄCZONA — env
-  żyje na hoście; B18 decyduje, czy go montować do kontenera backupu)
-  + `sha256` zestawu. Zestaw = wspólny stempel UTC:
-  `pasnik-<YYYYmmddTHHMMSSZ>.dump`, `pasnik-<stempel>-uploads.tar.gz`,
-  `[pasnik-<stempel>.env]`, `pasnik-<stempel>.sha256`. Pliki powstają jako
-  `.tmp` i są przenoszone po sukcesie; `umask 077` ⇒ uprawnienia 600
-  (backup = komplet danych rodziny, traktowany jak sekret).
-- **Skrypty**: `docker/backup/backup.sh`, `docker/backup/restore.sh`,
-  `docker/backup/cron-loop.sh`; retencja: `backend/scripts/backup_prune.py`
-  (czysta stdlib, testowana pytestem) kopiowany do obrazu jako
-  `/opt/backup/prune.py`. Obraz: `docker/backup/Dockerfile` = `postgres:17`
-  (TA SAMA wersja co serwis `db` — `pg_dump`/`pg_restore` zawsze pasują do
-  serwera) + `python3`, `USER 10001`.
-- **Kiedy**: kontener `backup` (profil `backup`) uruchamia `cron-loop.sh`:
-  codziennie o `BACKUP_AT` (domyślnie `03:00`, strefa `TZ`), wynik każdego
-  przebiegu na stdout (`docker logs`), kod wyjścia ≠ 0 = linia `BŁĄD`.
-  Decyzja B17: pętla `sleep`, nie crond — crond w `postgres:17` to dodatkowy
-  demon, który nie przekazuje wyjścia zadań na stdout kontenera i gubi
-  zmienne środowiskowe (jedyne źródło konfiguracji).
+- **Co** (stan faktyczny B17, bez zmian): `pg_dump --format=custom --no-owner
+  --no-privileges` BAZY aplikacji (nigdy całego klastra) + `tar.gz` katalogu
+  uploadów **bez scratcha `transfer/`** + opcjonalnie kopia pliku env
+  (`BACKUP_ENV_FILE`, domyślnie WYŁĄCZONA) + `sha256` zestawu. Zestaw =
+  wspólny stempel UTC: `pasnik-<YYYYmmddTHHMMSSZ>.dump`,
+  `pasnik-<stempel>-uploads.tar.gz`, `[pasnik-<stempel>.env]`,
+  `pasnik-<stempel>.sha256`. Pliki powstają jako `.tmp` i są przenoszone po
+  sukcesie; `umask 077` ⇒ uprawnienia 600.
+- **Skrypty**: `docker/backup/backup.sh`, `docker/backup/restore.sh`, retencja
+  `backend/scripts/backup_prune.py` (czysta stdlib, testowana pytestem).
+  Konfigurowane wyłącznie env (`PGHOST`, `PGPORT`, `PGUSER`, `PGDATABASE`,
+  `BACKUP_DIR`, `UPLOADS_DIR`, `PRUNE_SCRIPT`, `BACKUP_KEEP_*`) — B18 uruchamia
+  je w LXC bez zmian semantyki (ewentualne przeniesienie katalogu = decyzja
+  karty). Hasło przez `PGPASSFILE` (0600, właściciel `pasnik`), nie w env
+  procesu.
+- **Klient = wersja serwera**: Debian 13 ma klienta 17, a dump z `pg_dump` 17
+  nie zawsze wraca na serwer 16 (`pg_restore --exit-on-error`). W LXC
+  instalujemy **`postgresql-client-16` z PGDG** (rola dawnej zasady „obraz
+  backupu = ta sama wersja co `db`").
+- **Kiedy**: `pasnik-backup.timer` codziennie o 03:00 (`Persistent=true` —
+  przebieg pominięty przez wyłączony kontener nadrabia się po starcie),
+  `pasnik-backup.service` (`Type=oneshot`, `User=pasnik`); wynik w journald
+  (`journalctl -u pasnik-backup`). Dodatkowo **dump przed każdą migracją**
+  w hooku deployu (§4). `docker/backup/cron-loop.sh` przestaje być potrzebny
+  na produkcji (zostaje w stacku testowym).
 - **Retencja** — `7 dziennych + 4 tygodniowe`, semantyka borg-podobna
   (UTC): zostają WSZYSTKIE zestawy z 7 najnowszych dni kalendarzowych
-  mających backup (ręczny backup przed migracją z §4 nie ginie przez nocny
-  z tej samej doby) + najnowszy zestaw z każdego z 4 najnowszych tygodni ISO;
-  reszta jest usuwana. Idempotentne; pliki spoza konwencji nazw nietykane.
-  `python3 /opt/backup/prune.py --dir /backups --dry-run` pokazuje plan.
-- **Dokąd**: `/srv/pasnik/backups` (bind mount) + kopia off-device wg D6
-  (RĘCZNA, na dysk zewnętrzny — procedura w runbooku B18).
-- **Restore** (`restore.sh <dump> [<uploads.tar.gz>] [--wipe-uploads]`,
-  nieinteraktywny; gołe nazwy plików są szukane w `BACKUP_DIR`): sprawdza
-  `sha256` zestawu (jeśli jest; `--ignore-missing` dla pominiętego `.env`) → `pg_restore
-  --clean --if-exists --no-owner --no-privileges --exit-on-error` (działa na
-  świeżej i na zapełnionej bazie; **app musi być zatrzymana** — otwarte sesje
-  blokują DROP) → rozpakowanie uploadów (domyślnie dokłada, `--wipe-uploads`
-  czyści katalog) → wypisuje `alembic_version` z dumpu. Następny krok
-  runbooku ZAWSZE: `alembic upgrade head` (idempotentnie domiga do wersji
-  obrazu), start app, smoke.
-- **Targety Taskfile (stack testowy `docker/compose.test.yml`)**:
-  `task build-prod`, `task test-stack-up` (db → migracje → app na
-  `127.0.0.1:${PASNIK_TEST_PORT:-8081}`), `task backup`, `task restore --
-  pasnik-<stempel>.dump [pasnik-<stempel>-uploads.tar.gz] [--wipe-uploads]`
-  (gołe nazwy — `restore.sh` szuka ich w `BACKUP_DIR`),
-  `task test-stack-down` (kasuje wolumeny), **`task backup-drill`**
-  (`docker/backup/drill.sh`: seed → zdjęcie → backup → `down -v` → restore →
-  porównanie liczności 18 tabel i liczby plików → smoke API). compose.prod
-  (B18) używa TYCH SAMYCH obrazów i skryptów — podmienia porty/wolumeny na
-  bind mounty `/srv/pasnik/*` i `env_file`.
-- **Ostatni drill (B17, 2026-09-05, Docker Desktop/Windows, stack testowy)**:
-  patrz Completion notes karty `BATCH_17` — wynik, czasy i rozmiary są tam
-  zapisane po REALNYM wykonaniu; B18 powtarza drill na Odroidzie i wpisuje
-  swój wynik do `OPERATIONS.md`.
+  mających backup (dump przed migracją nie ginie przez nocny z tej samej doby)
+  + najnowszy zestaw z każdego z 4 najnowszych tygodni ISO; reszta jest
+  usuwana. Idempotentne; pliki spoza konwencji nazw nietykane.
+- **Dokąd**: `/opt/pasnik/shared/backups` w LXC + kopia off-device wg D6
+  (RĘCZNA, na dysk zewnętrzny — procedura w `OPERATIONS.md`). Kopia leżąca
+  tylko na .111 nie chroni przed awarią dysku Odroida ani kradzieżą sprzętu.
+- **Restore** (`restore.sh <dump> [<uploads.tar.gz>] [--wipe-uploads]`):
+  sprawdza `sha256` → `pg_restore --clean --if-exists --no-owner
+  --no-privileges --exit-on-error` do BAZY aplikacji (rolą-właścicielem;
+  **usługa `pasnik` musi być zatrzymana** — otwarte sesje blokują DROP) →
+  rozpakowanie uploadów → wypisuje `alembic_version`. Następny krok runbooku
+  ZAWSZE: `alembic upgrade head`, start usługi, smoke.
+- **Restore drill na produkcji**: do OSOBNEJ bazy w tym samym klastrze
+  (`ffp_db_drill` — zakłada ją superuser `postgres-apps`, bo rola aplikacji nie
+  ma `CREATEDB`), nigdy `--clean` na `ffp_db`; release uruchomiony ręcznie na
+  innym porcie z `DATABASE_URL` drillu → health → smoke. Druga ścieżka: kopia
+  danych rodziny (transfer) na czystą bazę.
+- **Stack testowy (lokalnie, stan faktyczny B17)**: `task build-prod`,
+  `task test-stack-up`, `task backup`, `task restore -- …`,
+  `task test-stack-down`, `task backup-drill` (`docker/backup/drill.sh`).
+  Ostatni drill B17 (2026-09-05, Docker Desktop/Windows) — Completion notes
+  karty `BATCH_17`; B18 wpisuje wynik drillu z produkcji do `OPERATIONS.md`.
 - **Zajętość uploadów** (D10, rewizja R4): `backup.sh` loguje `du -sh`
-  katalogu uploadów i katalogu backupów przy każdym przebiegu; `task
-  uploads-report` (`python -m app.cli uploads-report`) wypisuje pliki BEZ
-  referencji w bazie (i wiersze wskazujące brakujący plik) — WYŁĄCZNIE
-  raport, nic nie kasuje. Oba trafiają do runbooku backupu (B18).
+  katalogu uploadów i backupów; `pasnik-cli python -m app.cli uploads-report`
+  wypisuje pliki BEZ referencji w bazie — WYŁĄCZNIE raport, nic nie kasuje.
 - Dodatkowo eksport logiczny aplikacji (moduł transfer) = backup „ludzki",
   niezależny od wersji PG.
 
 ## 4. Update / rollback
 
-Update: `git pull` → `task build-prod` (tag = `git describe`) → backup przed
-migracją (`task backup` / `backup.sh` — automatyczny krok skryptu B18) →
-`docker compose run --rm app alembic upgrade head` → `compose up -d`.
-Rollback: obrazy tagowane, `compose up` poprzedniego tagu (`PASNIK_IMAGE_TAG`);
-migracje w dół tylko gdy downgrade przetestowany (każda migracja ma test down
-— 03_DATABASE §1); w razie wątpliwości restore z backupu sprzed update
-(`restore.sh`). Health po update ma pokazać `migrations: ok` — `fail` znaczy,
-że krok migracji został pominięty.
+Wszystko z WSL w katalogu `deploy/` (cienkie wrappery w Taskfile — karta B18):
+
+- **Provision** (`playbook-provision.yml`, kanał `root`, rzadko): asercje
+  maszyny (selftest z `lxc/provision.sh`), szablony unitów systemd,
+  `pasnik.env` renderowany RAZ (`force: false`, sekrety z vaulta spoza repo),
+  `pasnik-cli`. Niczego nie instaluje — maszynę buduje `provision.sh`.
+- **Deploy** (`playbook-deploy.yml`, kanał `deploy`):
+  1. pre-tasks: brak `CHANGE_ME`; lokalny `frontend/dist` istnieje i ma tę
+     samą wersję co release (stale-dist guard); baza osiągalna z LXC;
+  2. rsync do `releases/<ts>` (`--chmod=D755,F644`, `--delete-excluded`,
+     bez `.git`, testów, `node_modules`, `.env*`, lokalnych uploadów);
+  3. `after-update`: guard sekretów w release, `uv sync --frozen --no-dev`,
+     import-smoke;
+  4. `before-symlink`: **dump bazy** (asercja niepustego pliku) →
+     `alembic upgrade head` z nowego release;
+  5. symlink `current` → `systemctl restart pasnik` → health z parsowaniem
+     JSON (`status: ok`, `version` = release) → `/api/docs` = 404.
+- **Rollback** (`playbook-rollback.yml`): `ansistrano.rollback` do poprzedniego
+  release + ten sam restart i health. Migracji NIE cofa — gdy nowy release
+  migrował schemat: stop usługi → `restore.sh` dumpu sprzed migracji → rollback
+  (downgrade wyłącznie przetestowany, 03_DATABASE §1).
+- Health po deployu ma pokazać `migrations: ok` — `fail` znaczy, że krok
+  migracji został pominięty.
 
 ## 5. Konfiguracja środowisk
 
-| | dev (Windows/dowolne) | test (obraz prod lokalnie) | prod (Odroid) |
+| | dev (Windows/dowolne) | test (obraz prod lokalnie) | prod (LXC) |
 |---|---|---|---|
-| compose | `compose.dev.yml` (hot reload, porty otwarte) | **`compose.test.yml`** (B17: czysta baza + `pasnik-app:<tag>` + profil `backup`) | `compose.prod.yml` (B18) |
-| frontend | vite dev server + proxy /api | dist w obrazie app | dist w obrazie app |
-| dane | wolumeny nazwane | wolumeny nazwane (`down -v` kasuje); backupy opcjonalnie na katalogu hosta `PASNIK_TEST_BACKUPS_DIR` | bind mounts /srv/pasnik |
-| sekrety | .env lokalny | .env lokalny | pasnik.env chmod 600 |
+| uruchomienie | `compose.dev.yml` (hot reload) | `compose.test.yml` (B17) | systemd `pasnik.service` |
+| PostgreSQL | kontener `db`/`db-test` (**16** od B18 — parytet z prod) | kontener `db` (16 od B18) | `postgres-apps` PG 16 na .121, baza `ffp_db` |
+| frontend | vite dev server + proxy /api | dist w obrazie | `frontend/dist` w release |
+| dane | wolumeny nazwane | wolumeny nazwane | baza zewnętrzna + `/opt/pasnik/shared` |
+| sekrety | .env lokalny | .env lokalny | `/etc/pasnik/pasnik.env` 0640 root:pasnik |
 | `APP_ENV` | dev | prod (wymuszone w compose) | prod |
 
 Cała konfiguracja różnicująca środowiska idzie przez env
 (`app/core/config.py`, komplet z opisem w `.env.example`): m.in. `APP_ENV`,
-`LOG_LEVEL`, `UVICORN_WORKERS`, `FORWARDED_ALLOW_IPS`, `DISK_MIN_FREE_MB`,
-`SPA_DIST_DIR`, `UPLOADS_DIR`, `IMAGE_MAX_UPLOAD_MB`, `TRANSFER_MAX_ZIP_MB`,
-`REQUEST_MAX_BODY_MB`, `BACKUP_AT`, `BACKUP_KEEP_DAILY`, `BACKUP_KEEP_WEEKLY`,
-`BACKUP_ENV_FILE`, `TZ`. Żadnych wartości prod zaszytych w kodzie.
-Od BATCH_20 nie ma tu ANI JEDNEGO klucza do usługi zewnętrznej (D25).
+`APP_VERSION`, `LOG_LEVEL`, `UVICORN_WORKERS`, `FORWARDED_ALLOW_IPS`,
+`DISK_MIN_FREE_MB`, `SPA_DIST_DIR`, `UPLOADS_DIR`, `IMAGE_MAX_UPLOAD_MB`,
+`TRANSFER_MAX_ZIP_MB`, `REQUEST_MAX_BODY_MB`, `BACKUP_*`, `TZ`. Poza obrazem
+NIC nie ustawia się samo: `APP_ENV=prod`, `SPA_DIST_DIR=/opt/pasnik/current/frontend/dist`
+i ABSOLUTNY `UPLOADS_DIR=/opt/pasnik/shared/uploads` muszą być w `pasnik.env`
+(względna ścieżka rozwiązałaby się w katalogu release i znikała z każdym
+deployem). Wartości bez spacji i cudzysłowów — plik czyta systemd, a `pasnik-cli`
+nie może go interpretować inaczej (pułapka znana z runnera). Od BATCH_20 nie
+ma tu ANI JEDNEGO klucza do usługi zewnętrznej (D25).
 
-**Użytkownik bazy (07_SECURITY §9) — stan faktyczny, NIEEGZEKWOWANE**: w compose
-dev/test rola `POSTGRES_USER` jest rolą bootstrapową obrazu `postgres`, czyli
-SUPERUSER. Aplikacja tego nie potrzebuje: migracje tworzą wyłącznie obiekty we
-własnej bazie, a rozszerzenie `pg_trgm` jest w PG 13+ „trusted" (może je
-założyć właściciel bazy). B18 ma w `compose.prod.yml` dodać skrypt
-inicjalizacyjny (`/docker-entrypoint-initdb.d/`) zakładający rolę aplikacyjną
-`NOSUPERUSER NOCREATEROLE` będącą właścicielem bazy i podać ją w
-`DATABASE_URL`; `backup.sh` łączy się tą samą rolą (`--no-owner` w dumpie jest
-po to, żeby restore nie zależał od nazwy roli).
+**Użytkownik bazy (07_SECURITY §9) — na produkcji SPEŁNIONE od D29**: rola
+`ffp_user` jest właścicielem `ffp_db` i nie ma `SUPERUSER`, `CREATEDB` ani
+`CREATEROLE` (inwentaryzacja 2026-10-03). Aplikacja tego nie potrzebuje:
+migracje tworzą obiekty wyłącznie we własnej bazie, a `pg_trgm` jest w PG 13+
+„trusted". `backup.sh` łączy się tą samą rolą (`--no-owner` w dumpie jest po
+to, żeby restore nie zależał od nazwy roli). W dev/test rola nadal jest
+bootstrapowa (SUPERUSER) — to nie jest produkcja.
 
 ## 6. Obserwowalność (na miarę domową)
 
-Logi na stdout → `docker logs` / opcjonalnie loki później. W `APP_ENV=prod`
-**cały stdout jest JSON-em**: structlog i rekordy stdlib (`uvicorn`,
-`uvicorn.access`, biblioteki) przez `structlog.stdlib.ProcessorFormatter`
-z tym samym rendererem; poziom `LOG_LEVEL` (aplikacja i uvicorn). Jedyny
-wyjątek: dwie linie startowe SUPERVISORA uvicorna (`Uvicorn running on…`,
-`Started parent process`) są zwykłym tekstem — pisze je proces nadrzędny,
-który nigdy nie wykonuje `create_app()`; każda linia po nich jest JSON-em
-(zmierzone na realnym logu obrazu prod: 2 z 32 linii). Publiczny
-token listy maskowany w obu warstwach PRZED renderowaniem
-(`/api/v1/public/lists/***`); silnik bazy z `hide_parameters=True` — patrz
-07_SECURITY §8 (zweryfikowane grepem po realnym logu obrazu prod w B17).
-`/health` (status, wersja, migracje, dostępność DB, dysk — §2). Kontener
-`backup` loguje każdy przebieg i prune. Miejsce na przyszłość: prosty
-uptime-check z zewnątrz (np. healthchecks.io ping z crona) — decyzja przy B18.
+Logi na stdout procesu → **journald** (`journalctl -u pasnik`,
+`journalctl -u pasnik-backup`). W `APP_ENV=prod` **cały stdout jest JSON-em**:
+structlog i rekordy stdlib (`uvicorn`, `uvicorn.access`, biblioteki) przez
+`structlog.stdlib.ProcessorFormatter`; poziom `LOG_LEVEL`. Jedyny wyjątek: dwie
+linie startowe SUPERVISORA uvicorna są zwykłym tekstem. Publiczny token listy
+maskowany PRZED renderowaniem (`/api/v1/public/lists/***`, `/l/***`); silnik
+bazy z `hide_parameters=True` — 07_SECURITY §8. Access log Caddy'ego na .121
+pozostaje WYŁĄCZONY dla bloku Paśnika (D7 pkt 3). `/health` (status, wersja,
+migracje, baza, dysk — §2). Miejsce na przyszłość: prosty uptime-check
+z zewnątrz — decyzja przy B18.
 
 ## 7. Wymagania sprzętowe (sanity)
 
-Odroid H2 (4 rdzenie, ~8-32 GB RAM): PG + Uvicorn (2 workery) + Caddy hosta
-to ułamek możliwości. Jedyny chwilowy peak CPU/IO to pakowanie i rozpakowanie
-kopii danych rodziny ze zdjęciami — robione synchronicznie w żądaniu, ale
-NA DYSKU (paczka nigdy nie wchodzi w całości do RAM) i w wątku puli, żeby nie
-blokować pętli zdarzeń (bez Celery; ADR-001).
+Odroid .111 dzieli zasoby między kontenery Incusa (runner ma limit 3 CPU /
+6 GiB); Paśnik z 2 workerami potrzebuje ułamka tego — limity kontenera ustala
+`create-incus.sh` w B18. PostgreSQL liczy się na .121 razem z netQArnerem.
+Jedyny chwilowy peak CPU/IO to pakowanie i rozpakowanie kopii danych rodziny
+ze zdjęciami — robione synchronicznie w żądaniu, ale NA DYSKU i w wątku puli
+(bez Celery; ADR-001).

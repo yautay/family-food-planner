@@ -15,7 +15,7 @@ Zasady:
 | ADR | Tytuł |
 |---|---|
 | 001 | Modularny monolit FastAPI, bez workerów i kolejek |
-| 002 | PostgreSQL w Dockerze, dane na bind mounts, Alembic |
+| 002 | ~~PostgreSQL w Dockerze, dane na bind mounts, Alembic~~ (SUPERSEDED przez 017) |
 | 003 | Sesje server-side + cookie, argon2id, bez JWT i samorejestracji |
 | 004 | Model wartości odżywczych: kolumny rdzenia + rejestr nutrients |
 | 005 | Normalizacja jednostek do g/ml/szt; przeliczniki własnością produktu |
@@ -30,3 +30,4 @@ Zasady:
 | 014 | Backend serwuje SPA i uploady; jeden kontener aplikacyjny |
 | 015 | Dostęp do bazy asynchronicznie: SQLAlchemy async + psycopg 3 |
 | 016 | Transfer jedynym importem/eksportem; importer PDF wycofany |
+| 017 | Produkcja w LXC przez ansistrano; PostgreSQL we współdzielonym klastrze |

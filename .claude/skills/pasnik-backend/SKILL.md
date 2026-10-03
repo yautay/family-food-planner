@@ -84,7 +84,7 @@ nie ma.
 - FK zawsze z jawnym `ON DELETE` (RESTRICT domenowe, CASCADE tylko
   kompozycja rodzic→dziecko — ADR-012). `created_at`/`updated_at` wszędzie.
 
-## Alembic (ADR-002, 03_DATABASE §1)
+## Alembic (ADR-017 pkt 6–7, dawniej ADR-002; 03_DATABASE §1)
 
 - Numer migracji = pierwszy wolny w `migrations/versions/`; `down_revision`
   = wynik `task db-heads`. NIGDY numer z planu/karty. Rewizja bazowa to

@@ -9,8 +9,9 @@ Metodyka: adaptacja sprawdzonego procesu netQArnera (jeden batch = jedna
 Paśnik = prywatna aplikacja rodzinna: produkty kanoniczne → przepisy →
 planowanie dni/tygodni → kalorie/makro/ŁG → spiżarnia → silnik zakupowy →
 listy (mobile/print/QR/link publiczny) → PWA/offline → kopia danych rodziny
-(eksport/import ze scaleniem) → produkcja na Odroid H2 (Docker Compose, za
-istniejącym reverse proxy). Import PDF diet był filarem planu do 2026-09-06
+(eksport/import ze scaleniem) → produkcja w kontenerze LXC na Odroidzie
+(ansistrano, baza we współdzielonym klastrze PG, za istniejącym reverse proxy
+— D29, ADR-017). Import PDF diet był filarem planu do 2026-09-06
 (B15–B16 wykonane), po czym właściciel polecił go usunąć w całości (D25, B20).
 
 Stack (twardy): FastAPI + SQLAlchemy + Alembic + Pydantic + PostgreSQL;
@@ -67,7 +68,7 @@ Batch identyfikowany NAZWĄ (nie „X z N" — plan może się zmieniać).
 | 19 | FIX_LIST_PAGINATION | FIX | R4 (ustalenie P1; przed 18) | — |
 | 17 | PRODUCTION_HARDENING | PROD | R4 | — |
 | 20 | REMOVE_PDF_IMPORT_AND_FAMILY_BACKUP | PLAT | 17, R4 (transfer po D22); **przed 18** | **D25** (zatwierdzona 2026-09-06); D26 = rekomendacja, nie blokuje |
-| 18 | PRODUCTION_DEPLOYMENT_AND_OPERATIONS | PROD | 17, **19**, **20** | **D6, D7** |
+| 18 | PRODUCTION_DEPLOYMENT_AND_OPERATIONS | PROD | 17, **19**, **20** | **D6, D7, D29** |
 
 ## 4. Graf zależności
 

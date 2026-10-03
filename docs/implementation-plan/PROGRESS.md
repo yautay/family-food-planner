@@ -31,7 +31,7 @@ commit wykonany). Kolumna „Blokery" = zależności + decyzje z 02_DECISIONS.
 | 19 FIX_LIST_PAGINATION | [x] | — | `batch(19)` na master (hash wpisać po push) |
 | 17 PRODUCTION_HARDENING | [x] | — | `batch(17)` na master (hash wpisać po push) |
 | 20 REMOVE_PDF_IMPORT_AND_FAMILY_BACKUP | [x] | — | `batch(20)` na master (hash wpisać po push) |
-| 18 PRODUCTION_DEPLOYMENT_AND_OPERATIONS | [ ] | — (17, 19 i **20** DONE; D6 i D7 zatwierdzone 2026-09-05) | |
+| 18 PRODUCTION_DEPLOYMENT_AND_OPERATIONS | [ ] | — (17, 19 i **20** DONE; D6 i D7 zatwierdzone 2026-09-05; **D29** zatwierdzone 2026-10-03 — karta przepisana na LXC + ansistrano) | |
 
 ## Dziennik
 
@@ -40,6 +40,40 @@ co weszło + **„rzeczy, o których muszą wiedzieć następne batche"**
 (odstępstwa, nowe kontrakty, pułapki). Wpis NIE zastępuje propagacji —
 zmiany dotykające przyszłych batchy trzeba wpisać do ich kart
 (00_MASTER_PLAN §8); dziennik to indeks, nie schowek.
+
+---
+
+**2026-10-03 — DECYZJA WŁAŚCICIELA D29: produkcja w kontenerze LXC przez
+ansistrano, baza w istniejącym klastrze `postgres-apps`. Karta B18 przepisana.**
+
+Właściciel zmienił sposób hostingu przed wdrożeniem: zamiast `compose.prod.yml`
+z własnym `postgres:17` (D12, ADR-002) — kontener Incus `pasnik` na Odroidzie
+192.168.2.111 wg wzorca `C:\dev
+c-tech-test-runner\deploy\` (provision.sh,
+ansistrano rsync, kanały `root`/`deploy`, systemd, journald), baza `ffp_db`
+(rola `ffp_user`, NOSUPERUSER, pusta) w klastrze `postgres-apps` — PostgreSQL
+**16.15** na 192.168.2.121, współdzielonym z netQArnerem. W tym commicie:
+D29, nowy **ADR-017** (ADR-002 → `SUPERSEDED`, ADR-014 doprecyzowany),
+09_DEPLOYMENT przepisany, 07_SECURITY §7/§9, 01_ARCHITECTURE, karta
+`BATCH_18` od nowa (18a maszyna + deploy, 18b backup + drill).
+
+**Rzeczy, o których musi wiedzieć B18 (i każdy po nim):**
+
+1. **Wzorcem jest `nc-tech-test-runner/deploy/`, NIE `qa-test-toc`.** Pre-prod
+   netQArnera to ansistrano + aplikacja w Dockerze na .121 — przydaje się
+   wyłącznie jako ściąga kroków „aplikacja + PostgreSQL" (stale-dist guard,
+   dump przed symlinkiem, smoke). Wariant LXC w repo TOC jest tylko
+   zaprojektowany (ich BATCH_24), nie zrobiony.
+2. **PostgreSQL 16, nie 17.** Dev, test i obraz backupu przechodzą na
+   `postgres:16` w B18 (Stage 1); klient `pg_dump` w LXC = 16 z PGDG.
+3. **Caddy jest na .121, aplikacja na .111** — `reverse_proxy` idzie po LAN,
+   więc `FORWARDED_ALLOW_IPS=*` jest teraz DZIURĄ, nie skrótem (07 §7).
+4. **Host .111 ma Dockera, który odcina NAT Incusa** (`FORWARD DROP`) — bez
+   utrwalonych reguł `DOCKER-USER` restart hosta odetnie aplikację od bazy.
+   Znane z runnera (jego dług O4), tu jest kryterium akceptacji.
+5. **Odczyt bazy przez SSH na .121 nie przechodzi przez auto mode agenta** —
+   inwentaryzację z 2026-10-03 wykonał właściciel; kolejne operacje na .121
+   (drill, Caddy) też robi on wg przygotowanych komend.
 
 ---
 
