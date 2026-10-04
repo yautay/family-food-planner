@@ -405,6 +405,14 @@ Mapa ID → skill: `docs/implementation-plan/03_AI_SKILLS.md` §3.
   do CLAUDE.md §6.
 - Odroczone decyzje operacyjne (uptime-check, zawężenie `pg_hba`, los obrazu
   prod) → 02_DECISIONS.
+- **B22 (`/pdf-extract`, DONE)**: `docs/OPERATIONS.md` dostaje JEDEN akapit „Wgrywanie
+  paczki danych (jadłospis dietetyka)”: paczkę `data/diet-imports/NNNN-slug/export.zip`
+  wgrywa WŁAŚCICIEL z UI (Ustawienia → „Kopia danych rodziny”; dla przepisów „Wszyscy”
+  `/admin/dane` → „Instancja” jako ADMIN, paczka `--recipe-scope global` z jego e-mailem),
+  nie agent i nie przez bazę; przed kliknięciem „Wczytaj” sprawdzić w DRY-RUN, że `users`
+  nie jest w „Nowe”; zrobić kopię (`task backup`/dump) przed wgraniem na produkcję. Bez
+  zmiany procedury deployu (nic nowego w `deploy/`). Migracje `0017`/`0018` (B21) jadą tym
+  samym deployem.
 
 ## Implementation checklist
 

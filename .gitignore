@@ -41,3 +41,7 @@ Thumbs.db
 
 # Stan sesji E2E (ciasteczka po logowaniu) — nigdy w repo
 frontend/e2e/.auth/
+
+# PDF-y jadłospisów dietetyka: imię i nazwisko na okładce (D27, D31) — nigdy w repo
+/data/source_pdfs/
+/docs/dieta.pdf

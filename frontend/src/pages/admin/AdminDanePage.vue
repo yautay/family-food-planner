@@ -11,6 +11,7 @@
  * §7) — strona mówi to wprost, żeby administrator nie zdziwił się, że nikt się
  * nie loguje. Hasła nadaje się potem w `/admin/uzytkownicy`.
  */
+import { Info } from '@lucide/vue'
 import { useMutation } from '@tanstack/vue-query'
 import { ref } from 'vue'
 
@@ -23,6 +24,7 @@ import { saveBlob } from '@/lib/download'
 import { common, transfer as texts } from '@/lib/texts'
 
 const importOpen = ref(false)
+const helpOpen = ref(false)
 const errorMessage = ref<string | null>(null)
 const exportedFilename = ref<string | null>(null)
 
@@ -44,6 +46,29 @@ const exportInstance = useMutation({
     <header class="grid gap-1">
       <h1 class="text-2xl font-semibold">{{ texts.instanceTitle }}</h1>
       <p class="text-muted-foreground text-sm">{{ texts.instanceSubtitle }}</p>
+      <div class="grid gap-2">
+        <Button
+          type="button"
+          variant="ghost"
+          class="min-h-11 w-fit justify-start px-2"
+          :aria-expanded="helpOpen"
+          aria-controls="admin-dane-help"
+          data-testid="admin-dane-help-toggle"
+          @click="helpOpen = !helpOpen"
+        >
+          <Info aria-hidden="true" />
+          {{ texts.instanceHelpToggle }}
+        </Button>
+        <div
+          v-if="helpOpen"
+          id="admin-dane-help"
+          class="border-border bg-muted text-foreground grid gap-2 rounded-xl border p-3 text-sm"
+          role="note"
+          data-testid="admin-dane-help"
+        >
+          <p v-for="line in texts.instanceHelpLines" :key="line">{{ line }}</p>
+        </div>
+      </div>
     </header>
 
     <Card class="rounded-xl">

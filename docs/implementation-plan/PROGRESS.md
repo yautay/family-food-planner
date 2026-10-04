@@ -33,7 +33,7 @@ commit wykonany). Kolumna „Blokery" = zależności + decyzje z 02_DECISIONS.
 | 20 REMOVE_PDF_IMPORT_AND_FAMILY_BACKUP | [x] | — | `batch(20)` na master (hash wpisać po push) |
 | 18 PRODUCTION_DEPLOYMENT_AND_OPERATIONS | [ ] | — (17, 19 i **20** DONE; D6 i D7 zatwierdzone 2026-09-05; **D29** zatwierdzone 2026-10-03 — karta przepisana na LXC + ansistrano) | |
 | 21 GLOBAL_RECIPE_SCOPE | [x] | — (20 DONE; D32 wdrożone) | `batch(21)` na master (hash wpisać po push; brak remote'a — repo bez upstreamu) |
-| 22 PDF_EXTRACT_TOOL | [ ] | — (21 DONE; D31/D32 zatwierdzone). **D33 OPEN** (rekomendacja: paczka `global` jako `scope=instance`) — rozstrzygnąć przed startem | |
+| 22 PDF_EXTRACT_TOOL | [x] | — (21 DONE; D31/D32 i **D33** zatwierdzone) | `batch(22)` na master (hash wpisać po push; brak remote'a — repo bez upstreamu) |
 
 ## Dziennik
 
@@ -42,6 +42,34 @@ co weszło + **„rzeczy, o których muszą wiedzieć następne batche"**
 (odstępstwa, nowe kontrakty, pułapki). Wpis NIE zastępuje propagacji —
 zmiany dotykające przyszłych batchy trzeba wpisać do ich kart
 (00_MASTER_PLAN §8); dziennik to indeks, nie schowek.
+
+---
+
+**2026-10-04 — BATCH_22 (PDF_EXTRACT_TOOL) — komenda `/pdf-extract`: jadłospis PDF → wersjonowana paczka
+transferu, POZA runtime aplikacji (D31); D33 rozstrzygnięte (wariant A).**
+
+Kod w `backend/scripts/pdf_extract/` (spec, catalog_index, verify, package, report, roundtrip, cli), skill
+`.claude/skills/pdf-extract/SKILL.md` (dwie bramki właściciela), targety `task pdfx-index|verify|package|roundtrip`.
+Wersja `0001` (`data/diet-imports/0001-dieta-2000/{spec.json,report.md,export.zip}`) skonwertowana z draftu: 44 produkty,
+12 przepisów, 68 składników; weryfikacja 0 błędów / 9 ostrzeżeń, dni w progu 5% (pon −2,9%, wt 0%, śr −1,8%), 11 składników
+zapisanych jako gramy; `pdfx-roundtrip` na bazie testowej: drugi import `created=0` (także dla paczki `global`, lokalnie).
+Testy (`task check` zielony): unit 572, integration 292, api 443, vitest 409. Aplikacja bez zmian poza podpowiedzią
+w `/admin/dane` (polecenie właściciela). `/code-review` (7 napraw, 2 odnotowane) i `/security-review` (0 ustaleń ≥ 8).
+
+**Rzeczy, o których muszą wiedzieć następne batche i operator:**
+
+1. **D33 = wariant A**: paczka z przepisami „Wszyscy” to `scope=instance` + sekcja `users` (`--owner-email`; rola `user`,
+   `is_active=false`). Wgrywa ADMIN w `/admin/dane` z konta o TYM SAMYM e-mailu (inaczej drugi import zdubluje przepisy);
+   w DRY-RUN `users` nie może być w „Nowe”. W UI jest o tym rozwijana podpowiedź (`admin-dane-help`).
+2. **Reguła jednostek jest w `verify.resolve_ingredient`** (jedno miejsce; używa jej też generator paczki). „Sztuka” przy
+   produkcie spoza `PIECE` i jednostka domowa odbiegająca od gramów z PDF-a >10% → gramy + oryginał w `note`.
+3. **Konflikt 0001 z seedem demo** (Cebula, Pomidor: PIECE vs MASS; Oliwa: MASS vs VOLUME) — nie importować paczki do bazy
+   po `task db-seed-demo`; narzędzie ostrzega (konflikt z wersją/eksportem instancji jest błędem zatrzymującym).
+4. **Skutek kcal scaleń 0001 jest nieznany** (draft bez wartości źródłowych); kolejne wersje zapisują `merged_from[].per_100`.
+5. **Skill nie był przetestowany end-to-end na PDF-ie** (0001 z konwersji draftu, PDF nie był czytany ponownie) — pierwsze
+   realne użycie to jego test; follow-upy i odstępstwa: Completion notes karty B22.
+6. **B18**: `docs/OPERATIONS.md` dostaje akapit o wgrywaniu paczki przez właściciela (karta B18 zaktualizowana).
+7. Repo nadal bez remote'a — commit lokalny.
 
 ---
 

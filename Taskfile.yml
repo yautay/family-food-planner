@@ -267,6 +267,34 @@ tasks:
     cmds:
       - uv run python -m app.cli uploads-report
 
+  # --- narzędzie /pdf-extract (BATCH_22, D31): jadłospis PDF -> paczka transferu ----
+  # Poza runtime aplikacji. Ścieżki względne liczone są od KORZENIA REPO. Nic nie
+  # wgrywa na produkcję; `pdfx-roundtrip` dotyka wyłącznie bazy TESTOWEJ.
+
+  pdfx-index:
+    desc: 'Katalog znanych produktów albo zestawienie spec z katalogiem (BRAMKA 1). -- [spec.json] [--instance-export export.json]'
+    dir: backend
+    cmds:
+      - uv run python -m scripts.pdf_extract index {{.CLI_ARGS}}
+
+  pdfx-verify:
+    desc: 'Weryfikacja wersji silnikiem aplikacji; z --report zapisuje report.md (BRAMKA 2). -- data/diet-imports/NNNN-slug/spec.json [--report]'
+    dir: backend
+    cmds:
+      - uv run python -m scripts.pdf_extract verify {{.CLI_ARGS}}
+
+  pdfx-package:
+    desc: 'Buduje export.zip (paczka transferu v1) po udanej weryfikacji. -- <spec> [--recipe-scope household|private|global --owner-email <e-mail ADMIN-a>]'
+    dir: backend
+    cmds:
+      - uv run python -m scripts.pdf_extract package {{.CLI_ARGS}}
+
+  pdfx-roundtrip:
+    desc: 'Import paczki na bazie TESTOWEJ dwa razy (created=0 przy drugim). Wymaga `task dev-db`; nie równolegle z test-int. -- <export.zip>'
+    dir: backend
+    cmds:
+      - uv run python -m scripts.pdf_extract roundtrip {{.CLI_ARGS}}
+
   # --- obraz prod, stack testowy, backup (BATCH_17; compose.prod spina B18) ----
 
   build-prod:

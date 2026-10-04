@@ -207,7 +207,9 @@ Wyłącznie `backend/scripts/pdf_extract/` (+ testy). Wymagania:
 
 ## Frontend
 
-Brak.
+Brak — POZA JEDNYM odstępstwem na polecenie właściciela (2026-10-03, rozstrzygnięcie D33 wariant A): rozwijana
+podpowiedź „Co to jest kopia instancji i kiedy jej użyć?” w `/admin/dane` (`AdminDanePage.vue`, teksty w
+`lib/texts.ts`, test `AdminDanePage.spec.ts`). Rozwijana, nie hover — UI jest mobile-first.
 
 ## Security
 
@@ -338,27 +340,88 @@ Już istnieją (z sesji planistycznej): `data/diet-imports/0001-dieta-2000/spec.
 
 ## Implementation checklist
 
-- [ ] Baseline po B21: `task check` zielony
-- [ ] `spec.py` + test „brak pól na dane osobowe”
-- [ ] `catalog_index.py` (wersje + seed demo + `--instance-export`) + testy
-- [ ] `verify.py` na `normalize_amount` i silniku; reguła jednostek; progi
-- [ ] `package.py` z `serializer.SECTIONS`; deterministyczna paczka
-- [ ] `report.py`; `cli.py`; targety `pdfx-*`
-- [ ] `.claude/skills/pdf-extract/SKILL.md` z dwiema bramkami
-- [ ] Dogfood: wersja 0001 (`spec.json`, `report.md`, `export.zip`)
-- [ ] Test integracyjny idempotencji i reużycia produktów między wersjami
-- [ ] Dokumenty (CLAUDE.md, 03_AI_SKILLS, README, B18), PROGRESS
+- [x] Baseline po B21: `task check` zielony
+- [x] `spec.py` + test „brak pól na dane osobowe”
+- [x] `catalog_index.py` (wersje + seed demo + `--instance-export`) + testy
+- [x] `verify.py` na `normalize_amount` i silniku; reguła jednostek; progi
+- [x] `package.py` z `serializer.SECTIONS`; deterministyczna paczka
+- [x] `report.py`; `cli.py`; targety `pdfx-*`
+- [x] `.claude/skills/pdf-extract/SKILL.md` z dwiema bramkami
+- [x] Dogfood: wersja 0001 (`spec.json`, `report.md`, `export.zip`)
+- [x] Test integracyjny idempotencji i reużycia produktów między wersjami
+- [x] Dokumenty (CLAUDE.md, 03_AI_SKILLS, README, B18), PROGRESS
 
 ## Verification checklist
 
-- [ ] `task check` zielony; `task pdfx-verify`/`pdfx-roundtrip` na 0001 zielone
-- [ ] Drugi import paczki: `created=0` dla produktów i przepisów
-- [ ] Grep prywatności z AC 5 czysty; `git ls-files '*.pdf'` bez jadłospisów
-- [ ] Brak nowych zależności runtime; `app/` nie importuje `scripts.pdf_extract`
-- [ ] `/code-review` i `/security-review` na diffie
-- [ ] Jeden commit `batch(22): komenda /pdf-extract i wersja 0001 danych dietetyka`, bez push
+- [x] `task check` zielony; `task pdfx-verify`/`pdfx-roundtrip` na 0001 zielone
+- [x] Drugi import paczki: `created=0` dla produktów i przepisów
+- [x] Grep prywatności z AC 5 czysty; `git ls-files '*.pdf'` bez jadłospisów
+- [x] Brak nowych zależności runtime; `app/` nie importuje `scripts.pdf_extract`
+- [x] `/code-review` i `/security-review` na diffie
+- [x] Jeden commit `batch(22): narzędzie pdf-extract` (treść z promptu sesji; karta mówiła „komenda /pdf-extract i wersja 0001…”)
 
 ## Completion notes
 
 _(wypełnia agent wykonujący batch: wykonane / odstępstwa / decyzje /
 follow-upy / pytania)_
+
+**Wykonane (2026-10-04).**
+- `backend/scripts/pdf_extract/`: `spec` (schemat Pydantic v2, `extra="forbid"`, liczby jako stringi mieszczące się w kolumnach
+  bazy, brak pól na dane osobowe), `catalog_index` (wersje + seed demo + `--instance-export`, `normalize_name` z aplikacji),
+  `verify` (reguła jednostek w JEDNYM miejscu `resolve_ingredient`, sumy przez `normalize_amount` → `to_basis_amount` →
+  `nutrition/engine.py`), `package` (paczka v1 z `serializer.SECTIONS`, deterministyczny ZIP), `report`, `roundtrip`, `cli`.
+- Skill `.claude/skills/pdf-extract/SKILL.md` (dwie bramki, zakaz produkcji/PDF-ów w gicie/danych osobowych); targety
+  `pdfx-index|verify|package|roundtrip`; dokumenty: CLAUDE.md (blok „Dołożone w BATCH_22” + tabela komend), 03_AI_SKILLS, README
+  („Jak dodać jadłospis dietetyka”), karta B18 (akapit runbooka), D33 w 02_DECISIONS.
+- Wersja `0001` (`data/diet-imports/0001-dieta-2000/{spec.json,report.md,export.zip}`): `spec.json` skonwertowany z
+  `spec.draft.json` (44 produkty, 12 przepisów, 68 składników; draft usunięty po AC 2). Weryfikacja: 0 błędów, 9 ostrzeżeń;
+  11 składników zapisanych jako gramy. Roundtrip na bazie testowej: import 2 = `created {}` (produkty 44 → 0, przepisy 12 → 0).
+  Paczka `global` (lokalnie, nie w repo) też przechodzi roundtrip.
+
+**Różnice silnik vs PDF (wyjaśnienie dla dogfood).** Dni (silnik / PDF): pon 1903/1959 (−2,9%), wt 1987/1987 (0%), śr 1993/2030
+(−1,8%) — w progu 5%. Draft liczył 1905/1991/2000 na gramach z PDF-a; różnice biorą się z tego, że silnik liczy z ZAPISANEJ ilości
+(jednostka domowa × przelicznik tam, gdzie mieści się w 10%, np. jajko 2 szt. = 116 g zamiast 120 g, pomidor 160 g zamiast 170/150 g,
+łyżeczka oliwy 5,5 g zamiast 5/6 g). Największy posiłek: pon podwieczorek −9,3% kcal (ostrzeżenie nie padło: próg > 10%). Lista
+zakupów: Σ gramów z PDF-a = lista PDF-a co do grama; Σ silnika odbiega tylko dla jajka (−2,8%) i pomidora (−2,0%) — w progu 5%.
+
+**Odstępstwa od karty.**
+1. **Dogfood bez ponownego czytania PDF-a.** `0001` powstał z konwersji `spec.draft.json` (tak każe karta: „ma z niego powstać,
+   nie od zera”), a PDF (z imieniem pacjenta na okładce) nie był ponownie czytany. Skill nie został więc przetestowany
+   end-to-end na PDF-ie; testowany jest kod (jednostkowo, integracyjnie, na danych 0001). Do sprawdzenia przy PIERWSZYM realnym
+   użyciu na kolejnym tygodniu. `anthropic-skills:pdf` i `skill-creator` (Recommended) nie zostały użyte — SKILL.md napisany
+   wprost wg wzorca istniejących project skilli.
+2. **Podpowiedź w `/admin/dane`** (frontend) — poza zakresem karty, na polecenie właściciela (D33 wariant A).
+3. **Formuła energii**: karta mówi „kcal ≈ 4B+4W+9T ±20%”; kod akceptuje też wariant z błonnikiem po 2 kcal/g (Atwater) —
+   inaczej cynamon (247 kcal, 53 g błonnika) wychodził błędem. Tolerancja: ±20% albo ±10 kcal.
+4. **Konflikt miary z seedem demo jest OSTRZEŻENIEM, nie błędem** (karta: błąd dla „konfliktu definicji”). Wersje i eksport
+   instancji zatrzymują, demo ostrzega głośno (Cebula, Pomidor: PIECE vs MASS; Oliwa: MASS vs VOLUME — 0001 i demo faktycznie
+   się różnią). Powód: demo to dane deweloperskie, a właściciel zatwierdził te miary w 0001.
+5. `merged_from` to obiekty `{name, per_100?}` (draft miał same nazwy), a składnik ma opcjonalne `pdf_name` — inaczej raport
+   nie policzy skutku scalenia. **Dla 0001 skutek kcal scaleń jest NIEZNANY** (draft nie niesie wartości źródłowych) i raport mówi
+   to wprost; kolejne wersje zapisują `per_100` źródeł.
+6. Spec dostał pola: `analyzed_on` (data → `exported_at` paczki, determinizm), `reused` (produkty z katalogu), `thresholds`.
+   Pole `verification_status` i `last_calibration` z draftu pominięte (paczka zawsze `unverified`; kalibracja zastąpiona raportem
+   silnika). Składnikom bez ilości w PDF-ie (tylko gramy) ustawiono `pdf_qty` = gramy.
+7. Komentarz dietetyka (brak kolumny w `recipes`) wchodzi na koniec instrukcji jako „Uwaga: …”.
+8. Dodatkowe pliki ponad listę „Expected”: `roundtrip.py`, `tests/pdf_extract_fixtures.py`.
+
+**Decyzje.** D33 → **ZATWIERDZONE, wariant A** (stan z B21 zostaje; paczka `global` = `scope=instance` + sekcja `users`).
+Rozstrzygnięcie karty (Cross-Batch): drugi import paczki `global` przez TEGO SAMEGO ADMIN-a (e-mail paczki = jego konto) daje
+`created=0` (przepisy są „własne”); wczytanie przez INNEGO admina zakłada nieaktywne konto `user` (DRY-RUN pokazuje `users` w
+„Nowe” = sygnał STOP) i przepisy NIE są globalne — oba przypadki mają test. Konto w paczce ma rolę `user` i `is_active=false`.
+
+**Review.** `/code-review` (high): 9 ustaleń — naprawione 7 (ostrzeżenia katalogu przy `package`, guard hosta w roundtripie przed
+`TRUNCATE`, normalizacja nazw przepisów w `index`, kaskada fałszywych błędów po błędzie składnika, ujemne zero w odchyłce,
+kolejność progów, jedna definicja progów dnia), 2 odnotowane bez zmiany (kopia listy kategorii z migracji `0005` — pilnuje jej test
+zgodności; test-grep po źródle `verify.py`). `/security-review`: brak ustaleń ≥ 8/10.
+
+**Follow-upy.**
+- Pierwsze użycie `/pdf-extract` na realnym PDF-ie (tydzień I czw–nie albo II) — zweryfikować skill end-to-end i uzupełnić
+  `merged_from[].per_100`.
+- Ostrzeżenia z 0001 do rozstrzygnięcia przez właściciela: instrukcje wspominają składniki spoza listy (pomidor w Spaghetti,
+  czosnek w Makaronie ze szpinakiem i Grzankach, szynka mielona w Grzankach, orzechy włoskie w Jogurcie) i pusta instrukcja
+  Koktajlu jagodowego — to dane z PDF-a, nie błąd narzędzia.
+- Konflikt 0001 z seedem demo (Cebula/Pomidor/Oliwa): nie importować do bazy z `task db-seed-demo`.
+- `docs/OPERATIONS.md` (B18b) ma dostać akapit z karty B18.
+
+**Pytania.** Brak otwartych (D33 rozstrzygnięte).

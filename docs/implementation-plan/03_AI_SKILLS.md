@@ -83,7 +83,7 @@ Minimalny zestaw dla projektu. Project skille żyją w `.claude/skills/`
 | SKILL-REVIEW | `/code-review` (wbudowany) | builtin | przegląd poprawności diffu |
 | SKILL-SECREV | `/security-review` (wbudowany) | builtin | audyt bezpieczeństwa zmian |
 | SKILL-CREATOR | `skill-creator` (wbudowany) | builtin | tworzenie/aktualizacja project skilli |
-| SKILL-PDFX | `.claude/skills/pdf-extract` (powstaje w B22, D31) | project (dev-tool) | procedura `/pdf-extract`: wyciąg z PDF-a jadłospisu, scalenia, weryfikacja, paczka transferu; NIE jest skillem implementacyjnym aplikacji — uruchamia go właściciel, nie batch |
+| SKILL-PDFX | `.claude/skills/pdf-extract` (powstał w B22, D31; kod: `backend/scripts/pdf_extract/`, komendy `task pdfx-*`) | project (dev-tool) | procedura `/pdf-extract`: wyciąg z PDF-a jadłospisu, scalenia, weryfikacja, paczka transferu; NIE jest skillem implementacyjnym aplikacji — uruchamia go właściciel, nie batch |
 
 ## 4. Manifest — kiedy używać / kiedy nie
 

@@ -23,6 +23,22 @@ Deployment: Docker Compose na Odroid H2, za istniejącym reverse proxy.
 3. Status i kolejność batchy: `docs/implementation-plan/PROGRESS.md`
    i `docs/implementation-plan/00_MASTER_PLAN.md`.
 
+## Jak dodać jadłospis dietetyka
+
+Narzędzie deweloperskie `/pdf-extract` (D31) zamienia jadłospis PDF w paczkę danych, którą
+wgrywasz zwykłym importem — aplikacja sama PDF-ów nie czyta.
+
+1. Połóż PDF poza gitem: `data/source_pdfs/` albo `docs/dieta.pdf` (oba w `.gitignore`).
+2. W Claude Code: `/pdf-extract <plik.pdf>` (opcjonalnie `--instance-export <export.json>`,
+   czyli eksport instancji z `/admin/dane`, żeby uwzględnić produkty założone ręcznie).
+3. Skill zatrzymuje się na DWÓCH bramkach, w których decydujesz: propozycja scaleń
+   produktów (ze skutkiem kcal) i raport z weryfikacją liczb silnikiem aplikacji.
+4. Wynik trafia do `data/diet-imports/NNNN-slug/` (`spec.json`, `report.md`, `export.zip`);
+   kolejne jadłospisy reużywają produkty z wcześniejszych wersji.
+5. Paczkę wgrywasz Ty: Ustawienia → „Kopia danych rodziny” (przepisy rodzinne) albo, dla
+   przepisów „Wszyscy”, `/admin/dane` → „Instancja” jako ADMIN (paczka `--recipe-scope global`
+   z Twoim e-mailem). Szczegóły i komendy `task pdfx-*`: `CLAUDE.md` → „Dołożone w BATCH_22”.
+
 ## Mapa dokumentacji
 
 ```

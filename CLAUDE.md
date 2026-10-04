@@ -59,6 +59,7 @@ Start od zera: `cp .env.example .env` → `task install` → `task dev`.
 | `task audit` / `task secrets-scan` | Review batche i BATCH_17 |
 | `task create-admin` | tworzy konto ADMIN (prompt albo `PASNIK_ADMIN_*` z env; nigdy hasło w repo) |
 | `task db-seed-demo` | idempotentny seed demo (od B04: ~15 produktów; kolejne encje dokładają batche domenowe) |
+| `task pdfx-index` / `pdfx-verify` / `pdfx-package` / `pdfx-roundtrip` | **`/pdf-extract` (B22, D31)**: katalog i zestawienie produktów / weryfikacja silnikiem aplikacji (+ `--report`) / paczka transferu `export.zip` / import paczki na bazie TESTOWEJ dwa razy; parametry po `--`, ścieżki od korzenia repo |
 | `task uploads-report` | pliki uploadów BEZ referencji w bazie — TYLKO raport, nic nie kasuje (D10) |
 | `task build-prod` | obrazy `pasnik-app:<git describe>` (+`:latest`, SPA w środku, ADR-014) i `pasnik-backup` |
 | `task test-stack-up` / `test-stack-down` | stack testowy obrazu prod (`docker/compose.test.yml`, app na 127.0.0.1:8081) / kasacja z wolumenami |
@@ -392,6 +393,40 @@ Dołożone w BATCH_21 (zakres `global` dla przepisów — D32, ADR-006 aneks):
   `queryKeys.ts`; opcja „Wszyscy" w edytorze tylko dla ADMIN-a, przepis globalny dla
   USER-a jest w edytorze tylko do odczytu, a w szczególe `recipe-copy` zamiast
   `recipe-edit`/`recipe-delete`; odznaka zakresu na karcie (`recipe-scope-badge-{id}`).
+
+Dołożone w BATCH_22 (narzędzie `/pdf-extract` — D31, POZA runtime aplikacji):
+
+- **Co to jest**: skill `.claude/skills/pdf-extract/SKILL.md` (`/pdf-extract <plik.pdf>`)
+  + kod `backend/scripts/pdf_extract/` (`spec`, `catalog_index`, `verify`, `package`,
+  `report`, `roundtrip`, `cli`). PDF czyta sesja agenta; kod liczy, weryfikuje i pakuje.
+  **Aplikacja nadal nie ma importu PDF** (D25/ADR-016): `app/` nie importuje
+  `scripts.pdf_extract` (pilnuje test), brak nowych zależności runtime, brak `float`
+  (test statyczny na AST). Nowy import danych dalej = rozszerzenie formatu `transfer`.
+- **Wynik = paczka transferu v1**, nie SQL: `data/diet-imports/NNNN-slug/{spec.json,
+  report.md,export.zip}` (numer = pierwszy wolny). `spec.json` to JEDYNE źródło prawdy
+  (liczby jako stringi, `extra="forbid"`, brak pól na dane osobowe); raport i paczka są
+  pochodne, a ta sama spec daje te same bajty. Katalog produktów = suma wszystkich
+  `spec.json`; kolejna wersja deklaruje produkt w `reused` zamiast go redefiniować.
+- **Dwie bramki właściciela** (skill się na nich zatrzymuje): propozycja scaleń produktów
+  (skutek kcal!) i `report.md`. **Wgrywa właściciel** (Ustawienia → „Kopia danych rodziny”
+  albo `/admin/dane`), agent nigdy — produkcja poza zasięgiem sesji AI (§3).
+- **Reguła jednostek jest w JEDNYM miejscu**: `verify.resolve_ingredient` (wołają ją
+  weryfikacja i generator paczki). Jednostka domowa nierozwiązywalna przez `normalize_amount`
+  („Sztuka” przy produkcie spoza `PIECE`, brak przelicznika) albo odbiegająca od gramów
+  z PDF-a ponad próg (10%) → gramy, oryginał w `note`. Produkt VOLUME: gramy z PDF-a jako ml.
+- **Zakres przepisów w paczce** (D33, wariant A): `--recipe-scope household|private`
+  → `scope=user` z placeholderami id (`owner_user_id`/`household_id` = 1, import mapuje je
+  na konto wczytujące; `null` w `household_id` zrobiłby z przepisu prywatny); `global` →
+  `scope=instance` + sekcja `users` (`--owner-email`, rola `user`, `is_active=false`, żeby
+  literówka nie założyła ADMIN-a). Wgrywa ADMIN z konta o TYM SAMYM e-mailu (inaczej drugi
+  import zdubluje przepisy), a w DRY-RUN `users` nie może być w „Nowe”. W `/admin/dane`
+  jest rozwijana podpowiedź o tym (`admin-dane-help`).
+- **`pdfx-roundtrip`** dotyka WYŁĄCZNIE bazy z `TEST_DATABASE_URL` (nazwa `*_test`, różna
+  od `DATABASE_URL`), robi `TRUNCATE` i nie wolno go puszczać równolegle z `task test-int`.
+- Kategorie produktów w paczce MUSZĄ być z migracji `0005` (kopia listy w `package.py`
+  pilnowana testem zgodności); nowy produkt w kategorii spoza listy = błąd, nie nowa kategoria.
+- **Prywatność (D27)**: PDF-y i `data/source_pdfs/` poza gitem (`.gitignore`), w `spec.json`
+  i raporcie nie ma danych osobowych. Paczki `global` z e-mailem właściciela się nie commituje.
 
 Testy: `tests/{unit,integration,api}/` (pakiet — z `__init__.py`), markery
 `unit`/`integration`/`api` (wymagane — bez markera test nie wejdzie do

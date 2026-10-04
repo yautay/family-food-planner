@@ -809,6 +809,22 @@ export const transfer = {
     'Kopia CAŁEJ instalacji: konta, rodziny i wszystkie dane. Hasła nigdy nie opuszczają bazy. ' +
     'Kopię danych swojej rodziny robi każdy sam w Ustawieniach.',
 
+  // Podpowiedź dla ADMIN-a (D33): tylko kopia INSTANCJI może dać przepisy „Wszyscy”.
+  // Rozwijana, nie tooltip na hover — UI jest mobile-first, a na telefonie hovera nie ma.
+  instanceHelpToggle: 'Co to jest kopia instancji i kiedy jej użyć?',
+  instanceHelpLines: [
+    'Kopia instancji to plik z całą instalacją: konta, rodziny i wszystkie dane. ' +
+      'Wczytanie SCALA — to, co już jest, zostaje, a nowe rzeczy dochodzą.',
+    'Tylko ta zakładka może nadać przepisom zakres „Wszyscy”: widzi je wtedy każda rodzina, ' +
+      'a edytować i usuwać może wyłącznie administrator. Dzieje się tak, gdy w pliku właścicielem ' +
+      'przepisów jest konto administratora, które ten plik wczytuje (ten sam adres e-mail) — ' +
+      'tak przygotowuje się paczki z jadłospisami dietetyka.',
+    'Zwykła „Kopia danych rodziny” (Ustawienia), nawet wczytana przez administratora, ' +
+      'zawsze daje przepisy rodzinne albo prywatne — nigdy „Wszyscy”.',
+    'Przed kliknięciem „Wczytaj” sprawdź podgląd: jeśli w sekcji „Nowe” pojawiają się Konta, ' +
+      'a nie spodziewasz się nowych kont, przerwij — adres e-mail w pliku nie pasuje do Twojego konta.',
+  ],
+
   exportButton: 'Pobierz kopię danych rodziny',
   exportInstanceButton: 'Pobierz kopię instancji',
   exportPending: 'Przygotowuję plik…',

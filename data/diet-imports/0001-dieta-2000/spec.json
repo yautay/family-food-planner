@@ -1,0 +1,1879 @@
+{
+ "version": "0001",
+ "slug": "dieta-2000",
+ "analyzed_on": "2026-10-03",
+ "source": "plan żywieniowy ~2000 kcal, Tydzień I, poniedziałek–środa (PDF nie jest w repo; dane osobowe pominięte)",
+ "decisions": [
+  "Zatwierdzone przez właściciela: scalenie 1–5 — Oliwa z oliwek (wiersze różniące się tylko miarą), Pierś z kurczaka + Pierś z indyka → „Pierś z drobiu”, Skyr naturalny + waniliowy → „Skyr”, Mozzarella + mozzarella light → „Ser mozzarella”, Śmietana 12% + 18% → „Śmietana”.",
+  "Zatwierdzone przez właściciela: przecier pomidorowy (passata) NIE jest scalany z pomidorem ani z „pomidorami z puszki” — osobny produkt.",
+  "Wagi sztuk zatwierdzone: Cebula 105 g, Pomidor 160 g (kompromis wobec 150/170 g w PDF-ie).",
+  "Wartości odżywcze to kompromis: środek zakresu źródeł internetowych; tam, gdzie źródła się rozjeżdżają, kotwicą były sumy posiłków z PDF-a. Erytrytol liczony jako 0 węglowodanów (tak liczy dietetyk).",
+  "Oliwa z oliwek jako MASS (g), nie VOLUME jak w seedzie demo — PDF podaje gramy, a g→ml wymagałoby gęstości (ADR-005).",
+  "Wartości scalonych produktów to średnie ważone ilościami z tego planu (drób 150:100, skyr 150:75, mozzarella 20:125, śmietana 54:100).",
+  "Etykieta „Sztuka” przy produkcie nie-PIECE NIE przechodzi normalize_amount (szt. wymaga PIECE) — dla pieczarek, mozzarelli, piersi z drobiu, polędwicy, kiełbasy i ogórka kiszonego generator zapisuje GRAMY, a oryginał („5 x Sztuka”) trafia do note.",
+  "Przepisy: po 1 porcji; nazwy bez kropek końcowych, pierwsza litera wielka; literówki PDF poprawione w instrukcjach (np. „DOdać”).",
+  "Konwersja do schematu B22: pominięto pole `last_calibration` (liczone na gramach z PDF-a — zastępuje je raport policzony silnikiem aplikacji) i `verification_status` (paczka zawsze `unverified`); scalenia zapisano w `merged_from` bez wartości źródłowych (wersja sprzed narzędzia), więc skutek kcal scaleń w raporcie jest nieznany; składnikom bez ilości w PDF-ie (tylko gramy) ustawiono `pdf_qty` = gramy."
+ ],
+ "thresholds": {
+  "unit_deviation_pct": "10",
+  "meal_warning_pct": "10",
+  "meal_error_pct": "15",
+  "day_kcal_pct": "5",
+  "day_macro_pct": "10",
+  "shopping_pct": "5"
+ },
+ "products": [
+  {
+   "key": "cebula",
+   "name": "Cebula",
+   "category": "Warzywa",
+   "measure_kind": "piece",
+   "piece_weight_g": "105",
+   "per_100": {
+    "basis": "g",
+    "kcal": "40.00",
+    "protein": "1.10",
+    "fat": "0.10",
+    "carbs": "9.30",
+    "fiber": "1.70",
+    "sugars": "4.20"
+   },
+   "glycemic_index": "15.0",
+   "unit_weights": {},
+   "merged_from": [],
+   "nutrition_source": "kompromis: tabele internetowe (środek zakresu źródeł) + sumy posiłków z PDF jako kotwica; do weryfikacji",
+   "nutrition_range": []
+  },
+  {
+   "key": "cukinia",
+   "name": "Cukinia",
+   "category": "Warzywa",
+   "measure_kind": "piece",
+   "piece_weight_g": "600",
+   "per_100": {
+    "basis": "g",
+    "kcal": "17.00",
+    "protein": "1.20",
+    "fat": "0.30",
+    "carbs": "3.10",
+    "fiber": "1.00",
+    "sugars": "2.50"
+   },
+   "glycemic_index": "15.0",
+   "unit_weights": {},
+   "merged_from": [],
+   "nutrition_source": "kompromis: tabele internetowe (środek zakresu źródeł) + sumy posiłków z PDF jako kotwica; do weryfikacji",
+   "nutrition_range": []
+  },
+  {
+   "key": "czosnek",
+   "name": "Czosnek",
+   "category": "Warzywa",
+   "measure_kind": "mass",
+   "piece_weight_g": null,
+   "per_100": {
+    "basis": "g",
+    "kcal": "149.00",
+    "protein": "6.40",
+    "fat": "0.50",
+    "carbs": "33.10",
+    "fiber": "2.10",
+    "sugars": "1.00"
+   },
+   "glycemic_index": "30.0",
+   "unit_weights": {
+    "ząbek": "5"
+   },
+   "merged_from": [],
+   "nutrition_source": "kompromis: tabele internetowe (środek zakresu źródeł) + sumy posiłków z PDF jako kotwica; do weryfikacji",
+   "nutrition_range": []
+  },
+  {
+   "key": "kapusta",
+   "name": "Kapusta pekińska",
+   "category": "Warzywa",
+   "measure_kind": "mass",
+   "piece_weight_g": null,
+   "per_100": {
+    "basis": "g",
+    "kcal": "16.00",
+    "protein": "1.20",
+    "fat": "0.20",
+    "carbs": "3.20",
+    "fiber": "1.00",
+    "sugars": "1.40"
+   },
+   "glycemic_index": "15.0",
+   "unit_weights": {
+    "liść": "50"
+   },
+   "merged_from": [],
+   "nutrition_source": "kompromis: tabele internetowe (środek zakresu źródeł) + sumy posiłków z PDF jako kotwica; do weryfikacji",
+   "nutrition_range": []
+  },
+  {
+   "key": "papryka",
+   "name": "Papryka czerwona",
+   "category": "Warzywa",
+   "measure_kind": "piece",
+   "piece_weight_g": "200",
+   "per_100": {
+    "basis": "g",
+    "kcal": "31.00",
+    "protein": "1.00",
+    "fat": "0.30",
+    "carbs": "6.00",
+    "fiber": "2.10",
+    "sugars": "4.20"
+   },
+   "glycemic_index": "15.0",
+   "unit_weights": {},
+   "merged_from": [],
+   "nutrition_source": "kompromis: tabele internetowe (środek zakresu źródeł) + sumy posiłków z PDF jako kotwica; do weryfikacji",
+   "nutrition_range": []
+  },
+  {
+   "key": "pomidor",
+   "name": "Pomidor",
+   "category": "Warzywa",
+   "measure_kind": "piece",
+   "piece_weight_g": "160",
+   "per_100": {
+    "basis": "g",
+    "kcal": "18.00",
+    "protein": "0.90",
+    "fat": "0.20",
+    "carbs": "3.90",
+    "fiber": "1.20",
+    "sugars": "2.60"
+   },
+   "glycemic_index": "30.0",
+   "unit_weights": {},
+   "merged_from": [],
+   "nutrition_source": "kompromis: tabele internetowe (środek zakresu źródeł) + sumy posiłków z PDF jako kotwica; do weryfikacji",
+   "nutrition_range": []
+  },
+  {
+   "key": "szczypiorek",
+   "name": "Szczypiorek",
+   "category": "Warzywa",
+   "measure_kind": "mass",
+   "piece_weight_g": null,
+   "per_100": {
+    "basis": "g",
+    "kcal": "30.00",
+    "protein": "3.30",
+    "fat": "0.70",
+    "carbs": "4.40",
+    "fiber": "2.50",
+    "sugars": "1.90"
+   },
+   "glycemic_index": "15.0",
+   "unit_weights": {
+    "łyżka": "5"
+   },
+   "merged_from": [],
+   "nutrition_source": "kompromis: tabele internetowe (środek zakresu źródeł) + sumy posiłków z PDF jako kotwica; do weryfikacji",
+   "nutrition_range": []
+  },
+  {
+   "key": "ziemniak",
+   "name": "Ziemniak",
+   "category": "Warzywa",
+   "measure_kind": "piece",
+   "piece_weight_g": "75",
+   "per_100": {
+    "basis": "g",
+    "kcal": "77.00",
+    "protein": "2.00",
+    "fat": "0.10",
+    "carbs": "17.50",
+    "fiber": "2.20",
+    "sugars": "0.80"
+   },
+   "glycemic_index": "70.0",
+   "unit_weights": {},
+   "merged_from": [],
+   "nutrition_source": "kompromis: tabele internetowe (środek zakresu źródeł) + sumy posiłków z PDF jako kotwica; do weryfikacji",
+   "nutrition_range": []
+  },
+  {
+   "key": "pieczarki",
+   "name": "Pieczarki",
+   "category": "Grzyby",
+   "measure_kind": "mass",
+   "piece_weight_g": null,
+   "per_100": {
+    "basis": "g",
+    "kcal": "22.00",
+    "protein": "3.10",
+    "fat": "0.30",
+    "carbs": "3.30",
+    "fiber": "1.00",
+    "sugars": "2.00"
+   },
+   "glycemic_index": "15.0",
+   "unit_weights": {},
+   "merged_from": [],
+   "nutrition_source": "kompromis: tabele internetowe (środek zakresu źródeł) + sumy posiłków z PDF jako kotwica; do weryfikacji",
+   "nutrition_range": []
+  },
+  {
+   "key": "ogorek_kis",
+   "name": "Ogórek kiszony",
+   "category": "Przetwory, puszki i słoiki",
+   "measure_kind": "mass",
+   "piece_weight_g": null,
+   "per_100": {
+    "basis": "g",
+    "kcal": "11.00",
+    "protein": "0.60",
+    "fat": "0.10",
+    "carbs": "2.00",
+    "fiber": "1.00",
+    "sugars": "1.10"
+   },
+   "glycemic_index": "15.0",
+   "unit_weights": {
+    "sztuka średnia": "60"
+   },
+   "merged_from": [],
+   "nutrition_source": "kompromis: tabele internetowe (środek zakresu źródeł) + sumy posiłków z PDF jako kotwica; do weryfikacji",
+   "nutrition_range": []
+  },
+  {
+   "key": "kukurydza",
+   "name": "Kukurydza konserwowa",
+   "category": "Przetwory, puszki i słoiki",
+   "measure_kind": "mass",
+   "piece_weight_g": null,
+   "per_100": {
+    "basis": "g",
+    "kcal": "81.00",
+    "protein": "2.60",
+    "fat": "1.30",
+    "carbs": "14.90",
+    "fiber": "2.40",
+    "sugars": "3.20"
+   },
+   "glycemic_index": "52.0",
+   "unit_weights": {
+    "łyżka": "20"
+   },
+   "merged_from": [],
+   "nutrition_source": "kompromis: tabele internetowe (środek zakresu źródeł) + sumy posiłków z PDF jako kotwica; do weryfikacji",
+   "nutrition_range": []
+  },
+  {
+   "key": "passata",
+   "name": "Przecier pomidorowy (passata)",
+   "category": "Przetwory, puszki i słoiki",
+   "measure_kind": "mass",
+   "piece_weight_g": null,
+   "per_100": {
+    "basis": "g",
+    "kcal": "30.00",
+    "protein": "1.40",
+    "fat": "0.20",
+    "carbs": "5.50",
+    "fiber": "1.50",
+    "sugars": "4.50"
+   },
+   "glycemic_index": "30.0",
+   "unit_weights": {},
+   "merged_from": [],
+   "nutrition_source": "kompromis: tabele internetowe (środek zakresu źródeł) + sumy posiłków z PDF jako kotwica; do weryfikacji",
+   "nutrition_range": []
+  },
+  {
+   "key": "keczup",
+   "name": "Keczup",
+   "category": "Przetwory, puszki i słoiki",
+   "measure_kind": "mass",
+   "piece_weight_g": null,
+   "per_100": {
+    "basis": "g",
+    "kcal": "100.00",
+    "protein": "1.20",
+    "fat": "0.30",
+    "carbs": "24.00",
+    "fiber": "0.50",
+    "sugars": "22.00"
+   },
+   "glycemic_index": "55.0",
+   "unit_weights": {
+    "łyżka": "15"
+   },
+   "merged_from": [],
+   "nutrition_source": "kompromis: tabele internetowe (środek zakresu źródeł) + sumy posiłków z PDF jako kotwica; do weryfikacji",
+   "nutrition_range": []
+  },
+  {
+   "key": "majonez",
+   "name": "Majonez",
+   "category": "Przetwory, puszki i słoiki",
+   "measure_kind": "mass",
+   "piece_weight_g": null,
+   "per_100": {
+    "basis": "g",
+    "kcal": "680.00",
+    "protein": "1.00",
+    "fat": "75.00",
+    "carbs": "2.50",
+    "fiber": "0.00",
+    "sugars": "1.50"
+   },
+   "glycemic_index": "0.0",
+   "unit_weights": {
+    "łyżka": "25"
+   },
+   "merged_from": [],
+   "nutrition_source": "kompromis: tabele internetowe (środek zakresu źródeł) + sumy posiłków z PDF jako kotwica; do weryfikacji",
+   "nutrition_range": []
+  },
+  {
+   "key": "banan",
+   "name": "Banan",
+   "category": "Owoce",
+   "measure_kind": "piece",
+   "piece_weight_g": "140",
+   "per_100": {
+    "basis": "g",
+    "kcal": "89.00",
+    "protein": "1.10",
+    "fat": "0.30",
+    "carbs": "22.80",
+    "fiber": "2.60",
+    "sugars": "12.20"
+   },
+   "glycemic_index": "51.0",
+   "unit_weights": {},
+   "merged_from": [],
+   "nutrition_source": "kompromis: tabele internetowe (środek zakresu źródeł) + sumy posiłków z PDF jako kotwica; do weryfikacji",
+   "nutrition_range": []
+  },
+  {
+   "key": "gruszka",
+   "name": "Gruszka",
+   "category": "Owoce",
+   "measure_kind": "piece",
+   "piece_weight_g": "130",
+   "per_100": {
+    "basis": "g",
+    "kcal": "57.00",
+    "protein": "0.40",
+    "fat": "0.10",
+    "carbs": "15.20",
+    "fiber": "3.10",
+    "sugars": "9.80"
+   },
+   "glycemic_index": "38.0",
+   "unit_weights": {},
+   "merged_from": [],
+   "nutrition_source": "kompromis: tabele internetowe (środek zakresu źródeł) + sumy posiłków z PDF jako kotwica; do weryfikacji",
+   "nutrition_range": []
+  },
+  {
+   "key": "jablko",
+   "name": "Jabłko",
+   "category": "Owoce",
+   "measure_kind": "piece",
+   "piece_weight_g": "170",
+   "per_100": {
+    "basis": "g",
+    "kcal": "52.00",
+    "protein": "0.30",
+    "fat": "0.20",
+    "carbs": "13.80",
+    "fiber": "2.40",
+    "sugars": "10.40"
+   },
+   "glycemic_index": "36.0",
+   "unit_weights": {},
+   "merged_from": [],
+   "nutrition_source": "kompromis: tabele internetowe (środek zakresu źródeł) + sumy posiłków z PDF jako kotwica; do weryfikacji",
+   "nutrition_range": []
+  },
+  {
+   "key": "jagody",
+   "name": "Czarne jagody",
+   "category": "Owoce",
+   "measure_kind": "mass",
+   "piece_weight_g": null,
+   "per_100": {
+    "basis": "g",
+    "kcal": "53.00",
+    "protein": "0.70",
+    "fat": "0.30",
+    "carbs": "12.50",
+    "fiber": "3.00",
+    "sugars": "8.00"
+   },
+   "glycemic_index": "25.0",
+   "unit_weights": {
+    "garść": "50"
+   },
+   "merged_from": [],
+   "nutrition_source": "kompromis: tabele internetowe (środek zakresu źródeł) + sumy posiłków z PDF jako kotwica; do weryfikacji",
+   "nutrition_range": []
+  },
+  {
+   "key": "szpinak_mr",
+   "name": "Szpinak mrożony",
+   "category": "Mrożonki",
+   "measure_kind": "mass",
+   "piece_weight_g": null,
+   "per_100": {
+    "basis": "g",
+    "kcal": "31.00",
+    "protein": "3.80",
+    "fat": "0.70",
+    "carbs": "4.50",
+    "fiber": "2.50",
+    "sugars": "0.50"
+   },
+   "glycemic_index": "15.0",
+   "unit_weights": {
+    "porcja": "50"
+   },
+   "merged_from": [],
+   "nutrition_source": "kompromis: tabele internetowe (środek zakresu źródeł) + sumy posiłków z PDF jako kotwica; do weryfikacji",
+   "nutrition_range": []
+  },
+  {
+   "key": "truskawki",
+   "name": "Truskawki mrożone",
+   "category": "Mrożonki",
+   "measure_kind": "mass",
+   "piece_weight_g": null,
+   "per_100": {
+    "basis": "g",
+    "kcal": "35.00",
+    "protein": "0.60",
+    "fat": "0.20",
+    "carbs": "7.50",
+    "fiber": "2.00",
+    "sugars": "6.00"
+   },
+   "glycemic_index": "25.0",
+   "unit_weights": {
+    "porcja": "50"
+   },
+   "merged_from": [],
+   "nutrition_source": "kompromis: tabele internetowe (środek zakresu źródeł) + sumy posiłków z PDF jako kotwica; do weryfikacji",
+   "nutrition_range": []
+  },
+  {
+   "key": "kielbasa",
+   "name": "Kiełbasa śląska",
+   "category": "Mięso i produkty mięsne",
+   "measure_kind": "mass",
+   "piece_weight_g": null,
+   "per_100": {
+    "basis": "g",
+    "kcal": "214.00",
+    "protein": "18.00",
+    "fat": "16.00",
+    "carbs": "1.00",
+    "fiber": "0.00",
+    "sugars": "0.50"
+   },
+   "glycemic_index": "0.0",
+   "unit_weights": {},
+   "merged_from": [],
+   "nutrition_source": "kompromis: tabele internetowe (środek zakresu źródeł) + sumy posiłków z PDF jako kotwica; do weryfikacji",
+   "nutrition_range": []
+  },
+  {
+   "key": "drob",
+   "name": "Pierś z drobiu",
+   "category": "Mięso i produkty mięsne",
+   "measure_kind": "mass",
+   "piece_weight_g": null,
+   "per_100": {
+    "basis": "g",
+    "kcal": "108.00",
+    "protein": "23.20",
+    "fat": "1.30",
+    "carbs": "0.00",
+    "fiber": "0.00",
+    "sugars": "0.00"
+   },
+   "glycemic_index": "0.0",
+   "unit_weights": {},
+   "merged_from": [
+    {
+     "name": "Pierś z kurczaka",
+     "per_100": null
+    },
+    {
+     "name": "Pierś z indyka",
+     "per_100": null
+    }
+   ],
+   "nutrition_source": "kompromis: tabele internetowe (środek zakresu źródeł) + sumy posiłków z PDF jako kotwica; do weryfikacji",
+   "nutrition_range": []
+  },
+  {
+   "key": "poledwica",
+   "name": "Polędwica wieprzowa",
+   "category": "Mięso i produkty mięsne",
+   "measure_kind": "mass",
+   "piece_weight_g": null,
+   "per_100": {
+    "basis": "g",
+    "kcal": "125.00",
+    "protein": "21.00",
+    "fat": "4.50",
+    "carbs": "0.00",
+    "fiber": "0.00",
+    "sugars": "0.00"
+   },
+   "glycemic_index": "0.0",
+   "unit_weights": {},
+   "merged_from": [],
+   "nutrition_source": "kompromis: tabele internetowe (środek zakresu źródeł) + sumy posiłków z PDF jako kotwica; do weryfikacji",
+   "nutrition_range": []
+  },
+  {
+   "key": "szynka_miel",
+   "name": "Szynka wieprzowa mielona",
+   "category": "Mięso i produkty mięsne",
+   "measure_kind": "mass",
+   "piece_weight_g": null,
+   "per_100": {
+    "basis": "g",
+    "kcal": "131.00",
+    "protein": "20.00",
+    "fat": "5.40",
+    "carbs": "0.50",
+    "fiber": "0.00",
+    "sugars": "0.00"
+   },
+   "glycemic_index": "0.0",
+   "unit_weights": {
+    "porcja": "150"
+   },
+   "merged_from": [],
+   "nutrition_source": "kompromis: tabele internetowe (środek zakresu źródeł) + sumy posiłków z PDF jako kotwica; do weryfikacji",
+   "nutrition_range": []
+  },
+  {
+   "key": "wedlina",
+   "name": "Wędlina wieprzowa",
+   "category": "Mięso i produkty mięsne",
+   "measure_kind": "mass",
+   "piece_weight_g": null,
+   "per_100": {
+    "basis": "g",
+    "kcal": "120.00",
+    "protein": "18.00",
+    "fat": "5.00",
+    "carbs": "1.00",
+    "fiber": "0.00",
+    "sugars": "0.50"
+   },
+   "glycemic_index": "0.0",
+   "unit_weights": {
+    "plaster": "15"
+   },
+   "merged_from": [],
+   "nutrition_source": "kompromis: tabele internetowe (środek zakresu źródeł) + sumy posiłków z PDF jako kotwica; do weryfikacji",
+   "nutrition_range": []
+  },
+  {
+   "key": "jajko",
+   "name": "Jajko",
+   "category": "Nabiał i jaja",
+   "measure_kind": "piece",
+   "piece_weight_g": "58",
+   "per_100": {
+    "basis": "g",
+    "kcal": "143.00",
+    "protein": "12.60",
+    "fat": "9.50",
+    "carbs": "0.70",
+    "fiber": "0.00",
+    "sugars": "0.40"
+   },
+   "glycemic_index": "0.0",
+   "unit_weights": {},
+   "merged_from": [],
+   "nutrition_source": "kompromis: tabele internetowe (środek zakresu źródeł) + sumy posiłków z PDF jako kotwica; do weryfikacji",
+   "nutrition_range": []
+  },
+  {
+   "key": "jogurt",
+   "name": "Jogurt naturalny",
+   "category": "Nabiał i jaja",
+   "measure_kind": "mass",
+   "piece_weight_g": null,
+   "per_100": {
+    "basis": "g",
+    "kcal": "60.00",
+    "protein": "4.00",
+    "fat": "3.00",
+    "carbs": "4.50",
+    "fiber": "0.00",
+    "sugars": "4.50"
+   },
+   "glycemic_index": "35.0",
+   "unit_weights": {
+    "opakowanie": "180"
+   },
+   "merged_from": [],
+   "nutrition_source": "kompromis: tabele internetowe (środek zakresu źródeł) + sumy posiłków z PDF jako kotwica; do weryfikacji",
+   "nutrition_range": []
+  },
+  {
+   "key": "maslanka",
+   "name": "Maślanka 1,5%",
+   "category": "Nabiał i jaja",
+   "measure_kind": "volume",
+   "piece_weight_g": null,
+   "per_100": {
+    "basis": "ml",
+    "kcal": "42.00",
+    "protein": "3.40",
+    "fat": "1.50",
+    "carbs": "4.90",
+    "fiber": "0.00",
+    "sugars": "4.90"
+   },
+   "glycemic_index": "30.0",
+   "unit_weights": {
+    "szklanka": "240"
+   },
+   "merged_from": [],
+   "nutrition_source": "kompromis: tabele internetowe (środek zakresu źródeł) + sumy posiłków z PDF jako kotwica; do weryfikacji",
+   "nutrition_range": []
+  },
+  {
+   "key": "ricotta",
+   "name": "Ser ricotta",
+   "category": "Nabiał i jaja",
+   "measure_kind": "mass",
+   "piece_weight_g": null,
+   "per_100": {
+    "basis": "g",
+    "kcal": "160.00",
+    "protein": "9.00",
+    "fat": "11.50",
+    "carbs": "3.50",
+    "fiber": "0.00",
+    "sugars": "3.00"
+   },
+   "glycemic_index": "30.0",
+   "unit_weights": {
+    "opakowanie": "250"
+   },
+   "merged_from": [],
+   "nutrition_source": "kompromis: tabele internetowe (środek zakresu źródeł) + sumy posiłków z PDF jako kotwica; do weryfikacji",
+   "nutrition_range": []
+  },
+  {
+   "key": "skyr",
+   "name": "Skyr",
+   "category": "Nabiał i jaja",
+   "measure_kind": "mass",
+   "piece_weight_g": null,
+   "per_100": {
+    "basis": "g",
+    "kcal": "70.00",
+    "protein": "11.20",
+    "fat": "0.20",
+    "carbs": "6.40",
+    "fiber": "0.00",
+    "sugars": "6.40"
+   },
+   "glycemic_index": "11.0",
+   "unit_weights": {
+    "opakowanie": "150"
+   },
+   "merged_from": [
+    {
+     "name": "Skyr naturalny",
+     "per_100": null
+    },
+    {
+     "name": "Skyr waniliowy",
+     "per_100": null
+    }
+   ],
+   "nutrition_source": "kompromis: tabele internetowe (środek zakresu źródeł) + sumy posiłków z PDF jako kotwica; do weryfikacji",
+   "nutrition_range": []
+  },
+  {
+   "key": "smietana",
+   "name": "Śmietana",
+   "category": "Nabiał i jaja",
+   "measure_kind": "mass",
+   "piece_weight_g": null,
+   "per_100": {
+    "basis": "g",
+    "kcal": "171.00",
+    "protein": "3.00",
+    "fat": "15.90",
+    "carbs": "4.80",
+    "fiber": "0.00",
+    "sugars": "4.80"
+   },
+   "glycemic_index": "30.0",
+   "unit_weights": {
+    "łyżka": "22"
+   },
+   "merged_from": [
+    {
+     "name": "Śmietana 12 % tłuszczu",
+     "per_100": null
+    },
+    {
+     "name": "Śmietana 18 % tłuszczu",
+     "per_100": null
+    }
+   ],
+   "nutrition_source": "kompromis: tabele internetowe (środek zakresu źródeł) + sumy posiłków z PDF jako kotwica; do weryfikacji",
+   "nutrition_range": []
+  },
+  {
+   "key": "mozzarella",
+   "name": "Ser mozzarella",
+   "category": "Nabiał i jaja",
+   "measure_kind": "mass",
+   "piece_weight_g": null,
+   "per_100": {
+    "basis": "g",
+    "kcal": "190.00",
+    "protein": "22.00",
+    "fat": "10.50",
+    "carbs": "3.00",
+    "fiber": "0.00",
+    "sugars": "1.50"
+   },
+   "glycemic_index": "0.0",
+   "unit_weights": {
+    "plaster": "20"
+   },
+   "merged_from": [
+    {
+     "name": "Ser mozzarella",
+     "per_100": null
+    },
+    {
+     "name": "Ser mozzarella light",
+     "per_100": null
+    }
+   ],
+   "nutrition_source": "kompromis: tabele internetowe (środek zakresu źródeł) + sumy posiłków z PDF jako kotwica; do weryfikacji",
+   "nutrition_range": []
+  },
+  {
+   "key": "cheddar",
+   "name": "Ser cheddar",
+   "category": "Nabiał i jaja",
+   "measure_kind": "mass",
+   "piece_weight_g": null,
+   "per_100": {
+    "basis": "g",
+    "kcal": "403.00",
+    "protein": "24.90",
+    "fat": "33.10",
+    "carbs": "1.30",
+    "fiber": "0.00",
+    "sugars": "0.50"
+   },
+   "glycemic_index": "0.0",
+   "unit_weights": {
+    "plaster": "20"
+   },
+   "merged_from": [],
+   "nutrition_source": "kompromis: tabele internetowe (środek zakresu źródeł) + sumy posiłków z PDF jako kotwica; do weryfikacji",
+   "nutrition_range": []
+  },
+  {
+   "key": "camembert",
+   "name": "Ser camembert",
+   "category": "Nabiał i jaja",
+   "measure_kind": "mass",
+   "piece_weight_g": null,
+   "per_100": {
+    "basis": "g",
+    "kcal": "300.00",
+    "protein": "19.80",
+    "fat": "24.30",
+    "carbs": "0.50",
+    "fiber": "0.00",
+    "sugars": "0.50"
+   },
+   "glycemic_index": "0.0",
+   "unit_weights": {},
+   "merged_from": [],
+   "nutrition_source": "kompromis: tabele internetowe (środek zakresu źródeł) + sumy posiłków z PDF jako kotwica; do weryfikacji",
+   "nutrition_range": []
+  },
+  {
+   "key": "orzech_wl",
+   "name": "Orzechy włoskie",
+   "category": "Orzechy i nasiona",
+   "measure_kind": "mass",
+   "piece_weight_g": null,
+   "per_100": {
+    "basis": "g",
+    "kcal": "654.00",
+    "protein": "15.20",
+    "fat": "65.20",
+    "carbs": "7.00",
+    "fiber": "6.70",
+    "sugars": "2.60"
+   },
+   "glycemic_index": "15.0",
+   "unit_weights": {
+    "garść": "30"
+   },
+   "merged_from": [],
+   "nutrition_source": "kompromis: tabele internetowe (środek zakresu źródeł) + sumy posiłków z PDF jako kotwica; do weryfikacji",
+   "nutrition_range": []
+  },
+  {
+   "key": "pekan",
+   "name": "Orzechy pekan",
+   "category": "Orzechy i nasiona",
+   "measure_kind": "mass",
+   "piece_weight_g": null,
+   "per_100": {
+    "basis": "g",
+    "kcal": "691.00",
+    "protein": "9.20",
+    "fat": "72.00",
+    "carbs": "13.90",
+    "fiber": "9.60",
+    "sugars": "4.00"
+   },
+   "glycemic_index": "10.0",
+   "unit_weights": {
+    "garść": "30"
+   },
+   "merged_from": [],
+   "nutrition_source": "kompromis: tabele internetowe (środek zakresu źródeł) + sumy posiłków z PDF jako kotwica; do weryfikacji",
+   "nutrition_range": []
+  },
+  {
+   "key": "chleb",
+   "name": "Chleb żytni",
+   "category": "Pieczywo",
+   "measure_kind": "mass",
+   "piece_weight_g": null,
+   "per_100": {
+    "basis": "g",
+    "kcal": "235.00",
+    "protein": "6.80",
+    "fat": "1.60",
+    "carbs": "45.50",
+    "fiber": "7.00",
+    "sugars": "2.50"
+   },
+   "glycemic_index": "58.0",
+   "unit_weights": {
+    "kromka": "35"
+   },
+   "merged_from": [],
+   "nutrition_source": "kompromis: tabele internetowe (środek zakresu źródeł) + sumy posiłków z PDF jako kotwica; do weryfikacji",
+   "nutrition_range": []
+  },
+  {
+   "key": "makaron",
+   "name": "Makaron pełnoziarnisty",
+   "category": "Makarony, ryż i kasze",
+   "measure_kind": "mass",
+   "piece_weight_g": null,
+   "per_100": {
+    "basis": "g",
+    "kcal": "352.00",
+    "protein": "13.90",
+    "fat": "2.90",
+    "carbs": "73.40",
+    "fiber": "9.20",
+    "sugars": "3.00"
+   },
+   "glycemic_index": "45.0",
+   "unit_weights": {},
+   "merged_from": [],
+   "nutrition_source": "kompromis: tabele internetowe (środek zakresu źródeł) + sumy posiłków z PDF jako kotwica; do weryfikacji",
+   "nutrition_range": []
+  },
+  {
+   "key": "maka_orkisz",
+   "name": "Mąka orkiszowa jasna",
+   "category": "Makarony, ryż i kasze",
+   "measure_kind": "mass",
+   "piece_weight_g": null,
+   "per_100": {
+    "basis": "g",
+    "kcal": "340.00",
+    "protein": "12.00",
+    "fat": "2.50",
+    "carbs": "68.00",
+    "fiber": "5.00",
+    "sugars": "2.00"
+   },
+   "glycemic_index": "70.0",
+   "unit_weights": {
+    "łyżka": "12"
+   },
+   "merged_from": [],
+   "nutrition_source": "kompromis: tabele internetowe (środek zakresu źródeł) + sumy posiłków z PDF jako kotwica; do weryfikacji",
+   "nutrition_range": []
+  },
+  {
+   "key": "oliwa",
+   "name": "Oliwa z oliwek",
+   "category": "Tłuszcze",
+   "measure_kind": "mass",
+   "piece_weight_g": null,
+   "per_100": {
+    "basis": "g",
+    "kcal": "884.00",
+    "protein": "0.00",
+    "fat": "100.00",
+    "carbs": "0.00",
+    "fiber": "0.00",
+    "sugars": "0.00"
+   },
+   "glycemic_index": "0.0",
+   "unit_weights": {
+    "łyżka": "10",
+    "łyżeczka": "5.5"
+   },
+   "merged_from": [],
+   "nutrition_source": "kompromis: tabele internetowe (środek zakresu źródeł) + sumy posiłków z PDF jako kotwica; do weryfikacji",
+   "nutrition_range": []
+  },
+  {
+   "key": "cynamon",
+   "name": "Cynamon",
+   "category": "Przyprawy i zioła",
+   "measure_kind": "mass",
+   "piece_weight_g": null,
+   "per_100": {
+    "basis": "g",
+    "kcal": "247.00",
+    "protein": "4.00",
+    "fat": "1.20",
+    "carbs": "80.60",
+    "fiber": "53.00",
+    "sugars": "2.20"
+   },
+   "glycemic_index": "5.0",
+   "unit_weights": {
+    "szczypta": "0.3"
+   },
+   "merged_from": [],
+   "nutrition_source": "kompromis: tabele internetowe (środek zakresu źródeł) + sumy posiłków z PDF jako kotwica; do weryfikacji",
+   "nutrition_range": []
+  },
+  {
+   "key": "erytrytol",
+   "name": "Erytrytol",
+   "category": "Inne",
+   "measure_kind": "mass",
+   "piece_weight_g": null,
+   "per_100": {
+    "basis": "g",
+    "kcal": "0.00",
+    "protein": "0.00",
+    "fat": "0.00",
+    "carbs": "0.00",
+    "fiber": "0.00",
+    "sugars": "0.00"
+   },
+   "glycemic_index": "0.0",
+   "unit_weights": {
+    "łyżka": "10"
+   },
+   "merged_from": [],
+   "nutrition_source": "kompromis: tabele internetowe (środek zakresu źródeł) + sumy posiłków z PDF jako kotwica; do weryfikacji",
+   "nutrition_range": []
+  },
+  {
+   "key": "miod",
+   "name": "Miód",
+   "category": "Inne",
+   "measure_kind": "mass",
+   "piece_weight_g": null,
+   "per_100": {
+    "basis": "g",
+    "kcal": "304.00",
+    "protein": "0.30",
+    "fat": "0.00",
+    "carbs": "82.40",
+    "fiber": "0.20",
+    "sugars": "82.00"
+   },
+   "glycemic_index": "58.0",
+   "unit_weights": {
+    "łyżeczka": "8"
+   },
+   "merged_from": [],
+   "nutrition_source": "kompromis: tabele internetowe (środek zakresu źródeł) + sumy posiłków z PDF jako kotwica; do weryfikacji",
+   "nutrition_range": []
+  },
+  {
+   "key": "czekolada",
+   "name": "Czekolada ciemna (60-69% kakao)",
+   "category": "Inne",
+   "measure_kind": "mass",
+   "piece_weight_g": null,
+   "per_100": {
+    "basis": "g",
+    "kcal": "520.00",
+    "protein": "7.50",
+    "fat": "35.00",
+    "carbs": "41.00",
+    "fiber": "9.00",
+    "sugars": "28.00"
+   },
+   "glycemic_index": "30.0",
+   "unit_weights": {
+    "kostka": "8"
+   },
+   "merged_from": [],
+   "nutrition_source": "kompromis: tabele internetowe (środek zakresu źródeł) + sumy posiłków z PDF jako kotwica; do weryfikacji",
+   "nutrition_range": []
+  }
+ ],
+ "reused": [],
+ "recipes": [
+  {
+   "day": "pon",
+   "meal": "śniadanie",
+   "name": "Jajka z warzywami i serem",
+   "base_servings": 1,
+   "instructions": "Warzywa pokroić i podgrzać, wbić jajka, pod koniec dodać ser żeby się roztopił.",
+   "comment": "",
+   "pdf_totals": {
+    "kcal": "478",
+    "protein": "28.5",
+    "fat": "35.5",
+    "carbs": "11.9",
+    "fiber": "3.4",
+    "glycemic_load": "1.2"
+   },
+   "ingredients": [
+    {
+     "product": "cukinia",
+     "pdf_name": null,
+     "pdf_qty": "0.2",
+     "pdf_unit": "Sztuka",
+     "pdf_grams": "120",
+     "write_as": "auto"
+    },
+    {
+     "product": "jajko",
+     "pdf_name": null,
+     "pdf_qty": "2",
+     "pdf_unit": "Sztuka",
+     "pdf_grams": "120",
+     "write_as": "auto"
+    },
+    {
+     "product": "papryka",
+     "pdf_name": null,
+     "pdf_qty": "0.5",
+     "pdf_unit": "Sztuka",
+     "pdf_grams": "100",
+     "write_as": "auto"
+    },
+    {
+     "product": "cheddar",
+     "pdf_name": null,
+     "pdf_qty": "2",
+     "pdf_unit": "Plaster",
+     "pdf_grams": "40",
+     "write_as": "auto"
+    },
+    {
+     "product": "oliwa",
+     "pdf_name": null,
+     "pdf_qty": "1",
+     "pdf_unit": "Łyżka",
+     "pdf_grams": "10",
+     "write_as": "auto"
+    }
+   ]
+  },
+  {
+   "day": "pon",
+   "meal": "obiad",
+   "name": "Spaghetti",
+   "base_servings": 1,
+   "instructions": "Cebulę zeszklić, dodać czosnek. Mięso podsmażyć, dodać passatę, pomidory z puszki lub przecier i całość wymieszać z ugotowanym makaronem, doprawić ziołami (bazylia, oregano, tymianek).",
+   "comment": "",
+   "pdf_totals": {
+    "kcal": "559",
+    "protein": "40.7",
+    "fat": "20.3",
+    "carbs": "60.5",
+    "fiber": "9.0",
+    "glycemic_load": "20.8"
+   },
+   "ingredients": [
+    {
+     "product": "cebula",
+     "pdf_name": null,
+     "pdf_qty": "0.3",
+     "pdf_unit": "Sztuka",
+     "pdf_grams": "31.5",
+     "write_as": "auto"
+    },
+    {
+     "product": "czosnek",
+     "pdf_name": null,
+     "pdf_qty": "1",
+     "pdf_unit": "Ząbek",
+     "pdf_grams": "5",
+     "write_as": "auto"
+    },
+    {
+     "product": "szynka_miel",
+     "pdf_name": null,
+     "pdf_qty": "1",
+     "pdf_unit": "Porcja",
+     "pdf_grams": "150",
+     "write_as": "auto"
+    },
+    {
+     "product": "makaron",
+     "pdf_name": null,
+     "pdf_qty": "60",
+     "pdf_unit": "g",
+     "pdf_grams": "60",
+     "write_as": "auto"
+    },
+    {
+     "product": "passata",
+     "pdf_name": null,
+     "pdf_qty": "150",
+     "pdf_unit": "g",
+     "pdf_grams": "150",
+     "write_as": "auto"
+    },
+    {
+     "product": "oliwa",
+     "pdf_name": null,
+     "pdf_qty": "1",
+     "pdf_unit": "Łyżka",
+     "pdf_grams": "10",
+     "write_as": "auto"
+    }
+   ]
+  },
+  {
+   "day": "pon",
+   "meal": "podwieczorek",
+   "name": "Ricotta z owocami",
+   "base_servings": 1,
+   "instructions": "Ser ricotta wymieszać ze skyrem, dodać truskawki (wcześniej rozmrozić). Może być serek capreggio z biedronki lub twaróg półtłusty.",
+   "comment": "",
+   "pdf_totals": {
+    "kcal": "454",
+    "protein": "23.2",
+    "fat": "25.5",
+    "carbs": "33.8",
+    "fiber": "4.0",
+    "glycemic_load": "5.0"
+   },
+   "ingredients": [
+    {
+     "product": "ricotta",
+     "pdf_name": null,
+     "pdf_qty": "0.5",
+     "pdf_unit": "Opakowanie",
+     "pdf_grams": "125",
+     "write_as": "auto"
+    },
+    {
+     "product": "truskawki",
+     "pdf_name": null,
+     "pdf_qty": "2",
+     "pdf_unit": "Porcja",
+     "pdf_grams": "100",
+     "write_as": "auto"
+    },
+    {
+     "product": "skyr",
+     "pdf_name": null,
+     "pdf_qty": "0.5",
+     "pdf_unit": "Opakowanie",
+     "pdf_grams": "75",
+     "write_as": "auto"
+    },
+    {
+     "product": "czekolada",
+     "pdf_name": null,
+     "pdf_qty": "3",
+     "pdf_unit": "Kostka",
+     "pdf_grams": "24",
+     "write_as": "auto"
+    }
+   ]
+  },
+  {
+   "day": "pon",
+   "meal": "kolacja",
+   "name": "Skyrowe pancakes z gruszką",
+   "base_servings": 1,
+   "instructions": "Wymieszaj jajo z mąką, erytrytolem i 3/4 skyra (możesz dodać odrobinę wody, jeśli masa będzie zbyt gęsta). Wykładaj placki na rozgrzaną patelnię z oliwą i smaż z obu stron na średnim ogniu, do lekkiego zrumienienia. Gruszkę pokrój w kostkę. Placki wyłóż na talerz, posmaruj pozostałym skyrem, wyłóż gruszkę na placki i posyp cynamonem.",
+   "comment": "Można użyć innej mąki",
+   "pdf_totals": {
+    "kcal": "468",
+    "protein": "30.1",
+    "fat": "12.4",
+    "carbs": "61.2",
+    "fiber": "6.6",
+    "glycemic_load": "35.2"
+   },
+   "ingredients": [
+    {
+     "product": "jajko",
+     "pdf_name": null,
+     "pdf_qty": "1",
+     "pdf_unit": "Sztuka",
+     "pdf_grams": "50",
+     "write_as": "auto"
+    },
+    {
+     "product": "maka_orkisz",
+     "pdf_name": null,
+     "pdf_qty": "4",
+     "pdf_unit": "Łyżka",
+     "pdf_grams": "48",
+     "write_as": "auto"
+    },
+    {
+     "product": "skyr",
+     "pdf_name": null,
+     "pdf_qty": "1",
+     "pdf_unit": "Opakowanie",
+     "pdf_grams": "150",
+     "write_as": "auto"
+    },
+    {
+     "product": "cynamon",
+     "pdf_name": null,
+     "pdf_qty": "1",
+     "pdf_unit": "Szczypta",
+     "pdf_grams": "0.3",
+     "write_as": "auto"
+    },
+    {
+     "product": "gruszka",
+     "pdf_name": null,
+     "pdf_qty": "1",
+     "pdf_unit": "Sztuka",
+     "pdf_grams": "130",
+     "write_as": "auto"
+    },
+    {
+     "product": "oliwa",
+     "pdf_name": null,
+     "pdf_qty": "1",
+     "pdf_unit": "Łyżeczka",
+     "pdf_grams": "5",
+     "write_as": "auto"
+    },
+    {
+     "product": "erytrytol",
+     "pdf_name": null,
+     "pdf_qty": "1",
+     "pdf_unit": "Łyżka",
+     "pdf_grams": "10",
+     "write_as": "auto"
+    }
+   ]
+  },
+  {
+   "day": "wt",
+   "meal": "śniadanie",
+   "name": "Kiełbasa z warzywami",
+   "base_servings": 1,
+   "instructions": "Kiełbasę pokroić w kostkę i podgrzać na patelni z pokrojonymi warzywami na oliwie. Na koniec dać pokruszony ser i przykryć na minutę aby ser się roztopił.",
+   "comment": "",
+   "pdf_totals": {
+    "kcal": "493",
+    "protein": "32.6",
+    "fat": "35.9",
+    "carbs": "12.9",
+    "fiber": "4.1",
+    "glycemic_load": "1.5"
+   },
+   "ingredients": [
+    {
+     "product": "cukinia",
+     "pdf_name": null,
+     "pdf_qty": "0.3",
+     "pdf_unit": "Sztuka",
+     "pdf_grams": "180",
+     "write_as": "auto"
+    },
+    {
+     "product": "kielbasa",
+     "pdf_name": null,
+     "pdf_qty": "1",
+     "pdf_unit": "Sztuka",
+     "pdf_grams": "100",
+     "write_as": "auto"
+    },
+    {
+     "product": "oliwa",
+     "pdf_name": null,
+     "pdf_qty": "1",
+     "pdf_unit": "Łyżeczka",
+     "pdf_grams": "6",
+     "write_as": "auto"
+    },
+    {
+     "product": "papryka",
+     "pdf_name": null,
+     "pdf_qty": "0.5",
+     "pdf_unit": "Sztuka",
+     "pdf_grams": "100",
+     "write_as": "auto"
+    },
+    {
+     "product": "cheddar",
+     "pdf_name": null,
+     "pdf_qty": "2",
+     "pdf_unit": "Plaster",
+     "pdf_grams": "40",
+     "write_as": "auto"
+    }
+   ]
+  },
+  {
+   "day": "wt",
+   "meal": "obiad",
+   "name": "Makaron ze szpinakiem",
+   "base_servings": 1,
+   "instructions": "Cebulę zeszklić, można dodać czosnek, po chwili szpinak (ilość dowolna), po chwili dodać śmietanę i ser w celu zagęszczenia. Mięso pokroić w kostkę i podsmażyć beztłuszczowo (przyprawić wg uznania).",
+   "comment": "",
+   "pdf_totals": {
+    "kcal": "647",
+    "protein": "45.0",
+    "fat": "30.9",
+    "carbs": "53.5",
+    "fiber": "9.0",
+    "glycemic_load": "18.0"
+   },
+   "ingredients": [
+    {
+     "product": "cebula",
+     "pdf_name": null,
+     "pdf_qty": "0.3",
+     "pdf_unit": "Sztuka",
+     "pdf_grams": "31.5",
+     "write_as": "auto"
+    },
+    {
+     "product": "makaron",
+     "pdf_name": null,
+     "pdf_qty": "60",
+     "pdf_unit": "g",
+     "pdf_grams": "60",
+     "write_as": "auto"
+    },
+    {
+     "product": "drob",
+     "pdf_name": null,
+     "pdf_qty": "100",
+     "pdf_unit": "g",
+     "pdf_grams": "100",
+     "write_as": "auto"
+    },
+    {
+     "product": "camembert",
+     "pdf_name": null,
+     "pdf_qty": "40",
+     "pdf_unit": "g",
+     "pdf_grams": "40",
+     "write_as": "auto"
+    },
+    {
+     "product": "szpinak_mr",
+     "pdf_name": null,
+     "pdf_qty": "2",
+     "pdf_unit": "Porcja",
+     "pdf_grams": "100",
+     "write_as": "auto"
+    },
+    {
+     "product": "smietana",
+     "pdf_name": null,
+     "pdf_qty": "3",
+     "pdf_unit": "Łyżka",
+     "pdf_grams": "54",
+     "write_as": "auto"
+    },
+    {
+     "product": "oliwa",
+     "pdf_name": null,
+     "pdf_qty": "1",
+     "pdf_unit": "Łyżka",
+     "pdf_grams": "10",
+     "write_as": "auto"
+    }
+   ]
+  },
+  {
+   "day": "wt",
+   "meal": "podwieczorek",
+   "name": "Koktajl jagodowy",
+   "base_servings": 1,
+   "instructions": "",
+   "comment": "",
+   "pdf_totals": {
+    "kcal": "398",
+    "protein": "14.3",
+    "fat": "21.6",
+    "carbs": "40.4",
+    "fiber": "7.0",
+    "glycemic_load": "14.0"
+   },
+   "ingredients": [
+    {
+     "product": "maslanka",
+     "pdf_name": null,
+     "pdf_qty": "1",
+     "pdf_unit": "Szklanka",
+     "pdf_grams": "240",
+     "write_as": "auto"
+    },
+    {
+     "product": "banan",
+     "pdf_name": null,
+     "pdf_qty": "0.5",
+     "pdf_unit": "Sztuka",
+     "pdf_grams": "70",
+     "write_as": "auto"
+    },
+    {
+     "product": "jagody",
+     "pdf_name": null,
+     "pdf_qty": "2",
+     "pdf_unit": "Garść",
+     "pdf_grams": "100",
+     "write_as": "auto"
+    },
+    {
+     "product": "orzech_wl",
+     "pdf_name": null,
+     "pdf_qty": "1",
+     "pdf_unit": "Garść",
+     "pdf_grams": "30",
+     "write_as": "auto"
+    }
+   ]
+  },
+  {
+   "day": "wt",
+   "meal": "kolacja",
+   "name": "Grzanki z pieczarkami",
+   "base_servings": 1,
+   "instructions": "Cebulę i czosnek podsmażyć bez tłuszczu (grzyby puszczą wodę i trzymać do odparowania). Na chleb położyć pieczarki, szynkę, ser i zapiec.",
+   "comment": "",
+   "pdf_totals": {
+    "kcal": "449",
+    "protein": "23.9",
+    "fat": "17.5",
+    "carbs": "50.2",
+    "fiber": "7.2",
+    "glycemic_load": "16.8"
+   },
+   "ingredients": [
+    {
+     "product": "cebula",
+     "pdf_name": null,
+     "pdf_qty": "1",
+     "pdf_unit": "Sztuka",
+     "pdf_grams": "105",
+     "write_as": "auto"
+    },
+    {
+     "product": "chleb",
+     "pdf_name": null,
+     "pdf_qty": "2",
+     "pdf_unit": "Kromka",
+     "pdf_grams": "70",
+     "write_as": "auto"
+    },
+    {
+     "product": "pieczarki",
+     "pdf_name": null,
+     "pdf_qty": "5",
+     "pdf_unit": "Sztuka",
+     "pdf_grams": "100",
+     "write_as": "auto"
+    },
+    {
+     "product": "cheddar",
+     "pdf_name": null,
+     "pdf_qty": "2",
+     "pdf_unit": "Plaster",
+     "pdf_grams": "40",
+     "write_as": "auto"
+    },
+    {
+     "product": "wedlina",
+     "pdf_name": null,
+     "pdf_qty": "2",
+     "pdf_unit": "Plaster",
+     "pdf_grams": "30",
+     "write_as": "auto"
+    }
+   ]
+  },
+  {
+   "day": "śr",
+   "meal": "śniadanie",
+   "name": "Szakszuka z serem",
+   "base_servings": 1,
+   "instructions": "Dodać pomidory, wbić jajka i pod koniec dodać mozzarellę. Można dodać np. fasolki szparagowej.",
+   "comment": "",
+   "pdf_totals": {
+    "kcal": "479",
+    "protein": "48.4",
+    "fat": "24.8",
+    "carbs": "16.3",
+    "fiber": "2.8",
+    "glycemic_load": "1.6"
+   },
+   "ingredients": [
+    {
+     "product": "jajko",
+     "pdf_name": null,
+     "pdf_qty": "2",
+     "pdf_unit": "Sztuka",
+     "pdf_grams": "120",
+     "write_as": "auto"
+    },
+    {
+     "product": "pomidor",
+     "pdf_name": null,
+     "pdf_qty": "1",
+     "pdf_unit": "Sztuka",
+     "pdf_grams": "170",
+     "write_as": "auto"
+    },
+    {
+     "product": "cebula",
+     "pdf_name": null,
+     "pdf_qty": "0.3",
+     "pdf_unit": "Sztuka",
+     "pdf_grams": "36",
+     "write_as": "auto"
+    },
+    {
+     "product": "szczypiorek",
+     "pdf_name": null,
+     "pdf_qty": "1",
+     "pdf_unit": "Łyżka",
+     "pdf_grams": "5",
+     "write_as": "auto"
+    },
+    {
+     "product": "mozzarella",
+     "pdf_name": null,
+     "pdf_qty": "1",
+     "pdf_unit": "Sztuka",
+     "pdf_grams": "125",
+     "write_as": "auto"
+    }
+   ]
+  },
+  {
+   "day": "śr",
+   "meal": "obiad",
+   "name": "Polędwiczki w sosie śmietanowym",
+   "base_servings": 1,
+   "instructions": "Polędwiczkę obsmażyć bez tłuszczu z każdej strony. Dodać trochę wody i dusić do miękkości. Cebulę zeszklić, dodać czosnek, pieczarki i poczekać aż woda trochę odparuje. Przełożyć do mięsa. Dodać śmietanę i pod koniec plaster mozzarelli żeby się sos zagęścił. Podawać z ziemniakami i mizerią z pomidora (3 łyżki śmietany słodkiej do sosu, 1 łyżka śmietany kwaśnej do pomidora).",
+   "comment": "",
+   "pdf_totals": {
+    "kcal": "631",
+    "protein": "46.0",
+    "fat": "25.1",
+    "carbs": "57.0",
+    "fiber": "8.2",
+    "glycemic_load": "26.5"
+   },
+   "ingredients": [
+    {
+     "product": "cebula",
+     "pdf_name": null,
+     "pdf_qty": "0.3",
+     "pdf_unit": "Sztuka",
+     "pdf_grams": "31.5",
+     "write_as": "auto"
+    },
+    {
+     "product": "czosnek",
+     "pdf_name": null,
+     "pdf_qty": "1",
+     "pdf_unit": "Ząbek",
+     "pdf_grams": "5",
+     "write_as": "auto"
+    },
+    {
+     "product": "pieczarki",
+     "pdf_name": null,
+     "pdf_qty": "3",
+     "pdf_unit": "Sztuka",
+     "pdf_grams": "60",
+     "write_as": "auto"
+    },
+    {
+     "product": "poledwica",
+     "pdf_name": null,
+     "pdf_qty": "0.3",
+     "pdf_unit": "Sztuka",
+     "pdf_grams": "150",
+     "write_as": "auto"
+    },
+    {
+     "product": "smietana",
+     "pdf_name": null,
+     "pdf_qty": "4",
+     "pdf_unit": "Łyżka",
+     "pdf_grams": "100",
+     "write_as": "auto"
+    },
+    {
+     "product": "mozzarella",
+     "pdf_name": null,
+     "pdf_qty": "1",
+     "pdf_unit": "Plaster",
+     "pdf_grams": "20",
+     "write_as": "auto"
+    },
+    {
+     "product": "ziemniak",
+     "pdf_name": null,
+     "pdf_qty": "3",
+     "pdf_unit": "Sztuka",
+     "pdf_grams": "225",
+     "write_as": "auto"
+    },
+    {
+     "product": "pomidor",
+     "pdf_name": null,
+     "pdf_qty": "1",
+     "pdf_unit": "Sztuka",
+     "pdf_grams": "170",
+     "write_as": "auto"
+    }
+   ]
+  },
+  {
+   "day": "śr",
+   "meal": "podwieczorek",
+   "name": "Jogurt z orzechami i miodem",
+   "base_servings": 1,
+   "instructions": "Wymieszaj jogurt z orzechami, pokrojonym jabłkiem i miodem.",
+   "comment": "",
+   "pdf_totals": {
+    "kcal": "429",
+    "protein": "9.5",
+    "fat": "27.7",
+    "carbs": "42.6",
+    "fiber": "7.0",
+    "glycemic_load": "12.0"
+   },
+   "ingredients": [
+    {
+     "product": "jogurt",
+     "pdf_name": null,
+     "pdf_qty": "1",
+     "pdf_unit": "Opakowanie",
+     "pdf_grams": "180",
+     "write_as": "auto"
+    },
+    {
+     "product": "pekan",
+     "pdf_name": null,
+     "pdf_qty": "1",
+     "pdf_unit": "Garść",
+     "pdf_grams": "30",
+     "write_as": "auto"
+    },
+    {
+     "product": "miod",
+     "pdf_name": null,
+     "pdf_qty": "1",
+     "pdf_unit": "Łyżeczka",
+     "pdf_grams": "8",
+     "write_as": "auto"
+    },
+    {
+     "product": "jablko",
+     "pdf_name": null,
+     "pdf_qty": "1",
+     "pdf_unit": "Sztuka",
+     "pdf_grams": "170",
+     "write_as": "auto"
+    }
+   ]
+  },
+  {
+   "day": "śr",
+   "meal": "kolacja",
+   "name": "Sałatka kebab",
+   "base_servings": 1,
+   "instructions": "Mięso podsmażyć z przyprawą kebab, warzywa pokroić w kostkę i ułożyć warstwowo, przekładając majonezem i ketchupem.",
+   "comment": "",
+   "pdf_totals": {
+    "kcal": "491",
+    "protein": "39.8",
+    "fat": "24.8",
+    "carbs": "29.9",
+    "fiber": "6.8",
+    "glycemic_load": "9.1"
+   },
+   "ingredients": [
+    {
+     "product": "kapusta",
+     "pdf_name": null,
+     "pdf_qty": "2",
+     "pdf_unit": "Liść",
+     "pdf_grams": "100",
+     "write_as": "auto"
+    },
+    {
+     "product": "keczup",
+     "pdf_name": null,
+     "pdf_qty": "1",
+     "pdf_unit": "Łyżka",
+     "pdf_grams": "15",
+     "write_as": "auto"
+    },
+    {
+     "product": "kukurydza",
+     "pdf_name": null,
+     "pdf_qty": "3",
+     "pdf_unit": "Łyżka",
+     "pdf_grams": "60",
+     "write_as": "auto"
+    },
+    {
+     "product": "majonez",
+     "pdf_name": null,
+     "pdf_qty": "1",
+     "pdf_unit": "Łyżka",
+     "pdf_grams": "25",
+     "write_as": "auto"
+    },
+    {
+     "product": "drob",
+     "pdf_name": null,
+     "pdf_qty": "1",
+     "pdf_unit": "Sztuka",
+     "pdf_grams": "150",
+     "write_as": "auto"
+    },
+    {
+     "product": "ogorek_kis",
+     "pdf_name": null,
+     "pdf_qty": "2",
+     "pdf_unit": "Sztuka",
+     "pdf_grams": "120",
+     "write_as": "auto"
+    },
+    {
+     "product": "papryka",
+     "pdf_name": null,
+     "pdf_qty": "0.5",
+     "pdf_unit": "Sztuka",
+     "pdf_grams": "100",
+     "write_as": "auto"
+    },
+    {
+     "product": "pomidor",
+     "pdf_name": null,
+     "pdf_qty": "1",
+     "pdf_unit": "Sztuka",
+     "pdf_grams": "150",
+     "write_as": "auto"
+    }
+   ]
+  }
+ ],
+ "pdf_day_totals": {
+  "pon": {
+   "kcal": "1959",
+   "protein": "122.5",
+   "fat": "93.7",
+   "carbs": "167.4",
+   "fiber": "23.0",
+   "glycemic_load": "62.2"
+  },
+  "wt": {
+   "kcal": "1987",
+   "protein": "115.8",
+   "fat": "105.9",
+   "carbs": "157.0",
+   "fiber": "27.3",
+   "glycemic_load": "50.3"
+  },
+  "śr": {
+   "kcal": "2030",
+   "protein": "143.7",
+   "fat": "102.4",
+   "carbs": "145.8",
+   "fiber": "24.8",
+   "glycemic_load": "49.2"
+  }
+ },
+ "pdf_shopping_list_grams": {
+  "pieczarki": "160",
+  "kielbasa": "100",
+  "drob": "250",
+  "poledwica": "150",
+  "szynka_miel": "150",
+  "wedlina": "30",
+  "szpinak_mr": "100",
+  "truskawki": "100",
+  "jajko": "290",
+  "jogurt": "180",
+  "maslanka": "240",
+  "camembert": "40",
+  "cheddar": "120",
+  "mozzarella": "145",
+  "ricotta": "125",
+  "skyr": "225",
+  "smietana": "154",
+  "pekan": "30",
+  "orzech_wl": "30",
+  "banan": "70",
+  "jagody": "100",
+  "gruszka": "130",
+  "jablko": "170",
+  "kukurydza": "60",
+  "ogorek_kis": "120",
+  "passata": "150",
+  "cynamon": "0.3",
+  "czekolada": "24",
+  "oliwa": "41",
+  "cebula": "235.5",
+  "cukinia": "300",
+  "czosnek": "10",
+  "kapusta": "100",
+  "papryka": "300",
+  "pomidor": "490",
+  "szczypiorek": "5",
+  "ziemniak": "225",
+  "chleb": "70",
+  "makaron": "120",
+  "maka_orkisz": "48",
+  "erytrytol": "10",
+  "keczup": "15",
+  "majonez": "25",
+  "miod": "8"
+ }
+}
