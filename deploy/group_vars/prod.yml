@@ -1,0 +1,67 @@
+---
+# Środowisko produkcyjne Paśnika (B18a): kontener `pasnik`, baza `ffp_db`
+# w klastrze `postgres-apps`, TLS na Caddym — WSZYSTKO NA JEDNYM HOŚCIE
+# 192.168.2.121 (ADR-017, D7, D29; host kontenera zmieniony na .121 w D30).
+# Wyłącznie wartości NIESEKRETNE — hasło bazy i SECRET_KEY są w Vaulcie operatora
+# (`group_vars/all.yml`, sekcja „sekrety").
+
+# Kanał rutynowy. Provision nadpisuje go `admin_user` na czas swojego przebiegu.
+ansible_user: "{{ deploy_user }}"
+
+# Klucz hosta SSH kontenera ZMIENIA SIĘ po każdym `create-incus.sh --recreate`.
+# Wpis trzymamy w osobnym pliku zamiast w `~/.ssh/known_hosts`: skasowanie go po
+# odtworzeniu maszyny nie rusza kluczy żadnego innego hosta. PRZED pierwszym
+# przebiegiem Ansible wklej tu wpis wypisany przez `create-incus.sh` (krok 10),
+# żeby pierwszy provision — ten, który wiezie sekrety — rozmawiał z maszyną
+# o ZNANYM kluczu, a nie z pierwszym, który odpowie na porcie (deploy/README.md).
+ssh_host_key_file: "{{ lookup('env', 'HOME') }}/.ssh/pasnik-prod.hostkeys"
+ansible_ssh_common_args: >-
+  -o StrictHostKeyChecking=accept-new
+  -o UserKnownHostsFile={{ ssh_host_key_file }}
+
+# --- domena i proxy (D7, D30) ------------------------------------------------
+
+domain: pasnik.cpt-sztos.com
+# Host (.121): Caddy, klaster `postgres-apps` i Incus z kontenerem `pasnik`.
+host_ip: 192.168.2.121
+# Dwie wartości poznajesz dopiero po `create-incus.sh` (wypisuje je na końcu);
+# do tego czasu `CHANGE_ME` zatrzymuje provision (assert w playbooku):
+#   ct_ip          statyczny IPv4 kontenera na `incusbr0` (np. 10.53.158.201)
+#   bridge_gateway adres `incusbr0` NA HOŚCIE (np. 10.53.158.1)
+ct_ip: 10.133.61.201
+bridge_gateway: 10.133.61.1
+# Caddy łączy się z kontenerem WPROST po moście (bez proxy device'a i bez
+# wystawiania portu w LAN): `reverse_proxy <ct_ip>:8000`. Źródłem takiego
+# połączenia jest adres hosta na moście, więc to on jest jedynym zaufanym
+# w `FORWARDED_ALLOW_IPS` (`*` zabronione — 07_SECURITY §7).
+app_host: "{{ ct_ip }}"
+app_host_port: 8000
+# HSTS na proxy (07_SECURITY §3): KRÓTKI max-age na start — przeglądarka
+# zapamiętuje nagłówek, a pomyłka z długim czasem jest bolesna do odkręcenia.
+hsts_max_age: 300
+
+# --- baza (klaster `postgres-apps`, D29) -------------------------------------
+
+db_host: 192.168.2.121
+db_port: 5432
+db_name: ffp_db
+db_user: ffp_user
+
+# --- konfiguracja aplikacji → `pasnik.env` -----------------------------------
+
+log_level: INFO
+uvicorn_workers: 2
+forwarded_allow_ips: "{{ bridge_gateway }}"
+disk_min_free_mb: 1024
+image_max_upload_mb: 10
+transfer_max_zip_mb: 100
+request_max_body_mb: 2
+catalog_search_similarity_threshold: "0.25"
+
+# --- backup (stan startowy 18a; przebieg i drill: 18b) ------------------------
+
+# Strefa w wyrażeniu: kontener ma zegar hosta (UTC), a backup ma iść o 03:00
+# czasu polskiego. Walidacja: `systemd-analyze calendar` w assert-machine.
+backup_oncalendar: "*-*-* 03:00:00 Europe/Warsaw"
+backup_keep_daily: 7
+backup_keep_weekly: 4

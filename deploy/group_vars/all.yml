@@ -1,0 +1,169 @@
+---
+# Zmienne wspólne środowisk Paśnika (B18a). To, co różni środowiska, siedzi
+# w `group_vars/<grupa>.yml` (dziś tylko `prod.yml`) — tutaj są wyłącznie rzeczy
+# wynikające z ARCHITEKTURY (09_DEPLOYMENT §1, ADR-017), nie ze środowiska.
+#
+# ZERO sekretów: każda wartość tajna ma tu `CHANGE_ME` i przyjeżdża z pliku
+# Ansible Vault operatora POZA repo (deploy/README.md, sekcja „Sekrety").
+
+# --- układ na maszynie (09 §1) ----------------------------------------------
+
+deploy_to: /opt/pasnik
+env_dir: /etc/pasnik
+lib_dir: /usr/local/lib/pasnik
+shared_dir: "{{ deploy_to }}/shared"
+uploads_dir: "{{ shared_dir }}/uploads"
+backups_dir: "{{ shared_dir }}/backups"
+uv_cache_dir: "{{ shared_dir }}/uv-cache"
+pasnik_env_file: "{{ env_dir }}/pasnik.env"
+pgpass_file: "{{ env_dir }}/pgpass"
+cli_path: /usr/local/bin/pasnik-cli
+selftest_path: /usr/local/sbin/pasnik-selftest
+service_name: pasnik
+backup_service_name: pasnik-backup
+unit_dir: /etc/systemd/system
+
+# --- konta i kanały ----------------------------------------------------------
+
+# Dwa kanały SSH, dwie role (wzorzec runnera, deploy/README.md):
+#   deploy_user — ścieżka rutynowa: rsync releasu, hooki, restart wąskim sudo;
+#   admin_user  — ścieżka uprzywilejowana, raz: unity, /etc/pasnik, pasnik-cli.
+# `deploy` celowo nie ma jak zostać rootem, więc provision ma własny kanał.
+deploy_user: deploy
+admin_user: root
+# Konto, z którego uprawnieniami działa aplikacja i backup (system, nologin).
+app_user: pasnik
+app_group: pasnik
+
+# Systemowy interpreter z obrazu (Debian 13 = Python 3.13); venv release'u
+# powstaje z NIEGO (`uv sync --python`, bez pobierania własnego Pythona).
+python_bin: /usr/bin/python3
+python_required: "3.13"
+uv_bin: /usr/local/bin/uv
+
+# Port uvicorna WEWNĄTRZ kontenera (`backend/scripts/serve.sh`); Caddy łączy się
+# z nim wprost po moście Incusa (`app_host`:`app_host_port` w `prod.yml`).
+app_port: 8000
+
+# --- ansistrano --------------------------------------------------------------
+
+ansistrano_deploy_to: "{{ deploy_to }}"
+ansistrano_deploy_from: "{{ playbook_dir }}/../"
+ansistrano_deploy_via: rsync
+ansistrano_current_dir: current
+ansistrano_keep_releases: 5
+# Release nie potrzebuje dowiązań do `shared/`: uploady i backupy mają
+# ABSOLUTNE ścieżki z `pasnik.env`.
+ansistrano_shared_paths: []
+ansistrano_shared_files: []
+# `synchronize` buduje własne polecenie `ssh` dla rsynca i DOMYŚLNIE nie
+# przekazuje mu `ansible_ssh_common_args` — bez tego rsync użyłby globalnego
+# `known_hosts` zamiast pliku z inwentarza (dług runnera, sprawdzone w kodzie
+# modułu).
+ansistrano_rsync_use_ssh_args: true
+# Rola wysyła anonimową statystykę deployu na serwery ansistrano.com.
+ansistrano_allow_anonymous_stats: false
+
+# Co NIE jedzie do release'u. Kolejność ma znaczenie (rsync: pierwsze dopasowanie
+# wygrywa), więc lista ma trzy bloki:
+#   1. wykluczenia ogólne i pliki sekretów (WYGRYWAJĄ z listą dozwolonych),
+#   2. biała lista tego, co do release'u wchodzi: `backend/` (kod, migracje,
+#      `pyproject.toml`, `uv.lock`, `scripts/serve.sh`), `frontend/dist/`
+#      i plik `VERSION`,
+#   3. `--exclude=/*` — wszystko inne (Taskfile, docs, docker, deploy, landing,
+#      node_modules, zdjęcia z `backend/data`…) zostaje na maszynie dewelopera.
+# Biała lista jest PRIMARY, a bloki z nazwami (docs, docker…) to pas i szelki:
+# test `test_deploy_config.py` pilnuje, że żaden wzorzec sekretu nie zniknął.
+#
+# UWAGA na wzorzec runnera: jego `--exclude=dist` wycinałby `frontend/dist`.
+# Tu `dist` NIE jest wykluczone po nazwie.
+#
+# `--chmod` jest obowiązkowy: checkout na `/mnt/c` (WSL) pokazuje każdy plik
+# jako 0777, a bez tego release na hoście byłby zapisywalny dla wszystkich.
+# `--delete-excluded`: ansistrano synchronizuje do TRWAŁEJ kopii
+# (`shared/.shared-copy`), z której robi `cp -a` do release'u; bez tej flagi
+# wzorzec dodany do listy PÓŹNIEJ nie sprzątałby plików, które już tam pojechały.
+ansistrano_rsync_extra_params:
+  - "--chmod=D755,F644"
+  - "--delete-excluded"
+  # --- 1a. śmieci maszyny developera ---
+  - "--exclude=.git"
+  - "--exclude=.venv"
+  - "--exclude=node_modules"
+  - "--exclude=.mypy_cache"
+  - "--exclude=.pytest_cache"
+  - "--exclude=.ruff_cache"
+  - "--exclude=.coverage"
+  - "--exclude=.hypothesis"
+  - "--exclude=__pycache__"
+  - "--exclude=*.pyc"
+  - "--exclude=*.egg-info"
+  - "--exclude=*.log"
+  - "--exclude=tests"
+  - "--exclude=/backend/data"
+  - "--exclude=/backend/.env*"
+  - "--exclude=/frontend/node_modules"
+  - "--exclude=/frontend/src"
+  - "--exclude=/frontend/e2e"
+  - "--exclude=/frontend/test-results"
+  - "--exclude=/frontend/playwright-report"
+  - "--exclude=/frontend/dev-dist"
+  - "--exclude=/landing"
+  - "--exclude=/docker"
+  - "--exclude=/docs"
+  - "--exclude=/deploy"
+  - "--exclude=/uploads"
+  - "--exclude=/backups"
+  - "--exclude=/.claude"
+  # --- 1b. pliki sekretów (lista przepisana z guardu releasu w
+  #         tasks/after-update.yml; test pilnuje zgodności obu list) ---
+  - "--exclude=.env"
+  - "--exclude=.env.*"
+  - "--exclude=*.env"
+  - "--exclude=.netrc"
+  - "--exclude=*.netrc"
+  - "--exclude=*_key"
+  - "--exclude=*.pem"
+  - "--exclude=*.key"
+  - "--exclude=id_rsa"
+  - "--exclude=id_rsa.*"
+  - "--exclude=id_ed25519"
+  - "--exclude=id_ed25519.*"
+  - "--exclude=id_ecdsa"
+  - "--exclude=id_ecdsa.*"
+  - "--exclude=known_hosts"
+  - "--exclude=known_hosts.*"
+  - "--exclude=authorized_keys"
+  - "--exclude=*vault*"
+  - "--exclude=pasnik.env"
+  - "--exclude=pgpass"
+  # --- 2. biała lista ---
+  - "--include=/VERSION"
+  - "--include=/frontend/"
+  - "--include=/frontend/dist/***"
+  - "--exclude=/frontend/*"
+  - "--include=/backend/***"
+  # --- 3. reszta zostaje u dewelopera ---
+  - "--exclude=/*"
+
+# --- przełączniki przebiegu --------------------------------------------------
+
+# Pliki `pasnik.env` i `pgpass` powstają RAZ. Nadpisanie kasuje to, co operator
+# wpisał na maszynie (rotacja hasła bazy: vault → `-e force_env=true`).
+force_env: false
+# Po `create-incus.sh --recreate` maszyna ma NOWY klucz hosta SSH. Wtedy raz:
+# `-e refresh_host_key=true` (kasuje przypięty klucz tej jednej maszyny).
+refresh_host_key: false
+# Plik z przypiętym kluczem hosta tej maszyny (osobny dla każdego środowiska).
+ssh_host_key_file: ""
+# Wersja release'u: Taskfile podaje ją z `git describe` po stronie Windows
+# (`-e release_version=…`), żeby vite i playbook liczyły ją TYM SAMYM gitem.
+# Bez przełącznika playbook liczy ją sam w WSL.
+release_version: ""
+
+# --- sekrety (WYŁĄCZNIE nazwy; wartości z Vaulta operatora) -------------------
+
+# `CHANGE_ME` jest wartością STRAŻNIKA: provision odmawia renderowania
+# `pasnik.env`/`pgpass`, gdy któraś zmienna została placeholderem.
+db_password: "{{ vault_db_password | default('CHANGE_ME') }}"
+secret_key: "{{ vault_secret_key | default('CHANGE_ME') }}"

@@ -21,6 +21,12 @@ vars:
   # Wersja obrazu prod = tag gita; bez tagów — sha (09_DEPLOYMENT §1 i §4).
   GIT_VERSION:
     sh: git describe --tags --always --dirty
+  # Deploy produkcyjny (B18a, ADR-017): Ansible chodzi w WSL, z venv
+  # `~/.venvs/ansible` (ansible-core>=2.16,<2.18 z pipa, NIE z apt). Nazwę
+  # dystrybucji można nadpisać: `task deploy WSL_DISTRO=Ubuntu`.
+  WSL_DISTRO: Ubuntu-22.04
+  # Wejście do Ansible w WSL: deploy/ansible-run.sh (ustawia ANSIBLE_CONFIG, venv, vault).
+  ANSIBLE_SH: wsl -d {{.WSL_DISTRO}} --cd "{{.ROOT_DIR}}/deploy" -- bash ansible-run.sh
 
 tasks:
   default:
@@ -384,3 +390,42 @@ tasks:
     desc: Skan sekretów w repo (gitleaks przez docker run)
     cmds:
       - docker run --rm -v "{{.ROOT_DIR}}:/repo" zricethezav/gitleaks:latest detect --source=/repo --redact --verbose
+
+  # --- deploy produkcyjny (BATCH_18a; LXC + ansistrano, ADR-017) ---------------
+  # Wymagania operatora (poza Docker Desktop, uv, Node, go-task): WSL z Ubuntu,
+  # `python3 -m venv ~/.venvs/ansible` + `pip install "ansible-core>=2.16,<2.18"`,
+  # `task deploy-galaxy` (role ansistrano), vault z sekretami POZA repo
+  # (`~/pasnik-prod.yml`, `ansible-vault create`). Opis: deploy/README.md.
+
+  deploy-galaxy:
+    desc: 'Instaluje role i kolekcje Ansible (ansistrano 4.4.0/4.0.1) do deploy/.ansible'
+    cmds:
+      - '{{.ANSIBLE_SH}} galaxy'
+
+  deploy-syntax:
+    desc: 'ansible-playbook --syntax-check dla wszystkich playbooków deploy/'
+    cmds:
+      - '{{.ANSIBLE_SH}} syntax'
+
+  provision:
+    desc: 'Provision maszyny (kanał root, raz): unity, pasnik.env, pgpass, pasnik-cli. Vault: ~/pasnik-prod.yml (PASNIK_VAULT_FILE)'
+    interactive: true
+    cmds:
+      - '{{.ANSIBLE_SH}} provision {{.CLI_ARGS}}'
+
+  deploy:
+    desc: 'Wdrożenie na produkcję: fe-build → secrets-scan → ansistrano (dump → migracja → symlink → health). Próba: -- --check --diff'
+    cmds:
+      - task: fe-build
+      - task: secrets-scan
+      - '{{.ANSIBLE_SH}} deploy -e release_version={{.GIT_VERSION}} {{.CLI_ARGS}}'
+
+  rollback:
+    desc: 'Powrót do poprzedniego release (migracji NIE cofa — runbook w deploy/README.md). Konkretny: -- -e ansistrano_rollback_to_release=<ts>'
+    cmds:
+      - '{{.ANSIBLE_SH}} rollback {{.CLI_ARGS}}'
+
+  deploy-caddy-vhost:
+    desc: 'Renderuje przykładowy blok Caddy do deploy/.ansible/pasnik-caddy-vhost.conf (wkleja właściciel, D7)'
+    cmds:
+      - '{{.ANSIBLE_SH}} caddy-vhost'

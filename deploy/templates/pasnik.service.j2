@@ -1,0 +1,55 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Paśnik — planowanie posiłków i zakupów (uvicorn)
+Documentation=file://{{ deploy_to }}/{{ ansistrano_current_dir }}/backend/scripts/serve.sh
+# Baza jest na INNYM hoście (.121), ale `degraded` w /health to informacja dla
+# operatora, nie powód do restartu (09 §2) — usługa nie czeka na bazę.
+After=network-online.target
+Wants=network-online.target
+# Zła konfiguracja kończy się kodem ≠ 0, a `Restart=on-failure` próbowałby bez
+# końca. Po dziesięciu nieudanych startach w minucie usługa ma wpaść w `failed`
+# i tam zostać: widać to w `systemctl status`, w przeciwieństwie do cichej pętli.
+StartLimitIntervalSec=60
+StartLimitBurst=10
+
+[Service]
+Type=simple
+User={{ app_user }}
+Group={{ app_group }}
+# `current` to symlink przełączany przez ansistrano; systemd rozwiązuje go przy
+# KAŻDYM starcie, więc restart po przełączeniu bierze nowy release.
+WorkingDirectory={{ deploy_to }}/{{ ansistrano_current_dir }}/backend
+# Konfiguracja WYŁĄCZNIE stąd — w katalogu release'u nie ma i nie może być
+# żadnego `.env` (guard w tasks/after-update.yml).
+EnvironmentFile={{ pasnik_env_file }}
+# `uvicorn` z PATH to ten z venv release'u (serve.sh go nie zna z nazwy ścieżki).
+Environment=PATH={{ deploy_to }}/{{ ansistrano_current_dir }}/backend/.venv/bin:/usr/local/bin:/usr/bin:/bin
+# Wersja release'u → APP_VERSION → pole `version` w /api/v1/health.
+Environment=PASNIK_VERSION_FILE={{ deploy_to }}/{{ ansistrano_current_dir }}/VERSION
+# Bufor wyłączony: logi JSON pojawiają się w journalu na bieżąco. Bytecode:
+# release należy do `deploy` (katalogi tylko do odczytu dla `pasnik`), więc
+# .pyc powstają w hooku after-update (compileall), nie w runtime.
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+# JEDNO źródło flag uvicorna (09 §2): ten sam skrypt co w obrazie prod.
+ExecStart=/bin/sh {{ deploy_to }}/{{ ansistrano_current_dir }}/backend/scripts/serve.sh
+
+# Graceful shutdown uvicorna: SIGTERM, 30 s na dokończenie żądań.
+KillSignal=SIGTERM
+TimeoutStopSec=30
+Restart=on-failure
+RestartSec=5
+
+# Hardening (09 §2). Zapis wyłącznie do uploadów (zdjęcia + scratch kopii danych).
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths={{ uploads_dir }}
+PrivateTmp=yes
+ProtectHome=yes
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier={{ service_name }}
+
+[Install]
+WantedBy=multi-user.target

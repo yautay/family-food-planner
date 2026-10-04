@@ -1,0 +1,219 @@
+---
+# Hook ansistrano `after_update_code`: release leży już na maszynie, ale
+# `current` jeszcze na niego nie wskazuje. To ostatni moment, żeby go odrzucić —
+# i moment, w którym powstaje venv (kanał `deploy`, bez roota).
+#
+# Wszystko operuje na ścieżce release'u: przy pierwszym deployu `current` nie
+# istnieje, a przy kolejnych wskazuje STARY kod.
+
+- name: Ścieżka release'u
+  ansible.builtin.set_fact:
+    # W ansistrano 4.x to zwykły ciąg; `.stdout` było w wersjach 3.x i wraca
+    # w komunikatach błędów, więc fallback zostaje.
+    release_path: "{{ ansistrano_release_path.stdout | default(ansistrano_release_path) }}"
+
+- name: Ścieżka release'u jest sensowna
+  ansible.builtin.assert:
+    that:
+      - release_path is string
+      - release_path | length > 1
+      - release_path.startswith(deploy_to ~ '/releases/')
+    fail_msg: >-
+      Nie udało się ustalić ścieżki release'u z `ansistrano_release_path`
+      ({{ ansistrano_release_path | default('(brak)') }}). Sprawdź wersję roli
+      ansistrano.deploy — requirements.yml przypina 4.4.0.
+    quiet: true
+
+# --- strażnik sekretów -------------------------------------------------------
+# Wykluczenia rsynca są w `group_vars/all.yml`, ale lista wykluczeń to
+# konfiguracja, a to jest DOWÓD na tym, co naprawdę leży na maszynie. Plik
+# `.env` albo klucz w release'ie oznacza, że sekret pojechał razem z kodem
+# (07_SECURITY §7). Lista wzorców jest przepisana z wykluczeń rsynca (blok 1b)
+# — test_deploy_config pilnuje, żeby obie zostały zgodne.
+- name: Szukaj plików, które nie mogą trafić do release'u
+  ansible.builtin.find:
+    paths: "{{ release_path }}"
+    patterns:
+      - ".env"
+      - ".env.*"
+      - "*.env"
+      - ".netrc"
+      - "*.netrc"
+      - "*_key"
+      - "*.pem"
+      - "*.key"
+      - "id_rsa"
+      - "id_rsa.*"
+      - "id_ed25519"
+      - "id_ed25519.*"
+      - "id_ecdsa"
+      - "id_ecdsa.*"
+      - "known_hosts"
+      - "known_hosts.*"
+      - "authorized_keys"
+      - "*vault*"
+      - "pasnik.env"
+      - "pgpass"
+    hidden: true
+    recurse: true
+  register: leaked
+
+# `assert` sam przerwałby play i zostawił katalog z sekretem na maszynie — ansistrano
+# sprząta nieudany release w `rescue`, ale nie polegamy na tym: kasujemy PRZED
+# assertem, żeby plik, który nie miał prawa opuścić maszyny dewelopera, nie leżał
+# na hoście do końca świata.
+- name: Skasuj release, który przywiózł plik z sekretem
+  ansible.builtin.file:
+    path: "{{ release_path }}"
+    state: absent
+  when: leaked.matched | int > 0
+
+- name: Release nie zawiera plików z sekretami
+  ansible.builtin.assert:
+    that:
+      - leaked.matched == 0
+    # Same nazwy plików, bez ścieżek: komunikat idzie do logu Ansible na
+    # maszynie operatora i nie ma powodu, żeby niósł więcej niż trzeba.
+    fail_msg: >-
+      W release'ie były pliki, których tam być nie może:
+      {{ leaked.files | map(attribute='path') | map('basename') | list }}.
+      Release został skasowany z maszyny, `current` bez zmian. Usuń te pliki
+      z drzewa roboczego albo popraw `ansistrano_rsync_extra_params`
+      w `group_vars/all.yml`.
+    quiet: true
+
+- name: Release nie zawiera katalogów maszyny dewelopera
+  ansible.builtin.stat:
+    path: "{{ release_path }}/{{ item }}"
+  register: forbidden_paths
+  loop:
+    - .git
+    - .venv
+    - docs
+    - docker
+    - deploy
+    - tests
+    - backend/tests
+    - backend/data
+    - frontend/src
+    - frontend/node_modules
+    - node_modules
+    - landing
+
+- name: Wykluczone ścieżki naprawdę nie trafiły do release'u
+  ansible.builtin.assert:
+    that:
+      - not item.stat.exists
+    fail_msg: "`{{ item.item }}` trafiło do release'u, a nie powinno."
+    quiet: true
+  loop: "{{ forbidden_paths.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+# `Settings.env_file=(".env","../.env")` względem katalogu roboczego: plik
+# `.env` w `backend/` albo w katalogu release'u nadpisałby `EnvironmentFile`.
+# Guard wyżej łapie `.env*`; ten dowód jest wprost o tych dwóch lokalizacjach.
+- name: W release'ie nie leży żaden `.env` czytany przez Settings
+  ansible.builtin.stat:
+    path: "{{ release_path }}/{{ item }}"
+  register: dotenv_probe
+  loop:
+    - .env
+    - backend/.env
+  loop_control:
+    label: "{{ item }}"
+
+- name: Konfiguracja przychodzi wyłącznie z EnvironmentFile
+  ansible.builtin.assert:
+    that:
+      - not item.stat.exists
+    fail_msg: >-
+      `{{ item.item }}` w release'ie — Settings czyta go przed zmiennymi
+      środowiska usługi? Nie: zmienne procesu wygrywają, ale plik z sekretem
+      nie ma prawa tu leżeć (07_SECURITY §7).
+    quiet: true
+  loop: "{{ dotenv_probe.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+# --- frontend i wersja -------------------------------------------------------
+- name: SPA dojechało razem z release'em
+  ansible.builtin.stat:
+    path: "{{ release_path }}/frontend/dist/index.html"
+  register: release_dist
+
+- name: SPA jest w release'ie
+  ansible.builtin.assert:
+    that: release_dist.stat.exists
+    fail_msg: >-
+      W release'ie nie ma frontend/dist/index.html — backend z ustawionym
+      SPA_DIST_DIR nie wstanie (app/core/spa.py). Uruchom `task fe-build`
+      i powtórz deploy.
+    quiet: true
+
+- name: Wersja release'u (plik VERSION) i znacznik builda SPA
+  ansible.builtin.slurp:
+    src: "{{ release_path }}/{{ item }}"
+  register: release_stamps
+  loop:
+    - VERSION
+    - frontend/dist/build-info.json
+
+- name: Build SPA jest z tego samego wydania co kod
+  # Drugi strażnik stechłego dista (pierwszy jest po stronie localhost): ten
+  # sprawdza to, co NAPRAWDĘ dojechało na maszynę.
+  vars:
+    version_file: "{{ (release_stamps.results[0].content | b64decode).splitlines() | first | trim }}"
+    build_info: "{{ release_stamps.results[1].content | b64decode | from_json }}"
+  ansible.builtin.assert:
+    that:
+      - build_info.version | default('') == version_file
+    fail_msg: >-
+      frontend/dist jest z innego wydania niż kod: dist mówi
+      "{{ build_info.version | default('(brak)') }}", VERSION mówi
+      "{{ version_file }}". Uruchom `task fe-build` i powtórz deploy.
+    quiet: true
+
+# --- venv release'u ----------------------------------------------------------
+# Serwer potrzebuje PyPI (ADR-017); `uv.lock` gwarantuje powtarzalność, a cache
+# w `shared/uv-cache` skraca kolejne deploye. `--python` + UV_PYTHON_DOWNLOADS=never:
+# venv powstaje z systemowego Pythona 3.13, uv nie pobiera własnego. Tylko koła
+# (wheels) — na maszynie nie ma kompilatora.
+- name: Zależności release'u w jego własnym venv (uv sync --frozen --no-dev)
+  ansible.builtin.command:
+    argv:
+      - "{{ uv_bin }}"
+      - sync
+      - --frozen
+      - --no-dev
+      - --python
+      - "{{ python_bin }}"
+    chdir: "{{ release_path }}/backend"
+  environment:
+    UV_CACHE_DIR: "{{ uv_cache_dir }}"
+    UV_PYTHON_DOWNLOADS: never
+    UV_COMPILE_BYTECODE: "1"
+    UV_LINK_MODE: copy
+    UV_NO_PROGRESS: "1"
+  register: uv_sync
+  changed_when: true
+
+# Bytecode kodu aplikacji powstaje TU (kanał `deploy`, release jest jego): usługa
+# działa jako `pasnik` z PYTHONDONTWRITEBYTECODE, więc bez tego każdy start
+# kompilowałby kod od zera — a zimny start i tak trwa ~1,5 s (09 §2).
+- name: Kompilacja bytecode'u aplikacji
+  ansible.builtin.command:
+    argv: ["{{ release_path }}/backend/.venv/bin/python", -m, compileall, -q, app]
+    chdir: "{{ release_path }}/backend"
+  changed_when: false
+
+- name: Import-smoke release'u (python -c "import app.main")
+  ansible.builtin.command:
+    argv: ["{{ release_path }}/backend/.venv/bin/python", -c, "import app.main"]
+    chdir: "{{ release_path }}/backend"
+  changed_when: false
+
+- name: Wersja release'u
+  ansible.builtin.debug:
+    msg: >-
+      release {{ release_path | basename }} = {{ (release_stamps.results[0].content | b64decode) | trim }}

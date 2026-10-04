@@ -71,3 +71,28 @@ Zastępuje: **ADR-002** (w całości — punkty 6 i 7 przenoszą jego zasady,
 które nadal obowiązują). Doprecyzowuje: **ADR-014** (decyzja rdzeniowa —
 backend serwuje SPA i uploady z jednego originu — bez zmian; „jeden obraz do
 wdrożenia i rollbacku" zastępuje „jeden katalog release").
+
+## Aneks B18a — doprecyzowania z implementacji (2026-10-03)
+
+Nie zmieniają decyzji, domykają to, co karta zostawiła do wyboru:
+
+9. **Jedno źródło flag uvicorna**: `backend/scripts/serve.sh` (jedzie i do obrazu,
+   i do release'u). `docker/entrypoint.sh` jest cienkim wywołaniem; unit LXC woła
+   ten sam skrypt z `PATH` zaczynającym się od `backend/.venv/bin`. Wersja
+   release'u (`APP_VERSION`) pochodzi z pliku `VERSION` (`PASNIK_VERSION_FILE`),
+   więc `pasnik.env` — renderowany raz — jej nie niesie.
+10. **Skrypty backupu** zostają w `docker/backup/` i `backend/scripts/`; provision
+    kopiuje je do `/usr/local/lib/pasnik/`. Dump przed migracją to
+    `systemctl start pasnik-backup` (ten sam unit co timer), a asercję nowego
+    zestawu robi `pasnik-cli` jako `pasnik` — `deploy` nie czyta `shared/backups`.
+11. **`pasnik-cli`** ładuje środowisko pętlą po `pasnik.env`, a nie `source`
+    i nie `systemd-run` (ten wymaga roota, a sudoers daje deployowi wyłącznie
+    `-u pasnik pasnik-cli`). Równoważność z `EnvironmentFile=` zapewnia
+    ograniczony format pliku (bez spacji i cudzysłowów — test).
+12. **Port aplikacji na .111 zamyka `DOCKER-USER`, nie ufw**: proxy device
+    `nat=true` robi DNAT, który omija INPUT. Reguła DROP na pozycji 1 łańcucha
+    (`deploy/lxc/host-firewall.sh`) jest warunkiem bezpieczeństwa
+    `FORWARDED_ALLOW_IPS=192.168.2.121`.
+13. **Release = biała lista rsynca** (`backend/`, `frontend/dist/`, `VERSION`),
+    bez `docker/`, `docs/`, `deploy/`, testów i danych; strażnik stechłego dista
+    porównuje `git describe` z `dist/build-info.json` (vite).

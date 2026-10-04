@@ -1,0 +1,83 @@
+#!/bin/sh
+# {{ ansible_managed }}
+#
+# pasnik-cli — uruchamia polecenie JAKO `{{ app_user }}`, w katalogu `backend/`
+# wybranego release'u, z TYM SAMYM środowiskiem co usługa `{{ service_name }}`.
+#
+#   pasnik-cli [--release KATALOG] -- POLECENIE [ARGUMENTY...]
+#
+#   pasnik-cli -- python -m app.cli create-admin      (interaktywnie; TTY: ssh -t root@…)
+#   pasnik-cli -- python -m app.cli uploads-report
+#   pasnik-cli --release {{ deploy_to }}/releases/<ts> -- alembic upgrade head
+#
+# Kto może wołać: `root` (kanał provisionu) oraz `{{ deploy_user }}` przez
+# `sudo -n -u {{ app_user }} {{ cli_path }}` — jedyny wpis sudoers poza `systemctl`
+# (deploy/lxc/provision.sh). Z `root` skrypt przechodzi na `{{ app_user }}`
+# (`runuser`), więc POLECENIE ZAWSZE chodzi z uprawnieniami usługi.
+#
+# Środowisko czyta ZWYKŁA PĘTLA po `{{ pasnik_env_file }}`, a NIE `source` pliku
+# powłoką (dług nr 1 runnera: wartość ze spacją, nawiasem albo cudzysłowem
+# czytałaby powłoka inaczej niż systemd). Plik ma ograniczony format
+# (`KLUCZ=wartość` bez spacji i cudzysłowów — pilnuje test_deploy_config),
+# więc ta pętla i `EnvironmentFile=` dają identyczny wynik.
+# Różnica względem usługi: brak sandboxu unitu (ProtectSystem itd.) i brak
+# limitów — to narzędzie operatora, nie proces serwera.
+set -eu
+
+ENV_FILE="{{ pasnik_env_file }}"
+RELEASES_DIR="{{ deploy_to }}/releases"
+CURRENT="{{ deploy_to }}/{{ ansistrano_current_dir }}"
+APP_USER="{{ app_user }}"
+
+die() { printf 'pasnik-cli: %s\n' "$*" >&2; exit 2; }
+
+if [ "$(id -u)" -eq 0 ]; then
+    exec runuser -u "$APP_USER" -- "{{ cli_path }}" "$@"
+fi
+[ "$(id -un)" = "$APP_USER" ] || die "uruchom jako $APP_USER (sudo -u $APP_USER) albo root"
+
+release="$CURRENT"
+if [ "${1:-}" = "--release" ]; then
+    [ -n "${2:-}" ] || die "--release wymaga katalogu"
+    release="$2"
+    shift 2
+fi
+[ "${1:-}" = "--" ] || die "użycie: pasnik-cli [--release KATALOG] -- POLECENIE [ARGUMENTY...]"
+shift
+[ "$#" -gt 0 ] || die "brak polecenia po --"
+
+# Release musi leżeć w `releases/` (albo być `current`) — bez ucieczek `..`.
+resolved="$(cd "$release" 2>/dev/null && pwd -P)" || die "nie ma katalogu release'u: $release"
+case "$resolved" in
+    "$RELEASES_DIR"/*) : ;;
+    *) die "release spoza $RELEASES_DIR: $resolved" ;;
+esac
+[ -d "$resolved/backend/.venv" ] || die "brak venv w $resolved/backend (po deployu jest tworzony w hooku after-update)"
+
+[ -r "$ENV_FILE" ] || die "brak odczytu $ENV_FILE"
+while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in
+        ''|'#'*) continue ;;
+    esac
+    key=${line%%=*}
+    value=${line#*=}
+    case "$key" in
+        ''|*[!A-Za-z0-9_]*) die "linia w $ENV_FILE nie jest KLUCZ=wartość" ;;
+    esac
+    export "$key=$value"
+done < "$ENV_FILE"
+
+# Te same dodatki co w `pasnik.service`, ale względem WYBRANEGO release'u
+# (hook migracji idzie na nowym, zanim `current` zostanie przełączony).
+PATH="$resolved/backend/.venv/bin:/usr/local/bin:/usr/bin:/bin"
+PASNIK_VERSION_FILE="$resolved/VERSION"
+PYTHONUNBUFFERED=1
+PYTHONDONTWRITEBYTECODE=1
+export PATH PASNIK_VERSION_FILE PYTHONUNBUFFERED PYTHONDONTWRITEBYTECODE
+if [ -r "$PASNIK_VERSION_FILE" ]; then
+    APP_VERSION="$(head -n 1 "$PASNIK_VERSION_FILE")"
+    export APP_VERSION
+fi
+
+cd "$resolved/backend"
+exec "$@"

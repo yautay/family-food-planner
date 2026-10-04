@@ -1,0 +1,122 @@
+---
+# Hook ansistrano `after_symlink` (deploy) ORAZ `rollback_after_symlink`
+# (rollback): `current` wskazuje już na właściwy release, więc usługa ma czym
+# wstać. Jedna definicja „zdrowego wdrożenia" dla obu kierunków.
+#
+# KANAŁ DEPLOYU, nie root. Konto `{{ deploy_user }}` ma dokładnie te polecenia
+# w `/etc/sudoers.d/60-pasnik-deploy` i ani jednego więcej — dlatego wołamy `sudo`
+# wprost, zamiast `become: true`. Rozjazd tej listy z sudoersami widać tu
+# natychmiast. Journal czyta TYLKO root, więc przy porażce rescue przełącza
+# pojedyncze zadanie na kanał roota (task-level `ansible_user`).
+#
+# Wszystkie zadania tylko-czytające mają `check_mode: false`: w `--check` rola
+# ansistrano jest pominięta (patrz playbook-deploy.yml), a te zadania mówią
+# o usłudze, która chodzi TERAZ.
+
+- name: Restart usługi i dowód zdrowia
+  block:
+    - name: Przeładuj systemd (unit mógł się zmienić w provisionie)
+      ansible.builtin.command:
+        argv: [sudo, -n, /usr/bin/systemctl, daemon-reload]
+      changed_when: true
+
+    - name: Restart usługi {{ service_name }}
+      ansible.builtin.command:
+        argv: [sudo, -n, /usr/bin/systemctl, restart, "{{ service_name }}"]
+      changed_when: true
+
+    - name: Usługa jest aktywna
+      ansible.builtin.command:
+        argv: [sudo, -n, /usr/bin/systemctl, is-active, "{{ service_name }}"]
+      register: is_active
+      changed_when: false
+      failed_when: false
+      check_mode: false
+      # `Restart=on-failure` z `RestartSec=5` daje usłudze chwilę na wstanie.
+      retries: 10
+      delay: 2
+      until: is_active.stdout | trim == 'active'
+
+    - name: Usługa musi być aktywna po wdrożeniu
+      ansible.builtin.assert:
+        that:
+          - is_active.stdout | trim == 'active'
+        fail_msg: >-
+          `systemctl is-active {{ service_name }}` zwróciło `{{ is_active.stdout | trim }}`.
+        quiet: true
+
+    # Wersja, którą MA zwracać health = to, na co wskazuje `current` po
+    # przełączeniu (deploy: nowy release, rollback: poprzedni). Wersję stempluje
+    # `serve.sh` z pliku VERSION do APP_VERSION usługi.
+    - name: Wersja release'u pod `current`
+      ansible.builtin.slurp:
+        src: "{{ deploy_to }}/{{ ansistrano_current_dir }}/VERSION"
+      register: current_version_raw
+      check_mode: false
+
+    - name: Oczekiwana wersja
+      ansible.builtin.set_fact:
+        expected_version: "{{ (current_version_raw.content | b64decode).splitlines() | first | trim }}"
+
+    # `degraded` to też HTTP 200 (09 §2) — sam kod przepuściłby nieudaną migrację
+    # albo odciętą bazę. Dlatego asercja idzie na TREŚĆ: status ok i wersja.
+    - name: /api/v1/health — status ok i wersja wdrożonego release'u
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ app_port }}/api/v1/health"
+        return_content: true
+        status_code: 200
+        timeout: 10
+      register: health
+      check_mode: false
+      retries: 20
+      delay: 3
+      until:
+        - health.status is defined
+        - health.status == 200
+        - health.json is defined
+        - health.json.status == 'ok'
+        - health.json.version == expected_version
+
+    - name: Health po wdrożeniu
+      ansible.builtin.debug:
+        msg: "{{ health.json }}"
+
+    - name: "Migracje na head (checks.migrations = ok)"
+      ansible.builtin.assert:
+        that:
+          - health.json.checks.db == 'ok'
+          - health.json.checks.migrations == 'ok'
+          - health.json.checks.disk == 'ok'
+        fail_msg: "Health ma status ok, ale checks = {{ health.json.checks }}."
+        quiet: true
+
+    # Dokumentacja API nie istnieje w prod (`docs_url=None`), a catch-all SPA
+    # nie oddaje `index.html` pod `/api/*` — oczekujemy kontraktowego 404.
+    - name: Dokumentacja API nie istnieje na produkcji
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ app_port }}/api/docs"
+        status_code: 404
+        timeout: 10
+      check_mode: false
+
+  rescue:
+    - name: Journal usługi (kanał root) — ostatnie 50 linii
+      ansible.builtin.command:
+        argv: [journalctl, -u, "{{ service_name }}", -n, "50", --no-pager, -o, cat]
+      vars:
+        ansible_user: "{{ admin_user }}"
+      register: failure_journal
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    - name: Przyczyna widoczna w journalu
+      ansible.builtin.debug:
+        msg: "{{ failure_journal.stdout_lines | default(['brak odczytu journala (kanał root niedostępny?)']) }}"
+
+    - name: Wdrożenie NIE jest zdrowe
+      ansible.builtin.fail:
+        msg: >-
+          Po restarcie {{ service_name }} health nie potwierdził wdrożenia
+          (zadanie: {{ ansible_failed_task.name | default('?') }}). Ostatnie
+          linie journala wyżej. Rollback: `task rollback`.

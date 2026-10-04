@@ -1,0 +1,13 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Paśnik — backup nocny
+
+[Timer]
+# 03:00 czasu polskiego (09 §3). Persistent=true: przebieg pominięty przez
+# wyłączony kontener albo host nadrabia się po starcie.
+OnCalendar={{ backup_oncalendar }}
+Persistent=true
+Unit={{ backup_service_name }}.service
+
+[Install]
+WantedBy=timers.target

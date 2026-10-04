@@ -1,0 +1,27 @@
+---
+# Renderuje PRZYKŁADOWY blok Caddy'ego dla Paśnika (D7) do pliku lokalnego:
+#
+#   cd deploy && ANSIBLE_CONFIG=ansible.cfg ansible-playbook -i inventories/prod playbook-caddy-vhost.yml
+#   → deploy/.ansible/pasnik-caddy-vhost.conf
+#
+# NICZEGO nie zapisuje na hostach: blok w /etc/caddy/Caddyfile na .121 PODMIENIA
+# (nie dopisuje) właściciel — komendy i pułapki w deploy/README.md i w komentarzu
+# samego szablonu. Plik leży w `deploy/.ansible/` (gitignored).
+- name: Paśnik | przykładowy blok Caddy (lokalnie)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - group_vars/prod.yml
+  vars:
+    ansible_python_interpreter: "{{ ansible_playbook_python }}"
+  tasks:
+    - name: Wyrenderuj blok Caddy do pliku przykładowego
+      ansible.builtin.template:
+        src: caddy-vhost.example.j2
+        dest: "{{ playbook_dir }}/.ansible/pasnik-caddy-vhost.conf"
+        mode: "0644"
+
+    - name: Gdzie leży przykład
+      ansible.builtin.debug:
+        msg: "Blok dla {{ domain }} → {{ playbook_dir }}/.ansible/pasnik-caddy-vhost.conf"

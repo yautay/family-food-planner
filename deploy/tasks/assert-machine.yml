@@ -1,0 +1,116 @@
+---
+# Asserty provisionu: czy maszyna jest tą, którą obiecuje `deploy/lxc/`.
+#
+# NIC TU SIĘ NIE INSTALUJE. Jeśli którykolwiek assert jest czerwony, odpowiedzią
+# jest odtworzenie maszyny (`create-incus.sh --recreate`), a nie doinstalowanie
+# brakującego kawałka Ansiblem — inaczej maszyna przestaje być plikiem.
+#
+# Trzon sprawdzenia to SAMOTEST z obrazu, a nie lista warunków przepisana do
+# YAML-a: jest jednym artefaktem, chodzi tak samo z Ansible, z `incus exec`
+# i z ręki operatora, i nie da się go rozjechać z deklaracją maszyny. Poniżej
+# powtarzamy tylko to, co ma sens dla ŚCIEŻKI, którą pójdzie `ExecStart`.
+
+- name: Samotest maszyny (`pasnik-selftest`) — kod 0 jest warunkiem provisionu i deployu
+  ansible.builtin.command:
+    argv: ["{{ selftest_path }}"]
+  register: selftest
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Wynik samotestu
+  ansible.builtin.debug:
+    msg: "{{ selftest.stdout_lines | default(['brak wyjścia']) }}"
+
+- name: Samotest maszyny musi kończyć się kodem 0
+  ansible.builtin.assert:
+    that:
+      - selftest.rc == 0
+    fail_msg: >-
+      `{{ selftest_path }}` zakończył się kodem {{ selftest.rc }}. Maszyna nie
+      zgadza się z deklaracją `deploy/lxc/` — odtwórz ją
+      (`create-incus.sh --recreate`), nie łataj Ansiblem.
+    quiet: true
+
+# Samotest pyta o `/usr/bin/python3`, a venv release'u powstaje z `python_bin`.
+- name: Interpreter z `python_bin` istnieje i jest w wersji {{ python_required }}
+  ansible.builtin.command:
+    argv: ["{{ python_bin }}", "-c", "import sys; print('%d.%d.%d' % sys.version_info[:3])"]
+  register: python_version
+  changed_when: false
+  check_mode: false
+
+- name: Wersja interpretera zgadza się z `requires-python`
+  ansible.builtin.assert:
+    that:
+      - python_version.stdout.startswith(python_required ~ '.')
+    fail_msg: >-
+      {{ python_bin }} to {{ python_version.stdout }}, a `backend/pyproject.toml`
+      wymaga {{ python_required }}.x.
+    quiet: true
+
+- name: Klient PostgreSQL w wersji SERWERA (pg_dump)
+  ansible.builtin.command:
+    argv: [pg_dump, --version]
+  register: pg_dump_version
+  changed_when: false
+  check_mode: false
+
+- name: pg_dump jest w wersji 16 (dump klienta 17 nie zawsze wraca na serwer 16)
+  ansible.builtin.assert:
+    that:
+      - "' 16.' in pg_dump_version.stdout"
+    fail_msg: >-
+      `pg_dump --version` = {{ pg_dump_version.stdout }}. Klient ma być z
+      `postgresql-client-16` (PGDG) — odtwórz maszynę.
+    quiet: true
+
+# Elementy pętli to słowniki {path, mode, owner}: KLUCZE słowników w `vars:` nie
+# są przepuszczane przez Jinja, więc `{{ deploy_to }}` w kluczu zostałoby literałem.
+- name: Katalogi danych i konfiguracji
+  ansible.builtin.stat:
+    path: "{{ item.path }}"
+  register: machine_dirs
+  loop:
+    - {path: "{{ deploy_to }}/releases", mode: "0755", owner: "{{ deploy_user }}"}
+    - {path: "{{ uv_cache_dir }}", mode: "0755", owner: "{{ deploy_user }}"}
+    - {path: "{{ uploads_dir }}", mode: "0750", owner: "{{ app_user }}"}
+    - {path: "{{ backups_dir }}", mode: "0750", owner: "{{ app_user }}"}
+    - {path: "{{ env_dir }}", mode: "0750", owner: root}
+    - {path: "{{ lib_dir }}", mode: "0755", owner: root}
+  loop_control:
+    label: "{{ item.path }}"
+  check_mode: false
+
+- name: Uprawnienia katalogów zgodne z 09_DEPLOYMENT §1
+  ansible.builtin.assert:
+    that:
+      - item.stat.isdir
+      - item.stat.mode == item.item.mode
+      - item.stat.pw_name == item.item.owner
+    fail_msg: >-
+      {{ item.item.path }} ma {{ item.stat.mode | default('brak katalogu') }}
+      {{ item.stat.pw_name | default('') }}, oczekiwane
+      {{ item.item.mode }} {{ item.item.owner }}.
+    quiet: true
+  loop: "{{ machine_dirs.results }}"
+  loop_control:
+    label: "{{ item.item.path }}"
+
+# ADR-017 pkt 1: gdyby ktoś doinstalował silnik kontenerów, samotest już by to
+# zgłosił. Ten assert jest tu dla czytelności wyniku — komunikat mówi o DECYZJI.
+- name: Na maszynie nie ma silnika kontenerów
+  ansible.builtin.command:
+    argv: [sh, -c, 'command -v docker podman || true']
+  register: container_cli
+  changed_when: false
+  check_mode: false
+
+- name: Silnik kontenerów nie może istnieć w LXC
+  ansible.builtin.assert:
+    that:
+      - container_cli.stdout | trim | length == 0
+    fail_msg: >-
+      W LXC jest {{ container_cli.stdout | trim }}. ADR-017: produkcja bez
+      Dockera — aplikacja i backup chodzą jako usługi systemd.
+    quiet: true

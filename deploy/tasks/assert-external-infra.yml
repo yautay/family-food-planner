@@ -1,0 +1,84 @@
+---
+# Czy zewnętrzna baza jest osiągalna z LXC — kanał ROOT, PRZED rsyncem release'u.
+# Wywoływane w playbook-deploy.yml (play „przed deployem"). Perspektywa jest
+# wyłącznie sieciowa i „rolą aplikacji": kontener, który nie dosięga bazy na
+# .121 (Docker na hoście odcina NAT Incusa — dług O4 runnera), nie ma co dostać
+# release'u, bo `alembic upgrade head` i tak padłby w połowie wydania.
+#
+# CZEGO TEN PLIK NIE ROBI (świadomie): nie zakłada bazy ani roli, nie dotyka
+# klastra `postgres-apps` (Out of Scope B18). Wykrywa stan i raportuje; naprawa
+# należy do operatora klastra / hosta.
+
+- name: Komendy diagnostyczne do komunikatów błędu
+  ansible.builtin.set_fact:
+    infra_diag_hint: |-
+      Co sprawdzić, w tej kolejności:
+        1. na hoście ({{ host_ip }}): sudo iptables -S DOCKER-USER   (reguły dla incusbr0 muszą istnieć i być utrwalone)
+        2. w LXC:                    ping -c1 {{ db_host }}  oraz  pg_isready -h {{ db_host }} -p {{ db_port }}
+        3. na hoście:                docker ps | grep postgres-apps  oraz  ss -ltn | grep {{ db_port }}
+        4. jeśli działa ufw:         sudo ufw status  (potrzebne: allow in/route na incusbr0, lxc/README.md §3)
+      Runbook: docs/OPERATIONS.md (po 18b), deploy/lxc/README.md sekcja 3.
+
+- name: Serwer PostgreSQL odpowiada (pg_isready z LXC)
+  ansible.builtin.command:
+    argv: [pg_isready, -h, "{{ db_host }}", -p, "{{ db_port }}", -t, "5"]
+  register: pg_isready
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Serwer bazy jest osiągalny z kontenera
+  ansible.builtin.assert:
+    that:
+      - pg_isready.rc == 0
+    fail_msg: |-
+      `pg_isready -h {{ db_host }} -p {{ db_port }}` zwrócił {{ pg_isready.rc }}:
+      {{ pg_isready.stdout | trim }}
+
+      {{ infra_diag_hint }}
+    quiet: true
+
+# `select 1` ROLĄ APLIKACJI, tym samym PGPASSFILE co backup — dowód, że hasło
+# w vaulcie pasuje do roli i że baza `{{ db_name }}` istnieje. Idzie przez
+# `runuser`, więc plik 0600 czyta jego właściciel (`{{ app_user }}`).
+- name: Rola aplikacji łączy się z bazą (`select 1`)
+  ansible.builtin.command:
+    argv:
+      - runuser
+      - -u
+      - "{{ app_user }}"
+      - --
+      - env
+      - "PGPASSFILE={{ pgpass_file }}"
+      - psql
+      - -h
+      - "{{ db_host }}"
+      - -p
+      - "{{ db_port }}"
+      - -U
+      - "{{ db_user }}"
+      - -d
+      - "{{ db_name }}"
+      - -tAc
+      - select 1
+  register: db_select
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  # Wyjście niesie komunikaty libpq, nie sekrety, ale stderr bywa cytowany
+  # z wiersza pgpass — nie ryzykujemy wycieku w logu Ansible.
+  no_log: true
+
+- name: Baza odpowiada na zapytanie rolą aplikacji
+  ansible.builtin.assert:
+    that:
+      - db_select.rc == 0
+      - db_select.stdout | trim == '1'
+    fail_msg: |-
+      Rola `{{ db_user }}` nie połączyła się z bazą `{{ db_name }}` na
+      {{ db_host }}:{{ db_port }} (kod {{ db_select.rc }}). Możliwe przyczyny:
+      złe hasło w vaulcie (`-e force_env=true` po poprawce), brak bazy/roli na
+      klastrze, `pg_hba` odrzuca adres LXC.
+
+      {{ infra_diag_hint }}
+    quiet: true

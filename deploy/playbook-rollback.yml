@@ -1,0 +1,68 @@
+---
+# ROLLBACK — powrót do poprzedniego release'u.
+#
+#   task rollback
+#   cd deploy && ANSIBLE_CONFIG=ansible.cfg ansible-playbook -i inventories/prod playbook-rollback.yml
+#
+# Przełącza `current` na poprzedni katalog w `releases/` i restartuje usługę
+# (restart-and-health.yml: health z asercją na treść i na wersję PRZYWRÓCONEGO
+# release'u). Pliki konfiguracji (`{{ env_dir }}`) i dane (`shared/`) NIE są
+# częścią release'u, więc rollback ich nie dotyka — usługa wraca na stary kod
+# z tą samą konfiguracją, bazą i uploadami.
+#
+# Konkretny release zamiast poprzedniego:
+#   -e ansistrano_rollback_to_release=20261003120000Z
+#
+# ROLLBACK NIE COFA MIGRACJI. Jeśli nowy release zmigrował schemat, stary kod
+# może nie zgadzać się z bazą: najpierw `systemctl stop pasnik`, potem
+# `restore.sh` z dumpu sprzed migracji (`shared/backups`, wykonany przez hook
+# before-symlink tuż przed deployem), dopiero potem rollback (09 §4, runbook).
+# Downgrade schematu wyłącznie przetestowany (03_DATABASE §1).
+#
+# Rollback NIE cofa też zmian w unicie systemd ani w pasnik.env (zakłada je
+# provision) — przy awarii spowodowanej konfiguracją właściwą odpowiedzią jest
+# provision z `-e force_env=true`, nie ten playbook.
+- name: Paśnik | rollback release'u (kanał deployu)
+  hosts: all
+  # Jak w provisionie: fakty dopiero po ewentualnym odświeżeniu klucza hosta.
+  gather_facts: false
+  vars:
+    # UWAGA: rola `ansistrano.rollback` ma WŁASNE nazwy hooków
+    # (`ansistrano_rollback_*`), inne niż rola deploy — wzorzec runnera używał
+    # tu `ansistrano_after_symlink_tasks_file`, którego ta rola nie czyta, więc
+    # jego rollback nie sprawdzał zdrowia. Tu hook jest podpięty naprawdę.
+    ansistrano_rollback_after_symlink_tasks_file: "{{ playbook_dir }}/tasks/restart-and-health.yml"
+    # Wycofany release znika z maszyny. Domyślne `yes` roli zostaje: gdyby
+    # zostawał, `keep_releases` liczyłoby wersje, na które nikt nie wróci.
+    ansistrano_remove_rolled_back: true
+
+  pre_tasks:
+    - name: Skasuj przypięty klucz hosta (po odtworzeniu maszyny)
+      ansible.builtin.import_tasks: tasks/refresh-host-key.yml
+
+    - name: Fakty maszyny (po ustaleniu klucza hosta)
+      ansible.builtin.setup:
+
+    - name: Jest do czego wracać (co najmniej dwa release'y)
+      ansible.builtin.find:
+        paths: "{{ deploy_to }}/releases"
+        file_type: directory
+      register: releases
+      check_mode: false
+
+    - name: Rollback wymaga poprzedniego release'u
+      ansible.builtin.assert:
+        that:
+          - releases.matched >= 2
+        fail_msg: >-
+          W `{{ deploy_to }}/releases` jest {{ releases.matched }} katalog(ów) —
+          nie ma na co wrócić. Rollback działa od drugiego deployu.
+        quiet: true
+
+    - name: Release'y na maszynie (przed rollbackiem)
+      ansible.builtin.debug:
+        msg: "{{ releases.files | map(attribute='path') | map('basename') | sort | list }}"
+
+  roles:
+    - role: ansistrano.rollback
+      when: not ansible_check_mode

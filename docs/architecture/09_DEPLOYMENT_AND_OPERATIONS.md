@@ -7,7 +7,10 @@ na Odroidzie 192.168.2.111**, wdrażany **Ansible + ansistrano** wg wzorca
 `pasnik.cpt-sztos.com`). Docker na produkcji NIE występuje (D12 i ADR-002
 zastąpione). Ten dokument opisuje **stan faktyczny po BATCH_17** (healthcheck,
 skrypty backup/restore, konfiguracja przez env, obraz prod jako lokalny stos
-testowy) oraz założenia WIĄŻĄCE dla **BATCH_18** (maszyna, deploy, runbooki).
+testowy) i **po BATCH_18a** (maszyna `deploy/lxc/`, Ansible `deploy/`, usługa
+systemd, `pasnik-cli`, hooki dump → migracja → health). Backup nocny, drill
+i `docs/OPERATIONS.md` to BATCH_18b — tam, gdzie dokument opisuje 18b, jest to
+założenie wiążące, nie zrobiony fakt.
 
 ## 1. Topologia produkcyjna (założenia wiążące)
 
@@ -34,6 +37,13 @@ Operator (WSL, ansible-core) ─► 192.168.2.111:2223 ─► LXC:22   (proxy de
   łączy się z kontenerem z loopbacku, więc zaufany musiałby być `127.0.0.1`,
   a jedyną barierą przed podrobionym `X-Forwarded-For` byłby ufw na .111 —
   dopuszczalne wyłącznie jako odnotowane odstępstwo (§2 „Za proxy").
+  **Zapora na .111 (fakt B18a)**: ruch DNAT do kontenera przechodzi przez
+  FORWARD/`DOCKER-USER`, NIE przez INPUT, więc `ufw allow from .121 to any
+  port <APP_PORT>` go nie ogranicza. Port aplikacji zamyka reguła DROP na
+  POZYCJI 1 `DOCKER-USER` (`-d <IP kontenera> --dport 8000 ! -s 192.168.2.121`),
+  nakładana i utrwalana przez `deploy/lxc/host-firewall.sh` (unit
+  `pasnik-docker-user.service`, `After/PartOf=docker.service`). Goły
+  `-o incusbr0 -j ACCEPT` (rada z runnera) otwierałby port całemu LAN-owi.
 - **Rozkład w LXC** (ansistrano):
 
 ```
@@ -42,7 +52,11 @@ Operator (WSL, ansible-core) ─► 192.168.2.111:2223 ─► LXC:22   (proxy de
 /opt/pasnik/shared/uploads       UPLOADS_DIR (zdjęcia + scratch kopii danych)   (pasnik, 0750)
 /opt/pasnik/shared/backups       BACKUP_DIR (dumpy + kopie uploads)             (pasnik, 0750)
 /opt/pasnik/shared/uv-cache      cache uv między release'ami                    (deploy)
+/etc/pasnik/                     root:pasnik 0750
 /etc/pasnik/pasnik.env           konfiguracja + sekrety (root:pasnik 0640)
+/etc/pasnik/pgpass               hasło roli dla pg_dump/psql (pasnik 0600, PGPASSFILE)
+/usr/local/lib/pasnik/           backup.sh, restore.sh, backup_prune.py (root, kopiowane przez provision)
+/usr/local/bin/pasnik-cli        polecenia operatora jako `pasnik` ze środowiskiem usługi
 /etc/systemd/system/pasnik{,-backup}.{service,timer}
 ```
 
@@ -54,12 +68,17 @@ Operator (WSL, ansible-core) ─► 192.168.2.111:2223 ─► LXC:22   (proxy de
   `systemctl daemon-reload|start|stop|restart|is-active` dla `pasnik` i
   `pasnik-backup` oraz `pasnik-cli` jako `pasnik`), `pasnik` (system,
   nologin — z jego uprawnieniami działa aplikacja i backup).
-- **Release (stan docelowy B18)**: frontend budowany LOKALNIE (`task fe-build`)
-  i wysyłany jako `frontend/dist`; backend: `uv sync --frozen --no-dev` do
-  `backend/.venv` w katalogu release (serwer potrzebuje PyPI; cache uv
-  w `shared/`). Wersja = `git describe --tags --always --dirty` stemplowana
-  lokalnie do pliku w release (rsync NIE wysyła `.git`) i podawana usłudze
-  jako `APP_VERSION`, więc pole `version` w health = wdrożony release.
+- **Release (fakt B18a)**: frontend budowany LOKALNIE (`task fe-build`)
+  i wysyłany jako `frontend/dist`; backend: `uv sync --frozen --no-dev
+  --python /usr/bin/python3` do `backend/.venv` w katalogu release (serwer
+  potrzebuje PyPI; cache uv w `shared/uv-cache`). Do release'u jedzie WYŁĄCZNIE
+  biała lista rsynca: `backend/` (bez testów i danych), `frontend/dist/`
+  i plik `VERSION`. Wersja = `git describe --tags --always --dirty`
+  stemplowana lokalnie do `VERSION` (rsync NIE wysyła `.git`) i do
+  `frontend/dist/build-info.json` (vite); deploy odmawia, gdy te dwie wersje się
+  różnią (strażnik stechłego dista). `backend/scripts/serve.sh` czyta `VERSION`
+  do `APP_VERSION`, więc pole `version` w health = wdrożony release, a
+  `pasnik.env` wersji NIE niesie.
 - **Kontrakt cache SPA** (ADR-009, „trzy sprawdzenia" z karty B18):
   `assets/*` (hash w nazwie) → `Cache-Control: public, max-age=31536000,
   immutable`; `index.html`, `sw.js`, `workbox-*.js`, `manifest.webmanifest`
@@ -76,11 +95,13 @@ Operator (WSL, ansible-core) ─► 192.168.2.111:2223 ─► LXC:22   (proxy de
 ## 2. Start aplikacji, migracje, healthcheck
 
 - **Usługa** `pasnik.service`: `User=pasnik`, `WorkingDirectory=/opt/pasnik/current/backend`,
-  `EnvironmentFile=/etc/pasnik/pasnik.env`, `ExecStart` = uvicorn z venv
-  release'u z tymi samymi flagami co `docker/entrypoint.sh` (`app.main:create_app
-  --factory --host 0.0.0.0 --port 8000 --workers $UVICORN_WORKERS
-  --timeout-worker-healthcheck 30 --proxy-headers --no-server-header
-  --log-level …`), `Restart=on-failure`, `TimeoutStopSec=30` (graceful
+  `EnvironmentFile=/etc/pasnik/pasnik.env`,
+  `ExecStart=/bin/sh …/current/backend/scripts/serve.sh` — JEDNO źródło flag
+  uvicorna (`app.main:create_app --factory --host 0.0.0.0 --port 8000
+  --workers $UVICORN_WORKERS --timeout-worker-healthcheck 30 --proxy-headers
+  --no-server-header --log-level …`), wspólne z obrazem prod
+  (`docker/entrypoint.sh` woła ten sam skrypt); `PATH` jednostki zaczyna się od
+  `current/backend/.venv/bin`, `Restart=on-failure`, `TimeoutStopSec=30` (graceful
   shutdown uvicorna), hardening `NoNewPrivileges`, `ProtectSystem=strict`,
   `ReadWritePaths=/opt/pasnik/shared/uploads`, `PrivateTmp`, `ProtectHome`.
 - Aplikacja przy starcie NIE migruje. Migrację wykonuje hook ansistrano
@@ -136,6 +157,11 @@ Operator (WSL, ansible-core) ─► 192.168.2.111:2223 ─► LXC:22   (proxy de
   sukcesie; `umask 077` ⇒ uprawnienia 600.
 - **Skrypty**: `docker/backup/backup.sh`, `docker/backup/restore.sh`, retencja
   `backend/scripts/backup_prune.py` (czysta stdlib, testowana pytestem).
+  **Lokalizacja (decyzja B18a)**: zostają w repo tam, gdzie są (używa ich też
+  stack testowy), a `playbook-provision.yml` kopiuje je do
+  `/usr/local/lib/pasnik/` — nie mogą jechać w release'ie (hook `before-symlink`
+  robi dump PRZED pierwszym release'em, a rsync wyklucza `docker/`). Zmiana
+  skryptu = ponowny provision.
   Konfigurowane wyłącznie env (`PGHOST`, `PGPORT`, `PGUSER`, `PGDATABASE`,
   `BACKUP_DIR`, `UPLOADS_DIR`, `PRUNE_SCRIPT`, `BACKUP_KEEP_*`) — B18 uruchamia
   je w LXC bez zmian semantyki (ewentualne przeniesienie katalogu = decyzja
@@ -183,7 +209,8 @@ Operator (WSL, ansible-core) ─► 192.168.2.111:2223 ─► LXC:22   (proxy de
 
 ## 4. Update / rollback
 
-Wszystko z WSL w katalogu `deploy/` (cienkie wrappery w Taskfile — karta B18):
+Wszystko z WSL w katalogu `deploy/` (cienkie wrappery w Taskfile:
+`task provision|deploy|rollback`, opis: `deploy/README.md`):
 
 - **Provision** (`playbook-provision.yml`, kanał `root`, rzadko): asercje
   maszyny (selftest z `lxc/provision.sh`), szablony unitów systemd,
@@ -191,17 +218,23 @@ Wszystko z WSL w katalogu `deploy/` (cienkie wrappery w Taskfile — karta B18):
   `pasnik-cli`. Niczego nie instaluje — maszynę buduje `provision.sh`.
 - **Deploy** (`playbook-deploy.yml`, kanał `deploy`):
   1. pre-tasks: brak `CHANGE_ME`; lokalny `frontend/dist` istnieje i ma tę
-     samą wersję co release (stale-dist guard); baza osiągalna z LXC;
+     samą wersję co release (stale-dist guard); samotest maszyny, prawa plików
+     z sekretami; baza osiągalna z LXC rolą aplikacji (`pg_isready` +
+     `select 1`); `task secrets-scan` (wrapper `task deploy`);
   2. rsync do `releases/<ts>` (`--chmod=D755,F644`, `--delete-excluded`,
      bez `.git`, testów, `node_modules`, `.env*`, lokalnych uploadów);
   3. `after-update`: guard sekretów w release, `uv sync --frozen --no-dev`,
      import-smoke;
-  4. `before-symlink`: **dump bazy** (asercja niepustego pliku) →
-     `alembic upgrade head` z nowego release;
+  4. `before-symlink`: **dump bazy** przez `sudo systemctl start pasnik-backup`
+     (ten sam unit co timer; `Type=oneshot` blokuje do końca; asercja nowego,
+     niepustego zestawu przez `pasnik-cli`, bo `deploy` nie czyta
+     `shared/backups`) → `pasnik-cli --release <nowy> -- alembic upgrade head`;
   5. symlink `current` → `systemctl restart pasnik` → health z parsowaniem
      JSON (`status: ok`, `version` = release) → `/api/docs` = 404.
 - **Rollback** (`playbook-rollback.yml`): `ansistrano.rollback` do poprzedniego
-  release + ten sam restart i health. Migracji NIE cofa — gdy nowy release
+  release + ten sam restart i health (hook podpięty pod
+  `ansistrano_rollback_after_symlink_tasks_file` — rola rollback ma własne
+  nazwy hooków). Migracji NIE cofa — gdy nowy release
   migrował schemat: stop usługi → `restore.sh` dumpu sprzed migracji → rollback
   (downgrade wyłącznie przetestowany, 03_DATABASE §1).
 - Health po deployu ma pokazać `migrations: ok` — `fail` znaczy, że krok

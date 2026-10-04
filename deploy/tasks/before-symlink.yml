@@ -1,0 +1,127 @@
+---
+# Hook ansistrano `before_symlink`: ostatni moment, w którym `current` wskazuje
+# STARY release, czyli ostatni moment na kopię bazy PRZED migracją nowego
+# (ADR-017 pkt 6; aplikacja NIGDY nie migruje przy starcie).
+#
+# Wybór kanału dumpu (uzasadnienie wymagane przez kartę B18): `systemctl start
+# pasnik-backup` zamiast `pasnik-cli` z `backup.sh`. Powód: to TEN SAM kod,
+# unit i środowisko (PGPASSFILE, BACKUP_DIR, prune), które potem chodzą z timera
+# — dump przed migracją jest więc przebiegiem realnego backupu, a nie osobną
+# ścieżką, która mogłaby działać, gdy nocna nie działa. `Type=oneshot` sprawia,
+# że `start` blokuje do końca skryptu i zwraca jego kod wyjścia. Koszt: jeden
+# dodatkowy wpis sudoers (`start pasnik-backup`), którego i tak wymaga 18b.
+#
+# `deploy` nie czyta `shared/backups` (0750 pasnik, pliki 0600), więc asercję na
+# nowy, niepusty zestaw wykonuje `pasnik-cli` (jako `pasnik`) — nie ma tu
+# `become`, a katalog zostaje zamknięty dla konta deployu.
+
+- name: Znacznik czasu przed dumpem (sekundy epoki z zegara maszyny)
+  ansible.builtin.command:
+    argv: [date, +%s]
+  register: dump_started
+  changed_when: false
+  check_mode: false
+
+- name: Dump bazy przed migracją (pasnik-backup.service, blokujący)
+  ansible.builtin.command:
+    argv: [sudo, -n, /usr/bin/systemctl, start, "{{ backup_service_name }}"]
+  changed_when: true
+
+- name: Wynik jednostki backupu
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - show
+      - "{{ backup_service_name }}"
+      - --property=Result
+      - --property=ExecMainStatus
+  register: backup_unit
+  changed_when: false
+  check_mode: false
+
+- name: Backup zakończył się sukcesem
+  ansible.builtin.assert:
+    that:
+      - "'Result=success' in backup_unit.stdout"
+      - "'ExecMainStatus=0' in backup_unit.stdout"
+    fail_msg: >-
+      pasnik-backup.service nie zakończył się sukcesem ({{ backup_unit.stdout_lines }}).
+      Deploy zatrzymany PRZED migracją i przełączeniem release'u — instalacja
+      nadal chodzi na starym kodzie. Powód: `journalctl -u {{ backup_service_name }}
+      -n 50` (kanał root).
+    quiet: true
+
+# `-newermt @epoka`: tylko pliki NOWSZE niż początek tego dumpu; `-size +0` =
+# niepuste. Zestaw (B17) to dump + uploady + sumy kontrolne; `.env` jest
+# opcjonalny i domyślnie wyłączony.
+- name: Nowy, niepusty zestaw backupu w shared/backups
+  ansible.builtin.command:
+    argv:
+      - sudo
+      - -n
+      - -u
+      - "{{ app_user }}"
+      - "{{ cli_path }}"
+      - --release
+      - "{{ release_path }}"
+      - --
+      - find
+      - "{{ backups_dir }}"
+      - -maxdepth
+      - "1"
+      - -name
+      - "pasnik-*"
+      - -newermt
+      - "@{{ (dump_started.stdout | trim | int) - 1 }}"
+      # W CUDZYSŁOWIE: niecytowane `+0` YAML czyta jako liczbę 0, a `find -size 0`
+      # szuka plików PUSTYCH (błąd z pierwszego deployu).
+      - -size
+      - "+0"
+      - -printf
+      - "%f %s\\n"
+  register: new_backup
+  changed_when: false
+  check_mode: false
+
+- name: Zestaw ma dump, uploady i sumy kontrolne
+  vars:
+    names: "{{ new_backup.stdout_lines | map('split', ' ') | map('first') | list }}"
+  ansible.builtin.assert:
+    that:
+      - names | select('match', '^pasnik-[0-9TZ]+\.dump$') | list | length >= 1
+      - names | select('match', '^pasnik-[0-9TZ]+-uploads\.tar\.gz$') | list | length >= 1
+      - names | select('match', '^pasnik-[0-9TZ]+\.sha256$') | list | length >= 1
+    fail_msg: >-
+      Po `systemctl start {{ backup_service_name }}` w {{ backups_dir }} nie ma
+      nowego kompletu (dump + uploady + sha256), jest: {{ names }}. Deploy
+      zatrzymany przed migracją.
+    success_msg: "Zestaw backupu przed migracją: {{ names }}"
+    quiet: true
+
+- name: Zestaw przed migracją (nazwy i rozmiary)
+  ansible.builtin.debug:
+    msg: "{{ new_backup.stdout_lines }}"
+
+# `alembic upgrade head` z NOWEGO release'u: `current` jeszcze wskazuje stary (albo
+# nie istnieje), więc ścieżka release'u idzie jawnie. Wejście `pasnik-cli` ładuje
+# TO SAMO środowisko co usługa (DATABASE_URL z pasnik.env).
+- name: Migracja bazy (alembic upgrade head) z nowego release'u
+  ansible.builtin.command:
+    argv:
+      - sudo
+      - -n
+      - -u
+      - "{{ app_user }}"
+      - "{{ cli_path }}"
+      - --release
+      - "{{ release_path }}"
+      - --
+      - alembic
+      - upgrade
+      - head
+  register: alembic_upgrade
+  changed_when: "'Running upgrade' in (alembic_upgrade.stderr ~ alembic_upgrade.stdout)"
+
+- name: Wynik migracji
+  ansible.builtin.debug:
+    msg: "{{ (alembic_upgrade.stderr_lines + alembic_upgrade.stdout_lines) | select('search', 'Running upgrade|Context impl|Will assume') | list or ['brak nowych migracji (baza już na head)'] }}"

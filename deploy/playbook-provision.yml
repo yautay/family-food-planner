@@ -1,0 +1,272 @@
+---
+# PROVISION — ścieżka uprzywilejowana, uruchamiana RAZ na maszynę (i po zmianie
+# szablonów unitów albo hasła bazy).
+#
+#   cd deploy && ANSIBLE_CONFIG=ansible.cfg ansible-playbook -i inventories/prod \
+#       playbook-provision.yml -e @~/pasnik-prod.yml --ask-vault-pass
+#   (albo: `task provision`)
+#
+# Ten playbook NICZEGO NIE INSTALUJE. Maszyna przychodzi gotowa z `deploy/lxc/`
+# (Debian 13, python3, uv, postgresql-client-16, użytkownicy, katalogi, sshd,
+# sudoers), więc provision tylko SPRAWDZA, czy dostał to, co obiecuje tamta
+# deklaracja — i dokłada rzeczy, których deklaracja świadomie nie zna, bo
+# wymagałyby sekretu przy odtwarzaniu maszyny:
+#
+#   1. unity systemd: pasnik.service (włączony, NIE wystartowany — `current`
+#      powstaje w deployu), pasnik-backup.service + timer,
+#   2. /usr/local/lib/pasnik/{backup.sh,restore.sh,backup_prune.py} — skrypty
+#      z repo (docker/backup/, backend/scripts/), bo hook deployu robi dump
+#      PRZED pierwszym release'em, więc nie mogą leżeć w release'ie,
+#   3. /etc/pasnik/pasnik.env (0640 root:pasnik) i /etc/pasnik/pgpass (0600
+#      pasnik) — JEDYNE miejsca, w których pojawiają się wartości sekretów,
+#   4. /usr/local/bin/pasnik-cli.
+#
+# Kanał: ROOT po SSH kluczem (`PROVISION_PUBKEY` z `deploy/lxc/`). Konto
+# `deploy` celowo nie ma jak zostać rootem, a zapis unitu i pliku z sekretem
+# wymaga roota (deploy/README.md, „Dwa kanały, dwie role").
+- name: Paśnik | provision maszyny (kanał root, raz)
+  hosts: all
+  # Fakty zbieramy dopiero w `pre_tasks`, PO ewentualnym odświeżeniu klucza
+  # hosta: `gather_facts: true` łączy się z maszyną przed pierwszym zadaniem,
+  # więc na odtworzonej maszynie playbook przewracałby się, zanim dojdzie do
+  # zadania, które ten problem naprawia.
+  gather_facts: false
+  vars:
+    # Wymuszenie kanału roota: `ansible_user` z `group_vars` (konto deployu)
+    # ma tu przegrać, bo zmienne play-a są wyżej w kolejności pierwszeństwa.
+    ansible_user: "{{ admin_user }}"
+    # Wartości NIESEKRETNE, które MUSZĄ być wypełnione (nie `CHANGE_ME`).
+    required_settings:
+      domain: "{{ domain }}"
+      db_host: "{{ db_host }}"
+      db_name: "{{ db_name }}"
+      db_user: "{{ db_user }}"
+      host_ip: "{{ host_ip }}"
+      ct_ip: "{{ ct_ip }}"
+      bridge_gateway: "{{ bridge_gateway }}"
+
+  pre_tasks:
+    - name: Skasuj przypięty klucz hosta (po `create-incus.sh --recreate`)
+      ansible.builtin.import_tasks: tasks/refresh-host-key.yml
+
+    - name: Fakty maszyny (po ustaleniu klucza hosta)
+      ansible.builtin.setup:
+
+    - name: Konfiguracja środowiska jest wypełniona (bez CHANGE_ME)
+      ansible.builtin.assert:
+        that:
+          - item.value | string | length > 0
+          - item.value != 'CHANGE_ME'
+        fail_msg: >-
+          `{{ item.key }}` ma wartość `{{ item.value }}`. Uzupełnij
+          `group_vars/prod.yml` — to są wartości NIESEKRETNE i ich miejsce
+          jest w repo.
+        quiet: true
+      loop: "{{ required_settings | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
+      run_once: true
+
+    # `FORWARDED_ALLOW_IPS=*` jest DZIURĄ, nie skrótem (07_SECURITY §7): każdy,
+    # kto dosięgnie portu aplikacji, podstawiłby sobie adres klienta. Zaufany jest
+    # wyłącznie adres hosta na moście Incusa (źródło połączeń Caddy → kontener).
+    - name: FORWARDED_ALLOW_IPS wskazuje adres mostu, nie `*`
+      ansible.builtin.assert:
+        that:
+          - forwarded_allow_ips != '*'
+          - "'*' not in forwarded_allow_ips"
+          - forwarded_allow_ips == bridge_gateway
+        fail_msg: >-
+          forwarded_allow_ips = `{{ forwarded_allow_ips }}` — dozwolony wyłącznie
+          adres hosta na moście Incusa (`bridge_gateway` = {{ bridge_gateway }});
+          `*` zabronione (07_SECURITY §7).
+        quiet: true
+      run_once: true
+
+    - name: Stan plików z sekretami na maszynie
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      register: secret_files_before
+      loop:
+        - "{{ pasnik_env_file }}"
+        - "{{ pgpass_file }}"
+      loop_control:
+        label: "{{ item }}"
+
+    # Sekrety są potrzebne tylko wtedy, gdy pliki powstają (pierwszy provision)
+    # albo są nadpisywane (`force_env`). Zwykły ponowny provision (np. po zmianie
+    # unitu) nie wymaga Vaulta — pliki zostają, jak je operator zostawił.
+    - name: Czy pliki z sekretami będą (nad)pisane
+      ansible.builtin.set_fact:
+        secrets_needed: >-
+          {{ (force_env | bool) or (secret_files_before.results | map(attribute='stat.exists') | select('equalto', false) | list | length > 0) }}
+
+    - name: Sekrety z Vaulta są podane i poprawne (bez CHANGE_ME)
+      ansible.builtin.assert:
+        that:
+          - db_password != 'CHANGE_ME'
+          - secret_key != 'CHANGE_ME'
+          - db_password | length >= 8
+          # token_urlsafe(48): znaki base64 URL, bez spacji i cudzysłowów —
+          # plik env czyta systemd i pasnik-cli, wartość ma być jednoznaczna.
+          - secret_key is match('^[A-Za-z0-9_-]{32,}$')
+          # Hasło idzie do pgpass (jedna linia) i do URL-a (kodowane): zabroń
+          # znaków sterujących, które rozbiłyby oba pliki.
+          - db_password is not search('[\r\n\x00]')
+        fail_msg: >-
+          Brak sekretów albo `CHANGE_ME`: pliki {{ pasnik_env_file }} i
+          {{ pgpass_file }} powstają z wartości `vault_db_password` i
+          `vault_secret_key` z pliku Vaulta POZA repo
+          (`-e @~/pasnik-prod.yml --ask-vault-pass`). SECRET_KEY: 32+ znaków
+          [A-Za-z0-9_-] (`python -c "import secrets; print(secrets.token_urlsafe(48))"`).
+        quiet: true
+      no_log: true
+      when: secrets_needed | bool
+
+  tasks:
+    # -------------------------------------------------------------------------
+    # 1. Asserty: czy to jest maszyna z `deploy/lxc/`
+    # -------------------------------------------------------------------------
+    - name: Maszyna zgadza się z deklaracją `deploy/lxc/`
+      ansible.builtin.import_tasks: tasks/assert-machine.yml
+      tags: [assert]
+
+    - name: Wyrażenie OnCalendar timera jest poprawne (baza stref czasowych jest)
+      ansible.builtin.command:
+        argv: [systemd-analyze, calendar, "{{ backup_oncalendar }}"]
+      register: oncalendar
+      changed_when: false
+      check_mode: false
+
+    # -------------------------------------------------------------------------
+    # 2. Skrypty backupu (jedno źródło w repo, kopiowane na maszynę)
+    # -------------------------------------------------------------------------
+    # Decyzja B18a (zapis dla 18b): skrypty ZOSTAJĄ w `docker/backup/` i
+    # `backend/scripts/` (używa ich też stack testowy: `task backup-drill`),
+    # a provision kopiuje je do `{{ lib_dir }}`. Nie mogą jechać w release'ie
+    # (hook before-symlink robi dump przed pierwszym release'em, a rsync
+    # wyklucza `docker/`) i nie mogą być wołane przez `current/` (nie istnieje
+    # przy pierwszym deployu). Zmiana skryptu = ponowny provision.
+    - name: Skrypty backupu w {{ lib_dir }}
+      ansible.builtin.copy:
+        src: "{{ item.src }}"
+        dest: "{{ lib_dir }}/{{ item.dest }}"
+        owner: root
+        group: root
+        mode: "{{ item.mode }}"
+      loop:
+        - {src: "{{ playbook_dir }}/../docker/backup/backup.sh", dest: backup.sh, mode: "0755"}
+        - {src: "{{ playbook_dir }}/../docker/backup/restore.sh", dest: restore.sh, mode: "0755"}
+        - {src: "{{ playbook_dir }}/../backend/scripts/backup_prune.py", dest: backup_prune.py, mode: "0644"}
+      loop_control:
+        label: "{{ item.dest }}"
+
+    # -------------------------------------------------------------------------
+    # 3. Unity systemd
+    # -------------------------------------------------------------------------
+    - name: Unity systemd (usługa, backup, timer)
+      ansible.builtin.template:
+        src: "{{ item.src }}"
+        dest: "{{ unit_dir }}/{{ item.dest }}"
+        owner: root
+        group: root
+        mode: "0644"
+      loop:
+        - {src: pasnik.service.j2, dest: "{{ service_name }}.service"}
+        - {src: pasnik-backup.service.j2, dest: "{{ backup_service_name }}.service"}
+        - {src: pasnik-backup.timer.j2, dest: "{{ backup_service_name }}.timer"}
+      loop_control:
+        label: "{{ item.dest }}"
+      register: units
+
+    - name: Przeładuj systemd po zmianie unitów
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+      when: units.changed
+
+    # Bez `state: started`: `{{ deploy_to }}/{{ ansistrano_current_dir }}` jeszcze nie
+    # istnieje, więc usługa nie ma czego uruchomić. Uruchamia ją deploy.
+    - name: Usługa włączona przy starcie maszyny (bez startu teraz)
+      ansible.builtin.systemd_service:
+        name: "{{ service_name }}"
+        enabled: true
+
+    # Timer nie zależy od `current` (backup.sh leży w {{ lib_dir }}), więc rusza
+    # od razu — Persistent=true nadrabia przebiegi pominięte przez wyłączoną maszynę.
+    - name: Timer backupu włączony i uruchomiony
+      ansible.builtin.systemd_service:
+        name: "{{ backup_service_name }}.timer"
+        enabled: true
+        state: started
+
+    # -------------------------------------------------------------------------
+    # 4. pasnik-cli
+    # -------------------------------------------------------------------------
+    - name: Wejście operatora `pasnik-cli`
+      ansible.builtin.template:
+        src: pasnik-cli.sh.j2
+        dest: "{{ cli_path }}"
+        owner: root
+        group: root
+        mode: "0755"
+
+    # -------------------------------------------------------------------------
+    # 5. Pliki z sekretami — JEDYNE miejsce, w którym pojawiają się wartości
+    # -------------------------------------------------------------------------
+    - name: pasnik.env (root:pasnik 0640) i pgpass (pasnik 0600)
+      ansible.builtin.template:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        owner: "{{ item.owner }}"
+        group: "{{ app_group }}"
+        mode: "{{ item.mode }}"
+        # RAZ. Deploy i kolejne provisiony nie ruszają tego, co operator wpisał
+        # na maszynie; nadpisanie wymaga jawnego `-e force_env=true`.
+        force: "{{ force_env | bool }}"
+      loop:
+        - {src: pasnik.env.j2, dest: "{{ pasnik_env_file }}", owner: root, mode: "0640"}
+        - {src: pgpass.j2, dest: "{{ pgpass_file }}", owner: "{{ app_user }}", mode: "0600"}
+      loop_control:
+        label: "{{ item.dest }}"
+      # Treść obu plików to sekrety: diff Ansible wypisałby je na ekran.
+      no_log: true
+
+    - name: Prawa plików z sekretami (także gdy istniały wcześniej)
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        owner: "{{ item.owner }}"
+        group: "{{ app_group }}"
+        mode: "{{ item.mode }}"
+      loop:
+        - {path: "{{ pasnik_env_file }}", owner: root, mode: "0640"}
+        - {path: "{{ pgpass_file }}", owner: "{{ app_user }}", mode: "0600"}
+      loop_control:
+        label: "{{ item.path }}"
+
+    # Dowód, że żadna zmienna nie została placeholderem — grep -c nie wypisuje
+    # treści, tylko liczbę. `-e force_env=true` bez Vaulta zatrzymuje się już
+    # w pre_tasks, ale plik z poprzedniego provisionu też sprawdzamy.
+    - name: W plikach z sekretami nie ma CHANGE_ME
+      ansible.builtin.command:
+        argv: [grep, -c, CHANGE_ME, "{{ item }}"]
+      register: placeholder_probe
+      changed_when: false
+      failed_when: placeholder_probe.rc not in [0, 1] or (placeholder_probe.stdout | trim | int) > 0
+      check_mode: false
+      loop:
+        - "{{ pasnik_env_file }}"
+        - "{{ pgpass_file }}"
+      loop_control:
+        label: "{{ item }}"
+      no_log: true
+
+  post_tasks:
+    - name: Co zostaje operatorowi
+      ansible.builtin.debug:
+        msg: >-
+          Maszyna gotowa na deploy (`task deploy`). Po pierwszym deployu: konto
+          admina — `ssh -t root@{{ ansible_host }} -p {{ ansible_port }}
+          {{ cli_path }} -- python -m app.cli create-admin` (hasło z promptu,
+          nie z historii powłoki). Blok Caddy'ego na {{ host_ip }}: wygeneruj
+          przykład `ansible-playbook -i inventories/prod playbook-caddy-vhost.yml`
+          i wklej własnoręcznie wg D7 (deploy/README.md).

@@ -1,6 +1,6 @@
 # Paśnik — obraz kontenera backupu (profil `backup`, 09_DEPLOYMENT §3).
 #
-# Baza: `postgres:17` — TA SAMA wersja co serwis `db`, więc `pg_dump`/`pg_restore`
+# Baza: `postgres:16` — TA SAMA wersja co serwis `db`, więc `pg_dump`/`pg_restore`
 # zawsze pasują do serwera (dump z nowszego klienta na starszy serwer to klasyczna
 # awaria restore). Dokładamy tylko `python3` pod prune retencji
 # (`backend/scripts/backup_prune.py` — czysta stdlib, testowana pytestem).
@@ -10,7 +10,7 @@
 # aplikacja czyta (docker/Dockerfile).
 #
 # Budowanie z korzenia repo: docker build -f docker/backup/Dockerfile .
-FROM postgres:17
+FROM postgres:16
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends python3 \

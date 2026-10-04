@@ -24,7 +24,7 @@ x-postgres-env: &postgres-env
 
 services:
   db:
-    image: postgres:17
+    image: postgres:16
     environment:
       <<: *postgres-env
     volumes:
@@ -50,7 +50,7 @@ services:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-pasnik}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-pasnik}
       UVICORN_WORKERS: ${UVICORN_WORKERS:-2}
       # W compose połączenie od reverse proxy hosta przychodzi z bramy sieci
-      # dockera, nie z 127.0.0.1 — patrz docker/entrypoint.sh.
+      # dockera, nie z 127.0.0.1 — patrz backend/scripts/serve.sh.
       FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-127.0.0.1}
       DISK_MIN_FREE_MB: ${DISK_MIN_FREE_MB:-1024}
     volumes:

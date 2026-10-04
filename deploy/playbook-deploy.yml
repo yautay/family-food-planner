@@ -1,0 +1,238 @@
+---
+# DEPLOY — ścieżka rutynowa, uruchamiana przy każdym wydaniu.
+#
+#   task deploy          (fe-build → secrets-scan → wsl ansible-playbook)
+#   cd deploy && ANSIBLE_CONFIG=ansible.cfg ansible-playbook -i inventories/prod playbook-deploy.yml
+#
+# Cztery przebiegi, bo cztery różne miejsca i uprawnienia (wzór 09 §4):
+#
+#   0. przed wydaniem  (localhost) — brak CHANGE_ME, `frontend/dist` istnieje
+#      i jest z TEGO commita (stale-dist guard), plik VERSION release'u,
+#   1. przed wydaniem  (root)      — samotest maszyny, pliki z sekretami
+#      (prawa), baza osiągalna rolą aplikacji z LXC,
+#   2. release         (deploy)    — rsync, after-update (guard sekretów, venv,
+#      import-smoke), before-symlink (dump → migracja), symlink, restart,
+#      health z asercją na TREŚĆ,
+#   3. (brak) — journal przy porażce czyta rescue w restart-and-health.yml.
+#
+# Release powstaje w CAŁOŚCI poza maszyną (frontend) i na maszynie (venv z
+# `uv.lock`); zadania kanału `deploy` używają wyłącznie poleceń z
+# `/etc/sudoers.d/60-pasnik-deploy`. Gdyby zaczęły potrzebować więcej, to sygnał
+# złego projektu, a nie powód do poszerzania tamtej listy.
+
+- name: Paśnik | przed wydaniem (localhost)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  # Implicit `localhost` nie należy do grupy `prod`, więc jej zmiennych (domena,
+  # adres bazy) nie dziedziczy — wczytujemy je jawnie.
+  vars_files:
+    - group_vars/prod.yml
+  vars:
+    ansible_python_interpreter: "{{ ansible_playbook_python }}"
+    repo_root: "{{ playbook_dir }}/.."
+    required_settings:
+      domain: "{{ domain }}"
+      db_host: "{{ db_host }}"
+      db_name: "{{ db_name }}"
+      db_user: "{{ db_user }}"
+      host_ip: "{{ host_ip }}"
+      ct_ip: "{{ ct_ip }}"
+      bridge_gateway: "{{ bridge_gateway }}"
+  tasks:
+    - name: Konfiguracja środowiska jest wypełniona (bez CHANGE_ME)
+      ansible.builtin.assert:
+        that:
+          - item.value | string | length > 0
+          - item.value != 'CHANGE_ME'
+        fail_msg: "`{{ item.key }}` ma wartość `{{ item.value }}` — uzupełnij group_vars/prod.yml."
+        quiet: true
+      loop: "{{ required_settings | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
+
+    # Wersja = `git describe --tags --always --dirty`. Taskfile podaje ją z git
+    # po stronie Windows (`-e release_version=…`) — tym samym gitem, którego użył
+    # vite przy buildzie; bez przełącznika liczymy ją tu (WSL).
+    - name: Wersja release'u z git describe
+      ansible.builtin.command:
+        argv: [git, describe, --tags, --always, --dirty]
+        chdir: "{{ repo_root }}"
+      register: git_describe
+      changed_when: false
+      check_mode: false
+      when: release_version | length == 0
+
+    - name: Ustal wersję release'u
+      ansible.builtin.set_fact:
+        release_version_final: "{{ (release_version | length > 0) | ternary(release_version, git_describe.stdout | default('') | trim) }}"
+
+    - name: Wersja release'u jest sensowna
+      ansible.builtin.assert:
+        that:
+          - release_version_final | length > 0
+          - release_version_final is match('^[A-Za-z0-9._-]+$')
+        fail_msg: "Nie udało się ustalić wersji release'u (`git describe`): `{{ release_version_final }}`."
+        quiet: true
+
+    - name: frontend/dist istnieje
+      ansible.builtin.stat:
+        path: "{{ repo_root }}/frontend/dist/index.html"
+      register: local_dist
+      check_mode: false
+
+    - name: Build SPA jest gotowy
+      ansible.builtin.assert:
+        that: local_dist.stat.exists
+        fail_msg: >-
+          Brak frontend/dist/index.html. Zbuduj SPA: `task fe-build`
+          (`task deploy` robi to sam).
+        quiet: true
+
+    - name: Znacznik builda SPA
+      ansible.builtin.slurp:
+        src: "{{ repo_root }}/frontend/dist/build-info.json"
+      register: local_build_info
+      check_mode: false
+
+    # Strażnik stechłego dista: vite stempluje wersję w `dist/build-info.json`
+    # w chwili builda (`git describe`), więc rozjazd znaczy „kod z innego commita
+    # niż interfejs" — przeglądarka pokazywałaby stary UI nad nowym API.
+    - name: Build SPA jest z tego samego commita co kod
+      vars:
+        build_info: "{{ local_build_info.content | b64decode | from_json }}"
+      ansible.builtin.assert:
+        that:
+          - build_info.version | default('') == release_version_final
+        fail_msg: >-
+          frontend/dist jest z innego commita niż kod: dist mówi
+          "{{ build_info.version | default('(brak)') }}", git mówi
+          "{{ release_version_final }}". Uruchom `task fe-build` i powtórz deploy.
+        quiet: true
+
+    # Plik VERSION leży w korzeniu drzewa i jedzie rsynciem do release'u
+    # (rsync nie wysyła `.git`). `serve.sh` czyta go do APP_VERSION.
+    - name: Plik VERSION w drzewie roboczym (gitignored)
+      ansible.builtin.copy:
+        content: "{{ release_version_final }}\n"
+        dest: "{{ repo_root }}/VERSION"
+        mode: "0644"
+
+- name: Paśnik | przed wydaniem (kanał root)
+  hosts: all
+  gather_facts: false
+  vars:
+    ansible_user: "{{ admin_user }}"
+  tasks:
+    - name: Skasuj przypięty klucz hosta (po odtworzeniu maszyny)
+      ansible.builtin.import_tasks: tasks/refresh-host-key.yml
+
+    - name: Fakty maszyny (po ustaleniu klucza hosta)
+      ansible.builtin.setup:
+
+    - name: Samotest maszyny, wersje, uprawnienia katalogów
+      ansible.builtin.import_tasks: tasks/assert-machine.yml
+
+    # Elementy pętli to słowniki: klucze słowników w `vars:` nie są przepuszczane
+    # przez Jinja, więc oczekiwane prawa niesie sam element pętli.
+    - name: Stan tego, co zakłada provision
+      ansible.builtin.stat:
+        path: "{{ item.path }}"
+      register: provisioned
+      loop:
+        - {path: "{{ unit_dir }}/{{ service_name }}.service"}
+        - {path: "{{ unit_dir }}/{{ backup_service_name }}.service"}
+        - {path: "{{ pasnik_env_file }}", mode: "0640", owner: root, group: "{{ app_group }}"}
+        - {path: "{{ pgpass_file }}", mode: "0600", owner: "{{ app_user }}", group: "{{ app_group }}"}
+        - {path: "{{ cli_path }}"}
+        - {path: "{{ lib_dir }}/backup.sh"}
+      loop_control:
+        label: "{{ item.path }}"
+      check_mode: false
+
+    - name: Maszyna przeszła provision (unity, env, pgpass, pasnik-cli, skrypty backupu)
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+        fail_msg: >-
+          Brak `{{ item.item.path }}`. Uruchom najpierw `task provision`.
+        quiet: true
+      loop: "{{ provisioned.results }}"
+      loop_control:
+        label: "{{ item.item.path }}"
+
+    - name: Pliki z sekretami mają właściwe prawa (09 §1, kryterium 8)
+      ansible.builtin.assert:
+        that:
+          - item.stat.mode == item.item.mode
+          - item.stat.pw_name == item.item.owner
+          - item.stat.gr_name == item.item.group
+        fail_msg: >-
+          `{{ item.item.path }}` ma {{ item.stat.mode }} {{ item.stat.pw_name }}:{{ item.stat.gr_name }},
+          oczekiwane {{ item.item.mode }} {{ item.item.owner }}:{{ item.item.group }}.
+        quiet: true
+      loop: "{{ provisioned.results[2:4] }}"
+      loop_control:
+        label: "{{ item.item.path }}"
+
+    - name: W pasnik.env nie ma CHANGE_ME (usługa nie wstanie z placeholderem)
+      ansible.builtin.command:
+        argv: [grep, -c, CHANGE_ME, "{{ pasnik_env_file }}"]
+      register: env_placeholder
+      changed_when: false
+      failed_when: env_placeholder.rc not in [0, 1] or (env_placeholder.stdout | trim | int) > 0
+      check_mode: false
+      no_log: true
+
+    - name: Baza osiągalna z LXC rolą aplikacji (pg_isready + select 1)
+      ansible.builtin.import_tasks: tasks/assert-external-infra.yml
+
+- name: Paśnik | release (kanał deployu)
+  hosts: all
+  gather_facts: true
+  vars:
+    ansistrano_after_update_code_tasks_file: "{{ playbook_dir }}/tasks/after-update.yml"
+    ansistrano_before_symlink_tasks_file: "{{ playbook_dir }}/tasks/before-symlink.yml"
+    ansistrano_after_symlink_tasks_file: "{{ playbook_dir }}/tasks/restart-and-health.yml"
+
+  pre_tasks:
+    # Rsync jest po OBU stronach: brak binarki na hoście kończyłby się błędem
+    # z wnętrza roli, kilkadziesiąt linii później i bez wskazania przyczyny.
+    - name: "`rsync` jest na maszynie"
+      ansible.builtin.command:
+        argv: [rsync, --version]
+      register: remote_rsync
+      changed_when: false
+      # Tylko czyta — ma chodzić TAKŻE w `--check` (poprawka z B10 runnera).
+      check_mode: false
+
+    - name: Wersja rsynca na maszynie
+      ansible.builtin.debug:
+        msg: "{{ remote_rsync.stdout_lines[0] }}"
+
+    # --- próba na sucho (`--check --diff`) ------------------------------------
+    # Rola ansistrano NIE umie próby na sucho: rsync idzie na sucho, więc
+    # katalogu nowego release'u nie ma, a jej krok „Change softlink to new
+    # release" kończy się `src file does not exist` (zmierzone w runnerze).
+    # Roli nie zmieniamy, więc w `--check` jej nie wołamy i mówimy to wprost.
+    # Próba na sucho sprawdza zatem: kanał root, prawa i bazę z przebiegu 1,
+    # rsync i „co wdrożyłbym na miejsce czego".
+    - name: Wersja chodząca teraz (`current/VERSION`)
+      ansible.builtin.slurp:
+        src: "{{ deploy_to }}/{{ ansistrano_current_dir }}/VERSION"
+      register: live_version
+      failed_when: false
+      check_mode: false
+      when: ansible_check_mode
+
+    - name: "`--check`: co wdrożyłbym na miejsce czego"
+      ansible.builtin.debug:
+        msg: >-
+          Paśnik {{ hostvars['localhost'].release_version_final | default('?') }} z drzewa roboczego
+          na miejsce {{ ((live_version.content | default('') | b64decode) | trim) or '(brak current)' }}.
+          Rola ansistrano pominięta — nie umie próby na sucho.
+      when: ansible_check_mode
+
+  roles:
+    - role: ansistrano.deploy
+      when: not ansible_check_mode

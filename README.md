@@ -11,7 +11,7 @@ kopia danych rodziny do pliku i z powrotem.
 ## Stack
 
 Backend: Python 3.13 · FastAPI · SQLAlchemy 2 · Alembic · Pydantic v2 ·
-PostgreSQL 17. Frontend: Vue 3 · TypeScript · Vite · Tailwind CSS ·
+PostgreSQL 16. Frontend: Vue 3 · TypeScript · Vite · Tailwind CSS ·
 shadcn-vue · Pinia · TanStack Query. Testy: pytest · vitest · Playwright.
 Deployment: Docker Compose na Odroid H2, za istniejącym reverse proxy.
 

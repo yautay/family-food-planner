@@ -1,0 +1,27 @@
+---
+# Klucz hosta SSH maszyny zmienia się po KAŻDYM jej odtworzeniu
+# (`create-incus.sh --recreate` generuje nowe `/etc/ssh/ssh_host_*`).
+# `StrictHostKeyChecking=accept-new` przypina klucz przy pierwszym połączeniu
+# (albo klucz wpisany ręcznie z wyjścia `create-incus.sh`), ale każdą późniejszą
+# ZMIANĘ zgłasza jako `REMOTE HOST IDENTIFICATION HAS CHANGED` — i słusznie,
+# bo tym kanałem jadą sekrety.
+#
+# Dlatego przypięty klucz kasuje się ŚWIADOMIE, jednym przełącznikiem:
+#
+#   ansible-playbook ... -e refresh_host_key=true
+#
+# Kasujemy cały plik, a nie wpis w `~/.ssh/known_hosts`: `ssh_host_key_file`
+# trzyma klucze WYŁĄCZNIE tej jednej maszyny, więc pomyłka nie może odpiąć
+# żadnego innego hosta. Po skasowaniu WKLEJ nowy wpis z `create-incus.sh`
+# (krok 10) i dopiero potem uruchom provision — inaczej `accept-new` przypnie
+# pierwszy klucz, który odpowie na porcie.
+- name: Skasuj przypięty klucz hosta maszyny (tylko na żądanie)
+  ansible.builtin.file:
+    path: "{{ ssh_host_key_file }}"
+    state: absent
+  delegate_to: localhost
+  connection: local
+  run_once: true
+  when:
+    - refresh_host_key | bool
+    - ssh_host_key_file | length > 0

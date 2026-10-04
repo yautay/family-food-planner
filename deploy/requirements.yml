@@ -1,0 +1,19 @@
+---
+# Role i kolekcje deployu Paśnika — te same wersje co w runnerze i w repo TOC
+# (jedna osoba, jedno narzędzie, jedne wersje). Instalacja na maszynie operatora:
+#
+#   cd deploy && ANSIBLE_CONFIG=ansible.cfg ~/.venvs/ansible/bin/ansible-galaxy install -r requirements.yml
+#
+# Wersje są PRZYPIĘTE świadomie: ansistrano zmienia nazwy zmiennych między
+# wydaniami, a wszystkie trzy deploye mają zachowywać się tak samo.
+roles:
+  - name: ansistrano.deploy
+    version: 4.4.0
+  - name: ansistrano.rollback
+    version: 4.0.1
+
+collections:
+  # `synchronize` (rsync) i `known_hosts` są w `ansible.builtin`; `posix`
+  # wchodzi tu, bo używa jej sama rola ansistrano.
+  - name: ansible.posix
+    version: ">=1.5.4"

@@ -18,7 +18,7 @@
 [extend]
 useDefault = true
 
-[allowlist]
+[[allowlists]]
 description = "Hasła testowe używane w fabrykach i testach — nigdy w żadnym środowisku"
 regexes = [
   '''haslo-testowe-2026''',
@@ -26,3 +26,22 @@ regexes = [
   # (`test_admin_users.py`, `test_audit.py`, `test_accounts.py`).
   '''nowe-haslo-2026''',
 ]
+
+# Nazwa przepisu w teście kopii danych (`test_transfer_roundtrip.py`, B20): słowo
+# „Sekretna" w literale `name="Sekretna zapiekanka"` łapie `generic-api-key`. To
+# dane testu prywatności przepisu, nie sekret — wykryte przy `task deploy` (B18a),
+# gdzie skan jest bramką. Dopasowanie po CAŁEJ LINII i dokładnym literale.
+[[allowlists]]
+description = "Nazwa przepisu testowego zawierająca słowo 'sekret'"
+regexTarget = "line"
+regexes = ['''name="Sekretna zapiekanka"''']
+
+# Skróty SHA-256 przypięć w `deploy/lxc/provision.sh` (B18a): `UV_SHA256`
+# i `PGDG_KEY_SHA256` to PUBLICZNE sumy kontrolne pobieranych artefaktów —
+# służą do weryfikacji, że dostawca niczego nie podmienił, więc ich jawność jest
+# celem. Reguła `generic-api-key` łapie je po entropii. Dopasowanie po nazwie
+# zmiennej + dokładnie 64 znakach hex: inny literał w tym pliku nadal wywala skan.
+[[allowlists]]
+description = "Publiczne sumy SHA-256 przypięć instalatora (provision.sh)"
+regexTarget = "line"
+regexes = ['''(UV|PGDG_KEY)_SHA256="[0-9a-f]{64}"''']

@@ -2,7 +2,7 @@
 # Paśnik — „cron" kontenera backupu: raz na dobę o BACKUP_AT uruchamia backup.sh.
 #
 # Dlaczego pętla ze `sleep`, a nie crond (decyzja implementującego, karta B17
-# §Implementation Notes): (1) crond w obrazie `postgres:17` to dodatkowy pakiet
+# §Implementation Notes): (1) crond w obrazie `postgres:16` to dodatkowy pakiet
 # i dodatkowy proces-demon, który NIE przekazuje wyjścia zadań na stdout
 # kontenera bez obejść (`> /proc/1/fd/1`), a 09 §6 wymaga logów w `docker logs`;
 # (2) crond gubi zmienne środowiskowe kontenera (PG*, BACKUP_*), które są tu

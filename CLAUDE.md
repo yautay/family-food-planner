@@ -41,7 +41,10 @@ sesji: `docs/implementation-plan/implementation_prompt.md`.
 
 ## 3. Komendy (Taskfile — jedyne wejście)
 
-Wymagane na hoście: **Docker Desktop, uv, Node 22+, go-task**.
+Wymagane na hoście: **Docker Desktop, uv, Node 22+, go-task**. Do deployu
+produkcyjnego (B18a) dodatkowo **WSL (Ubuntu) z `ansible-core>=2.16,<2.18`
+z pipa** w `~/.venvs/ansible` (NIE z apt) i `task deploy-galaxy` (role
+ansistrano) — szczegóły w `deploy/README.md`.
 Start od zera: `cp .env.example .env` → `task install` → `task dev`.
 
 | Komenda | Do czego |
@@ -65,9 +68,21 @@ Start od zera: `cp .env.example .env` → `task install` → `task dev`.
 | `task test-stack-up` / `test-stack-down` | stack testowy obrazu prod (`docker/compose.test.yml`, app na 127.0.0.1:8081) / kasacja z wolumenami |
 | `task backup` / `task restore -- <dump> [tar] [--wipe-uploads]` | backup i restore stacku testowego (`docker/backup/*.sh`) |
 | `task backup-drill` | round-trip backup → `down -v` → restore → smoke (`docker/backup/drill.sh`, wymaga `PASNIK_TEST_BACKUPS_DIR`) |
+| `task provision` | **PRODUKCJA** (B18a): provision maszyny LXC kanałem root (unity, `pasnik.env`, `pgpass`, `pasnik-cli`); vault z sekretami POZA repo (`~/pasnik-prod.yml`) |
+| `task deploy` | **PRODUKCJA**: `fe-build` → `secrets-scan` → ansistrano (dump → migracja → symlink → restart → health z asercją na treść); próba: `-- --check --diff` |
+| `task rollback` | **PRODUKCJA**: poprzedni release (migracji NIE cofa — `deploy/README.md`) |
+| `task deploy-galaxy` / `deploy-syntax` / `deploy-caddy-vhost` | role Ansible / `--syntax-check` playbooków / przykład bloku Caddy (D7) |
 
 Nigdy nie wołaj gołego `pytest`/`vitest`/`alembic` — Taskfile wstrzykuje
 `.env` i właściwy interpreter.
+
+**Produkcja jest poza zasięgiem sesji AI.** `task provision|deploy|rollback`
+i każde polecenie na hostach .111/.121 (Incus, ufw, DOCKER-USER, Caddy,
+klaster `postgres-apps`) wykonuje albo zatwierdza właściciel wg runbooków
+(`deploy/README.md`, `deploy/lxc/README.md`, od 18b `docs/OPERATIONS.md`) —
+agent ich nie wymyśla, nie obchodzi blokad i nie dotyka bazy `ffp_db` poza
+tym, co opisuje runbook. Sekrety (hasło `ffp_user`, `SECRET_KEY`) żyją
+w vaulcie poza repo i nigdy nie trafiają do czatu ani do plików śledzonych.
 
 ## 4. Backend — wzorzec kodu
 
@@ -81,7 +96,11 @@ funkcje bez I/O (ADR-008). Katalogi modułów tworzy batch, który je zasiedla.
 Fundament dostarczony w BATCH_01 i BATCH_02:
 
 - `app/core/config.py` — `Settings` (pydantic-settings). Nowa zmienna =
-  wpis w `.env.example` w tym samym commicie. Brak wymaganej zmiennej =
+  wpis w `.env.example` **i w `deploy/templates/pasnik.env.j2`** (+ wartość
+  w `deploy/group_vars/prod.yml`, jeśli jest konfigurowalna) w tym samym
+  commicie — pilnuje tego `tests/unit/test_deploy_config.py` (wyjątek:
+  `APP_VERSION`, wersję podaje `serve.sh` z pliku release'u). Wartości
+  w `pasnik.env` bez spacji i cudzysłowów (plik czyta systemd i `pasnik-cli`). Brak wymaganej zmiennej =
   `ConfigurationError` z komunikatem po polsku.
 - `app/core/db.py` — `Base` (naming convention!), `TimestampMixin`
   (`created_at`/`updated_at`), silnik async (`postgresql+psycopg://`,
@@ -394,6 +413,29 @@ Dołożone w BATCH_21 (zakres `global` dla przepisów — D32, ADR-006 aneks):
   USER-a jest w edytorze tylko do odczytu, a w szczególe `recipe-copy` zamiast
   `recipe-edit`/`recipe-delete`; odznaka zakresu na karcie (`recipe-scope-badge-{id}`).
 
+Dołożone w BATCH_18a (produkcja = LXC + ansistrano, ADR-017 — nie pisz od nowa):
+
+- **Deploy**: katalog `deploy/` (Ansible), `deploy/lxc/` (maszyna: `provision.sh`,
+  `create-incus.sh`, `host-firewall.sh`). Release = biała lista rsynca
+  (`backend/`, `frontend/dist/`, `VERSION`), venv per release
+  (`uv sync --frozen --no-dev`), migracja w hooku `before-symlink` PO dumpie,
+  nigdy przy starcie aplikacji. Konfiguracja produkcji WYŁĄCZNIE
+  z `/etc/pasnik/pasnik.env` — w release'ie nie może leżeć żaden `.env`.
+- `backend/scripts/serve.sh` — JEDYNE źródło flag uvicorna (obraz prod woła je
+  przez `docker/entrypoint.sh`, LXC przez `pasnik.service`). Flagi w drugim
+  miejscu = błąd review (pilnuje test_deploy_config). `APP_VERSION` w LXC
+  pochodzi z pliku `VERSION` release'u (`PASNIK_VERSION_FILE`), nie z env.
+- `frontend/vite.config.ts` stempluje `dist/build-info.json` (wersja =
+  `git describe --tags --always --dirty`) — strażnik stechłego dista w deployu.
+- `pasnik-cli -- <polecenie>` na maszynie: jako `pasnik`, ze środowiskiem
+  usługi (pętla po `pasnik.env`, NIE `source`). Wzorzec dla każdego
+  przyszłego polecenia operatora (`create-admin`, `uploads-report`).
+- Skrypty backupu zostają w `docker/backup/` i `backend/scripts/`; provision
+  kopiuje je do `/usr/local/lib/pasnik` (zmiana skryptu = ponowny provision).
+- Port aplikacji na .111 ogranicza `DOCKER-USER` (proxy `nat=true` omija INPUT,
+  więc ufw go nie widzi) — `deploy/lxc/host-firewall.sh`. `FORWARDED_ALLOW_IPS`
+  = adres Caddy'ego, `*` zabronione (07_SECURITY §7).
+
 Dołożone w BATCH_22 (narzędzie `/pdf-extract` — D31, POZA runtime aplikacji):
 
 - **Co to jest**: skill `.claude/skills/pdf-extract/SKILL.md` (`/pdf-extract <plik.pdf>`)
@@ -501,3 +543,11 @@ uzupełnij wynikiem `task db-heads`. Po zmianie: dokładnie jedna głowa
 (pilnuje tego `task migrations-check` w `task check`), a `upgrade` i
 `downgrade` muszą przechodzić na czystej bazie. Backfill = osobna,
 idempotentna migracja.
+
+**Na produkcji migracje biegną rolą `ffp_user` (NOSUPERUSER, właściciel bazy
+w klastrze `postgres-apps`, PG 16)** — migracja wymagająca uprawnień ponad
+właściciela bazy (np. rozszerzenie spoza listy „trusted", `CREATE ROLE`,
+`CREATE DATABASE`) jest NIEWYKONALNA bez operatora klastra i wymaga decyzji
+właściciela przed napisaniem. `pg_trgm` (0004) jest „trusted"; próbę
+`upgrade head`/`downgrade base` wykonuje się rolą bez SUPERUSER-a (B18a).
+Dev/test stoją na `postgres:16` (parytet z produkcją).

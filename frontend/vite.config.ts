@@ -1,3 +1,4 @@
+import { execSync } from 'node:child_process'
 import { fileURLToPath, URL } from 'node:url'
 
 import tailwindcss from '@tailwindcss/vite'
@@ -21,10 +22,45 @@ const usePolling = process.env.VITE_USE_POLLING === 'true'
 // i padał bez winy aplikacji (ustalenie BATCH_11).
 const watchIgnored = ['**/test-results/**', '**/playwright-report/**']
 
+// Stempel wersji builda (B18a): `dist/build-info.json` = {version, built_at}.
+// Deploy (`deploy/playbook-deploy.yml`) porównuje `version` z plikiem VERSION
+// release'u (`git describe --tags --always --dirty`) — rozjazd znaczy „dist
+// z innego commita niż kod" i zatrzymuje wydanie, zanim przeglądarka pokaże
+// stary interfejs nad nowym API. `PASNIK_BUILD_VERSION` pozwala podać wersję
+// z zewnątrz (build bez gita, np. w obrazie); bez niej i bez gita: `unknown`.
+function buildVersion(): string {
+  const fromEnv = process.env.PASNIK_BUILD_VERSION
+  if (fromEnv) return fromEnv
+  try {
+    return execSync('git describe --tags --always --dirty', {
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+      .toString()
+      .trim()
+  } catch {
+    return 'unknown'
+  }
+}
+
+const buildInfoPlugin = () => ({
+  name: 'pasnik-build-info',
+  apply: 'build' as const,
+  generateBundle(this: {
+    emitFile: (file: { type: 'asset'; fileName: string; source: string }) => void
+  }) {
+    this.emitFile({
+      type: 'asset',
+      fileName: 'build-info.json',
+      source: JSON.stringify({ version: buildVersion(), built_at: new Date().toISOString() }),
+    })
+  },
+})
+
 export default defineConfig({
   plugins: [
     vue(),
     tailwindcss(),
+    buildInfoPlugin(),
     VitePWA({
       registerType: 'autoUpdate',
       // Dev server NIE rejestruje SW (BATCH_12, Implementation Notes): precache

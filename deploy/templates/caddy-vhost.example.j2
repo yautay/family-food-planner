@@ -1,0 +1,30 @@
+# {{ ansible_managed }}
+#
+# Blok Caddy'ego dla Paśnika (D7, D29) — PRZYKŁAD do wklejenia przez WŁAŚCICIELA
+# w /etc/caddy/Caddyfile na hoście {{ host_ip }}. Playbook NICZEGO tam nie zapisuje.
+#
+# PODMIEŃ istniejący blok `{{ domain }}` (dziś serwuje statyczny landing:
+# `root * /srv/sftp/ftpuser/files/landing`), NIE dopisuj drugiego — dwa bloki
+# na tę samą domenę to błąd konfiguracji. Caddyfile jest JEDEN, bez `import`.
+#
+# Po edycji (na .121):
+#   caddy validate --config /etc/caddy/Caddyfile && systemctl reload caddy
+#
+# Świadomie BEZ dyrektywy `log`: access log Caddy'ego zapisałby pełny URI, czyli
+# publiczny token listy (`/api/v1/public/lists/<token>`) i `/l/<token>` — w pliku
+# na hoście, poza wszystkim, co maskujemy w aplikacji (07_SECURITY §5, D7 pkt 3).
+# Bez `request_body` — Caddy domyślnie nie ogranicza ciała, więc paczka kopii
+# danych 100 MB przechodzi; limity egzekwuje aplikacja (`core/body_limit.py`).
+# `tls` bez dyrektywy: ACME działa na tym hoście (D7).
+{{ domain }} {
+	encode zstd gzip
+
+	# HSTS z KRÓTKIM max-age ({{ hsts_max_age }} s): przeglądarka zapamiętuje ten
+	# nagłówek, więc na starcie lepiej wybaczać pomyłki. Wydłużenie to osobna decyzja.
+	header Strict-Transport-Security "max-age={{ hsts_max_age }}"
+
+	# Caddy i kontener są na tym samym hoście: proxy WPROST na adres kontenera po
+	# moście Incusa (bez wystawiania portu w LAN). Źródłem połączenia jest adres
+	# hosta na moście, więc FORWARDED_ALLOW_IPS={{ forwarded_allow_ips }}.
+	reverse_proxy {{ app_host }}:{{ app_host_port }}
+}

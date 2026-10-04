@@ -1,0 +1,38 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Paśnik — backup (pg_dump + uploady + retencja)
+Documentation=file://{{ lib_dir }}/backup.sh
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# `systemctl start` na Type=oneshot BLOKUJE do końca skryptu i zwraca jego kod
+# wyjścia — dzięki temu hook before-symlink deployu czeka na dump przed migracją.
+Type=oneshot
+User={{ app_user }}
+Group={{ app_group }}
+# Wyłącznie wartości NIESEKRETNE. Hasło roli czyta libpq z PGPASSFILE (0600,
+# właściciel `{{ app_user }}`) — nie z env procesu (09 §3).
+Environment=PGHOST={{ db_host }}
+Environment=PGPORT={{ db_port }}
+Environment=PGUSER={{ db_user }}
+Environment=PGDATABASE={{ db_name }}
+Environment=PGPASSFILE={{ pgpass_file }}
+Environment=BACKUP_DIR={{ backups_dir }}
+Environment=UPLOADS_DIR={{ uploads_dir }}
+Environment=PRUNE_SCRIPT={{ lib_dir }}/backup_prune.py
+Environment=BACKUP_KEEP_DAILY={{ backup_keep_daily }}
+Environment=BACKUP_KEEP_WEEKLY={{ backup_keep_weekly }}
+ExecStart=/bin/bash {{ lib_dir }}/backup.sh
+# Dump dużej bazy + paczka zdjęć na Odroidzie: zapas, nie tolerancja na zawieszenie.
+TimeoutStartSec=30min
+
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths={{ backups_dir }}
+PrivateTmp=yes
+ProtectHome=yes
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier={{ backup_service_name }}

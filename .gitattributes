@@ -5,3 +5,6 @@
 Dockerfile text eol=lf
 docker/** text eol=lf
 *.mjs text eol=lf
+# deploy/ (B18a): szablony unitów i skrypty jadą na Linux — CRLF psułby `#!/bin/sh`,
+# wartości w pasnik.env i pliki unitów.
+deploy/** text eol=lf

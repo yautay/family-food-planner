@@ -19,14 +19,14 @@ x-postgres-env: &postgres-env
 
 services:
   db:
-    image: postgres:17
+    image: postgres:16
     environment:
       <<: *postgres-env
       POSTGRES_DB: ${POSTGRES_DB:-pasnik}
     ports:
       - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - pgdata16:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-pasnik} -d ${POSTGRES_DB:-pasnik}"]
       interval: 5s
@@ -36,7 +36,7 @@ services:
     restart: unless-stopped
 
   db-test:
-    image: postgres:17
+    image: postgres:16
     environment:
       <<: *postgres-env
       POSTGRES_DB: ${POSTGRES_TEST_DB:-pasnik_test}
@@ -126,5 +126,7 @@ services:
     restart: unless-stopped
 
 volumes:
-  pgdata:
+  # `pgdata16`, nie `pgdata`: wolumen PG17 z czasów sprzed B18 nie otwiera się
+  # w PG16 (parytet z produkcją, ADR-017). Stary wolumen można skasować.
+  pgdata16:
   node_modules:
