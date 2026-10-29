@@ -1,0 +1,520 @@
+<div id="pasnik-design">
+  <div class="viz-controls">
+    <label class="form-label">Ekran
+      <select class="form-select" id="pasnik-screen">
+        <option value="day">Plan dnia</option><option value="week">Plan tygodnia</option>
+        <option value="recipes">Katalog przepisów</option><option value="recipe">Szczegóły przepisu</option>
+        <option value="editor">Edycja przepisu</option><option value="shopping">Zakupy — start</option>
+        <option value="list">Lista w sklepie</option><option value="pantry">Spiżarnia</option>
+        <option value="stats">Podsumowanie planu</option><option value="products">Katalog produktów</option>
+        <option value="settings">Rodzina i ustawienia</option>
+      </select>
+    </label>
+    <label class="form-label">Widok
+      <select class="form-select" id="pasnik-device"><option value="desktop">Komputer</option><option value="mobile">Telefon</option></select>
+    </label>
+  </div>
+  <div class="viz-carousel" aria-label="Paśnik: rekonstrukcja i projekt" data-previous-label="Poprzedni wariant" data-next-label="Następny wariant">
+    <section data-variant="Po — domowa kuchnia" aria-label="Proponowany interfejs z dekoracjami">
+      <div class="pf-stage" id="pasnik-after-stage">
+        <p class="pf-caption">PO · domowa kuchnia · dane przykładowe</p>
+        <div class="pf-app pf-new" id="pasnik-after" aria-label="Paśnik po zmianach"></div>
+      </div>
+    </section>
+    <section data-variant="Przed — z kodu" aria-label="Obecny interfejs, rekonstrukcja" hidden>
+      <div class="pf-stage" id="pasnik-before-stage">
+        <p class="pf-caption">PRZED · rekonstrukcja z kodu · dane przykładowe</p>
+        <div class="pf-app pf-old" id="pasnik-before" aria-label="Paśnik obecnie"></div>
+      </div>
+    </section>
+  </div>
+</div>
+<style>
+#pasnik-design .pf-stage{width:100%;padding-top:8px}
+#pasnik-design .pf-caption{font:500 11px/1.5 system-ui,sans-serif;letter-spacing:.07em;margin:6px 0 10px;color:var(--muted-foreground)}
+#pasnik-design .pf-app{--pf-bg:#faf6ef;--pf-surface:#fff;--pf-ink:#2b2620;--pf-muted:#6f675c;--pf-line:#ede5d8;--pf-soft:#ede5d8;--pf-primary:#e07a2f;--pf-on:#fff;--pf-green:#3f7a5e;--pf-warn:#d9a441;--pf-red:#c24c3b;--pf-radius:12px;color-scheme:light;background:var(--pf-bg);color:var(--pf-ink);font:400 14px/1.5 'Inter',Segoe UI,sans-serif;position:relative;container-type:inline-size;border:1px solid var(--pf-line);min-height:820px;isolation:isolate}
+#pasnik-design .pf-new{--pf-bg:#f7f7f2;--pf-ink:#26392f;--pf-muted:#626c62;--pf-line:#dce2d8;--pf-soft:#edf2e8;--pf-primary:#315d47;--pf-warn:#855a14;--pf-red:#a43f32;--pf-radius:18px}
+#pasnik-design .pf-app *{box-sizing:border-box}
+#pasnik-design .pf-app button,#pasnik-design .pf-app input,#pasnik-design .pf-app select,#pasnik-design .pf-app textarea{font:inherit;color:inherit}
+#pasnik-design .pf-app h1,#pasnik-design .pf-app h2,#pasnik-design .pf-app h3,#pasnik-design .pf-app p{margin:0}
+#pasnik-design .pf-app h1{font-size:24px;line-height:1.2;font-weight:600;letter-spacing:-.03em}
+#pasnik-design .pf-new h1{font-size:32px;font-weight:600;letter-spacing:-.045em}
+#pasnik-design .pf-app h2{font-size:18px;font-weight:600;line-height:1.35}
+#pasnik-design .pf-app h3{font-size:15px;font-weight:600;line-height:1.4}
+#pasnik-design .pf-app small{font-size:12px;line-height:1.5;color:var(--pf-muted)}
+#pasnik-design .pf-app strong{font-weight:600}
+#pasnik-design .pf-app svg{flex-shrink:0;vertical-align:middle}
+#pasnik-design .pf-app button{cursor:pointer}
+#pasnik-design .pf-layout{display:grid;grid-template-columns:256px minmax(0,1fr);min-height:820px}
+#pasnik-design .pf-new .pf-layout{grid-template-columns:178px minmax(0,1fr)}
+#pasnik-design .pf-sidebar{background:var(--pf-surface);border-right:1px solid var(--pf-line);display:flex;flex-direction:column;padding:16px 8px}
+#pasnik-design .pf-new .pf-sidebar{padding:28px 14px 20px;background:var(--pf-bg)}
+#pasnik-design .pf-brand{display:flex;gap:10px;align-items:center;padding:0 8px 18px;margin-bottom:10px;border-bottom:1px solid var(--pf-line)}
+#pasnik-design .pf-new .pf-brand{border:0;margin-bottom:36px;padding:0 6px}
+#pasnik-design .pf-brand-mark{width:32px;height:32px;border-radius:9px;background:var(--pf-primary);display:grid;place-items:center;color:var(--pf-on)}
+#pasnik-design .pf-brand-name{font-size:15px;font-weight:600}
+#pasnik-design .pf-new .pf-brand-name{font-size:25px;letter-spacing:-.06em}
+#pasnik-design .pf-sidebar nav{display:grid;gap:4px}
+#pasnik-design .pf-nav{border:0;background:transparent;display:flex;align-items:center;gap:10px;padding:11px 12px;border-radius:10px;text-align:left;width:100%;min-height:44px}
+#pasnik-design .pf-nav.pf-current{background:var(--pf-soft);font-weight:600}
+#pasnik-design .pf-new .pf-nav.pf-current{background:var(--pf-primary);color:var(--pf-on)}
+#pasnik-design .pf-sidebar-bottom{margin-top:auto;padding:24px 4px 0;display:grid;gap:8px}
+#pasnik-design .pf-account{display:flex;gap:9px;align-items:center;border:0;background:transparent;text-align:left;padding:10px 4px}
+#pasnik-design .pf-avatar{background:var(--pf-soft);width:32px;height:32px;border-radius:50%;display:grid;place-items:center;flex-shrink:0;font-weight:600}
+#pasnik-design .pf-main{padding:24px 16px 32px;min-width:0;display:flex;flex-direction:column;gap:20px}
+#pasnik-design .pf-new .pf-main{padding:28px;gap:24px}
+#pasnik-design .pf-mobile-top,#pasnik-design .pf-bottomnav{display:none}
+#pasnik-design .pf-head{display:flex;gap:14px;justify-content:space-between;align-items:center;flex-wrap:wrap}
+#pasnik-design .pf-title{display:grid;gap:6px}
+#pasnik-design .pf-eyebrow{font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--pf-muted)}
+#pasnik-design .pf-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+#pasnik-design .pf-btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:44px;padding:9px 13px;border:1px solid var(--pf-line);background:var(--pf-surface);border-radius:8px;font-size:14px;text-align:center;line-height:1.25;max-width:100%;white-space:normal}
+#pasnik-design .pf-new .pf-btn{border-radius:11px;font-weight:500}
+#pasnik-design .pf-btn.pf-primary{background:var(--pf-primary);color:var(--pf-on);border-color:var(--pf-primary)}
+#pasnik-design .pf-btn.pf-quiet{border-color:transparent;background:transparent;color:var(--pf-muted)}
+#pasnik-design .pf-btn.pf-small{min-height:36px;padding:7px 10px;font-size:12px}
+#pasnik-design .pf-app button:focus-visible,#pasnik-design .pf-app input:focus-visible,#pasnik-design .pf-app select:focus-visible,#pasnik-design .pf-app textarea:focus-visible{outline:3px solid var(--pf-green);outline-offset:3px}
+#pasnik-design .pf-subnav{display:flex;gap:4px;flex-wrap:wrap;align-items:center}
+#pasnik-design .pf-subnav .pf-btn{background:transparent;border:0;border-radius:8px;color:var(--pf-muted)}
+#pasnik-design .pf-subnav .pf-current{background:var(--pf-surface);color:var(--pf-ink);box-shadow:0 1px 4px #26392f10}
+#pasnik-design .pf-card{border:1px solid var(--pf-line);border-radius:var(--pf-radius);background:var(--pf-surface);padding:16px;display:grid;gap:12px}
+#pasnik-design .pf-old .pf-card{box-shadow:0 1px 2px #2b262008;padding:12px}
+#pasnik-design .pf-stack{display:grid;gap:14px}
+#pasnik-design .pf-two{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start}
+#pasnik-design .pf-field{display:grid;gap:6px;font-size:13px;min-width:0}
+#pasnik-design .pf-input{border:1px solid var(--pf-line);border-radius:8px;background:var(--pf-surface);min-height:44px;padding:10px 12px;width:100%;min-width:0;box-sizing:border-box}
+#pasnik-design .pf-app textarea.pf-input{min-height:110px;resize:vertical}
+#pasnik-design .pf-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid var(--pf-line)}
+#pasnik-design .pf-row:last-child{border-bottom:0}
+#pasnik-design .pf-row>div:first-child{min-width:0}
+#pasnik-design .pf-row p{overflow-wrap:anywhere}
+#pasnik-design .pf-tag{display:inline-flex;align-items:center;gap:5px;padding:4px 8px;background:var(--pf-soft);color:var(--pf-muted);border-radius:6px;font-size:11px}
+#pasnik-design .pf-warning{color:var(--pf-warn)!important}
+#pasnik-design .pf-success{color:var(--pf-green)!important}
+#pasnik-design .pf-muted{color:var(--pf-muted)}
+#pasnik-design .pf-meter{height:5px;border-radius:5px;background:var(--pf-soft);overflow:hidden;margin:7px 0}
+#pasnik-design .pf-meter span{display:block;height:100%;background:var(--pf-green)}
+#pasnik-design .pf-old .pf-meter span{background:var(--pf-warn)}
+#pasnik-design .pf-metrics{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+#pasnik-design .pf-metric-number{font-size:21px;font-weight:600}
+#pasnik-design .pf-old-plan{display:grid;gap:16px}
+#pasnik-design .pf-old-item{border:1px solid var(--pf-line);padding:10px;border-radius:8px;display:grid;gap:10px}
+#pasnik-design .pf-old-item .pf-row{padding:0;border:0;align-items:start}
+#pasnik-design .pf-old-item .pf-item-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+#pasnik-design .pf-stepper{display:flex;align-items:center;gap:7px;flex-shrink:0}
+#pasnik-design .pf-stepper .pf-btn{width:44px;padding:0}
+#pasnik-design .pf-donut{width:128px;height:128px;margin:10px auto;border-radius:50%;background:conic-gradient(#3f7a5e 0 29%,#d9a441 29% 45%,#e07a2f 45%);position:relative}
+#pasnik-design .pf-donut:after{content:"";position:absolute;inset:20px;border-radius:50%;background:var(--pf-surface)}
+#pasnik-design .pf-day-hero{display:grid;gap:20px}
+#pasnik-design .pf-week-strip{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
+#pasnik-design .pf-date{border:0;background:transparent;border-radius:12px;min-height:68px;color:var(--pf-muted);display:grid;justify-items:center;gap:4px;align-content:center;padding:6px}
+#pasnik-design .pf-date strong{font-size:18px}
+#pasnik-design .pf-date.pf-current{background:var(--pf-primary);color:var(--pf-on)}
+#pasnik-design .pf-date.pf-current small{color:var(--pf-on)}
+#pasnik-design .pf-day-context{display:flex;gap:9px;align-items:center;padding:4px 0;flex-wrap:wrap;color:var(--pf-muted)}
+#pasnik-design .pf-dish{display:grid;grid-template-columns:52px minmax(0,1fr) auto;align-items:center;gap:16px;padding:22px 0;border-bottom:1px solid var(--pf-line)}
+#pasnik-design .pf-dish:last-child{border:0}
+#pasnik-design .pf-dish h3{font-size:18px;letter-spacing:-.025em;margin:5px 0}
+#pasnik-design .pf-food-icon{width:52px;height:58px;border-radius:14px;background:var(--pf-soft);display:grid;place-items:center;color:var(--pf-primary);flex-shrink:0}
+#pasnik-design .pf-food-icon svg{width:25px;height:25px}
+#pasnik-design .pf-balance{background:var(--pf-soft);border:0}
+#pasnik-design .pf-balance .pf-row{border-color:#26392f22}
+#pasnik-design .pf-summary-line{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+#pasnik-design .pf-amount{font-size:24px;font-weight:600;letter-spacing:-.03em}
+#pasnik-design .pf-old-week{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:10px}
+#pasnik-design .pf-old-week .pf-card{padding:8px;gap:8px;min-width:0;align-content:start}
+#pasnik-design .pf-old-week small{font-size:11px;overflow-wrap:anywhere}
+#pasnik-design .pf-old-week .pf-old-item{padding:6px;min-width:0}
+#pasnik-design .pf-initials{background:var(--pf-soft);display:grid;place-items:center;width:32px;height:32px;font-size:11px;border-radius:4px}
+#pasnik-design .pf-week-agenda{display:grid;gap:0}
+#pasnik-design .pf-week-day{display:grid;grid-template-columns:72px minmax(0,1fr);gap:16px;padding:18px 0;border-bottom:1px solid var(--pf-line)}
+#pasnik-design .pf-week-day.pf-today .pf-week-label{color:var(--pf-primary)}
+#pasnik-design .pf-week-label strong{display:block;font-size:20px}
+#pasnik-design .pf-week-meals{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+#pasnik-design .pf-week-meal{display:grid;gap:6px;align-content:start}
+#pasnik-design .pf-week-meal button{text-align:left;justify-content:flex-start}
+#pasnik-design .pf-empty-slot{border:1px dashed #a9b9a5;background:transparent;color:var(--pf-primary);padding:10px;border-radius:10px;min-height:44px;text-align:left}
+#pasnik-design .pf-recipes-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+#pasnik-design .pf-recipe-card{border:1px solid var(--pf-line);border-radius:var(--pf-radius);background:var(--pf-surface);overflow:hidden;min-width:0}
+#pasnik-design .pf-old-photo{aspect-ratio:4/3;background:var(--pf-soft);display:grid;place-items:center;color:var(--pf-muted)}
+#pasnik-design .pf-recipe-content{display:grid;gap:9px;padding:14px;min-width:0}
+#pasnik-design .pf-old .pf-recipe-content h3{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#pasnik-design .pf-recipe-art{height:72px;background:var(--pf-soft);display:flex;align-items:center;justify-content:space-between;padding:16px 18px;color:var(--pf-primary)}
+#pasnik-design .pf-recipe-art svg{width:25px;height:25px}
+#pasnik-design .pf-recipe-art .pf-btn svg{width:17px;height:17px}
+#pasnik-design .pf-new .pf-recipe-content{padding:18px;gap:12px}
+#pasnik-design .pf-new .pf-recipe-content h3{font-size:18px;min-height:50px}
+#pasnik-design .pf-new .pf-recipe-card{border-color:transparent;box-shadow:0 2px 12px #26392f06}
+#pasnik-design .pf-filter-row{display:flex;gap:7px;flex-wrap:wrap}
+#pasnik-design .pf-filter-row .pf-selected{background:var(--pf-soft);color:var(--pf-primary);border-color:var(--pf-soft)}
+#pasnik-design .pf-recipe-title{padding:8px 0;display:grid;gap:12px;max-width:570px}
+#pasnik-design .pf-new .pf-recipe-title h1{font-size:38px;line-height:1.12}
+#pasnik-design .pf-recipe-meta{display:flex;gap:15px;flex-wrap:wrap;color:var(--pf-muted)}
+#pasnik-design .pf-serving-control{display:flex;gap:14px;align-items:center;flex-wrap:wrap;background:var(--pf-soft);padding:14px;border-radius:14px}
+#pasnik-design .pf-checkline{display:flex;align-items:center;gap:12px;min-height:48px;padding:10px 0;border-bottom:1px solid var(--pf-line)}
+#pasnik-design .pf-checkline input{width:20px;height:20px;accent-color:var(--pf-primary);flex-shrink:0}
+#pasnik-design .pf-checkline>span{flex:1}
+#pasnik-design .pf-step{display:grid;grid-template-columns:28px 1fr;gap:10px;margin:18px 0}
+#pasnik-design .pf-step-num{height:25px;width:25px;border-radius:50%;background:var(--pf-soft);display:grid;place-items:center;font-size:12px}
+#pasnik-design .pf-edit-section{padding:20px 0;border-top:1px solid var(--pf-line);display:grid;gap:14px}
+#pasnik-design .pf-editor-row{display:grid;grid-template-columns:minmax(0,1fr) 72px 68px 38px;gap:7px;align-items:center}
+#pasnik-design .pf-editor-row .pf-btn{padding:5px}
+#pasnik-design .pf-active-list{border:0;padding:24px;background:var(--pf-primary);color:var(--pf-on);border-radius:var(--pf-radius);display:grid;gap:18px}
+#pasnik-design .pf-active-list small{color:#e0e9e1}
+#pasnik-design .pf-active-list h2{font-size:26px}
+#pasnik-design .pf-active-list .pf-btn{background:#fff;border-color:#fff;color:#315d47;font-weight:600}
+#pasnik-design .pf-active-list .pf-meter{background:#ffffff30}
+#pasnik-design .pf-active-list .pf-meter span{background:#fff}
+#pasnik-design .pf-shop-row{display:grid;grid-template-columns:24px minmax(0,1fr) auto;gap:12px;align-items:center;border-bottom:1px solid var(--pf-line);padding:16px 0;min-height:62px}
+#pasnik-design .pf-shop-row input{width:20px;height:20px;accent-color:var(--pf-primary);margin:0}
+#pasnik-design .pf-shop-row .pf-shop-name{font-size:16px;font-weight:500}
+#pasnik-design .pf-shop-row small{display:block}
+#pasnik-design .pf-shop-row.pf-checked .pf-shop-name{text-decoration:line-through;color:var(--pf-muted)}
+#pasnik-design .pf-old .pf-shop-row{grid-template-columns:48px minmax(0,1fr) auto;gap:12px;background:var(--pf-surface);border:1px solid var(--pf-line);border-radius:12px;padding:10px;margin:8px 0}
+#pasnik-design .pf-old .pf-shop-row input{width:48px;height:48px}
+#pasnik-design .pf-old .pf-shop-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;font-size:14px}
+#pasnik-design .pf-old .pf-shop-row .pf-tag{font-size:11px}
+#pasnik-design .pf-group-title{font-size:12px;letter-spacing:.07em;text-transform:uppercase;color:var(--pf-muted);margin:16px 0 8px!important}
+#pasnik-design .pf-bottom-action{margin-top:auto;padding-top:14px;display:grid;gap:10px}
+#pasnik-design .pf-sync{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--pf-green)}
+#pasnik-design .pf-use-first{background:#f2e8d7;color:#694a19;padding:18px 20px;border-radius:var(--pf-radius);display:grid;gap:8px}
+#pasnik-design .pf-use-first small{color:#765723}
+#pasnik-design .pf-pantry-row{display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:12px;align-items:center;padding:16px 0;border-bottom:1px solid var(--pf-line)}
+#pasnik-design .pf-chart{display:flex;align-items:end;gap:14px;height:180px;padding-top:15px;border-bottom:1px solid var(--pf-line)}
+#pasnik-design .pf-chart-col{display:flex;flex:1;flex-direction:column;justify-content:end;align-items:center;height:100%;gap:8px;min-width:0}
+#pasnik-design .pf-chart-bar{width:100%;max-width:40px;background:var(--pf-primary);border-radius:5px 5px 0 0;min-height:3px}
+#pasnik-design .pf-chart-bar.pf-gap{background:transparent;border:1px dashed #a9b9a5;height:100%!important;max-height:124px}
+#pasnik-design .pf-chart-label{font-size:11px;color:var(--pf-muted)}
+#pasnik-design .pf-stat-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;padding:20px 0;border-top:1px solid var(--pf-line)}
+#pasnik-design .pf-settings-tabs{display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--pf-line);padding-bottom:12px}
+#pasnik-design .pf-empty{display:grid;justify-items:start;gap:16px;padding:32px 0}
+#pasnik-design .pf-message{padding:13px 16px;background:var(--pf-soft);color:var(--pf-primary);border-radius:12px;display:flex;align-items:center;gap:8px}
+#pasnik-design .pf-overlay{position:absolute;inset:0;background:#1b2f2bcc;z-index:8;display:flex;align-items:flex-start;justify-content:flex-end;padding:20px}
+#pasnik-design .pf-dialog{width:430px;max-width:100%;background:var(--pf-surface);border:1px solid var(--pf-line);border-radius:20px;padding:24px;display:grid;gap:20px;box-shadow:0 16px 50px #10271f30}
+#pasnik-design .pf-dialog h2{font-size:25px;letter-spacing:-.035em}
+#pasnik-design .pf-dialog .pf-row{padding:10px 0}
+#pasnik-design .pf-calendar-choices{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+#pasnik-design .pf-calendar-choices label{display:flex;gap:8px;align-items:center;padding:10px 8px;background:var(--pf-soft);border-radius:8px;min-height:46px}
+#pasnik-design .pf-calendar-choices input{accent-color:var(--pf-primary)}
+#pasnik-design .pf-toast{background:var(--pf-primary);color:var(--pf-on);padding:13px 16px;border-radius:12px;display:flex;gap:10px;align-items:center}
+#pasnik-design .pf-toast button{background:transparent;border:0;color:inherit;margin-left:auto;min-height:32px}
+#pasnik-design .pf-mobile-stage{max-width:390px;margin:0 auto}
+#pasnik-design .pf-mobile-stage .pf-app{min-height:850px}
+#pasnik-design .pf-mobile-stage .pf-layout{display:block;min-height:850px;padding-bottom:74px}
+#pasnik-design .pf-mobile-stage .pf-sidebar{display:none}
+#pasnik-design .pf-mobile-stage .pf-mobile-top{display:flex}
+#pasnik-design .pf-mobile-top{justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid var(--pf-line);background:var(--pf-surface)}
+#pasnik-design .pf-mobile-stage .pf-main{padding:22px 16px}
+#pasnik-design .pf-mobile-stage .pf-new h1{font-size:28px}
+#pasnik-design .pf-mobile-stage .pf-bottomnav{display:grid}
+#pasnik-design .pf-bottomnav{grid-template-columns:repeat(4,minmax(0,1fr));position:absolute;bottom:0;inset-inline:0;padding:9px 3px 12px;background:var(--pf-surface);border-top:1px solid var(--pf-line);z-index:3}
+#pasnik-design .pf-bottomnav button{display:grid;gap:3px;justify-items:center;align-content:center;background:transparent;border:0;min-height:48px;font-size:11px;color:var(--pf-muted)}
+#pasnik-design .pf-bottomnav button.pf-current{color:var(--pf-primary);font-weight:600}
+#pasnik-design .pf-mobile-stage .pf-two,#pasnik-design .pf-mobile-stage .pf-old-plan,#pasnik-design .pf-mobile-stage .pf-recipes-grid,#pasnik-design .pf-mobile-stage .pf-metrics{grid-template-columns:1fr}
+#pasnik-design .pf-mobile-stage .pf-dish{grid-template-columns:42px minmax(0,1fr);gap:12px}
+#pasnik-design .pf-mobile-stage .pf-food-icon{width:42px;height:50px}
+#pasnik-design .pf-mobile-stage .pf-dish>.pf-btn{grid-column:2;justify-self:start}
+#pasnik-design .pf-mobile-stage .pf-dish h3{font-size:18px}
+#pasnik-design .pf-mobile-stage .pf-old-week{grid-template-columns:1fr}
+#pasnik-design .pf-mobile-stage .pf-week-day{grid-template-columns:54px 1fr;gap:10px}
+#pasnik-design .pf-mobile-stage .pf-week-meals{grid-template-columns:1fr;gap:15px}
+#pasnik-design .pf-mobile-stage .pf-dialog{padding:20px}
+#pasnik-design .pf-mobile-stage .pf-overlay{padding:12px}
+#pasnik-design .pf-mobile-stage .pf-recipe-title h1{font-size:32px}
+#pasnik-design .pf-mobile-stage .pf-stat-summary{grid-template-columns:1fr;gap:14px}
+@container (min-width:1000px){#pasnik-design .pf-old-plan{grid-template-columns:minmax(0,1fr) 260px}}
+@container (min-width:1200px){#pasnik-design .pf-week-agenda{grid-template-columns:repeat(7,minmax(0,1fr));gap:12px}#pasnik-design .pf-week-day{display:block;padding:14px;border:1px solid var(--pf-line);border-radius:14px;background:var(--pf-surface)}#pasnik-design .pf-week-meals{grid-template-columns:1fr;margin-top:20px}#pasnik-design .pf-metrics{grid-template-columns:repeat(4,1fr)}#pasnik-design .pf-recipes-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@container (max-width:700px){#pasnik-design .pf-layout,#pasnik-design .pf-new .pf-layout{display:block;padding-bottom:74px}#pasnik-design .pf-sidebar{display:none}#pasnik-design .pf-mobile-top{display:flex}#pasnik-design .pf-bottomnav{display:grid}#pasnik-design .pf-main,#pasnik-design .pf-new .pf-main{padding:22px 16px}#pasnik-design .pf-two{grid-template-columns:1fr}#pasnik-design .pf-new h1{font-size:28px}#pasnik-design .pf-old-week{grid-template-columns:1fr}#pasnik-design .pf-week-meals{grid-template-columns:1fr}#pasnik-design .pf-stat-summary{grid-template-columns:1fr}#pasnik-design .pf-dish{grid-template-columns:42px minmax(0,1fr);gap:12px}#pasnik-design .pf-dish>.pf-btn{grid-column:2;justify-self:start}#pasnik-design .pf-food-icon{width:42px;height:50px}#pasnik-design .pf-overlay{padding:12px}}
+@container (max-width:440px){#pasnik-design .pf-recipes-grid,#pasnik-design .pf-metrics{grid-template-columns:1fr}#pasnik-design .pf-old-item .pf-row{flex-wrap:wrap}#pasnik-design .pf-editor-row{grid-template-columns:minmax(0,1fr) 62px 56px 30px}#pasnik-design .pf-week-day{grid-template-columns:48px 1fr;gap:10px}#pasnik-design .pf-old .pf-shop-row{grid-template-columns:48px minmax(0,1fr)}#pasnik-design .pf-old .pf-shop-row>.pf-tag{grid-column:2;justify-self:start}#pasnik-design .pf-dialog{padding:18px}#pasnik-design .pf-dialog .pf-two{grid-template-columns:1fr}#pasnik-design .pf-app input,#pasnik-design .pf-app select,#pasnik-design .pf-app textarea{font-size:16px}#pasnik-design .pf-serving-control{gap:10px}#pasnik-design .pf-new .pf-recipe-title h1{font-size:30px}}
+#pasnik-design .pf-new.pf-adorned{--pf-bg:#faf7ef;--pf-surface:#fffdf8;--pf-ink:#293c2c;--pf-muted:#687061;--pf-line:#e3e4d6;--pf-soft:#eef0e2;--pf-primary:#365e43;--pf-terra:#a75e43;--pf-honey:#a37a28;--pf-radius:18px}
+#pasnik-design .pf-adorned h1,#pasnik-design .pf-adorned .pf-brand-name{font-family:Georgia,'Times New Roman',serif;font-weight:400;letter-spacing:-.045em}
+#pasnik-design .pf-adorned h1{font-size:37px;line-height:1.1}
+#pasnik-design .pf-adorned .pf-brand-name{font-size:29px}
+#pasnik-design .pf-adorned .pf-brand-mark{background:#e6ead9;color:var(--pf-primary);border-radius:50% 50% 42% 45%;width:34px;height:38px;transform:rotate(-8deg)}
+#pasnik-design .pf-adorned .pf-brand-mark svg{transform:rotate(8deg);width:22px;height:22px}
+#pasnik-design .pf-adorned .pf-brand{gap:8px}
+#pasnik-design .pf-adorned .pf-sidebar{background:#f3f1e6;border-right:1px solid #e3e4d6}
+#pasnik-design .pf-adorned .pf-sidebar-bottom{position:relative;padding-top:44px}
+#pasnik-design .pf-adorned .pf-sidebar-bottom::before{content:"";height:10px;position:absolute;left:10px;right:10px;top:14px;background:repeating-linear-gradient(90deg,#667d4d30 0 5px,transparent 5px 12px);border-radius:4px}
+#pasnik-design .pf-adorned .pf-nav.pf-current{box-shadow:0 3px 8px #365e4312}
+#pasnik-design .pf-adorned .pf-mobile-top{background:#f3f1e6}
+#pasnik-design .pf-adorned .pf-mobile-top>strong{font:400 27px/1.15 Georgia,serif;letter-spacing:-.045em}
+#pasnik-design .pf-adorned .pf-ornament-header{position:relative;display:grid;grid-template-columns:minmax(0,1fr) 116px;gap:16px;align-items:center;padding:25px 24px;background:#f0efdf;border-radius:24px 24px 24px 8px;isolation:isolate;overflow:hidden}
+#pasnik-design .pf-adorned .pf-ornament-header::after{content:"";position:absolute;right:0;top:0;bottom:0;width:68px;background:repeating-linear-gradient(90deg,#7584570c 0 8px,transparent 8px 16px),repeating-linear-gradient(0deg,#7584570c 0 8px,transparent 8px 16px);z-index:-1;pointer-events:none}
+#pasnik-design .pf-adorned .pf-ornament-header>.pf-head{align-items:flex-start;gap:18px}
+#pasnik-design .pf-adorned .pf-ornament-header>.pf-head>.pf-title{flex-basis:100%;gap:9px}
+#pasnik-design .pf-adorned .pf-ornament-header .pf-recipe-title{max-width:none;padding:0}
+#pasnik-design .pf-adorned .pf-ornament-header .pf-recipe-title h1{font-size:38px;line-height:1.1}
+#pasnik-design .pf-adorned .pf-ornament{width:116px;height:122px;position:relative;pointer-events:none;align-self:center}
+#pasnik-design .pf-adorned .pf-ornament-plate{position:absolute;inset:17px 2px 8px 10px;display:grid;place-items:center;background:#faf7eb;border:1px solid #ced5b6;border-radius:47% 52% 48% 49%;transform:rotate(-9deg);box-shadow:4px 6px 0 #7c8f5610}
+#pasnik-design .pf-adorned .pf-ornament-plate::after{content:"";position:absolute;inset:7px;border:1px solid #dce0c5;border-radius:48%}
+#pasnik-design .pf-adorned .pf-ornament-plate svg{width:46px;height:46px;stroke-width:1.2;color:var(--pf-primary);transform:rotate(9deg)}
+#pasnik-design .pf-adorned .pf-ornament-leaf{position:absolute;right:-2px;top:0;transform:rotate(23deg);color:#718149}
+#pasnik-design .pf-adorned .pf-ornament-leaf svg{width:43px;height:43px;stroke-width:1.25}
+#pasnik-design .pf-adorned .pf-ornament-seed{position:absolute;left:-5px;bottom:1px;transform:rotate(-24deg);color:var(--pf-terra)}
+#pasnik-design .pf-adorned .pf-ornament-seed svg{width:36px;height:36px;stroke-width:1.25}
+#pasnik-design .pf-adorned .pf-date.pf-current{border-radius:16px 16px 8px 16px}
+#pasnik-design .pf-adorned .pf-food-icon{background:#efe7d5;color:#92683a;border-radius:45% 46% 38% 46%;transform:rotate(-5deg)}
+#pasnik-design .pf-adorned .pf-food-icon svg{stroke-width:1.5;transform:rotate(5deg)}
+#pasnik-design .pf-adorned .pf-dish:nth-child(2) .pf-food-icon{background:#e7ecd9;color:#5c7541;transform:rotate(4deg)}
+#pasnik-design .pf-adorned .pf-dish:nth-child(3) .pf-food-icon{background:#f5e5dc;color:var(--pf-terra);transform:rotate(-3deg)}
+#pasnik-design .pf-adorned .pf-recipe-art{height:108px;position:relative;isolation:isolate;background:#eef0df;color:#536b39;align-items:flex-start}
+#pasnik-design .pf-adorned .pf-recipe-art::before{content:"";position:absolute;left:12px;top:12px;width:82px;height:82px;background:#fffaf2ab;border-radius:48% 45% 50% 42%;transform:rotate(-13deg);z-index:-1}
+#pasnik-design .pf-adorned .pf-recipe-art::after{content:"";position:absolute;right:0;bottom:0;width:61px;height:34px;background:repeating-linear-gradient(90deg,currentColor 0 5px,transparent 5px 10px),repeating-linear-gradient(0deg,currentColor 0 5px,transparent 5px 10px);opacity:.055;z-index:-1;pointer-events:none}
+#pasnik-design .pf-adorned .pf-recipe-art>svg{width:44px;height:44px;margin:17px 14px;stroke-width:1.3;transform:rotate(-8deg)}
+#pasnik-design .pf-adorned .pf-recipe-art>.pf-btn{background:#fffaf2c9;border-radius:20px;font-size:11px;gap:5px;color:var(--pf-ink)}
+#pasnik-design .pf-adorned .pf-recipe-card:nth-child(3n+1) .pf-recipe-art{background:#f2e8d4;color:#946c30}
+#pasnik-design .pf-adorned .pf-recipe-card:nth-child(3n) .pf-recipe-art{background:#f5e5db;color:#aa6951}
+#pasnik-design .pf-adorned .pf-recipe-card{border:1px solid #e8e5d8;box-shadow:0 3px 8px #5f614108}
+#pasnik-design .pf-adorned .pf-serving-control{background:#eeeede;border-radius:16px 6px 16px 16px}
+#pasnik-design .pf-adorned .pf-step-num{background:#f0e4d5;color:#905e36;font-family:Georgia,serif;font-size:15px}
+#pasnik-design .pf-adorned .pf-active-list{border-radius:22px 22px 8px 22px}
+#pasnik-design .pf-adorned .pf-active-list>.pf-head>svg{width:25px;height:25px;stroke-width:1.4;transform:rotate(-10deg)}
+#pasnik-design .pf-adorned .pf-use-first{border-radius:18px 18px 18px 6px;background:#f2e8d5}
+#pasnik-design .pf-adorned .pf-pantry-row .pf-avatar{background:#e9eddb;border-radius:40% 48% 43% 46%}
+#pasnik-design .pf-adorned .pf-group-title{color:#6a764d;letter-spacing:.09em}
+#pasnik-design .pf-adorned .pf-empty .pf-food-icon{width:62px;height:66px}
+#pasnik-design .pf-adorned .pf-brand-mark svg{width:22px!important;height:22px!important}
+#pasnik-design .pf-adorned .pf-ornament-plate svg{width:46px!important;height:46px!important}
+#pasnik-design .pf-adorned .pf-ornament-leaf svg{width:43px!important;height:43px!important}
+#pasnik-design .pf-adorned .pf-ornament-seed svg{width:36px!important;height:36px!important}
+#pasnik-design .pf-adorned .pf-food-icon svg{width:25px!important;height:25px!important}
+#pasnik-design .pf-adorned .pf-recipe-art>svg{width:44px!important;height:44px!important;margin:17px 14px!important}
+#pasnik-design .pf-adorned .pf-active-list>.pf-head>svg{width:25px!important;height:25px!important}
+#pasnik-design .pf-mobile-stage .pf-adorned .pf-ornament-header{grid-template-columns:minmax(0,1fr);padding:22px 18px;gap:0}
+#pasnik-design .pf-mobile-stage .pf-adorned .pf-ornament{display:none}
+#pasnik-design .pf-mobile-stage .pf-adorned h1{font-size:32px}
+#pasnik-design .pf-mobile-stage .pf-adorned .pf-ornament-header .pf-recipe-title h1{font-size:33px}
+#pasnik-design .pf-mobile-stage .pf-adorned .pf-ornament-header::after{width:24px}
+@container(max-width:700px){#pasnik-design .pf-adorned .pf-ornament-header{grid-template-columns:minmax(0,1fr) 90px;padding:22px 18px;gap:10px}#pasnik-design .pf-adorned .pf-ornament{width:90px;height:110px}#pasnik-design .pf-adorned .pf-ornament-leaf svg{width:33px;height:33px}#pasnik-design .pf-adorned .pf-ornament-plate svg{width:36px;height:36px}#pasnik-design .pf-adorned h1{font-size:32px}}
+@container(max-width:440px){#pasnik-design .pf-adorned .pf-ornament-header{grid-template-columns:minmax(0,1fr);gap:0}#pasnik-design .pf-adorned .pf-ornament{display:none}#pasnik-design .pf-adorned .pf-ornament-header::after{width:24px}#pasnik-design .pf-adorned .pf-ornament-header .pf-recipe-title h1{font-size:33px}}
+</style>
+<script>
+(function(){
+  const root=document.getElementById('pasnik-design');
+  const before=document.getElementById('pasnik-before'), after=document.getElementById('pasnik-after');
+  const screenSelect=document.getElementById('pasnik-screen'), deviceSelect=document.getElementById('pasnik-device');
+  const screens=['day','week','recipes','recipe','editor','shopping','list','pantry','stats','products','settings'];
+  const saved=window.openai&&window.openai.widgetState;
+  const initial=saved&&saved.privateContent||{};
+  const state={screen:screens.includes(initial.screen)?initial.screen:'day',device:initial.device==='mobile'?'mobile':'desktop',query:'',filter:'all',recipe:1,modal:null,checked:new Set([3,4]),favorites:new Set([0,1]),toast:'',portions:2,added:false,doneOpen:false,dayState:'ready',pantryFilter:false,setting:'Rodzina',oldTab:'Składniki',nutritionOpen:false};
+  const recipes=[
+    {name:'Owsianka z jabłkiem i cynamonem',time:10,kcal:420,icon:'wheat',category:'Śniadanie'},
+    {name:'Makaron z cukinią i pesto',time:25,kcal:620,icon:'cooking-pot',category:'Obiad'},
+    {name:'Pieczony łosoś z ziemniakami',time:35,kcal:560,icon:'fish',category:'Obiad'},
+    {name:'Zupa pomidorowa z soczewicą',time:30,kcal:390,icon:'soup',category:'Obiad'},
+    {name:'Kanapki z pastą jajeczną',time:15,kcal:410,icon:'sandwich',category:'Kolacja'},
+    {name:'Jogurt z gruszką i orzechami',time:5,kcal:260,icon:'milk',category:'Przekąska'}
+  ];
+  const shop=[{name:'Cukinia',amount:'2 szt.',note:'Około 500 g',cat:'Warzywa i owoce'}, {name:'Jabłka',amount:'4 szt.',note:'Około 600 g',cat:'Warzywa i owoce'}, {name:'Jogurt naturalny gęsty',amount:'1 op.',note:'400 g · zostanie 150 g',cat:'Nabiał'}, {name:'Makaron pełnoziarnisty',amount:'1 op.',note:'500 g · zostanie 300 g',cat:'Produkty suche'}, {name:'Płatki owsiane górskie',amount:'1 op.',note:'500 g · zostanie 380 g',cat:'Produkty suche'}];
+  const titles={day:'Plan dnia',week:'Tydzień',recipes:'Przepisy',recipe:'Przepis',editor:'Edycja przepisu',shopping:'Zakupy',list:'Lista zakupowa',pantry:'Spiżarnia',stats:'Statystyki',products:'Produkty',settings:'Ustawienia'};
+  function esc(s){return String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;')}
+  function icon(n){return '<i data-lucide="'+n+'" aria-hidden="true"></i>'}
+  function btn(t,a,cls,ic){return '<button type="button" class="pf-btn '+(cls||'')+'" data-action="'+a+'">'+(ic?icon(ic):'')+t+'</button>'}
+  function label(t,v,type){return '<label class="pf-field">'+t+'<input class="pf-input" type="'+(type||'text')+'" value="'+esc(v)+'"></label>'}
+  function head(t,s,action){return '<header class="pf-head"><div class="pf-title"><h1>'+t+'</h1>'+(s?'<p class="pf-muted">'+s+'</p>':'')+'</div>'+(action||'')+'</header>'}
+  function save(){if(window.openai&&window.openai.setWidgetState)window.openai.setWidgetState({modelContent:{projekt:'Paśnik przed i po',ekran:titles[state.screen],widok:state.device},privateContent:{screen:state.screen,device:state.device}}).catch(function(){})}
+  function planTabs(active){return '<nav class="pf-subnav" aria-label="Widok planu">'+[['day','Dzień'],['week','Tydzień'],['stats','Podsumowanie']].map(function(x){return btn(x[1],'screen:'+x[0],active===x[0]?'pf-current':'')}).join('')+'</nav>'}
+  function nav(old){
+    const arr=old?[['day','Plan dnia','calendar-days'],['week','Tydzień','calendar-range'],['recipes','Przepisy','chef-hat'],['products','Produkty','carrot'],['pantry','Spiżarnia','refrigerator'],['shopping','Zakupy','shopping-cart'],['stats','Statystyki','chart-column'],['settings','Ustawienia','settings']]:[['day','Plan','calendar-days'],['recipes','Przepisy','book-open'],['shopping','Zakupy','shopping-basket'],['pantry','Spiżarnia','refrigerator']];
+    const current=state.screen==='list'?'shopping':['recipe','editor'].includes(state.screen)?'recipes':!old&&['week','stats'].includes(state.screen)?'day':state.screen;
+    return arr.map(function(x){return '<button class="pf-nav '+(current===x[0]?'pf-current':'')+'" type="button" data-action="screen:'+x[0]+'">'+icon(x[2])+x[1]+'</button>'}).join('');
+  }
+  function shell(content,old){
+    const bottom=old?[['day','Plan dnia','calendar-days'],['recipes','Przepisy','chef-hat'],['shopping','Zakupy','shopping-cart'],['settings','Więcej','ellipsis']]:[['day','Plan','calendar-days'],['recipes','Przepisy','book-open'],['shopping','Zakupy','shopping-basket'],['pantry','Spiżarnia','refrigerator']];
+    const active=['week','stats'].includes(state.screen)?'day':['recipe','editor'].includes(state.screen)?'recipes':state.screen==='list'?'shopping':state.screen;
+    return '<div class="pf-layout"><aside class="pf-sidebar"><div class="pf-brand"><span class="pf-brand-mark">'+(old?'':icon('sprout'))+'</span><div><div class="pf-brand-name">Paśnik</div>'+(old?'<small>Rodzinne planowanie</small>':'')+'</div></div><nav aria-label="Nawigacja aplikacji">'+nav(old)+'</nav><div class="pf-sidebar-bottom">'+(!old?btn('Biblioteka produktów','screen:products','pf-quiet pf-small','carrot'):'')+'<button type="button" class="pf-account" data-action="screen:settings"><span class="pf-avatar">O</span><span>Ola<small style="display:block">Rodzina Nowaków</small></span></button>'+(old?btn('Wyloguj','old:logout','','log-out'):btn('Ustawienia','screen:settings','pf-quiet pf-small','settings'))+'</div></aside><header class="pf-mobile-top"><strong>Paśnik</strong><button type="button" class="pf-account" aria-label="Rodzina i ustawienia" data-action="screen:settings"><span class="pf-avatar">O</span></button></header><main class="pf-main">'+(!old&&state.toast?'<div class="pf-toast" role="status">'+icon('check')+esc(state.toast)+'<button type="button" data-action="dismiss-toast" aria-label="Zamknij potwierdzenie">×</button></div>':'')+content+'</main><nav class="pf-bottomnav" aria-label="Nawigacja mobilna">'+bottom.map(function(x){return '<button type="button" class="'+(active===x[0]?'pf-current':'')+'" data-action="screen:'+x[0]+'">'+icon(x[2])+x[1]+'</button>'}).join('')+'</nav></div>';
+  }
+  function oldMeal(i,name){const r=recipes[i];return '<section class="pf-card"><div class="pf-head"><div><h3>'+name+'</h3><small>'+r.kcal+' kcal</small></div>'+btn('⌄','old:meal','pf-quiet')+'</div><div class="pf-old-item"><div class="pf-row"><div><strong class="pf-item-name">'+r.name+'</strong><small>'+r.kcal+' kcal</small></div><div class="pf-stepper">'+btn('−','old:portion')+'1'+btn('+','old:portion')+'</div></div><div class="pf-actions">'+btn('Rozkład rodzinny','old:split','pf-quiet pf-small')+btn('Usuń','old:remove','pf-quiet pf-small')+'</div></div>'+btn('+ Dodaj pozycję','old:add')+'</section>'}
+  function oldDay(){return head('Plan dnia — 2026-10-29','', '<div class="pf-actions">'+btn('‹','old:date')+btn('Dziś','old:date')+btn('›','old:date')+'</div>')+'<div class="pf-metrics">'+[['Kalorie','1450','2000','kcal',72],['Białko','80','100','g',80],['Tłuszcze','50','65','g',77],['Węglowodany','170','250','g',68]].map(function(x){return '<div class="pf-card"><small>'+x[0]+'</small><p><span class="pf-metric-number">'+x[1]+'</span> <small>/ '+x[2]+' '+x[3]+'</small></p><div class="pf-meter"><span style="width:'+x[4]+'%"></span></div><small class="pf-warning">−'+(Number(x[2])-Number(x[1]))+' '+x[3]+' · za mało</small></div>'}).join('')+'</div><div class="pf-old-plan"><div class="pf-stack">'+oldMeal(0,'Śniadanie')+oldMeal(1,'Obiad')+oldMeal(4,'Kolacja')+'<div class="pf-actions">'+btn('+ Dodaj posiłek','old:add','pf-primary')+btn('Kopiuj dzień','old:copy')+'</div></div><aside class="pf-stack"><div class="pf-card"><h3>Makroskładniki dnia</h3><div class="pf-donut" role="img" aria-label="Przykładowy pierścień udziałów makroskładników"></div><p style="text-align:center">1450 kcal</p><small>Białko 80 g · Tłuszcze 50 g<br>Węglowodany 170 g</small></div><div class="pf-card"><h3>Ten tydzień</h3>'+bars(true)+'</div></aside></div>'}
+  function newDay(){
+    let c=planTabs('day')+head('Dzisiaj jemy','Czwartek, 29 października',btn('Dodaj danie','picker','pf-primary','plus'))+'<div class="pf-week-strip">'+['Pn','Wt','Śr','Cz','Pt','So','Nd'].map(function(d,i){return '<button type="button" class="pf-date '+(i===3?'pf-current':'')+'" data-action="choose-date:'+i+'"><small>'+d+'</small><strong>'+(26+i>31?1:26+i)+'</strong></button>'}).join('')+'</div>';
+    if(state.dayState==='error')return c+'<div class="pf-empty"><h2>Nie udało się pobrać planu</h2><p class="pf-muted">Nie możemy teraz sprawdzić zaplanowanych dań.</p>'+btn('Spróbuj ponownie','retry','pf-primary','refresh-cw')+'</div>';
+    if(state.dayState==='empty')return c+'<div class="pf-empty"><span class="pf-food-icon">'+icon('utensils')+'</span><h2>Co zjemy w czwartek?</h2><p class="pf-muted">Wybierz pierwsze danie lub wykorzystaj gotowy dzień.</p><div class="pf-actions">'+btn('Wybierz śniadanie','picker','pf-primary')+btn('Skopiuj inny dzień','copy')+'</div></div>';
+    c+='<div class="pf-day-context">'+icon('users')+'Gotujemy dla: Ola, Jan i Zosia '+btn('Zmień','family','pf-quiet pf-small')+'</div><section aria-label="Posiłki">'+[[0,'Śniadanie'],[1,'Obiad'],[4,'Kolacja']].concat(state.added?[[state.addedRecipe,'Dodatkowy posiłek']]:[]).map(function(x){const r=recipes[x[0]];return '<article class="pf-dish"><span class="pf-food-icon">'+icon(r.icon)+'</span><div><span class="pf-eyebrow">'+x[1]+'</span><h3>'+r.name+'</h3><small>'+r.time+' min · '+r.kcal+' kcal / porcja</small></div>'+btn('Zamień','picker','pf-quiet pf-small','repeat')+'</article>'}).join('')+'</section><div class="pf-actions">'+btn('Kopiuj dzień','copy','pf-quiet','copy')+btn('Otwórz tydzień','screen:week','pf-quiet','arrow-right')+'</div><section class="pf-card pf-balance"><div class="pf-summary-line"><strong>Bilans Oli · z planu</strong>'+btn(state.nutritionOpen?'Zwiń':'Szczegóły','nutrition','pf-quiet pf-small','chart-no-axes-column')+'</div><p><span class="pf-amount">1 450</span> <span class="pf-muted">/ 2 000 kcal</span></p><div class="pf-meter"><span style="width:72.5%"></span></div><small>550 kcal poniżej ustawionego celu</small>'+(state.nutritionOpen?'<div class="pf-row"><span>Białko</span><strong>80 / 100 g</strong></div><div class="pf-row"><span>Tłuszcze</span><strong>50 / 65 g</strong></div><div class="pf-row"><span>Węglowodany</span><strong>170 / 250 g</strong></div>':'')+'</section>';
+    return c;
+  }
+  function oldWeek(){return head('Tydzień','Tydzień od 2026-10-26',btn('Bieżący tydzień','old:date'))+'<div class="pf-actions">'+['Kopiuj dzień','Powiel blok','Zapisz jako szablon','Zastosuj szablon','Zastosuj cykl','Użyj ponownie'].map(function(x){return btn(x,x==='Kopiuj dzień'?'old:copy':'old:template')}).join('')+'</div><div class="pf-old-week">'+['Pn','Wt','Śr','Cz','Pt','So','Nd'].map(function(d,i){return '<article class="pf-card"><strong>'+d+'</strong><small>2026-'+(i===6?'11-01':'10-'+(26+i))+'</small><small>1450 kcal</small>'+['Śniadanie','Obiad','Kolacja'].map(function(m,j){return '<div class="pf-old-item"><strong style="font-size:11px">'+m+'</strong><small>420 kcal</small><span class="pf-initials">'+['Ow','Ma','Ka'][j]+'</span>'+btn('Przenieś','old:move','pf-quiet pf-small')+'</div>'}).join('')+btn('Otwórz dzień','screen:day','pf-quiet pf-small')+'</article>'}).join('')+'</div><div class="pf-card"><h3>Kalorie w tygodniu</h3>'+bars(true)+'</div>'}
+  function newWeek(){return planTabs('week')+head('Tydzień przy stole','26 października – 1 listopada',btn('Zrób listę zakupów','generate','pf-primary','shopping-basket'))+'<div class="pf-head"><div class="pf-actions">'+btn('‹','week-prev','pf-small')+btn('Ten tydzień','week-current','pf-small')+btn('›','week-next','pf-small')+'</div>'+btn('Uzupełnij plan','reuse','','copy')+'</div><div class="pf-week-agenda">'+['Pon.','Wt.','Śr.','Czw.','Pt.','Sob.','Niedz.'].map(function(d,i){return '<article class="pf-week-day '+(i===3?'pf-today':'')+'"><div class="pf-week-label"><small>'+d+'</small><strong>'+(i===6?'1':26+i)+'</strong>'+(i===3?'<small>Dzisiaj</small>':'')+'</div><div class="pf-week-meals">'+['Śniadanie','Obiad','Kolacja'].map(function(m,j){const n=(i+j)%recipes.length;return '<div class="pf-week-meal"><span class="pf-eyebrow">'+m+'</span>'+(i>3&&j===2?'<button type="button" class="pf-empty-slot" data-action="picker">'+icon('plus')+' Dodaj danie</button>':'<button type="button" class="pf-btn pf-quiet" data-action="recipe:'+n+'">'+recipes[n].name+'</button>')+'</div>'}).join('')+'</div></article>'}).join('')+'</div>'}
+  function recipeGrid(old){
+    const items=recipes.map(function(r,i){return {r:r,i:i}}).filter(function(x){return x.r.name.toLowerCase().includes(state.query.toLowerCase())&&(state.filter!=='fast'||x.r.time<=30)&&(state.filter!=='favorites'||state.favorites.has(x.i))&&(!state.pantryFilter||x.i===1)});
+    if(!items.length)return '<div class="pf-empty"><h2>Brak pasujących przepisów</h2>'+btn('Wyczyść filtry','clear-filters','pf-primary')+'</div>';
+    return items.map(function(x){const r=x.r,i=x.i;return '<article class="pf-recipe-card">'+(old?'<div class="pf-old-photo">'+r.name[0]+'</div>':'<div class="pf-recipe-art">'+icon(r.icon)+btn(state.favorites.has(i)?'Ulubiony':'Ulubione','favorite:'+i,'pf-quiet pf-small','heart')+'</div>')+'<div class="pf-recipe-content"><h3>'+r.name+'</h3>'+(old?'<span class="pf-tag">Rodzinny</span>':'')+'<small>'+r.time+' min · '+r.kcal+' kcal / porcja</small>'+(old?'<span class="pf-tag">'+r.category+'</span>'+btn('Otwórz przepis','recipe:'+i,'pf-quiet pf-small'):'<div class="pf-actions">'+btn('Zaplanuj','schedule:'+i,'pf-primary pf-small','plus')+btn('Przepis','recipe:'+i,'pf-quiet pf-small','arrow-up-right')+'</div>')+'</div></article>'}).join('');
+  }
+  function recipeCatalog(old){return head(old?'Przepisy':'Co masz ochotę ugotować?',old?'Przepisy Twoje i Twojej rodziny.':'Twoja rodzinna książka kucharska.',btn(old?'Dodaj przepis':'Nowy przepis','screen:editor',old?'pf-primary':'','plus'))+'<label class="pf-field">Szukaj przepisu<input class="pf-input" data-query="recipes" placeholder="Nazwa dania lub składnik" value="'+esc(state.query)+'"></label>'+(old?'<div class="pf-filter-row">'+['Wszystkie','Dla wszystkich','Rodzinne','Prywatne'].map(function(t,i){return btn(t,'old:filter',i===0?'pf-primary':'')}).join('')+'</div><div class="pf-filter-row">'+['Obiad','Śniadanie','Ulubione'].map(function(t){return btn(t,'old:filter')}).join('')+'</div>':'<div class="pf-filter-row">'+[['all','Wszystkie'],['favorites','Ulubione'],['fast','Do 30 minut']].map(function(x){return btn(x[1],'filter:'+x[0],state.filter===x[0]?'pf-selected':'','')}).join('')+(state.pantryFilter?btn('Z cukinią ×','clear-pantry','pf-selected','carrot'):'')+btn('Pozostałe filtry','filters','pf-quiet','sliders-horizontal')+'</div>')+'<small>'+ (old?'Przepisów: 6 z 6':'Przepisy rodzinne · bez zdjęć')+'</small><div class="pf-recipes-grid" data-recipe-grid>'+recipeGrid(old)+'</div>'}
+  function ingredients(check){
+    const sets=[
+      [['Płatki owsiane',100,'g'],['Mleko',300,'ml'],['Jabłko',1,'szt.'],['Cynamon',0.5,'łyżeczki']],
+      [['Makaron pełnoziarnisty',200,'g'],['Cukinia',1,'szt.'],['Pesto bazyliowe',40,'g'],['Parmezan',20,'g']],
+      [['Filet z łososia',300,'g'],['Ziemniaki',400,'g'],['Cytryna',0.5,'szt.'],['Oliwa',10,'ml']],
+      [['Passata pomidorowa',400,'ml'],['Soczewica czerwona',100,'g'],['Cebula',1,'szt.'],['Bulion',500,'ml']],
+      [['Pieczywo pełnoziarniste',4,'kromki'],['Jajka',3,'szt.'],['Jogurt naturalny',40,'g'],['Szczypiorek',10,'g']],
+      [['Jogurt naturalny',300,'g'],['Gruszka',1,'szt.'],['Orzechy włoskie',30,'g']]
+    ];
+    return sets[state.recipe].map(function(x){const amount=(x[1]*state.portions/2).toLocaleString('pl-PL')+' '+x[2];return check?'<label class="pf-checkline"><input type="checkbox"><span>'+x[0]+'</span><strong>'+amount+'</strong></label>':'<div class="pf-old-item"><div class="pf-row"><span>'+x[0]+'</span><strong>'+amount+'</strong></div></div>'}).join('');
+  }
+  function instructions(){
+    const sets=[
+      ['Podgrzej mleko i dodaj płatki owsiane.','Gotuj na małym ogniu do uzyskania ulubionej konsystencji.','Dodaj pokrojone jabłko i posyp cynamonem.'],
+      ['Zagotuj osoloną wodę i ugotuj makaron zgodnie z instrukcją na opakowaniu.','Pokrój cukinię w półplasterki. Podsmaż na patelni przez 6–8 minut.','Połącz makaron, cukinię i pesto. Dodaj odrobinę wody z gotowania. Posyp parmezanem.'],
+      ['Pokrój ziemniaki i wymieszaj z oliwą.','Upiecz ziemniaki, następnie dodaj przyprawioną rybę.','Dopiecz do gotowości i podawaj z cytryną.'],
+      ['Posiekaj cebulę i krótko podsmaż.','Dodaj passatę, soczewicę i bulion.','Gotuj do miękkości soczewicy i dopraw do smaku.'],
+      ['Ugotuj jajka na twardo i ostudź.','Rozgnieć jajka z jogurtem oraz szczypiorkiem.','Nałóż pastę na pieczywo.'],
+      ['Przełóż jogurt do miseczek.','Dodaj pokrojoną gruszkę.','Posyp posiekanymi orzechami.']
+    ];
+    return sets[state.recipe].map(function(t,i){return '<div class="pf-step"><span class="pf-step-num">'+(i+1)+'</span><p>'+t+'</p></div>'}).join('');
+  }
+  function recipeDetail(old){
+    const r=recipes[state.recipe];
+    if(old)return head(r.name,'Rodzinny · '+r.time+' min · Trudność: 3/10')+'<div class="pf-actions">'+btn('Wróć do listy','screen:recipes','pf-quiet')+btn('Edytuj','screen:editor')+btn('Usuń','old:remove','pf-quiet')+'</div><div class="pf-card"><div class="pf-actions"><strong>Porcje</strong>'+btn('−','portion:-1')+state.portions+btn('+','portion:1')+'</div></div><nav class="pf-subnav">'+['Składniki','Przygotowanie','Wartości odżywcze'].map(function(t){return btn(t,'oldtab:'+t,t===state.oldTab?'pf-current':'')}).join('')+'</nav><div class="pf-stack">'+(state.oldTab==='Składniki'?ingredients(false):state.oldTab==='Przygotowanie'?instructions():'<div class="pf-card">Kalorie: 620 kcal / porcja<br>Białko: 20 g · Tłuszcze: 22 g · Węglowodany: 85 g</div>')+'</div><div class="pf-card"><strong>Twoja ocena</strong><p class="pf-warning">☆ ☆ ☆ ☆ ☆</p></div>';
+    return '<div class="pf-head">'+btn('Przepisy','screen:recipes','pf-quiet pf-small','arrow-left')+btn('Edytuj','screen:editor','pf-quiet pf-small','pencil')+'</div><div class="pf-recipe-title"><span class="pf-eyebrow">'+r.category+' · przepis rodzinny</span><h1>'+r.name+'</h1><div class="pf-recipe-meta"><span>'+icon('clock')+' '+r.time+' min</span><span>'+r.kcal+' kcal / porcja</span>'+btn(state.favorites.has(state.recipe)?'W ulubionych':'Dodaj do ulubionych','favorite:'+state.recipe,'pf-quiet pf-small','heart')+'</div></div><div class="pf-actions">'+btn('Zaplanuj to danie','schedule:'+state.recipe,'pf-primary','calendar-plus')+btn('Gotuj krok po kroku','cook','','chef-hat')+'</div><div class="pf-serving-control"><strong>Przygotuj '+state.portions+' porcje</strong><div class="pf-stepper">'+btn('−','portion:-1','pf-small')+btn('+','portion:1','pf-small')+'</div><small>Składniki dla wybranej liczby porcji</small></div><div class="pf-two"><section><h2>Składniki</h2>'+ingredients(true)+'</section><section><h2>Przygotowanie</h2>'+instructions()+'</section></div><details><summary>Wartości odżywcze i kompletność danych</summary><p class="pf-muted">620 kcal na porcję. Przykładowe wartości do projektu interfejsu.</p></details>';
+  }
+  function editor(old){
+    return head(old?'Edycja przepisu':'Twój przepis',old?'':'Makaron z cukinią i pesto',old?'':btn('Zapisz przepis','save-recipe','pf-primary','check'))+btn('Wróć do przepisów','screen:recipes','pf-quiet pf-small','arrow-left')+'<div class="'+(old?'pf-card':'pf-stack')+'">'+label('Nazwa przepisu','Makaron z cukinią i pesto')+'<div class="pf-two">'+label(old?'Liczba porcji bazowych':'Z przepisu otrzymasz porcji','2','number')+label('Czas przygotowania (min)','25','number')+'</div>'+(old?'<div class="pf-two">'+label('Trudność (1–10)','3','number')+label('Widoczność','Rodzinny')+'</div>'+label('Instrukcje','Pokrój cukinię i podsmaż…'):'')+'</div><section class="'+(old?'pf-card':'pf-edit-section')+'"><h2>Składniki</h2>'+[['Makaron pełnoziarnisty','200','g'],['Cukinia','1','szt.'],['Pesto bazyliowe','40','g']].map(function(x){return old?'<div class="pf-old-item">'+label('Produkt',x[0])+label('Ilość',x[1]+' '+x[2])+btn('Usuń','old:remove','pf-quiet pf-small')+'</div>':'<div class="pf-editor-row"><input aria-label="Nazwa składnika" class="pf-input" value="'+x[0]+'"><input aria-label="Ilość składnika" class="pf-input" value="'+x[1]+'"><input aria-label="Jednostka składnika" class="pf-input" value="'+x[2]+'">'+btn('×','remove-ingredient','pf-quiet')+'</div>'}).join('')+btn('Dodaj składnik','ingredient','pf-quiet','plus')+'</section><section class="'+(old?'pf-card':'pf-edit-section')+'"><h2>'+(old?'Tagi':'Przygotowanie')+'</h2>'+(old?'<div class="pf-actions"><span class="pf-tag">Obiad</span><span class="pf-tag">Ulubione</span></div>':'<label class="pf-field">Kroki<textarea class="pf-input">1. Ugotuj makaron.\n2. Podsmaż cukinię.\n3. Połącz z pesto i parmezanem.</textarea></label>')+'</section>'+(old?'<div class="pf-card"><h3>Zdjęcie</h3><small>Wybierz zdjęcie przepisu</small>'+btn('Wybierz plik','old:photo')+'</div>'+btn('Zapisz','save-recipe','pf-primary'):'<details><summary>Zdjęcie, tagi i widoczność</summary><div class="pf-stack" style="padding-top:14px">'+label('Widoczność','Rodzinny')+label('Tagi','Obiad, ulubione')+'</div></details><small>Zmiany niezapisane · pozostają w szkicu na tym urządzeniu</small>');
+  }
+  function oldShopping(){return head('Zakupy','Wygeneruj listy zakupowe z planu posiłków. Nic nie kupujemy w tle.')+'<section class="pf-card"><h2>Tury zakupów</h2><p class="pf-muted">Tura to jedno wyjście do sklepu: dzień, na ile dni planu kupujesz i co bierzesz.</p>'+['Zakupy główne','Świeże w środę'].map(function(t,i){return '<div class="pf-old-item"><strong>'+t+'</strong><small>'+(i?'środa · Tylko świeże · na 3 dni':'niedziela · Trwałe + okno świeżych · na 7 dni')+'</small><div class="pf-actions">'+btn('↑','old:round','pf-small')+btn('↓','old:round','pf-small')+btn('Edytuj','old:round','pf-small')+btn('Usuń','old:remove','pf-small')+'</div></div>'}).join('')+btn('+ Dodaj turę','old:round','pf-primary')+'</section><section class="pf-card"><h2>Generuj zakupy</h2><p class="pf-muted">Wybierz zakres dat planu, z którego mają powstać listy.</p><div class="pf-two">'+label('Od','2026-10-26','date')+label('Do','2026-11-01','date')+'</div><label class="pf-checkline"><input type="checkbox"><span>Uwzględnić stan domowy?</span></label><small>Zaznacz tylko wtedy, gdy stan spiżarni jest aktualny.</small>'+btn('Pokaż podgląd zakupów','old:preview','pf-primary')+'</section>'}
+  function newShopping(){return head('Zakupy','Wszystkie listy w jednym miejscu.',btn('Nowa lista z planu','generate','','plus'))+'<section class="pf-active-list"><div class="pf-head"><span>AKTYWNA LISTA</span>'+icon('shopping-basket')+'</div><h2>Zakupy na weekend</h2><small>30 października – 1 listopada · Sklep osiedlowy</small><div><p>'+state.checked.size+' z '+shop.length+' produktów kupione</p><div class="pf-meter"><span style="width:'+(state.checked.size/shop.length*100)+'%"></span></div></div><div>'+btn('Kontynuuj zakupy','screen:list','','arrow-right')+'</div></section><section class="pf-stack"><h2>Pozostałe listy</h2><div class="pf-row"><div><strong>Świeże na środę</strong><small style="display:block">28 października · 6 produktów</small></div>'+btn('Otwórz','screen:list','pf-quiet','arrow-right')+'</div><div class="pf-row"><div><strong>Zakupy z 24 października</strong><small style="display:block">Zakończona · 18 produktów</small></div>'+btn('Historia','history','pf-quiet','archive')+'</div></section><details><summary>Preferencje zakupów</summary><div class="pf-stack" style="padding-top:14px"><small>Zakupy główne w niedzielę, świeże produkty w środę.</small>'+btn('Zmień podział zakupów','rounds')+'</div></details>'}
+  function shoppingRow(x,i,old){return '<label class="pf-shop-row '+(state.checked.has(i)?'pf-checked':'')+'"><input type="checkbox" data-check="'+i+'" '+(state.checked.has(i)?'checked':'')+'><span><span class="pf-shop-name">'+x.name+'</span><small>'+(old?x.amount+' · '+x.note:x.note)+'</small></span>'+(old?'<span class="pf-tag">'+(i>1?'Zostanie':'Bez resztki')+'</span>':'<strong>'+x.amount+'</strong>')+'</label>'}
+  function shoppingList(old){
+    let c=head('Zakupy na weekend',old?'Zakupy główne · Wygasa 2026-11-05':state.checked.size+' z '+shop.length+' produktów kupione',old?'':btn('Udostępnij','share','pf-quiet pf-small','share-2'));
+    c+=old?'<div class="pf-card">'+label('Sklep','Sklep osiedlowy')+'<small>Sklep ustala kolejność kategorii na liście.</small></div>':'<div class="pf-summary-line"><span class="pf-muted">Sklep osiedlowy</span><span class="pf-sync">'+icon('check-check')+'Lista dostępna offline</span></div><div class="pf-meter"><span style="width:'+(state.checked.size/shop.length*100)+'%"></span></div>';
+    const cats=['Warzywa i owoce','Nabiał','Produkty suche'];
+    cats.forEach(function(cat){const entries=shop.map(function(x,i){return {x:x,i:i}}).filter(function(z){return z.x.cat===cat&&(old||!state.checked.has(z.i))});if(entries.length)c+='<section><h2 class="pf-group-title">'+cat+'</h2>'+entries.map(function(z){return shoppingRow(z.x,z.i,old)}).join('')+'</section>'});
+    if(!old)c+=btn('Kupione ('+state.checked.size+') '+(state.doneOpen?'⌃':'⌄'),'toggle-done','pf-quiet')+(state.doneOpen?shop.map(function(x,i){return state.checked.has(i)?shoppingRow(x,i,false):''}).join(''):'');
+    c+='<div class="'+(old?'pf-card':'pf-bottom-action')+'">'+(old?'<h3>Lista zakupowa</h3><div class="pf-actions">'+btn('Udostępnij','old:share','pf-primary')+btn('Drukuj','old:print')+btn('Przyjmij do spiżarni','old:accept')+btn('Usuń listę','old:remove','pf-quiet')+'</div>':btn('Zakończ zakupy','finish','pf-primary','check'))+'</div>';
+    return c;
+  }
+  function pantry(old){
+    return head('Spiżarnia',old?'Stan domowy: co i ile faktycznie macie w domu.':'Najpierw wykorzystaj to, co już masz.',btn('Dodaj produkt',old?'old:pantry':'pantry-add',old?'pf-primary':'','plus'))+(old?'<section class="pf-card"><h2>Szukaj</h2>'+label('Produkt','')+'<div class="pf-two">'+label('Kategoria','Wszystkie kategorie')+label('Sortowanie','Termin ważności')+'</div><label class="pf-checkline"><input type="checkbox"><span>Wkrótce przeterminowane</span></label></section><div class="pf-head"><small>Produktów: 3 z 3</small><div class="pf-actions">'+btn('Kafelki','old:view','pf-primary')+btn('Lista','old:view')+'</div></div>':'<section class="pf-use-first"><div class="pf-head"><strong>'+icon('clock')+' Wykorzystaj w pierwszej kolejności</strong><span>2 produkty</span></div><p>Cukinia i jogurt mają krótki termin.</p><small>Sprawdź etykiety i stan produktów.</small>'+btn('Co z nich ugotować?','pantry-recipes','','chef-hat')+'</section>'+label('Szukaj w spiżarni',''))+'<section>'+[['Cukinia','2 szt.','Termin: jutro','carrot'],['Jogurt naturalny','400 g','Termin: za 2 dni','milk'],['Płatki owsiane','350 g','Termin: 18 listopada','wheat']].map(function(x){return old?'<div class="pf-card" style="margin-bottom:12px"><h3>'+x[0]+'</h3><p>'+x[1]+'</p><span class="pf-tag">'+x[2]+'</span><div class="pf-actions">'+btn('Edytuj','old:pantry')+btn('Usuń','old:remove','pf-quiet')+'</div></div>':'<div class="pf-pantry-row"><span class="pf-avatar">'+icon(x[3])+'</span><div><strong>'+x[0]+'</strong><small style="display:block">'+x[1]+' · '+x[2]+'</small></div>'+btn('Zmień ilość','pantry-amount','pf-quiet pf-small')+'</div>'}).join('')+'</section>'+(!old?'<small>Ostatnie sprawdzenie zapasów: wczoraj</small>':'');
+  }
+  function bars(old){return '<div class="pf-chart" role="img" aria-label="Przykładowe kalorie planu w siedmiu dniach. W niedzielę brak planu.">'+[74,82,95,72,89,68,0].map(function(v,i){return '<div class="pf-chart-col"><span class="pf-chart-bar '+(!v?'pf-gap':'')+'" style="height:'+v+'%;'+(old&&i!==6?'background:#d9a441':'')+'"></span><span class="pf-chart-label">'+['Pn','Wt','Śr','Cz','Pt','So','Nd'][i]+'</span></div>'}).join('')+'</div>'}
+  function stats(old){return (old?'':planTabs('stats'))+head(old?'Statystyki':'Podsumowanie planu',old?'Kalorie i makroskładniki dni z planu wobec Twoich celów.':'26 października – 1 listopada · Ola')+'<div class="'+(old?'pf-card':'pf-actions')+'"><div class="pf-actions">'+btn('Tydzień','stat-week','pf-primary')+btn('Miesiąc','stat-month')+btn('Własny zakres','stat-range')+'</div></div>'+(old?'<div class="pf-actions">'+btn('Kalorie','stat-kcal','pf-quiet')+btn('Makroskładniki','stat-macro','pf-quiet')+'</div>':'<div class="pf-message">'+icon('calendar-check')+'Zaplanowano 6 z 7 dni</div>')+'<section class="pf-card"><div class="pf-head"><h2>Kalorie zaplanowane na dzień</h2><small>Cel: 2 000 kcal</small></div>'+bars(old)+'<small>Puste miejsce oznacza brak planu.</small></section><div class="'+(old?'pf-metrics':'pf-stat-summary')+'">'+[['Średnio dziennie','1 600 kcal'],['Wobec celu','−400 kcal'],['Dni z planem','6 z 7']].map(function(x){return '<div class="'+(old?'pf-card':'pf-stack')+'"><small>'+x[0]+'</small><strong class="pf-amount">'+x[1]+'</strong></div>'}).join('')+'</div>'+(!old?'<small>Podsumowanie opisuje plan posiłków. Nie potwierdza ich zjedzenia.</small>'+btn('Uzupełnij niedzielę','picker','','plus'):'')}
+  function products(old){return head(old?'Produkty':'Biblioteka produktów',old?'Katalog produktów i wartości odżywczych.':'Składniki wykorzystywane w przepisach.',btn('Dodaj produkt',old?'old:product':'product-edit',old?'pf-primary':'','plus'))+'<div class="'+(old?'pf-card':'pf-stack')+'">'+label('Szukaj produktu','')+(old?label('Kategoria','Wszystkie kategorie'):'')+'</div><small>Produktów: 4 z 4</small><div class="'+(old?'pf-recipes-grid':'pf-stack')+'">'+[['Cukinia','17 kcal / 100 g'],['Makaron pełnoziarnisty','348 kcal / 100 g'],['Pesto bazyliowe','450 kcal / 100 g'],['Jogurt naturalny','60 kcal / 100 g']].map(function(x){return '<div class="'+(old?'pf-card':'pf-row')+'"><div><h3>'+x[0]+'</h3><small>'+x[1]+'</small>'+(old?'<p><span class="pf-tag">Zweryfikowany</span></p>':'')+'</div>'+btn(old?'Edytuj':'Dane produktu',old?'old:product':'product-edit',old?'':'pf-quiet pf-small','')+'</div>'}).join('')+'</div>'}
+  function settings(old){
+    if(old)return head('Ustawienia','Rodzina, profile i cele żywieniowe.')+'<div class="pf-card"><h2>Moja rodzina</h2><small>Rodzina Nowaków</small><h3>Członkowie</h3><div class="pf-old-item">Ola</div><div class="pf-old-item">Jan</div></div><div class="pf-card"><h2>Profile członków</h2>'+['Ola','Jan','Zosia'].map(function(n){return '<div class="pf-old-item"><strong>'+n+'</strong><small>Mnożnik porcji: '+(n==='Zosia'?'0,5':'1')+'</small><div class="pf-actions">'+btn('Edytuj','old:profile','pf-small')+btn('Dezaktywuj','old:profile','pf-small')+btn('Usuń','old:remove','pf-small')+'</div></div>'}).join('')+btn('+ Dodaj profil','old:profile','pf-primary')+'</div><div class="pf-card"><h2>Cele żywieniowe</h2>'+label('Kalorie','2000')+btn('Zapisz cele','old:goal','pf-primary')+'</div><div class="pf-card"><h2>Kopia danych rodziny</h2>'+btn('Eksportuj / importuj','old:backup')+'</div><div class="pf-card"><h2>Progi kolorów</h2>'+label('Dolny próg (%)','90')+'</div>';
+    const tabs=['Rodzina','Moje cele','Zakupy','Dane'];
+    let c=head('Dom i ustawienia','Rodzina Nowaków')+'<nav class="pf-settings-tabs" aria-label="Sekcje ustawień">'+tabs.map(function(t){return btn(t,'setting:'+t,t===state.setting?'pf-primary':'pf-quiet')}).join('')+'</nav>';
+    if(state.setting==='Rodzina')c+='<section class="pf-stack"><h2>Dla kogo gotujemy?</h2><p class="pf-muted">Domyślne porcje możesz zmienić przy każdym daniu.</p>'+[['Ola','1 porcja'],['Jan','1 porcja'],['Zosia','½ porcji']].map(function(x){return '<div class="pf-row"><div class="pf-actions"><span class="pf-avatar">'+x[0][0]+'</span><div><strong>'+x[0]+'</strong><small style="display:block">'+x[1]+'</small></div></div>'+btn('Edytuj','family','pf-quiet pf-small')+'</div>'}).join('')+btn('Dodaj osobę','family','','plus')+'</section><details><summary>Konta z dostępem do rodziny</summary><p>Ola i Jan · uprawnienia bez zmian</p></details>';
+    if(state.setting==='Moje cele')c+='<section class="pf-stack"><h2>Cele Oli</h2>'+label('Kalorie na dzień','2000','number')+'<div class="pf-two">'+label('Białko (g)','100','number')+label('Tłuszcze (g)','65','number')+'</div>'+label('Węglowodany (g)','250','number')+btn('Zapisz cele','save-settings','pf-primary')+'</section>';
+    if(state.setting==='Zakupy')c+='<section class="pf-stack"><h2>Kiedy robimy zakupy?</h2><div class="pf-card"><strong>Duże zakupy · niedziela</strong><small>Produkty trwałe na tydzień, świeże na pierwsze 3 dni.</small></div><div class="pf-card"><strong>Uzupełnienie · środa</strong><small>Świeże produkty na resztę tygodnia.</small></div>'+btn('Zmień harmonogram','rounds')+'</section>';
+    if(state.setting==='Dane')c+='<section class="pf-stack"><h2>Kopia danych rodziny</h2><p class="pf-muted">Zapisz kopię lub przywróć wcześniej wyeksportowane dane.</p><div class="pf-actions">'+btn('Zapisz kopię','backup-preview')+btn('Przywróć z pliku','import-preview')+'</div></section>';
+    return c;
+  }
+  state.ornaments=true;
+  function adornNew(){
+    after.classList.toggle('pf-adorned',state.ornaments);
+    if(!state.ornaments)return;
+    const motifs={day:'soup',week:'wheat',recipes:'book-open',recipe:recipes[state.recipe].icon,pantry:'carrot'};
+    if(!motifs[state.screen])return;
+    const target=state.screen==='recipe'?after.querySelector('.pf-recipe-title'):after.querySelector('main>header.pf-head');
+    if(!target)return;
+    const wrap=document.createElement('div');wrap.className='pf-ornament-header';
+    target.before(wrap);wrap.appendChild(target);
+    const art=document.createElement('div');art.className='pf-ornament';art.setAttribute('aria-hidden','true');
+    art.innerHTML='<span class="pf-ornament-plate">'+icon(motifs[state.screen])+'</span><span class="pf-ornament-leaf">'+icon('sprout')+'</span><span class="pf-ornament-seed">'+icon('wheat')+'</span>';
+    wrap.appendChild(art);
+  }
+  function render(){
+    screenSelect.value=state.screen;deviceSelect.value=state.device;
+    ['before','after'].forEach(function(x){const stage=document.getElementById('pasnik-'+x+'-stage');stage.classList.toggle('pf-mobile-stage',state.device==='mobile');stage.classList.toggle('viz-dotted-background',state.device==='mobile')});
+    const oldRender={day:oldDay,week:oldWeek,recipes:function(){return recipeCatalog(true)},recipe:function(){return recipeDetail(true)},editor:function(){return editor(true)},shopping:oldShopping,list:function(){return shoppingList(true)},pantry:function(){return pantry(true)},stats:function(){return stats(true)},products:function(){return products(true)},settings:function(){return settings(true)}};
+    const newRender={day:newDay,week:newWeek,recipes:function(){return recipeCatalog(false)},recipe:function(){return recipeDetail(false)},editor:function(){return editor(false)},shopping:newShopping,list:function(){return shoppingList(false)},pantry:function(){return pantry(false)},stats:function(){return stats(false)},products:function(){return products(false)},settings:function(){return settings(false)}};
+    before.innerHTML=shell(oldRender[state.screen](),true);
+    after.innerHTML=shell(newRender[state.screen](),false);
+    adornNew();
+    if(state.modal)renderModal();
+    if(globalThis.lucide)globalThis.lucide.createIcons({attrs:{width:17,height:17}});
+  }
+  function modalContent(){
+    const r=recipes[state.recipe];
+    switch(state.modal){
+      case 'picker':return '<h2>Wybierz danie</h2><p class="pf-muted">Czwartek, 29 października · Obiad</p><input class="pf-input" data-picker-search placeholder="Szukaj w przepisach" aria-label="Szukaj przepisu"><div data-picker-results>'+recipes.slice(0,4).map(function(x,i){return '<div class="pf-row" data-picker-name="'+esc(x.name.toLowerCase())+'"><div><strong>'+x.name+'</strong><small style="display:block">'+x.time+' min · '+x.kcal+' kcal / porcja</small></div>'+btn('Wybierz','schedule:'+i,'pf-quiet pf-small')+'</div>'}).join('')+'</div>';
+      case 'schedule':return '<h2>Zaplanuj danie</h2><strong>'+r.name+'</strong><div class="pf-two"><label class="pf-field">Dzień<input class="pf-input" type="date" value="2026-10-29"></label><label class="pf-field">Posiłek<select class="pf-input"><option>Obiad</option><option>Śniadanie</option><option>Kolacja</option></select></label></div><h3>Dla kogo?</h3>'+[['Ola','1'],['Jan','1'],['Zosia','0.5']].map(function(x){return '<label class="pf-row"><span>'+x[0]+'</span><input type="number" min="0" step="0.5" value="'+x[1]+'" class="pf-input" style="width:88px" data-person-portion aria-label="Porcje dla '+x[0]+'"></label>'}).join('')+'<p class="pf-message">Przygotujesz <strong data-portion-total>2,5</strong> porcji łącznie</p>'+btn('Dodaj do planu','apply-schedule','pf-primary','check');
+      case 'copy':return '<h2>Skopiuj czwartek</h2><p class="pf-muted">3 posiłki · 29 października</p><div class="pf-calendar-choices">'+['Pt. 30','Sob. 31','Niedz. 1'].map(function(x,i){return '<label><input type="checkbox" '+(i===0?'checked':'')+'><span>'+x+'</span></label>'}).join('')+'</div><p class="pf-message">Posiłki zostaną dopisane do wybranych dni.</p><small>Istniejące dania pozostaną w planie.</small>'+btn('Kopiuj na wybrane dni','apply-copy','pf-primary','copy');
+      case 'generate':return '<h2>Zakupy z planu</h2><small>1 z 2 · zakres i zapasy</small><div class="pf-two">'+label('Od','2026-10-30','date')+label('Do','2026-11-01','date')+'</div><label class="pf-checkline"><input type="checkbox"><span>Odejmij produkty ze spiżarni</span></label><small>Wybierz, jeśli stan zapasów jest aktualny. Odjęcia zobaczysz w podglądzie.</small><details><summary>Podziel zakupy na kilka dni</summary><p>Duże zakupy w piątek, świeże produkty w niedzielę.</p></details>'+btn('Sprawdź listę','preview-generation','pf-primary','arrow-right');
+      case 'preview':return '<h2>Sprawdź zakupy</h2><small>2 z 2 · 30 października – 1 listopada</small>'+shop.map(function(x){return '<div class="pf-row"><strong>'+x.name+'</strong><span>'+x.amount+'</span></div>'}).join('')+'<details><summary>Ilości, opakowania i przewidywane resztki</summary><p>Jogurt: opakowanie 400 g, zostanie 150 g. Makaron: opakowanie 500 g, zostanie 300 g.</p></details>'+btn('Utwórz listę','finalize-generation','pf-primary','check');
+      case 'finish':return '<h2>Zakończ zakupy</h2><p>Kupione: '+state.checked.size+' z '+shop.length+' produktów.</p><label class="pf-checkline"><input type="checkbox"><span>Dodaj kupione produkty do spiżarni</span></label><small>Pozostałe produkty możesz zachować na kolejnej liście.</small>'+btn('Zakończ i zapisz','apply-finish','pf-primary','check');
+      case 'share':return '<h2>Udostępnij listę</h2><p class="pf-muted">Osoba z linkiem może odhaczać produkty. Nie otrzymuje dostępu do planów ani spiżarni.</p>'+btn('Podgląd udostępniania','close','pf-primary','link')+'<small>Projekt — rzeczywisty link nie jest tworzony.</small>';
+      case 'family':return '<h2>Dla kogo gotujemy?</h2>'+[['Ola','1'],['Jan','1'],['Zosia','0.5']].map(function(x){return '<label class="pf-row"><span>'+x[0]+'</span><input class="pf-input" type="number" min="0" step="0.5" value="'+x[1]+'" style="width:88px" aria-label="Domyślne porcje dla '+x[0]+'"></label>'}).join('')+'<small>0 oznacza, że osoba nie je tego dania.</small>'+btn('Zapisz porcje','save-family','pf-primary');
+      case 'cook':return '<span class="pf-eyebrow">Gotowanie · 1 z 3</span><h2>Ugotuj makaron</h2><p>Zagotuj osoloną wodę. Wrzuć makaron i ugotuj zgodnie z instrukcją na opakowaniu.</p><div class="pf-message">'+icon('cooking-pot')+'200 g makaronu pełnoziarnistego</div>'+btn('Następny krok','cook-next','pf-primary','arrow-right');
+      case 'cook-next':return '<span class="pf-eyebrow">Gotowanie · 2 z 3</span><h2>Podsmaż cukinię</h2><p>Pokrój cukinię w półplasterki i podsmaż przez 6–8 minut.</p>'+btn('Następny krok','cook-last','pf-primary','arrow-right');
+      case 'cook-last':return '<span class="pf-eyebrow">Gotowanie · 3 z 3</span><h2>Połącz i podawaj</h2><p>Dodaj pesto do makaronu i cukinii. Wymieszaj z odrobiną wody z gotowania. Posyp parmezanem.</p>'+btn('Gotowe','close','pf-primary','check');
+      case 'reuse':return '<h2>Uzupełnij tydzień</h2>'+btn('Skopiuj poprzedni tydzień','copy','','copy')+btn('Wybierz zapisany szablon','templates','','book-open')+btn('Zastosuj cykl','cycles','','repeat')+'<small>Przed zapisaniem zobaczysz zakres i sposób dodawania posiłków.</small>';
+      case 'templates':return '<h2>Zapisane szablony</h2><div class="pf-row"><div><strong>Szybkie obiady</strong><small style="display:block">7 dni · Rodzinny</small></div>'+btn('Wybierz','copy','pf-primary pf-small')+'</div>';
+      case 'cycles':return '<h2>Powtarzaj plan</h2>'+label('Od','2026-11-02','date')+label('Do','2026-11-15','date')+'<div class="pf-card">Cykl: dwa tygodnie rodzinne</div>'+btn('Sprawdź dni docelowe','copy','pf-primary');
+      case 'filters':return '<h2>Filtry przepisów</h2><label class="pf-field">Widoczność<select class="pf-input"><option>Wszystkie dostępne</option><option>Rodzinne</option><option>Prywatne</option><option>Dla wszystkich</option></select></label><label class="pf-field">Rodzaj posiłku<select class="pf-input"><option>Wszystkie</option><option>Śniadania</option><option>Obiady</option></select></label>'+btn('Pokaż przepisy','close','pf-primary');
+      case 'pantry-add':case 'pantry-amount':return '<h2>'+(state.modal==='pantry-add'?'Dodaj zapas':'Zmień ilość')+'</h2>'+label('Produkt','Cukinia')+'<div class="pf-two">'+label('Ilość','2','number')+label('Jednostka','szt.')+'</div>'+label('Termin ważności','2026-10-30','date')+btn('Zapisz w spiżarni','save-pantry','pf-primary');
+      case 'product-edit':return '<h2>Dane produktu</h2>'+label('Nazwa','Cukinia')+label('Jednostka','g')+'<details open><summary>Wartości na 100 g</summary>'+label('Kalorie','17','number')+label('Białko (g)','1.2','number')+'</details><details><summary>Jednostki domowe i opakowania</summary><p>1 sztuka · około 250 g</p></details>'+btn('Zapisz produkt','save-product','pf-primary');
+      case 'ingredient':return '<h2>Dodaj składnik</h2>'+label('Produkt','Parmezan')+'<div class="pf-two">'+label('Ilość','20','number')+label('Jednostka','g')+'</div>'+btn('Dodaj do przepisu','save-ingredient','pf-primary');
+      case 'history':return '<h2>Historia zakupów</h2><div class="pf-row"><div><strong>Zakupy z 24 października</strong><small style="display:block">18 produktów · zakończona</small></div>'+btn('Otwórz','screen:list','pf-quiet pf-small')+'</div>';
+      case 'rounds':return '<h2>Podział zakupów</h2>'+label('Duże zakupy','Niedziela')+label('Świeże produkty na pierwsze','3 dni')+label('Uzupełnienie świeżych produktów','Środa')+btn('Zapisz podział','save-settings','pf-primary');
+      case 'backup-preview':case 'import-preview':return '<h2>Kopia danych rodziny</h2><p>Podgląd zakresu: przepisy, plan, zapasy i ustawienia rodziny.</p><small>W tej makiecie pliki nie są pobierane ani wysyłane.</small>'+btn('Zamknij podgląd','close','pf-primary');
+      default:return '<h2>Podgląd działania</h2><p class="pf-muted">Ten element jest częścią makiety. Żadne dane aplikacji nie są zmieniane.</p>'+btn('Wróć','close','pf-primary');
+    }
+  }
+  function renderModal(){
+    const overlay=document.createElement('div');overlay.className='pf-overlay';
+    overlay.innerHTML='<section class="pf-dialog" role="dialog" aria-modal="true" aria-label="Podgląd przepływu"><div class="pf-head"><span class="pf-eyebrow">Paśnik</span>'+btn('Zamknij','close','pf-quiet pf-small','x')+'</div>'+modalContent()+'</section>';
+    after.appendChild(overlay);
+  }
+  root.addEventListener('click',function(e){
+    const target=e.target.closest('[data-action]');if(!target)return;
+    const a=target.dataset.action, isOld=Boolean(target.closest('.pf-old'));
+    if(a.startsWith('screen:')){state.screen=a.slice(7);state.modal=null;state.toast='';save();render();return}
+    if(a.startsWith('recipe:')){state.recipe=Number(a.slice(7));state.screen='recipe';state.modal=null;state.toast='';save();render();return}
+    if(a.startsWith('favorite:')){const n=Number(a.slice(9));state.favorites.has(n)?state.favorites.delete(n):state.favorites.add(n);render();return}
+    if(a.startsWith('filter:')){state.filter=a.slice(7);render();return}
+    if(a==='clear-filters'){state.query='';state.filter='all';state.pantryFilter=false;render();return}
+    if(a==='clear-pantry'){state.pantryFilter=false;render();return}
+    if(a.startsWith('oldtab:')){state.oldTab=a.slice(7);render();return}
+    if(a.startsWith('portion:')){state.portions=Math.max(1,state.portions+Number(a.slice(8)));render();return}
+    if(a.startsWith('setting:')){state.setting=a.slice(8);render();return}
+    if(a.startsWith('schedule:')){state.recipe=Number(a.slice(9));state.modal='schedule';render();return}
+    if(isOld&&a.startsWith('old:')){
+      const main=before.querySelector('main');
+      const existing=main.querySelector('[data-old-panel]');if(existing)existing.remove();
+      const p=document.createElement('div');p.className='pf-card';p.dataset.oldPanel='';
+      p.innerHTML=a==='old:copy'?'<h3>Kopiuj dzień na inne daty</h3><small>Posiłki dopisują się na koniec wskazanych dni.</small><label class="pf-field">Daty docelowe (po jednej w wierszu)<textarea class="pf-input" placeholder="2026-10-30\n2026-10-31"></textarea></label>'+btn('Kopiuj','old:submit','pf-primary'):'<small>Rekonstrukcja układu — ta operacja nie jest wykonywana.</small>';
+      main.appendChild(p);return;
+    }
+    if(a==='close'){state.modal=null}
+    else if(a==='dismiss-toast'){state.toast=''}
+    else if(a==='nutrition'){state.nutritionOpen=!state.nutritionOpen}
+    else if(a==='retry'){state.dayState='ready'}
+    else if(a==='toggle-done'){state.doneOpen=!state.doneOpen}
+    else if(a==='apply-schedule'){state.modal=null;state.added=true;state.addedRecipe=state.recipe;state.dayState='ready';state.toast='Dodano danie do planu · czwartek';state.screen='day';save()}
+    else if(a==='apply-copy'){state.modal=null;state.toast='Skopiowano posiłki na wybrane dni · podgląd'}
+    else if(a==='preview-generation'){state.modal='preview'}
+    else if(a==='finalize-generation'){state.modal=null;state.screen='list';state.toast='Lista z planu jest gotowa · podgląd';save()}
+    else if(a==='apply-finish'){state.modal=null;state.screen='shopping';state.toast='Zapisano zakończenie zakupów · podgląd';save()}
+    else if(a==='save-recipe'){state.modal=null;state.screen='recipe';state.toast='Przepis zapisany w makiecie';save()}
+    else if(a==='save-family'){state.modal=null;state.toast='Zapisano wybór osób · podgląd'}
+    else if(a==='save-settings'){state.modal=null;state.toast='Ustawienia zapisane w makiecie'}
+    else if(a==='save-pantry'){state.modal=null;state.toast='Zaktualizowano zapas · podgląd'}
+    else if(a==='save-product'){state.modal=null;state.toast='Produkt zapisany w makiecie'}
+    else if(a==='save-ingredient'){state.modal=null;state.toast='Dodano składnik · podgląd'}
+    else if(a==='remove-ingredient'){target.closest('.pf-editor-row').remove();return}
+    else if(a==='pantry-recipes'){state.screen='recipes';state.pantryFilter=true;state.query='';state.filter='all';save()}
+    else if(a.startsWith('choose-date:')){state.toast='Wybrany dzień: '+['poniedziałek','wtorek','środa','czwartek','piątek','sobota','niedziela'][Number(a.slice(12))]+' · dane przykładowe'}
+    else if(a.startsWith('week-')){state.toast='Nawigacja tygodniami · podgląd układu'}
+    else if(a.startsWith('stat-')){state.toast='Wybrano zakres lub metrykę · dane wykresu są przykładowe'}
+    else{state.modal=a}
+    render();
+    if(state.modal){const close=after.querySelector('.pf-dialog button');if(close)close.focus()}
+  });
+  root.addEventListener('change',function(e){
+    if(e.target===screenSelect){state.screen=e.target.value;state.modal=null;state.toast='';save();render();return}
+    if(e.target===deviceSelect){state.device=e.target.value;save();render();return}
+    if(e.target.hasAttribute('data-check')){const n=Number(e.target.dataset.check);e.target.checked?state.checked.add(n):state.checked.delete(n);render()}
+  });
+  root.addEventListener('input',function(e){
+    if(e.target.hasAttribute('data-query')){state.query=e.target.value;before.querySelector('[data-recipe-grid]').innerHTML=recipeGrid(true);after.querySelector('[data-recipe-grid]').innerHTML=recipeGrid(false);const inputs=root.querySelectorAll('[data-query]');inputs.forEach(function(el){if(el!==e.target)el.value=state.query});if(globalThis.lucide)globalThis.lucide.createIcons({attrs:{width:17,height:17}})}
+    if(e.target.hasAttribute('data-picker-search')){const q=e.target.value.toLowerCase();after.querySelectorAll('[data-picker-name]').forEach(function(el){el.hidden=!el.dataset.pickerName.includes(q)})}
+    if(e.target.hasAttribute('data-person-portion')){const total=Array.from(after.querySelectorAll('[data-person-portion]')).reduce(function(sum,el){return sum+Math.max(0,Number(el.value)||0)},0);after.querySelector('[data-portion-total]').textContent=total.toLocaleString('pl-PL')}
+  });
+  root.addEventListener('keydown',function(e){if(e.key==='Escape'&&state.modal){state.modal=null;render()}});
+  window.addEventListener('openai:set_globals',function(e){const w=e.detail&&e.detail.globals&&e.detail.globals.widgetState;const p=w&&w.privateContent;if(p&&screens.includes(p.screen)){state.screen=p.screen;state.device=p.device==='mobile'?'mobile':'desktop';render()}});
+  render();
+  if(globalThis.Tweak){const tweak=new Tweak({container:after,onChange:render});tweak.addToggle(state,'ornaments',{label:'Dekoracje — domowa kuchnia'});tweak.addSelect(state,'dayState',{label:'Plan dnia — stan',options:[{label:'Z posiłkami',value:'ready'},{label:'Pierwsze użycie',value:'empty'},{label:'Błąd pobierania',value:'error'}]});tweak.addToggle(state,'nutritionOpen',{label:'Pokaż szczegóły bilansu'});}
+})();
+</script>
