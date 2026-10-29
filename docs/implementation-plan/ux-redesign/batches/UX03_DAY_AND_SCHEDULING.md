@@ -8,6 +8,14 @@ Dodać lub zamienić danie z czytelną datą, posiłkiem i podziałem porcji. Ko
 
 ## Zadania
 
+Ustalenia UX00 do wykorzystania po jego odbiorze: `../CONTRACTS.md` §3–4
+zamraża nazwę `RecipePlanningPanel.vue`, XOR `meal_id`/`new_meal_name`
+oraz odpowiedź nowego POST `{day, meal_id, item_id}`. Zachować faktyczne
+ID i serializować zmieniony dzień po ID; dodać regresję dwóch dni tej samej
+daty (własny oraz jawnie edytowany przez ADMIN-a). Obecny `get_day(date)`
+po mutacji może wybrać inny dzień. To ustalenie z kodu, do potwierdzenia
+testem w tej karcie; bez rozszerzenia scope ani przerabiania silników.
+
 - [ ] UX03.1 Przebudować dzień według makiety: jedzenie przed bilansem, pasek dat, pełne nazwy, akcja w kontekście posiłku. Oddzielić puste dane, błąd pobierania i stare dane w cache.
 - [ ] UX03.2 Wyodrębnić współdzielony panel Zaplanuj z propsami: przepis, data, opcjonalny istniejący posiłek i opcjonalna pozycja do zamiany. Wynik po sukcesie zawiera rzeczywisty dzień/posiłek/pozycję; konsument odświeża właściwe klucze cache. UX04 i UX07 korzystają z tego samego komponentu.
 - [ ] UX03.3 Automatycznie sumować podział rodzinny przez `sumDecimals`. Pole 0 lub świadome wyłączenie osoby pomija profil w payloadzie; pozostałe wartości dodatnie, suma dodatnia, maksima i dokładność jak w API. Nie wymagać ręcznego dopasowywania osobnej sumy. Obsłużyć użytkownika bez profili i zachować planowanie samą liczbą porcji.

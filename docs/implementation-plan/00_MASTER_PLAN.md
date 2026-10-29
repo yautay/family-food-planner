@@ -6,6 +6,15 @@ Metodyka: adaptacja sprawdzonego procesu netQArnera (jeden batch = jedna
 
 ## 1. Executive overview
 
+**2026-10-29 — osobny program UX00–UX11 uruchomiony przez właściciela.**
+Kierunek „domowa książka kucharska”, harmonogram fal i orkiestracja Sol:
+[`ux-redesign/README.md`](ux-redesign/README.md). W ramach tego programu
+jeden orkiestrator może kontynuować kolejne batche bez nowego zlecenia;
+każda karta nadal ma świeżą sesję wykonawcy, izolację i bramki. UX12, push,
+deploy i produkcja są poza zleceniem. Faktyczny postęp i blokady wyłącznie
+w [`ux-redesign/PROGRESS.md`](ux-redesign/PROGRESS.md); historyczne statusy
+poniżej nie oznaczają odbioru nowego UX.
+
 Paśnik = prywatna aplikacja rodzinna: produkty kanoniczne → przepisy →
 planowanie dni/tygodni → kalorie/makro/ŁG → spiżarnia → silnik zakupowy →
 listy (mobile/print/QR/link publiczny) → PWA/offline → kopia danych rodziny

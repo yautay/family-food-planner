@@ -8,6 +8,7 @@ wskazany batch — nie wolno go zlecić przed rozstrzygnięciem.
 
 | # | Decyzja | Wynik | Data |
 |---|---|---|---|
+| D34 | Program przebudowy UX Paśnika | **ZATWIERDZONE przez właściciela 2026-10-29:** kierunek „domowa książka kucharska” według `ux-redesign/DESIGN_SPEC.md` i makiety; cały zakres UX00–UX11 według `ux-redesign/ORCHESTRATION.md`, maks. 3 agentów Sol w osobnych worktree, bez pushu/deployu/produkcji i bez UX12. To jawny wyjątek od dawnej procedury zakończenia orkiestratora po pojedynczym batchu, a nie rezygnacja z testów/review. Zmiana dawnego założenia 06_UIUX §4.2: **planowany** filtr „Do 30 minut” w UX04 przez istniejące `prep_time_max`; na wejściu programu nie jest wdrożony. Formalny brak audytu bezpieczeństwa wymaga osobnego rozstrzygnięcia wg manifestu; D34 nie udziela zwolnienia. Postęp: `ux-redesign/PROGRESS.md`. | 2026-10-29 |
 | D1 | Repo i nazwa | **ZATWIERDZONE**: nowe repo `C:\dev\family-food-planner`; stare repo GitHub = archiwum i źródło referencji | 2026-08-16 |
 | D2 | Dane startowe | **ZATWIERDZONE: czysty start** — bez seedu z prototypu; treść wchodzi ręcznie + przez PDF importer. `data/reference/prototype.db` służy WYŁĄCZNIE jako referencja walidacyjna importera (84 przepisy / 592 składniki / 181 produktów). Konsekwencja: B15/B16 nie później niż po R3 | 2026-08-16 |
 | D3 | Język UI | **ZATWIERDZONE**: wyłącznie polski, bez warstwy i18n (ADR-007) | 2026-08-16 |

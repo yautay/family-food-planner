@@ -37,6 +37,15 @@ commit wykonany). Kolumna „Blokery" = zależności + decyzje z 02_DECISIONS.
 
 ## Dziennik
 
+**2026-10-29 — rozpoczęto osobny program UX00–UX11 (D34).**
+Właściciel zaakceptował „domową książkę kucharską” i wykonanie całego
+harmonogramu przez orkiestratora Sol, z osobnymi worktree i lokalnymi
+commitami. Stan, wykonane testy i ograniczenia:
+[`ux-redesign/PROGRESS.md`](ux-redesign/PROGRESS.md),
+[`ux-redesign/BASELINE.md`](ux-redesign/BASELINE.md).
+UX00 nie jest jeszcze odebrane; historycznych statusów batchy nie zmieniono.
+UX12 i operacje produkcyjne są poza tym programem.
+
 Wpis po każdym batchu (dopisywany NA GÓRZE sekcji): data, batch, 2–5 zdań:
 co weszło + **„rzeczy, o których muszą wiedzieć następne batche"**
 (odstępstwa, nowe kontrakty, pułapki). Wpis NIE zastępuje propagacji —
