@@ -5,6 +5,9 @@
 Dockerfile text eol=lf
 docker/** text eol=lf
 *.mjs text eol=lf
+# Prettier wymaga LF; checkout Windows nie może zmieniać formatowania frontendu.
+# Automatyczne rozpoznanie zachowuje binarne ikony i inne zasoby bez konwersji.
+frontend/** text=auto eol=lf
 # deploy/ (B18a): szablony unitów i skrypty jadą na Linux — CRLF psułby `#!/bin/sh`,
 # wartości w pasnik.env i pliki unitów.
 deploy/** text eol=lf

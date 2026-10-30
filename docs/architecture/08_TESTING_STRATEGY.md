@@ -171,6 +171,15 @@ API swojego zasobu (kody HTTP, nie wywołania serwisu).
 
 ## 5. Dane testowe
 
+Program UX00–UX11 (2026-10-30) ma dodatkowy, izolowany fixture przez
+`task ux-baseline -- --photo <plik>`. Guard dopuszcza wyłącznie lokalne
+bazy `pasnik_ux` / `pasnik_ux_test`, bez purge. Instrukcja i jawne ograniczenia:
+`docs/implementation-plan/ux-redesign/FIXTURE.md`. Opt-in `UX_VISUAL=1`
+uruchamia rzeczywiste zrzuty istniejących ekranów w `e2e/ux-visual.spec.ts`;
+bez flagi pomijany jest tylko ten dodatkowy scenariusz, nie wymagane core E2E.
+Fixture ma własne konta, daty 2029 poza cleanup zwykłego E2E, lokalny manifest
+bez sekretów oraz sprawdzone ponowienie bez duplikowania danych.
+
 Fabryki (proste funkcje asynchroniczne) per moduł w `tests/factories.py`;
 `task db-seed-demo` — deterministyczny, idempotentny seed demo do ręcznego
 klikania i E2E.

@@ -1,5 +1,114 @@
 # UX00 — faktyczny punkt odniesienia
 
+## Wznowienie 2026-10-30 — UX00 odebrane
+
+Poprzednie wyniki poniżej są historycznym zapisem pierwszej, zablokowanej
+próby. Właściciel wznowił cały UX00–UX11, a D35 rozstrzyga dostępność review:
+niezależne agenty Sol zastępują niedostępne builtin, bez rezygnacji z testów
+i dowodów wizualnych. Docker Engine 29.9.2 / WSL2 działają. Utworzono odrębne
+lokalne bazy `pasnik_ux` i `pasnik_ux_test`, losowe sekrety w ignorowanym
+`.env`, własnego ADMIN-a E2E i dane demo; health: db/migrations/disk `ok`.
+
+Host ma teraz Node 26.13.0. Zastany zestaw Vitest/jsdom na tym runtime
+zwrócił 15 błędów `localStorage` w spiżarni (394/409 PASS). Powtórzenie
+na dostępnym Node 24.22.1: 409/409 PASS bez zmiany testów. Lokalna aktywacja
+narzędzi `backend/data/ux00-tools/activate.ps1` wybiera ten runtime, task/uv/npm
+i lokalny kontekst Docker. Nie zmieniono globalnej konfiguracji użytkownika.
+`.gitattributes` stabilizuje tekstowe końce linii frontendu na LF, zachowując
+automatyczne rozpoznanie binariów.
+
+### Dane i rzeczywiste obrazy
+
+Skrypt [FIXTURE.md](FIXTURE.md) wykonano oraz ponowiono z tymi samymi ID:
+318 potwierdzonych operacji, 311 ID, `complete=true`, `pending=null`.
+55 produktów, 55 widocznych przepisów, rodzina z trzema profilami, trzy
+warianty podziału, zdjęcie/brak zdjęcia, ponad strona spiżarni i lista offline
+są rzeczywistymi danymi API. Zakres dat przeniesiono jawnie na czerwiec 2029,
+poza okno sprzątania zwykłych E2E. Nie ma resetu bazy ani importu produkcji.
+
+Pierwsza próba fixture ujawniła błędny PUT zdjęcia; poprawiono na istniejący
+POST. Przed uzgodnieniem wyłącznie `pending=photo` sprawdzono brak zapisanego
+zdjęcia w lokalnej bazie i potwierdzony HTTP 405, zachowując wcześniejsze
+182 operacje. Niezależny reviewer zweryfikował poprawkę i mocniejsze warunki
+gotowości zrzutów (odpowiedzi GET oraz konkretne posiłki/profile/produkt).
+
+Opt-in visual E2E: **1 PASS**, 40 PNG na 390 i 1440 px. Wszystkie 11 ekranów
+oraz stany dnia, publiczna lista, login i offline. Obrazy zachowano osobno
+w `backend/data/ux-baseline/screenshots-before/`, zestawienie mobilne
+`contact-before-mobile.png`. Faktyczne zdjęcie ma atrybucję i licencję w FIXTURE.
+O i niezależny reviewer Sol obejrzeli PNG dnia, tygodnia, szczegółu, katalogu,
+zakupów oraz zestawienie pozostałych ekranów. Reviewer potwierdził obecność
+rzeczywistych danych i zdjęcia oraz problemy starego układu.
+
+Zastane problemy do porównań po przebudowie: na viewport 390 px pełna strona
+dnia ma 801 px szerokości, szczegół przepisu 616 px, edytor 738 px, produkty
+759 px. Także viewport 1440 daje 1473 px dla dnia i 1683 px dla produktów.
+Stara siatka tygodnia ściska nazwy i akcje także na desktopie. Bilans
+dominuje nad jedzeniem; długie nazwy listy zakupowej są ucinane. To pomiar
+działającego starego UI, nie rekonstrukcja makiety; właściwe karty UX02–UX10
+mają te problemy usunąć. `baseline-dimensions.json` utrwala rozmiary PNG.
+
+### Naprawy zastanej infrastruktury i synchronizacji
+
+- Vite nie proxy'ował `/uploads`, więc przeglądarka otrzymywała fallback HTML
+  zamiast zdjęcia. Dopisano proxy do tego samego backendu co `/api`; autoryzacja
+  i pipeline obrazów pozostają po stronie backendu. Visual E2E potwierdził
+  dekodowanie obrazu. Reviewer: brak ustaleń.
+- E2E offline dwukrotnie zatrzymało się na jednej niewysłanej decyzji publicznej
+  listy. Trace nie pokazał publicznego PATCH. Trzy deterministyczne testy Promise
+  potwierdziły zapis IDB po migawce flush. Pobudka `flushRequested` wznawia
+  wyłącznie po nowym enqueue online, z zachowaniem backoffu i sekwencyjności.
+- Review ujawniło powiązane, zastane usuwanie nowszej decyzji tego samego
+  klucza po odpowiedzi starego PATCH. Atomowy ack i naliczanie prób porównują
+  `checkedAt` i `checked` w jednej transakcji IDB. Siedem dodatkowych regresji
+  red→green; razem 422 FE PASS autora. Kontrakt API/storage, LWW i backoff
+  nie zmieniły się. To wąska naprawa części offline przewidzianej w UX06,
+  wykonana wcześniej, aby uzyskać rzetelny punkt odniesienia; nie jest nowym UX12.
+
+Pojedynczy przebieg po pobudce doszedł do dalszej asercji stanu wspólnego
+i ją oblał; następny diagnostyczny przebieg z trace: 2/2 PASS. Nie przypisano
+tej niestabilności zegarowi bez dowodu ani nie osłabiono asercji.
+
+Fixture ujawnił również zależność dwóch starych E2E od pierwszej strony danych.
+Test spiżarni teraz wyszukuje własny nowo utworzony produkt; test weryfikacji
+produktów przechodzi przez istniejące Pokaż więcej, sprawdzając wzrost liczby
+wierszy. Zachowano wszystkie asercje zapisu, ilości, weryfikacji i usuwania.
+Niezależny review tej zmiany: bez ustaleń.
+
+Jeden pełny przebieg zatrzymał się przed logiką offline: Chromium zgłosił
+`net::ERR_NO_BUFFER_SPACE` dla `/src/lib/offline/registerSW.ts`, mimo 200
+dokumentu `/zakupy`. Statyczny import blokował bootstrap. Dwie osoby odczytały
+trace; przyczyna błędu bufora pozostaje nieustalona. Stan hosta sprawdzony po
+awarii nie wykazywał wyczerpania pamięci ani puli portów. ZIP raportu został
+nadpisany przez kolejny przebieg; nie deklarujemy zachowanej kopii. Nie dodano
+retry ani nie zmieniano systemowej konfiguracji sieci.
+
+### Audyty i bramki przed zamknięciem
+
+Pierwszy pełny check wznowienia: backend 572 unit / 292 integration / 443 API
+PASS, frontend zatrzymany na opisanej zmianie Node; to nie jest zielony check.
+`check-ux00-final-20261030.log`: **PASS**, 590 unit / 292 integration / 443 API /
+422 frontend, typy, lint, format, build i aktualność OpenAPI. Po opisanej
+poprawce wyłącznie testów E2E: typy/lint/format frontendu PASS oraz pełne E2E
+`e2e-ux00-paginated-2-20261030.log`: **20 PASS / 1 SKIP** (wyłącznie opt-in
+visual). Drugi kolejny pełny E2E `e2e-ux00-paginated-3-20261030.log`: także
+**20 PASS / 1 SKIP**. Ostatni `check-ux00-accepted-20261030.log`: **PASS**,
+te same 590/292/443/422, typy/lint/format/build/OpenAPI. Build PWA: 68 wpisów,
+947,89 KiB precache. Wcześniejsze czerwone przebiegi pozostają jawnie opisane.
+
+`task audit` zwrócił 42 alerty w trzech pakietach backendu (certifi, dnspython,
+Pillow), z ostrzeżeniem pip-audit o ścieżce środowiska uv. `task audit-fe`
+również nie jest zielony; szczegóły w lokalnych logach. Nie zmieniano lockfile
+ani nie wykonywano automatycznego upgrade. `task secrets-scan`: **PASS**, 52
+commity, zero wykrytych wycieków. Zastane alerty zależności wymagają osobnej
+oceny; audytu nie przedstawiamy jako bezbłędnego.
+
+Niezależny review Sol po 07c29b4 i d5d7ca6: wszystkie trzy P2 zamknięte,
+brak nowych ustaleń. O odebrał rzeczywiste dane, PNG i końcowe bramki.
+Lokalny commit integracji ma tytuł `batch(UX00): przygotuj srodowisko i zweryfikuj baseline UX`.
+UX01 może rozpocząć implementację. Alerty zależności i stare przepełnienia
+nie są ukryte jako rozwiązane. Poniżej pozostaje nienadpisany raport z 2026-10-29.
+
 Data: 2026-10-29. **UX00 nie jest odebrane.** Wykonano audyt repo, odtworzono narzędzia i zależności oraz uruchomiono dostępne bramki. Dalszy odbiór wymaga działającego lokalnego stacku PostgreSQL/backend i konta E2E. UX01–UX11 pozostają nierozpoczęte; ich zależność UX00 nie została spełniona.
 
 ## Repo i izolacja

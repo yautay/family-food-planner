@@ -10,8 +10,8 @@ Przygotować sprawdzalny punkt odniesienia. Przeczytać README, DESIGN_SPEC, ORC
 
 - [x] UX00.1 Sprawdzić HEAD, zmiany użytkownika, Taskfile, wersje i działanie lokalnego środowiska. Uruchomić `task check` oraz bazowe `task test-e2e` po sprawdzeniu wskazania bazy. Zapisać rzeczywiste awarie zastane. **Wykonano próby i diagnostykę, wyniki FAIL nie oznaczają odbioru środowiska; BASELINE.**
 - [x] UX00.2 Zrobić mapę obecnych funkcji i ich nowych miejsc. Uwzględnić produkty luzem, arbitralne posiłki, porcje i ich dopasowanie, tagi i oceny, role, szablony/cykle, historię, sklepy, druk, udostępnianie i kopie danych. **CONTRACTS §1–2.**
-- [ ] UX00.3 Przygotować powtarzalne dane dev/test: pusty plan, rodzina z trzema profilami, plan bez podziału porcji, częściowy podział, zdjęcie/brak zdjęcia, długie polskie nazwy, ponad jedną stronę wyników, lista offline i przepis globalny. Nie importować danych produkcyjnych ani resetować istniejącej bazy użytkownika.
-- [ ] UX00.4 Zapisać zrzuty obecnego UI dla dnia, katalogu, przepisu, tygodnia i zakupów na telefonie oraz desktopie. Jeżeli uruchomienie jest zablokowane, jawnie oddzielić dowody z kodu od zrzutów.
+- [x] UX00.3 Przygotować powtarzalne dane dev/test: pusty plan, rodzina z trzema profilami, plan bez podziału porcji, częściowy podział, zdjęcie/brak zdjęcia, długie polskie nazwy, ponad jedną stronę wyników, lista offline i przepis globalny. Nie importować danych produkcyjnych ani resetować istniejącej bazy użytkownika. **FIXTURE; wykonano i ponowiono bez duplikacji: 318 operacji / 311 ID.**
+- [x] UX00.4 Zapisać zrzuty obecnego UI dla dnia, katalogu, przepisu, tygodnia i zakupów na telefonie oraz desktopie. Jeżeli uruchomienie jest zablokowane, jawnie oddzielić dowody z kodu od zrzutów. **40 rzeczywistych PNG 390/1440, zachowane w screenshots-before, obejrzane przez O i niezależnego reviewera Sol.**
 - [x] UX00.5 Przed kodem zamrozić kontrakt wspólnego panelu, zachowanie nawigacji, reguły braku danych i proponowane rozszerzenia UX03. Zanotować odstępstwa makiety opisane w README. **O przyjął CONTRACTS §3–5; implementacja nadal przed nami.**
 - [x] UX00.6 Sprawdzić dostępność Required/Review skills. Zarejestrować nowy program, harmonogram i zatwierdzony kierunek w dokumentacji jako plan, bez twierdzenia, że stary wygląd już został zastąpiony. Zmianę dawnej decyzji o braku filtrów czasu ująć jawnie jako planowany filtr „Do 30 minut”, nie przemilczać jej. **D34, indeksy historyczne, BASELINE. Brak builtin review jawny; bez deklaracji wykonania.**
 
@@ -41,3 +41,15 @@ Brak Docker/DB i działającego WSL blokuje lokalny stack oraz konto E2E.
 Niezależny review obejmuje tylko dokumentację i zgodność raportu z dowodami,
 nie stanowi odbioru programu. Następna bramka: działający izolowany stack,
 fixture, pełne check/E2E i realne screenshoty, potem odbiór UX00 i UX01.
+
+## Odbiór 2026-10-30
+
+Historyczny bloker rozwiązany: lokalny Docker/WSL2, osobne pasnik_ux i
+pasnik_ux_test, migracje i ADMIN E2E. Fixture wykonany i ponowiony bez resetu,
+40 PNG starego UI na 390/1440 obejrzane przez O oraz niezależnego Sol reviewera.
+Pełny `task check` PASS: 590 unit, 292 integration, 443 API, 422 FE, typy,
+lint, format, build i OpenAPI. Dwa kolejne pełne E2E: 20 PASS / 1 SKIP
+wyłącznie dodatkowego visual, który przeszedł osobno. Wszystkie ustalenia
+review zamknięte. D35 zatwierdza niezależne review Sol zamiast builtin.
+Jawne ograniczenia: alerty audytu zależności, stare przepełnienia UI oraz
+wcześniejsze awarie opisane w BASELINE. Dane/kontrakty gotowe do UX01.

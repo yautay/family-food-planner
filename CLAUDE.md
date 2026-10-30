@@ -62,6 +62,7 @@ Start od zera: `cp .env.example .env` → `task install` → `task dev`.
 | `task audit` / `task secrets-scan` | Review batche i BATCH_17 |
 | `task create-admin` | tworzy konto ADMIN (prompt albo `PASNIK_ADMIN_*` z env; nigdy hasło w repo) |
 | `task db-seed-demo` | idempotentny seed demo (od B04: ~15 produktów; kolejne encje dokładają batche domenowe) |
+| `task ux-baseline -- --photo <lokalny-plik>` | izolowany zestaw danych UX00 do kontroli rzeczywistego UI; wyłącznie bazy `pasnik_ux` / `pasnik_ux_test`, bez resetu danych (instrukcja `ux-redesign/FIXTURE.md`) |
 | `task pdfx-index` / `pdfx-verify` / `pdfx-package` / `pdfx-roundtrip` | **`/pdf-extract` (B22, D31)**: katalog i zestawienie produktów / weryfikacja silnikiem aplikacji (+ `--report`) / paczka transferu `export.zip` / import paczki na bazie TESTOWEJ dwa razy; parametry po `--`, ścieżki od korzenia repo |
 | `task uploads-report` | pliki uploadów BEZ referencji w bazie — TYLKO raport, nic nie kasuje (D10) |
 | `task build-prod` | obrazy `pasnik-app:<git describe>` (+`:latest`, SPA w środku, ADR-014) i `pasnik-backup` |

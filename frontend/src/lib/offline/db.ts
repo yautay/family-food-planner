@@ -198,6 +198,18 @@ export async function deleteQueued(key: string): Promise<void> {
   }, undefined)
 }
 
+/** Usuń tylko wysłaną decyzję — w trakcie PATCH mogła powstać nowa pod tym samym kluczem. */
+export async function deleteQueuedIfUnchanged(entry: QueuedCheck): Promise<void> {
+  await withDb(async (database) => {
+    const transaction = database.transaction(QUEUE, 'readwrite')
+    const row = await transaction.store.get(entry.key)
+    if (row && row.checkedAt === entry.checkedAt && row.checked === entry.checked) {
+      await transaction.store.delete(entry.key)
+    }
+    await transaction.done
+  }, undefined)
+}
+
 /** Wpisy jednej listy — używane po 410 (token wygasł, nie ma dokąd wysyłać). */
 export async function clearQueueFor(target: QueueTarget): Promise<void> {
   const prefix = `${targetKey(target)}#`
@@ -231,12 +243,14 @@ export async function resetOfflineDb(): Promise<void> {
   }
 }
 
-/** Licznik prób — zabezpieczenie przed wpisem, który blokuje kolejkę na zawsze. */
-export async function bumpAttempts(key: string): Promise<void> {
+/** Odmowa dotyczy wysłanej decyzji, nie jej ewentualnego następcy pod tym samym kluczem. */
+export async function bumpAttempts(entry: QueuedCheck): Promise<void> {
   await withDb(async (database) => {
-    const row = await database.get(QUEUE, key)
-    if (row) {
-      await database.put(QUEUE, { ...row, attempts: row.attempts + 1 })
+    const transaction = database.transaction(QUEUE, 'readwrite')
+    const row = await transaction.store.get(entry.key)
+    if (row && row.checkedAt === entry.checkedAt && row.checked === entry.checked) {
+      await transaction.store.put({ ...row, attempts: row.attempts + 1 })
     }
+    await transaction.done
   }, undefined)
 }

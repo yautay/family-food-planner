@@ -6,6 +6,12 @@ Podział na ograniczone zadania, przekazywanie wyników i bramki odbioru opiera 
 
 ## Role
 
+**D35 / 2026-10-30:** właściciel zaakceptował zastąpienie niedostępnych
+builtin `/code-review` i `/security-review` niezależnym review Sol według
+architektury i `pasnik-security`, z rzeczywistymi testami scope/CSRF/tokenów
+i audytem zależności. Dotyczy UX00–UX11. Nie deklarować wykonania builtin
+skilla; wymagania niezależności, testów i wizualnego odbioru pozostają.
+
 | Rola | Odpowiedzialność | Ograniczenie |
 |---|---|---|
 | O — orkiestrator | Kolejność, przydział ścieżek, kontrakty, integracja, postęp i bramki | Nie edytuje równolegle plików oddanych wykonawcy |

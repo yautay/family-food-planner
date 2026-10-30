@@ -19,6 +19,11 @@ Bez Nuxta, bez i18n (UI wyłącznie PL).
 
 ## 2. Warstwa API
 
+UX00 (2026-10-30): Vite proxy'uje w dev zarówno `/api`, jak i `/uploads`
+do tego samego backendu. Bez drugiej ścieżki fallback SPA zwracał HTML
+zamiast zdjęcia. Zdjęcia nadal serwuje uwierzytelniony endpoint backendu;
+proxy nie dodaje publicznego serwowania plików ani nowego API.
+
 `src/api/client.ts` — fetch wrapper: credentials include, nagłówek CSRF
 z cookie, mapowanie kształtu błędu (04_API §1) na `ApiError`, toast dla
 błędów nieobsłużonych lokalnie. Typy: generowane z OpenAPI

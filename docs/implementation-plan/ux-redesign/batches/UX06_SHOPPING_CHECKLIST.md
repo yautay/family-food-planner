@@ -8,6 +8,14 @@ Czytelne zakupy jedną ręką przy zachowaniu poprawnej kolejki offline, publicz
 
 ## Zadania
 
+Ustalenia wykonawcze z UX00 (wznowienie 2026-10-30): zastane wyścigi
+enqueue/flush i usuwanie nowszej decyzji tego samego klucza naprawiono przed
+przebudową UI, z deterministycznymi regresjami w `offlineQueue.spec.ts`.
+Zachować pobudkę po nowym zapisie, atomowe potwierdzanie wersji IDB,
+sekwencyjność i backoff. Nie zastępować tej kolejki dla samego wyglądu.
+Rzeczywiste zdjęcia dev korzystają z dodanego proxy Vite `/uploads`;
+backend nadal egzekwuje sesję. Dowody i awarie zastane: `../BASELINE.md`.
+
 - [ ] UX06.1 Długie nazwy zawijają się, ilości mają własne miejsce, cały wiersz ma wygodne pole trafienia. Ograniczyć ozdobniki; nie zmniejszać obecnego dużego checkboxa.
 - [ ] UX06.2 Ograniczyć wizualny ciężar kupionych pozycji przez zwijanie ich w obrębie kategorii. Zachować serwerową kolejność kategorii, rozróżnienie `checked` i `already_have` oraz dostępność pozycji do ponownej zmiany.
 - [ ] UX06.3 Pokazać prawdziwy stan offline/synchronizacji/błędu. Zachować optimistic update, rollback, snapshot, restart aplikacji i semantykę `checked_at`. Reużywać istniejącej kolejki.

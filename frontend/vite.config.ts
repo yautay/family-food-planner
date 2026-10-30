@@ -150,6 +150,12 @@ export default defineConfig({
         target: apiTarget,
         changeOrigin: false,
       },
+      // Zdjęcia wymagają tej samej sesji co API i są serwowane przez backend.
+      // Bez proxy Vite zwracał dla <img> fallback HTML zamiast pliku obrazu.
+      '/uploads': {
+        target: apiTarget,
+        changeOrigin: false,
+      },
     },
   },
   test: {

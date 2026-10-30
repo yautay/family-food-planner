@@ -56,8 +56,10 @@ test('dodanie pozycji z inline create produktu, wyzerowanie i usunięcie', async
   await page.getByTestId('pantry-location-input').fill('szafka')
   await page.getByTestId('pantry-submit').click()
 
-  // --- pozycja widoczna od razu, z ilością w kilogramach ---------------------------
+  // Znajdujemy własną pozycję także przy ponad stu istniejących partiach.
+  // Filtr serwera obejmuje całą spiżarnię, a nie tylko pierwszą stronę.
   await expect(page.getByTestId('pantry-form')).toHaveCount(0)
+  await page.getByTestId('pantry-search').fill(productName)
   const card = page.getByTestId('pantry-list').getByText(productName)
   await expect(card).toBeVisible()
 

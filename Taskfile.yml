@@ -267,6 +267,12 @@ tasks:
     cmds:
       - uv run python -m scripts.seed_demo
 
+  ux-baseline:
+    desc: 'Bezpieczny zestaw lokalnych danych UX00 (wyłącznie odrębne bazy pasnik_ux / pasnik_ux_test)'
+    dir: backend
+    cmds:
+      - uv run python -m scripts.ux_baseline {{.CLI_ARGS}}
+
   uploads-report:
     desc: 'Raport plików uploadów BEZ referencji w bazie (B17, D10) — tylko raportuje, nic nie usuwa'
     dir: backend

@@ -5,7 +5,9 @@
  * deduplikacja per pozycja i kolejność wysyłki wynikają z kluczy `db.ts`,
  * więc atrapa sprawdzałaby wyłącznie samą siebie. Zamockowane są tylko dwie
  * warstwy transportu (`shoppingLists`, `publicList`) — tam interesuje nas,
- * CO poleciało na serwer, a nie jak.
+ * CO poleciało na serwer, a nie jak. Testy wyścigu dodatkowo wstrzymują
+ * zakończenie prawdziwej operacji storage'u bramką Promise — bez opóźnień
+ * zależnych od szybkości maszyny i bez zastępowania zawartości IndexedDB.
  *
  * Zegar: `checked_at` musi być w czasie SERWERA (`clock.ts`), więc scenariusz
  * korekty ustawia rozjechany zegar klienta i sprawdza wartość po korekcie.
@@ -19,8 +21,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as PublicListApi from '@/api/publicList'
 
 import { ApiError } from '@/api/client'
-import { PublicListUnavailableError } from '@/api/publicList'
+import { PublicListRequestError, PublicListUnavailableError } from '@/api/publicList'
+import * as offlineClock from '@/lib/offline/clock'
 import { recordServerDate, resetClockSkew } from '@/lib/offline/clock'
+import * as offlineDb from '@/lib/offline/db'
 import {
   readQueue,
   readSnapshot,
@@ -43,6 +47,14 @@ vi.mock('@/api/publicList', async () => {
 const LIST: QueueTarget = { kind: 'list', listId: 7 }
 const PUBLIC: QueueTarget = { kind: 'public', token: 'a'.repeat(43) }
 
+function gate() {
+  let release!: () => void
+  const promise = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  return { promise, release }
+}
+
 /** Czyste IndexedDB przed każdym testem — kolejka przeżywa reload, więc i testy. */
 async function wipeDatabase(): Promise<void> {
   // Otwarte połączenie blokuje usunięcie bazy — najpierw je zamykamy.
@@ -64,6 +76,237 @@ beforeEach(async () => {
 })
 
 describe('kolejka offline', () => {
+  it.each([
+    { status: 200, nextChecked: false, sameTime: false },
+    { status: 200, nextChecked: false, sameTime: true },
+    { status: 200, nextChecked: true, sameTime: false },
+    { status: 422, nextChecked: false, sameTime: true },
+  ])(
+    'odpowiedź $status nie usuwa nowszej decyzji tej samej pozycji (checked=$nextChecked, ten sam czas=$sameTime)',
+    async ({ status, nextChecked, sameTime }) => {
+      const firstTime = new Date('2026-10-30T12:00:00.000Z')
+      const nextTime = new Date(firstTime.getTime() + (sameTime ? 0 : 1))
+      vi.spyOn(offlineClock, 'nowWithSkew')
+        .mockReturnValueOnce(firstTime)
+        .mockReturnValueOnce(nextTime)
+      const store = useOfflineQueueStore()
+      store.markOffline()
+      await store.enqueue(PUBLIC, 1, true)
+      const sending = gate()
+      const finishSend = gate()
+      checkPublicListItem.mockImplementationOnce(async () => {
+        sending.release()
+        await finishSend.promise
+        if (status !== 200) {
+          throw new PublicListRequestError(status)
+        }
+        return { id: 1, checked: true }
+      })
+      checkPublicListItem.mockResolvedValue({ id: 1, checked: nextChecked })
+
+      store.markOnline()
+      await sending.promise
+      await store.enqueue(PUBLIC, 1, nextChecked)
+      expect(store.pendingCount).toBe(1)
+      expect(checkPublicListItem).toHaveBeenCalledTimes(1)
+      finishSend.release()
+
+      await vi.waitFor(() => {
+        expect(checkPublicListItem).toHaveBeenCalledTimes(2)
+        expect(store.pendingCount).toBe(0)
+        expect(store.flushing).toBe(false)
+      })
+      expect(checkPublicListItem.mock.calls.map((call) => [call[2], call[3]])).toEqual([
+        [true, firstTime.toISOString()],
+        [nextChecked, nextTime.toISOString()],
+      ])
+      expect(await readQueue()).toEqual([])
+    },
+  )
+
+  it.each([
+    { status: 429, nextChecked: false, sameTime: false },
+    { status: 503, nextChecked: false, sameTime: true },
+    { status: 429, nextChecked: true, sameTime: false },
+  ])(
+    'odmowa $status nie zwiększa prób nowej decyzji tej samej pozycji (checked=$nextChecked, ten sam czas=$sameTime)',
+    async ({ status, nextChecked, sameTime }) => {
+      const firstTime = new Date('2026-10-30T12:00:00.000Z')
+      const nextTime = new Date(firstTime.getTime() + (sameTime ? 0 : 1))
+      vi.spyOn(offlineClock, 'nowWithSkew')
+        .mockReturnValueOnce(firstTime)
+        .mockReturnValueOnce(nextTime)
+      const store = useOfflineQueueStore()
+      store.markOffline()
+      await store.enqueue(PUBLIC, 1, true)
+      const sending = gate()
+      const finishSend = gate()
+      checkPublicListItem.mockImplementationOnce(async () => {
+        sending.release()
+        await finishSend.promise
+        throw new PublicListRequestError(status)
+      })
+      const timers = vi.spyOn(globalThis, 'setTimeout')
+
+      store.online = true
+      const flushing = store.flush()
+      await sending.promise
+      await store.enqueue(PUBLIC, 1, nextChecked)
+      finishSend.release()
+      expect(await flushing).toBe(0)
+      expect(store.flushing).toBe(false)
+      expect(checkPublicListItem).toHaveBeenCalledTimes(1)
+      const retryIndex = timers.mock.calls.findIndex((args) => args[1] === 15_000)
+      expect(retryIndex).not.toBe(-1)
+      clearTimeout(timers.mock.results[retryIndex]?.value as ReturnType<typeof setTimeout>)
+      expect(await readQueue()).toEqual([
+        expect.objectContaining({
+          checked: nextChecked,
+          checkedAt: nextTime.toISOString(),
+          attempts: 0,
+        }),
+      ])
+      expect(store.pendingCount).toBe(1)
+      expect(store.isOffline).toBe(false)
+    },
+  )
+
+  it('wysyła publiczne odhaczenie zapisane dopiero po zakończeniu flush online', async () => {
+    const store = useOfflineQueueStore()
+    store.markOffline()
+    checkPublicListItem.mockResolvedValue({ id: 1, checked: false })
+
+    const write = gate()
+    const enqueueCheck = offlineDb.enqueueCheck
+    vi.spyOn(offlineDb, 'enqueueCheck').mockImplementationOnce(async (...args) => {
+      await write.promise
+      await enqueueCheck(...args)
+    })
+
+    // UI już pokazał optimistic odznaczenie, ale zapis IndexedDB jeszcze trwa.
+    const enqueueing = store.enqueue(PUBLIC, 1, false)
+    store.markOnline()
+    await vi.waitFor(() => expect(store.flushing).toBe(false))
+    expect(checkPublicListItem).not.toHaveBeenCalled()
+
+    write.release()
+    await enqueueing
+
+    await vi.waitFor(() => {
+      expect(checkPublicListItem).toHaveBeenCalledTimes(1)
+      expect(store.pendingCount).toBe(0)
+      expect(store.flushing).toBe(false)
+    })
+    expect(checkPublicListItem).toHaveBeenCalledWith(PUBLIC.token, 1, false, expect.any(String))
+    expect(await readQueue()).toEqual([])
+  })
+
+  it('wysyła nowy wpis spoza migawki trwającego flush, nadal sekwencyjnie', async () => {
+    const store = useOfflineQueueStore()
+    store.markOffline()
+    await store.enqueue(PUBLIC, 1, true)
+    const sending = gate()
+    const finishSend = gate()
+    checkPublicListItem.mockImplementationOnce(async () => {
+      sending.release()
+      await finishSend.promise
+      return { id: 1, checked: true }
+    })
+    checkPublicListItem.mockResolvedValue({ id: 2, checked: false })
+
+    store.markOnline()
+    await sending.promise
+    await store.enqueue(PUBLIC, 2, false)
+    expect(checkPublicListItem).toHaveBeenCalledTimes(1)
+    finishSend.release()
+
+    await vi.waitFor(() => {
+      expect(checkPublicListItem).toHaveBeenCalledTimes(2)
+      expect(store.pendingCount).toBe(0)
+      expect(store.flushing).toBe(false)
+    })
+    expect(checkPublicListItem.mock.calls.map((call) => call[1])).toEqual([1, 2])
+    expect(await readQueue()).toEqual([])
+  })
+
+  it('odzyskuje wpis zapisany po ostatniej migawce kończącego się flush', async () => {
+    const store = useOfflineQueueStore()
+    store.markOffline()
+    checkPublicListItem.mockResolvedValue({ id: 1, checked: false })
+    const snapshotTaken = gate()
+    const finishRefresh = gate()
+    const read = offlineDb.readQueue
+    let reads = 0
+    vi.spyOn(offlineDb, 'readQueue').mockImplementation(async () => {
+      const rows = await read()
+      reads += 1
+      if (reads === 2) {
+        // Drugi odczyt to końcowy refresh pustego flush; migawka już powstała.
+        snapshotTaken.release()
+        await finishRefresh.promise
+      }
+      return rows
+    })
+
+    store.markOnline()
+    await snapshotTaken.promise
+    await store.enqueue(PUBLIC, 1, false)
+    expect(store.pendingCount).toBe(1)
+    expect(checkPublicListItem).not.toHaveBeenCalled()
+    finishRefresh.release()
+
+    await vi.waitFor(() => {
+      expect(checkPublicListItem).toHaveBeenCalledTimes(1)
+      expect(store.pendingCount).toBe(0)
+      expect(store.flushing).toBe(false)
+    })
+    expect(await readQueue()).toEqual([])
+  })
+
+  it.each([0, 429, 503])(
+    'nowy wpis podczas flush zakończonego statusem %i nie omija zatrzymania i backoffu',
+    async (status) => {
+      const store = useOfflineQueueStore()
+      store.markOffline()
+      await store.enqueue(PUBLIC, 1, true)
+      const sending = gate()
+      const finishSend = gate()
+      checkPublicListItem.mockImplementationOnce(async () => {
+        sending.release()
+        await finishSend.promise
+        throw new PublicListRequestError(status)
+      })
+      const timers = vi.spyOn(globalThis, 'setTimeout')
+
+      store.online = true
+      const flushing = store.flush()
+      await sending.promise
+      await store.enqueue(PUBLIC, 2, false)
+      finishSend.release()
+      expect(await flushing).toBe(0)
+
+      // Pobudka z enqueue NIE może uruchomić drugiego flush po odmowie/braku sieci.
+      expect(store.flushing).toBe(false)
+      expect(checkPublicListItem).toHaveBeenCalledTimes(1)
+      expect(store.isOffline).toBe(status === 0)
+      expect(store.pendingCount).toBe(2)
+      expect((await readQueue()).map((entry) => entry.attempts)).toEqual([status === 0 ? 0 : 1, 0])
+
+      // Również kolejny zapis po zakończeniu flush nie skraca backoffu 15 s.
+      await store.enqueue(PUBLIC, 3, true)
+      expect(store.flushing).toBe(false)
+      expect(checkPublicListItem).toHaveBeenCalledTimes(1)
+      const retries = timers.mock.calls
+        .map((args, index) => ({ args, result: timers.mock.results[index] }))
+        .filter(({ args }) => args[1] === 15_000)
+      expect(retries).toHaveLength(1)
+      for (const { result } of retries) {
+        // Timer sprawdzony; nie może wrócić do starego store w kolejnym teście.
+        clearTimeout(result?.value as ReturnType<typeof setTimeout>)
+      }
+    },
+  )
+
   it('po odzyskaniu sieci wysyła zaległe odhaczenia z checked_at i czyści kolejkę', async () => {
     const store = useOfflineQueueStore()
     const invalidate = vi.fn()

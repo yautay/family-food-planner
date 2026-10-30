@@ -31,6 +31,7 @@ import {
   clearQueueFor,
   bumpAttempts,
   deleteQueued,
+  deleteQueuedIfUnchanged,
   deleteSnapshot,
   enqueueCheck,
   queueKey,
@@ -58,6 +59,7 @@ export const useOfflineQueueStore = defineStore('offlineQueue', () => {
   const listeners = new Map<string, Set<SyncListener>>()
   let started = false
   let retryTimer: ReturnType<typeof setTimeout> | undefined
+  let flushRequested = false
 
   const pendingCount = computed(() => pending.value.length)
   const isOffline = computed(() => !online.value)
@@ -85,6 +87,12 @@ export const useOfflineQueueStore = defineStore('offlineQueue', () => {
   async function enqueue(target: QueueTarget, itemId: number, checked: boolean): Promise<void> {
     await enqueueCheck(target, itemId, checked, nowWithSkew())
     await refresh()
+    if (online.value && retryTimer === undefined) {
+      // Powrót online mógł już odczytać migawkę sprzed tego zapisu IndexedDB.
+      // Zapamiętaj pobudkę także wtedy, gdy poprzedni flush jeszcze trwa.
+      flushRequested = true
+      void flush()
+    }
   }
 
   /**
@@ -140,6 +148,7 @@ export const useOfflineQueueStore = defineStore('offlineQueue', () => {
     if (flushing.value) {
       return 0
     }
+    flushRequested = false
     flushing.value = true
     let sent = 0
     const touched = new Set<string>()
@@ -167,11 +176,11 @@ export const useOfflineQueueStore = defineStore('offlineQueue', () => {
           // Serwer ODPOWIEDZIAŁ (429 albo 5xx) — jesteśmy online, tylko musimy
           // odczekać. Tu licznik prób ma sens: chroni przed wpisem, którego
           // serwer nie chce przyjąć nigdy, a który blokowałby całą kolejkę.
-          await bumpAttempts(entry.key)
+          await bumpAttempts(entry)
           scheduleRetry()
           break
         }
-        await deleteQueued(entry.key)
+        await deleteQueuedIfUnchanged(entry)
         const key = targetKey(entry.target)
         if (outcome === 'gone') {
           dead.add(key)
@@ -191,6 +200,9 @@ export const useOfflineQueueStore = defineStore('offlineQueue', () => {
     } finally {
       await refresh()
       flushing.value = false
+      if (flushRequested && online.value && retryTimer === undefined) {
+        void flush()
+      }
     }
     for (const key of touched) {
       notify(key)

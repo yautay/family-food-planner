@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 
 import { cleanupE2eData } from './cleanup.js'
 
@@ -18,6 +18,20 @@ import { cleanupE2eData } from './cleanup.js'
 
 /** Wspólny prefiks nazw tego specu — po nim sprząta `cleanupE2eData`. */
 const PREFIX = 'E2E produkt'
+
+/** Kolejka jest paginowana i najstarsze produkty są pierwsze. */
+async function showVerificationRow(page: Page, productId: string): Promise<void> {
+  await expect(page.getByTestId('verification-list')).toBeVisible()
+  const row = page.getByTestId(`verification-row-${productId}`)
+  const more = page.getByTestId('verification-load-more')
+  const rows = page.locator('[data-testid^="verification-row-"]')
+  while ((await row.count()) === 0 && (await more.isVisible())) {
+    const previousCount = await rows.count()
+    await more.click()
+    await expect.poll(() => rows.count()).toBeGreaterThan(previousCount)
+  }
+  await expect(row).toBeVisible()
+}
 
 test.beforeAll(async ({ request }) => {
   await cleanupE2eData(request, { namePrefix: PREFIX })
@@ -55,6 +69,7 @@ test('użytkownik dodaje produkt, administrator go weryfikuje', async ({ page })
 
   // --- kolejka weryfikacji ------------------------------------------------------
   await page.goto('/admin/weryfikacja')
+  await showVerificationRow(page, productId)
   const queueRow = page.getByTestId(`verification-row-${productId}`)
   await expect(queueRow).toBeVisible()
   await expect(queueRow).toContainText(productName)
@@ -76,6 +91,7 @@ test('użytkownik dodaje produkt, administrator go weryfikuje', async ({ page })
 
   // --- weryfikacja ------------------------------------------------------------------
   await page.goto('/admin/weryfikacja')
+  await showVerificationRow(page, productId)
   await page.getByTestId(`verification-verify-${productId}`).click()
   await expect(page.getByTestId(`verification-row-${productId}`)).toHaveCount(0)
 
