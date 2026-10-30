@@ -61,6 +61,21 @@ W kolumnie „Istnieje” podano dowód z kodu. Kolumna „Nowe miejsce” jest 
 
 ## 3. Projektowany wspólny panel przepisu — kontrakt dla UX03/UX04/UX07
 
+### Kontekst nawigacji ustalony w UX02
+
+`lib/navigation.ts`: `PlanNavigationContext {selectedDate, from, to}`,
+`validNavigationDate`, `navigationRange`, `planNavigationContext` oraz
+`planNavigationTarget`. Query `selectedDate/from/to` niesie lokalne dni ISO;
+from/to są włącznie i tworzą poprawną parę do 92 dni. Parametr date dnia
+jest nadrzędny; weekStart wyznacza tydzień i dopuszczalny selectedDate.
+Strzałki zachowują offset dnia, bieżący tydzień jawnie wybiera dziś.
+Podsumowanie odczytuje/synchronizuje poprawny zakres URL, nie nadpisując
+niepełnego szkicu. UX05 przejmuje ten sam query przez `navigationRange`;
+link Zakupy z planu niczego nie zapisuje. Po odbiorze UX02 zmiany helperów
+wymagają uzgodnienia z O, aby obie równoległe karty miały tę samą podstawę.
+
+### Panel przepisu
+
 Nazwa docelowa: `frontend/src/components/domain/planning/RecipePlanningPanel.vue`. To proponowany nowy komponent UX03; istniejący `PlanningDialog.vue` pozostaje wspólną oprawą operacji tygodnia do czasu świadomego uzgodnienia z UX07. Nie zakładać, że zmiana tej oprawy automatycznie realizuje panel przepisu.
 
 Proponowane wejście:

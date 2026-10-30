@@ -22,7 +22,7 @@
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { CalendarDays, ChevronLeft, ChevronRight, Copy, Layers, Repeat, Save } from '@lucide/vue'
-import { computed, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { ApiError } from '@/api/client'
@@ -51,6 +51,7 @@ import TemplateSaveDialog from '@/components/domain/planning/TemplateSaveDialog.
 import { Button } from '@/components/ui/button'
 import { addDays, isoDate, startOfWeek, weekDayLabel } from '@/lib/dates'
 import { formatDecimal } from '@/lib/format'
+import { planNavigationContext, planNavigationTarget, validNavigationDate } from '@/lib/navigation'
 import { statusLabel, statusToken } from '@/lib/nutrition'
 import { currentWeekStart } from '@/lib/schemas/template'
 import { common, plan as planTexts, recipes as recipeTexts, week as texts } from '@/lib/texts'
@@ -65,9 +66,8 @@ const HISTORY_DAYS = 90
 
 /** Poniedziałek z trasy; brak parametru albo śmieci = bieżący tydzień. */
 const weekStart = computed(() => {
-  const raw = route.params.weekStart
-  const value = Array.isArray(raw) ? raw[0] : raw
-  return typeof value === 'string' && value ? startOfWeek(value) : currentWeekStart()
+  const value = validNavigationDate(route.params.weekStart)
+  return value ? startOfWeek(value) : currentWeekStart()
 })
 
 const weekDates = computed(() =>
@@ -77,19 +77,25 @@ const weekEnd = computed(() => addDays(weekStart.value, DAYS_IN_WEEK - 1))
 const today = computed(() => isoDate(new Date()))
 
 /** Dzień, do którego odnoszą się akcje paska (domyślnie dziś albo poniedziałek). */
-const selectedDate = ref(weekStart.value)
-watch(
-  weekDates,
-  (dates) => {
-    if (!dates.includes(selectedDate.value)) {
-      selectedDate.value = dates.includes(today.value) ? today.value : (dates[0] ?? weekStart.value)
-    }
+const selectedDate = computed({
+  get: () => planNavigationContext(route).selectedDate,
+  set: (date: string) => {
+    if (date === selectedDate.value || !weekDates.value.includes(date)) return
+    void router.replace({
+      query: { ...route.query, selectedDate: date, from: weekStart.value, to: weekEnd.value },
+    })
   },
-  { immediate: true },
-)
+})
 
-function goToWeek(value: string): void {
-  void router.push({ name: 'tydzien', params: { weekStart: startOfWeek(value) } })
+function goToWeek(value: string, selectedDateOverride?: string): void {
+  const from = startOfWeek(value)
+  const offset = weekDates.value.indexOf(selectedDate.value)
+  // Tylko przycisk bieżącego tygodnia jawnie wskazuje dziś. Strzałki zawsze
+  // zachowują offset, również gdy docelowy poniedziałek wypada dzisiaj.
+  const date = selectedDateOverride ?? addDays(from, Math.max(0, offset))
+  void router.push(
+    planNavigationTarget('tydzien', { selectedDate: date, from, to: addDays(from, 6) }),
+  )
 }
 
 // --- dane -----------------------------------------------------------------------------
@@ -455,7 +461,7 @@ const copyDayParsedDates = computed(() =>
             variant="outline"
             class="min-h-11"
             data-testid="week-today"
-            @click="goToWeek(today)"
+            @click="goToWeek(today, today)"
           >
             {{ texts.currentWeek }}
           </Button>

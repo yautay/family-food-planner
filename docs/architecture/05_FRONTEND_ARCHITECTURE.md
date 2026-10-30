@@ -92,6 +92,39 @@ odpowiedzi API nie piszemy.
 Guard: brak sesji → `/login` (poza `/l/:token`). Layout: `AppShell`
 (sidebar desktop / bottom-nav mobile — patrz 06_UIUX).
 
+UX02 zachowuje wszystkie powyższe adresy i nazwy tras. `lib/navigation.ts`
+jest jednym rejestrem sekcji Plan / Przepisy / Zakupy / Spiżarnia oraz
+pomocniczej biblioteki i konta. `routes` wpisu wiąże szczegóły/edytory
+z aktywną sekcją. Administracja pozostaje tylko dla ADMIN-a; zmiana menu
+nie zmienia `authGuard` ani serwerowych uprawnień. `PlanNavigation`
+(`context`, `activeView`) pokazuje Dzień / Tydzień / Podsumowanie i link
+Zakupy z planu. `AccountNavigation` przyjmuje `displayName`, `householdName`,
+`isAdmin`, `pending`, `mobile` i emituje `logout`; Reka obsługuje menu
+zarówno przy koncie w sidebarze, jak i w nagłówku telefonu.
+
+Kontrakt UI dla UX03/05/07/10:
+
+- `PlanNavigationContext { selectedDate, from, to }`: lokalne dni ISO,
+  zakres włącznie, do 92 dni. `validNavigationDate` odrzuca także tablice
+  i nieistniejące dni. `navigationRange` wymaga poprawnej pary.
+- `planNavigationContext(route, today?)` odczytuje kontekst;
+  `planNavigationTarget(name, context)` buduje link i query
+  `selectedDate/from/to`. Parametr dnia jest nadrzędny. Parametr tygodnia
+  określa jego granice; selectedDate musi w nich pozostać. Bez wyboru:
+  dziś, jeżeli należy do tygodnia, w przeciwnym razie poniedziałek.
+- Strzałki tygodnia zachowują offset wybranego dnia. Przycisk bieżącego
+  tygodnia jawnie wybiera dziś. Podsumowanie rzeczywiście czyta parę
+  from/to; poprawne własne zmiany zapisuje przez replace, niepełny szkic
+  zostaje lokalny. Presety używają aktualnej daty odniesienia także bez reloadu.
+- Zakupy otrzymują from/to/selectedDate w query. Odczyt przez generator
+  należy do UX05; sama nawigacja nie generuje listy ani nie zapisuje danych.
+
+AppShell przechowuje wyłącznie kalendarzowy kontekst UI, nie dane planu.
+Zmiana path kieruje fokus do `main#main-content`, query zachowuje fokus
+i scroll. Wstecz odtwarza zapisaną pozycję. Skiplink prowadzi do tego samego
+main. Menu konta oddaje fokus triggerowi po Escape, a po zaakceptowanej
+nawigacji pozostawia go treści; anulowany guard nie gubi otwartego menu.
+
 Stan faktyczny po BATCH_11 — trzy rzeczy, które wiążą kolejne trasy publiczne:
 
 - `meta.public` znaczy „ekran LOGOWANIA": trasa działa bez sesji, ale zalogowany

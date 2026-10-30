@@ -1,4 +1,9 @@
-import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
+import {
+  createRouter,
+  createWebHistory,
+  type RouteRecordRaw,
+  type RouterScrollBehavior,
+} from 'vue-router'
 
 import AppShell from '@/layouts/AppShell.vue'
 import LoginPage from '@/pages/LoginPage.vue'
@@ -110,13 +115,13 @@ export const routes: RouteRecordRaw[] = [
         path: 'statystyki',
         name: 'statystyki',
         component: () => import('@/pages/StatystykiPage.vue'),
-        meta: { title: 'Statystyki' },
+        meta: { title: 'Podsumowanie planu' },
       },
       {
         path: 'ustawienia',
         name: 'ustawienia',
         component: () => import('@/pages/UstawieniaPage.vue'),
-        meta: { title: 'Ustawienia' },
+        meta: { title: 'Dom i ustawienia' },
       },
       {
         path: 'admin/uzytkownicy',
@@ -192,9 +197,14 @@ export async function authGuard(
   return true
 }
 
+/** Zmiana filtra query zachowuje scroll; wstecz odtwarza zapisaną pozycję. */
+export const scrollBehavior: RouterScrollBehavior = (to, from, savedPosition) =>
+  savedPosition ?? (to.path === from.path ? false : { top: 0, left: 0 })
+
 export const router = createRouter({
   history: createWebHistory(),
   routes,
+  scrollBehavior,
 })
 
 router.beforeEach((to) => authGuard(to, useAuthStore()))

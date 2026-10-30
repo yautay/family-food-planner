@@ -23,7 +23,8 @@
  */
 import { useQuery } from '@tanstack/vue-query'
 import { CalendarDays, Info } from '@lucide/vue'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 
 import { MAX_STATS_RANGE_DAYS, fetchDailyStats } from '@/api/stats'
 import type { StatsDay } from '@/api/stats'
@@ -46,6 +47,7 @@ import {
 } from '@/lib/dates'
 import { sumDecimals } from '@/lib/decimal'
 import { formatDecimal } from '@/lib/format'
+import { navigationRange, planNavigationContext, validNavigationDate } from '@/lib/navigation'
 import { statusLabel, statusToken } from '@/lib/nutrition'
 import { common, recipes as recipeTexts, stats as texts } from '@/lib/texts'
 
@@ -56,20 +58,29 @@ type StatsTab = 'kcal' | 'macros'
 const TREND_WINDOW_DAYS = 7
 
 const today = isoDate(new Date())
+const route = useRoute()
+const router = useRouter()
+const initialContext = planNavigationContext(route)
+const anchorDate = ref(initialContext.selectedDate)
 
-const preset = ref<RangePreset>('week')
+function rangePreset(from: string, to: string): RangePreset {
+  if (from === startOfWeek(from) && to === addDays(from, 6)) return 'week'
+  if (from === startOfMonth(from) && to === endOfMonth(from)) return 'month'
+  return 'custom'
+}
+const preset = ref<RangePreset>(rangePreset(initialContext.from, initialContext.to))
 const activeTab = ref<StatsTab>('kcal')
 /** Szkic zakresu własnego — stan UI, nie stan serwera (ADR-007). */
-const customFrom = ref(startOfWeek(today))
-const customTo = ref(addDays(startOfWeek(today), 6))
+const customFrom = ref(initialContext.from)
+const customTo = ref(initialContext.to)
 
 const range = computed(() => {
   if (preset.value === 'week') {
-    const from = startOfWeek(today)
+    const from = startOfWeek(anchorDate.value)
     return { from, to: addDays(from, 6) }
   }
   if (preset.value === 'month') {
-    return { from: startOfMonth(today), to: endOfMonth(today) }
+    return { from: startOfMonth(anchorDate.value), to: endOfMonth(anchorDate.value) }
   }
   return { from: customFrom.value, to: customTo.value }
 })
@@ -79,7 +90,7 @@ const rangeError = computed(() => {
   const { from, to } = range.value
   // Native date input da się WYCZYŚCIĆ — wtedy nie ma czego pytać serwera,
   // ale użytkownik musi wiedzieć, dlaczego wykres zniknął.
-  if (from === '' || to === '') {
+  if (!validNavigationDate(from) || !validNavigationDate(to)) {
     return texts.rangeIncomplete
   }
   if (from > to) {
@@ -91,6 +102,40 @@ const rangeError = computed(() => {
 })
 
 const rangeIsUsable = computed(() => rangeError.value === null)
+
+// URL przechowuje zatwierdzony zakres. Nie zapisujemy niepełnego szkicu.
+// Własne replace nie inicjalizuje ponownie formularza (ważne przy szybkim wpisywaniu).
+const ownQueries = new Set<string>()
+function queryKey(from: unknown, to: unknown, selectedDate: unknown): string {
+  return JSON.stringify([from, to, selectedDate])
+}
+watch(
+  () => route.fullPath,
+  () => {
+    const key = queryKey(route.query.from, route.query.to, route.query.selectedDate)
+    if (ownQueries.delete(key)) return
+    const context = planNavigationContext(route)
+    anchorDate.value = context.selectedDate
+    customFrom.value = context.from
+    customTo.value = context.to
+    preset.value = rangePreset(context.from, context.to)
+  },
+)
+watch(range, ({ from, to }) => {
+  if (!rangeIsUsable.value) return
+  const selectedDate = anchorDate.value >= from && anchorDate.value <= to ? anchorDate.value : from
+  // Własny replace pomija inicjalizację formularza, więc również lokalna kotwica
+  // musi wskazywać dzień zapisany do URL przed kolejnym wyborem presetu.
+  anchorDate.value = selectedDate
+  const current = navigationRange(route.query)
+  if (current?.from === from && current.to === to && route.query.selectedDate === selectedDate)
+    return
+  const key = queryKey(from, to, selectedDate)
+  ownQueries.add(key)
+  void router
+    .replace({ query: { ...route.query, from, to, selectedDate } })
+    .then(() => ownQueries.delete(key))
+})
 
 const stats = useQuery({
   queryKey: computed(() => queryKeys.stats.daily(range.value.from, range.value.to)),

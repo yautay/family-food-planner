@@ -2,6 +2,7 @@ import { VueQueryPlugin } from '@tanstack/vue-query'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createMemoryHistory, createRouter } from 'vue-router'
 
 import StatystykiPage from './StatystykiPage.vue'
 import type { DailyStats, StatsDay } from '@/api/stats'
@@ -93,13 +94,23 @@ const WEEK = [
   day('2026-08-23', { kcal: '1900', goalKcal: '2400' }),
 ]
 
-async function mountPage() {
+async function mountPage(path = '/statystyki') {
   setActivePinia(createPinia())
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [
+      { path: '/statystyki', name: 'statystyki', component: StatystykiPage },
+      { path: '/plan-dnia/:date?', name: 'plan-dnia', component: { template: '<div />' } },
+    ],
+  })
+  await router.push(path)
+  await router.isReady()
   const wrapper = mount(StatystykiPage, {
     global: {
       // `retry: false` — aplikacja ponawia raz (main.ts), a test ma sprawdzać
       // komunikat błędu, nie czekać na politykę ponowień.
       plugins: [
+        router,
         [VueQueryPlugin, { queryClientConfig: { defaultOptions: { queries: { retry: false } } } }],
       ],
       stubs: { RouterLink: { template: '<a><slot /></a>' } },
@@ -113,6 +124,100 @@ describe('StatystykiPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     statsApi.fetchDailyStats.mockResolvedValue(response(WEEK))
+  })
+
+  it('odczytuje historyczny zakres URL, a nie bieżący tydzień', async () => {
+    const wrapper = await mountPage(
+      '/statystyki?from=2031-03-03&to=2031-03-09&selectedDate=2031-03-05',
+    )
+    expect(statsApi.fetchDailyStats).toHaveBeenCalledWith('2031-03-03', '2031-03-09')
+    expect(wrapper.get('[data-testid="stats-preset-week"]').attributes('aria-pressed')).toBe('true')
+    await wrapper.get('[data-testid="stats-preset-month"]').trigger('click')
+    await flushPromises()
+    expect(statsApi.fetchDailyStats).toHaveBeenLastCalledWith('2031-03-01', '2031-03-31')
+    expect(wrapper.vm.$router.currentRoute.value.query).toMatchObject({
+      from: '2031-03-01',
+      to: '2031-03-31',
+      selectedDate: '2031-03-05',
+    })
+  })
+
+  it('zakres własny trafia do URL dopiero gdy obie daty są poprawne, szkic pozostaje', async () => {
+    const wrapper = await mountPage(
+      '/statystyki?from=2031-03-03&to=2031-03-09&selectedDate=2031-03-05',
+    )
+    await wrapper.get('[data-testid="stats-preset-custom"]').trigger('click')
+    await wrapper.get('[data-testid="stats-to"]').setValue('')
+    await wrapper.get('[data-testid="stats-from"]').setValue('2031-04-05')
+    await flushPromises()
+    expect(wrapper.get<HTMLInputElement>('[data-testid="stats-to"]').element.value).toBe('')
+    expect(wrapper.get<HTMLInputElement>('[data-testid="stats-from"]').element.value).toBe(
+      '2031-04-05',
+    )
+    expect(wrapper.vm.$router.currentRoute.value.query.to).toBe('2031-03-09')
+    await wrapper.get('[data-testid="stats-to"]').setValue('2031-04-07')
+    await flushPromises()
+    expect(wrapper.vm.$router.currentRoute.value.query).toMatchObject({
+      from: '2031-04-05',
+      to: '2031-04-07',
+      selectedDate: '2031-04-05',
+    })
+    expect(statsApi.fetchDailyStats).toHaveBeenLastCalledWith('2031-04-05', '2031-04-07')
+  })
+
+  it('zewnętrzna zmiana URL odtwarza zakres bez zapętlonych replace', async () => {
+    const wrapper = await mountPage()
+    const router = wrapper.vm.$router
+    const replace = vi.spyOn(router, 'replace')
+    await router.push('/statystyki?from=2031-04-05&to=2031-04-07&selectedDate=2031-04-06')
+    await flushPromises()
+    expect(wrapper.get<HTMLInputElement>('[data-testid="stats-from"]').element.value).toBe(
+      '2031-04-05',
+    )
+    expect(statsApi.fetchDailyStats).toHaveBeenLastCalledWith('2031-04-05', '2031-04-07')
+    expect(replace).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['month', '2031-04-01', '2031-04-30'],
+    ['week', '2031-03-31', '2031-04-06'],
+  ])(
+    'preset %s po kwietniowym zakresie własnym używa nowego dnia bez reloadu',
+    async (preset, from, to) => {
+      const wrapper = await mountPage(
+        '/statystyki?from=2031-03-03&to=2031-03-09&selectedDate=2031-03-05',
+      )
+      await wrapper.get('[data-testid="stats-preset-custom"]').trigger('click')
+      await wrapper.get('[data-testid="stats-to"]').setValue('')
+      await wrapper.get('[data-testid="stats-from"]').setValue('2031-04-05')
+      await wrapper.get('[data-testid="stats-to"]').setValue('2031-04-07')
+      await flushPromises()
+      expect(wrapper.vm.$router.currentRoute.value.query.selectedDate).toBe('2031-04-05')
+
+      const replace = vi.spyOn(wrapper.vm.$router, 'replace')
+      await wrapper.get(`[data-testid="stats-preset-${preset}"]`).trigger('click')
+      await flushPromises()
+      expect(statsApi.fetchDailyStats).toHaveBeenLastCalledWith(from, to)
+      expect(wrapper.vm.$router.currentRoute.value.query).toMatchObject({
+        from,
+        to,
+        selectedDate: '2031-04-05',
+      })
+      expect(replace).toHaveBeenCalledOnce()
+    },
+  )
+
+  it.each([
+    'from=2031-02-31&to=2031-03-05',
+    'from=2031-03-03',
+    'from=2031-03-03&from=2031-03-04&to=2031-03-05',
+  ])('ignoruje niepoprawny zakres URL bez błędu daty i zapętlenia: %s', async (query) => {
+    const wrapper = await mountPage(`/statystyki?${query}`)
+    const replace = vi.spyOn(wrapper.vm.$router, 'replace')
+    await flushPromises()
+    expect(statsApi.fetchDailyStats).toHaveBeenCalledTimes(1)
+    expect(replace).not.toHaveBeenCalled()
+    expect(wrapper.find('[data-testid="stats-error"]').exists()).toBe(false)
   })
 
   it('startuje od bieżącego tygodnia i pyta o zakres pon–nd', async () => {

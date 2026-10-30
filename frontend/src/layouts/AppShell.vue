@@ -1,37 +1,58 @@
 <script setup lang="ts">
-/**
- * Szkielet aplikacji (06_UIUX §5): sidebar na desktopie, bottom-nav na mobile.
- *
- * Bottom-nav pokazuje trzy najczęstsze sekcje (Plan / Przepisy / Zakupy)
- * i przycisk „Więcej" rozwijający resztę — pozycje pochodzą z jednego rejestru
- * `lib/navigation.ts`, więc oba warianty nie mogą się rozjechać.
- */
-import { LogOut } from '@lucide/vue'
+import { Sprout } from '@lucide/vue'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
-import { computed, ref } from 'vue'
-import { RouterLink, RouterView, useRouter } from 'vue-router'
+import { computed, nextTick, ref, watch } from 'vue'
+import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 
-import { Button } from '@/components/ui/button'
-import { navGroups, visibleNavItems } from '@/lib/navigation'
-import { APP_NAME, APP_TAGLINE, auth as authTexts } from '@/lib/texts'
+import AccountNavigation from '@/components/domain/navigation/AccountNavigation.vue'
+import PlanNavigation from '@/components/domain/navigation/PlanNavigation.vue'
+import {
+  isNavItemActive,
+  isPlanView,
+  planNavigationContext,
+  planNavigationTarget,
+  visibleNavItems,
+} from '@/lib/navigation'
+import { APP_NAME, navigation as texts } from '@/lib/texts'
 import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
+const route = useRoute()
 const router = useRouter()
 const queryClient = useQueryClient()
-
+const main = ref<HTMLElement | null>(null)
 const items = computed(() => visibleNavItems(auth.isAdmin))
-const groups = computed(() => navGroups(auth.isAdmin))
 const primaryItems = computed(() => items.value.filter((item) => item.primary))
-const secondaryItems = computed(() => items.value.filter((item) => !item.primary))
+const library = computed(() => items.value.find((item) => item.name === 'produkty')!)
+// Pamięć kontekstu kalendarza przy krótkiej wizycie w innym obszarze to stan UI.
+const context = ref(planNavigationContext(route))
+watch(
+  () => route.fullPath,
+  () => {
+    if (isPlanView(route.name)) context.value = planNavigationContext(route)
+  },
+  { immediate: true },
+)
 
-const moreOpen = ref(false)
+// Query zmienia filtry/wybór dnia w tygodniu, nie cały widok. Nie zabieramy fokusu.
+watch(
+  () => route.path,
+  async () => {
+    await nextTick()
+    main.value?.focus({ preventScroll: true })
+  },
+)
+watch(
+  () => route.meta.title,
+  (title) => {
+    document.title = typeof title === 'string' ? `${title} · ${APP_NAME}` : APP_NAME
+  },
+  { immediate: true },
+)
 
 const logout = useMutation({
   mutationFn: () => auth.logout(),
   onSettled: async () => {
-    moreOpen.value = false
-    // Po zmianie tożsamości żadne dane serwera w cache nie są już nasze.
     queryClient.clear()
     await router.push({ name: 'login' })
   },
@@ -40,133 +61,124 @@ const logout = useMutation({
 
 <template>
   <div class="bg-background text-foreground min-h-dvh md:flex" data-testid="app-shell">
-    <!-- Sidebar (desktop) -->
-    <!-- `print:hidden` na wszystkich elementach nawigacji: wariant do druku listy
-         zakupowej (06_UIUX §6) nie może zabrać ich z poziomu strony, bo strona
-         jest osadzona POD shellem. Reszta reguł druku: `assets/print.css`. -->
+    <a
+      href="#main-content"
+      class="bg-primary text-primary-foreground sr-only fixed top-3 left-3 z-50 rounded-lg px-4 py-3 focus:not-sr-only print:hidden"
+      data-testid="skip-link"
+      >{{ texts.skipToContent }}</a
+    >
     <aside
-      class="border-border bg-card hidden w-64 shrink-0 border-r md:flex md:flex-col print:hidden"
+      class="border-border bg-navigation hidden w-52 shrink-0 border-r md:flex md:flex-col lg:w-56 print:hidden"
       data-testid="nav-sidebar"
     >
-      <div class="border-border flex items-center gap-3 border-b px-4 py-4">
-        <span class="bg-primary size-8 rounded-lg" aria-hidden="true" />
-        <div>
-          <p class="text-sm font-semibold">{{ APP_NAME }}</p>
-          <p class="text-muted-foreground text-xs">{{ APP_TAGLINE }}</p>
-        </div>
-      </div>
-
-      <nav class="flex-1 space-y-1 p-2" aria-label="Nawigacja główna">
-        <template v-for="group in groups" :key="group.label ?? 'main'">
-          <p
-            v-if="group.label"
-            class="text-muted-foreground px-3 pt-4 pb-1 text-xs font-medium uppercase"
-            :data-testid="`nav-group-${group.label}`"
-          >
-            {{ group.label }}
-          </p>
+      <div class="sticky top-0 flex h-dvh flex-col overflow-y-auto px-4 py-7">
+        <RouterLink
+          :to="planNavigationTarget('plan-dnia', context)"
+          class="mb-10 flex min-h-11 items-center gap-3 px-2"
+          :aria-label="`${APP_NAME} — Plan`"
+        >
+          <span
+            class="bg-primary text-primary-foreground flex size-9 items-center justify-center rounded-xl"
+            ><Sprout class="size-6" aria-hidden="true"
+          /></span>
+          <span class="font-serif text-3xl tracking-tight">{{ APP_NAME }}</span>
+        </RouterLink>
+        <nav class="space-y-2" aria-label="Nawigacja główna">
           <RouterLink
-            v-for="item in group.items"
+            v-for="item in primaryItems"
             :key="item.name"
-            :to="{ name: item.name }"
-            class="hover:bg-accent flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm"
-            active-class="bg-accent text-accent-foreground font-medium"
+            :to="planNavigationTarget(item.name, context)"
+            class="flex min-h-12 items-center gap-3 rounded-xl px-3 text-sm"
+            :class="
+              isNavItemActive(item, route.name)
+                ? 'bg-primary text-primary-foreground font-medium shadow-sm'
+                : 'hover:bg-accent'
+            "
+            :aria-current="isNavItemActive(item, route.name) ? 'page' : undefined"
             :data-testid="`nav-item-${item.name}`"
           >
-            <component :is="item.icon" class="size-5 shrink-0" aria-hidden="true" />
-            {{ item.label }}
+            <component :is="item.icon" class="size-5 shrink-0" aria-hidden="true" />{{ item.label }}
           </RouterLink>
-        </template>
-      </nav>
-
-      <div class="border-border border-t p-3">
-        <p class="text-muted-foreground truncate px-1 pb-2 text-xs" data-testid="current-user">
-          {{ auth.user?.display_name }}
-        </p>
-        <Button
-          variant="outline"
-          class="min-h-11 w-full justify-start gap-3"
-          :disabled="logout.isPending.value"
-          data-testid="logout-button"
-          @click="logout.mutate()"
-        >
-          <LogOut class="size-5" aria-hidden="true" />
-          {{ authTexts.logout }}
-        </Button>
+        </nav>
+        <div class="mt-auto space-y-4 pt-10">
+          <div class="kitchen-check mx-2 h-2 rounded opacity-15" aria-hidden="true" />
+          <RouterLink
+            :to="{ name: library.name }"
+            class="hover:bg-accent flex min-h-11 items-center gap-3 rounded-xl px-2 text-sm"
+            :class="
+              isNavItemActive(library, route.name)
+                ? 'bg-accent text-primary font-medium'
+                : 'text-muted-foreground'
+            "
+            :aria-current="isNavItemActive(library, route.name) ? 'page' : undefined"
+            data-testid="nav-item-produkty"
+            ><component :is="library.icon" class="size-5 shrink-0" aria-hidden="true" />{{
+              library.label
+            }}</RouterLink
+          >
+          <AccountNavigation
+            :display-name="auth.user?.display_name"
+            :household-name="auth.user?.household?.name"
+            :is-admin="auth.isAdmin"
+            :pending="logout.isPending.value"
+            @logout="logout.mutate()"
+          />
+        </div>
       </div>
     </aside>
-
     <div class="flex min-w-0 flex-1 flex-col">
-      <!-- Nagłówek (mobile) -->
-      <header class="border-border bg-card border-b px-4 py-3 md:hidden print:hidden">
-        <p class="text-base font-semibold">{{ APP_NAME }}</p>
-      </header>
-
-      <main
-        class="mx-auto w-full max-w-5xl flex-1 px-4 py-6 pb-28 md:pb-8 print:max-w-none print:p-0"
+      <header
+        class="border-border bg-card flex items-center justify-between border-b px-4 py-2 md:hidden print:hidden"
       >
+        <RouterLink
+          :to="planNavigationTarget('plan-dnia', context)"
+          class="flex min-h-11 items-center gap-2 font-serif text-2xl"
+          ><Sprout class="text-primary size-6" aria-hidden="true" />{{ APP_NAME }}</RouterLink
+        >
+        <AccountNavigation
+          mobile
+          :display-name="auth.user?.display_name"
+          :household-name="auth.user?.household?.name"
+          :is-admin="auth.isAdmin"
+          :pending="logout.isPending.value"
+          @logout="logout.mutate()"
+        />
+      </header>
+      <main
+        id="main-content"
+        ref="main"
+        tabindex="-1"
+        class="mx-auto w-full max-w-5xl flex-1 px-4 py-6 pb-[calc(6rem+env(safe-area-inset-bottom))] md:px-6 md:pb-8 lg:px-8 print:max-w-none print:p-0"
+      >
+        <PlanNavigation
+          v-if="isPlanView(route.name)"
+          :context="context"
+          :active-view="route.name"
+          class="print:hidden"
+        />
         <RouterView />
       </main>
     </div>
-
-    <!-- Panel „Więcej" (mobile) -->
-    <div
-      v-if="moreOpen"
-      class="border-border bg-card fixed inset-x-0 bottom-16 z-20 border-t p-2 md:hidden print:hidden"
-      data-testid="nav-more-panel"
-    >
-      <RouterLink
-        v-for="item in secondaryItems"
-        :key="item.name"
-        :to="{ name: item.name }"
-        class="hover:bg-accent flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm"
-        :data-testid="`nav-more-item-${item.name}`"
-        @click="moreOpen = false"
-      >
-        <component :is="item.icon" class="size-5 shrink-0" aria-hidden="true" />
-        {{ item.label }}
-      </RouterLink>
-      <Button
-        variant="ghost"
-        class="min-h-11 w-full justify-start gap-3"
-        :disabled="logout.isPending.value"
-        data-testid="logout-button-mobile"
-        @click="logout.mutate()"
-      >
-        <LogOut class="size-5" aria-hidden="true" />
-        {{ authTexts.logout }}
-      </Button>
-    </div>
-
-    <!-- Bottom-nav (mobile) -->
     <nav
-      class="border-border bg-card fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t md:hidden print:hidden"
+      class="border-border bg-card fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t px-1 pb-[env(safe-area-inset-bottom)] md:hidden print:hidden"
       aria-label="Nawigacja główna (mobile)"
       data-testid="nav-bottom"
     >
       <RouterLink
         v-for="item in primaryItems"
         :key="item.name"
-        :to="{ name: item.name }"
-        class="flex min-h-16 flex-col items-center justify-center gap-1 text-xs"
-        active-class="text-primary font-medium"
+        :to="planNavigationTarget(item.name, context)"
+        class="flex min-h-16 min-w-0 flex-col items-center justify-center gap-1 rounded-lg px-1 text-xs"
+        :class="
+          isNavItemActive(item, route.name)
+            ? 'text-primary font-semibold'
+            : 'text-muted-foreground hover:bg-accent'
+        "
+        :aria-current="isNavItemActive(item, route.name) ? 'page' : undefined"
         :data-testid="`nav-bottom-${item.name}`"
-        @click="moreOpen = false"
       >
-        <component :is="item.icon" class="size-5" aria-hidden="true" />
-        {{ item.label }}
+        <component :is="item.icon" class="size-5" aria-hidden="true" />{{ item.label }}
       </RouterLink>
-      <button
-        type="button"
-        class="flex min-h-16 flex-col items-center justify-center gap-1 text-xs"
-        :aria-expanded="moreOpen"
-        aria-label="Więcej sekcji"
-        data-testid="nav-more-toggle"
-        @click="moreOpen = !moreOpen"
-      >
-        <span class="text-lg leading-none" aria-hidden="true">•••</span>
-        Więcej
-      </button>
     </nav>
   </div>
 </template>

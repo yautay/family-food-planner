@@ -8,6 +8,10 @@
 export const APP_NAME = 'Paśnik'
 export const APP_TAGLINE = 'Planer żywienia rodziny'
 
+export const navigation = {
+  skipToContent: 'Przejdź do treści',
+} as const
+
 export const auth = {
   loginTitle: 'Zaloguj się',
   emailLabel: 'Adres e-mail',
@@ -410,7 +414,7 @@ export const goals = {
  * wartości produktów.
  */
 export const stats = {
-  title: 'Statystyki',
+  title: 'Podsumowanie planu',
   subtitle: 'Kalorie i makroskładniki dni z planu wobec Twoich celów.',
   rangeLabel: 'Zakres',
   presetWeek: 'Tydzień',

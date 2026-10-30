@@ -50,6 +50,7 @@ import { Input } from '@/components/ui/input'
 import { addDays, isoDate, startOfWeek, weekDayLabel } from '@/lib/dates'
 import { isValidDecimal, normalizeDecimalInput } from '@/lib/decimal'
 import { formatDecimal } from '@/lib/format'
+import { validNavigationDate } from '@/lib/navigation'
 import { statusLabel, statusToken } from '@/lib/nutrition'
 import { common, plan as texts, recipes as recipeTexts } from '@/lib/texts'
 
@@ -59,9 +60,7 @@ const queryClient = useQueryClient()
 
 /** Data z trasy; brak parametru = dziś (najczęstszy przypadek otwarcia planu). */
 const currentDate = computed(() => {
-  const param = route.params.date
-  const value = Array.isArray(param) ? param[0] : param
-  return typeof value === 'string' && value.length > 0 ? value : isoDate(new Date())
+  return validNavigationDate(route.params.date) ?? isoDate(new Date())
 })
 
 /** Zakres tygodnia pobieramy JEDNYM zapytaniem — panel boczny nie ma własnego. */

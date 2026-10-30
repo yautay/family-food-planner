@@ -1,14 +1,14 @@
 # Postęp przebudowy UX
 
-Stan na 2026-10-30: UX00 ZINTEGROWANY (`1512a09`), UX01 odebrane i integrowane lokalnie po pełnym check, niezależnym review Sol i wizualnym odbiorze. Dwa pełne Linux E2E: 24 oraz 25 PASS (drugi dodaje druk), osobny visual 100 PNG na Windows. Następna fala UX02; program trwa do UX11. UX12 poza zakresem. Wyniki wejściowe i ograniczenia: [BASELINE.md](BASELINE.md), [CONTRACTS.md](CONTRACTS.md).
+Stan na 2026-10-30: UX00 (`1512a09`), UX01 (`90fd42d`) i UX02 odebrane oraz integrowane lokalnie. UX02: check590/292/443/481 PASS, dwa kolejne Linux E2E po31PASS, visual100PNG Windows, niezależny review bez otwartych ustaleń. Następna fala UX03 + UX05 z jednej podstawy. Program trwa do UX11, UX12 poza zakresem. Ograniczenia wejściowe: [BASELINE.md](BASELINE.md).
 
 Tylko orkiestrator aktualizuje ten rejestr. Reguły stanów i dowodów: [ORCHESTRATION.md](ORCHESTRATION.md).
 
 | Batch | Stan | Właściciel | Baza/worktree | Dowód i commit integracji |
 |---|---|---|---|---|
 | UX00 | ZINTEGROWANY | O + Sol fixture/offline + niezależny Sol runtime review | `9c4b066`; O: `F:/repo/family-food-planner`; osobne worktree autorów/reviewera | `1512a09`; 590/292/443/422 check PASS, E2E 20 PASS dwukrotnie, 40 PNG; BASELINE |
-| UX01 | ZINTEGROWANY | Sol `ux01_design`; niezależny `ux01_review`; O runtime | `1512a09`; `C:/Users/yauta/.codex/worktrees/ux00-review/family-food-planner`; `codex/ux01-design-system` | finalny commit `batch(UX01): wprowadz domowy system wizualny i dostepne panele akcji`; check590/292/443/449 PASS, fullE2E24/25 PASS, 100PNG + panel/druk, review3P2 zamknięte |
-| UX02 | PLANOWANY | — | — | — |
+| UX01 | ZINTEGROWANY | Sol `ux01_design`; niezależny `ux01_review`; O runtime | `1512a09`; `C:/Users/yauta/.codex/worktrees/ux00-review/family-food-planner`; `codex/ux01-design-system` | `90fd42d`; check590/292/443/449 PASS, fullE2E24/25 PASS, 100PNG + panel/druk, review3P2 zamknięte |
+| UX02 | ZINTEGROWANY | Sol `ux02_navigation`, niezależny `ux02_review`, O runtime | `90fd42d`; `C:/Users/yauta/.codex/worktrees/ux00-offline/family-food-planner`; `codex/ux02-navigation` | finalny commit `batch(UX02): uporzadkuj nawigacje i zachowaj kontekst planu`; check590/292/443/481PASS, E2E31PASSdwukrotnie, visual100PNG + menu/print, review3P2 zamknięte |
 | UX03 | PLANOWANY | — | — | — |
 | UX04 | PLANOWANY | — | — | — |
 | UX05 | PLANOWANY | — | — | — |
@@ -26,11 +26,11 @@ Tylko orkiestrator aktualizuje ten rejestr. Reguły stanów i dowodów: [ORCHEST
 |---|---|---|---|
 | Dokumentacja programu/architektury/skilli i rejestry | O / cały program | 2026-10-30 | po odbiorze UX11 |
 | Wspólna DB, check, migracje, seed, E2E, Taskfile i konfiguracja runtime | O / cały program | 2026-10-30 | jedna operacja naraz; po zakończeniu przebiegu |
-| UX01 tokeny, UI, prymitywy, PlanningDialog i 5 konsumentów, AmountInput.form, nagłówek dnia, RecipeCard image, testy | kandydat autora oddany do O | 2026-10-30 | niezmienny diff do finalnych bramek; nowe poprawki wracają do autora |
-| Niezależny review UX01 | Sol ux01_review / osobny worktree, tylko odczyt | 2026-10-30 | zakończone: 3 P2 zamknięte, finalne PNG/druk obejrzane |
-| Router, nawigacja, queryKeys, texts, OpenAPI, lockfile | O do przydziału w kolejnej karcie | 2026-10-30 | wyłączna rezerwacja zgodnie z ORCHESTRATION |
+| AppShell/spec, navigation/spec, router/spec, nowe komponenty nawigacji, texts, smoke/ux-navigation E2E | Sol `ux02_navigation` | 2026-10-30 | kandydat i odbiór UX02, bez samodzielnych DB/E2E |
+| Kontekst dat/URL w PlanTygodniaPage i StatystykiPage, ewentualnie minimalnie PlanDniaPage, testy | Sol `ux02_navigation` | 2026-10-30 | wyłącznie kontrakt nawigacji; przebudowy stron nadal UX03/07/10 |
+| Tokeny/UI/panel, API/OpenAPI/queryKeys, kolejka, lockfile | O do dalszych przydziałów | 2026-10-30 | nie zmieniać w UX02 bez uzgodnienia |
 
-Rezerwacje UX00 zakończone; hash, własność i przekazania pozostają w dzienniku.
+Rezerwacje UX00/UX01 zakończone; hash, własność i przekazania pozostają w dzienniku.
 
 ## Decyzje i ograniczenia
 
@@ -43,6 +43,12 @@ Rezerwacje UX00 zakończone; hash, własność i przekazania pozostają w dzienn
 - Bilans osoby, trwałe zakończenie zakupów, osobiste ulubione, trwałe szkice i dopasowanie spiżarni: UX12. Brak tych funkcji nie może być maskowany tekstami z makiety.
 
 ## Dziennik
+
+2026-10-30 — UX02 odebrane na `f617e9e` + sprawdzony patch dokumentacji O. `check-final.log` PASS590/292/443/481, typy/lint/format/build/OpenAPI; PWA75/1098,26KiB. `e2e-final-2.log`31PASS i `e2e-final-3.log`31PASS, po1SKIP tylko opt-in visual wykonanego osobno:100PNG5widths. Rzeczywisty USER/login/role/API403, publiczne obie sesje, fokus/skiplink i oba menu print PASS. O i niezależny Sol reviewer obejrzeli finalne PNG; wszystkie3P2 i gotowość testu zamknięte. Kontrakt selectedDate/from/to i helpery zamrożone w CONTRACTS/arch05 dla UX03/05/07/10. Bez zmiany API, obliczeń, scope ani kolejki. Istniejący overflow i wielostronicowy druk nadal w kolejnych kartach. Jeden finalny commit UX02, potem dwa świeże Sol worktree od wspólnej bazy.
+
+2026-10-30 — UX02 przekazanie: `89b2101`, 478 FE / typy / lint / format / build PASS, 16 plików. O: pierwsze navigation+smoke12PASS, visual1PASS100PNG5widths, PNG dzień/sekcje/publiczne/menu obejrzane również przez niezależnego Sol reviewera. Test USER zmieniony z symulowanej roli na prawdziwe konto i API403 w `7616e73`, bez zmiany konta E2E. Review znalazł 2 P2 dat, naprawione w `3a7e841` z RED3FAIL→GREEN481PASS. O + reviewer wykryli trzeci P2 druku portalu; `f617e9e` dodaje własne print:hidden oraz realne regresje obu menu. Pierwszy full Linux:29PASS/1FAILskiplink/1SKIPvisual/1notrun; trace wykazał Tab wysłany przy pustym app przed montażem SPA. Gotowość testu poprawiona bez focus/sleep/retry. Prawdziwy USER/UIguard/API403 przeszedł. O rozpoczyna pełne E2E→visual5widths→check→drugie E2E, bez innych DB/E2E; źródła zamrożone do końcowego review. Dokumentacja/helpery w niezmiennym patchu O SHA256 `3e317a1e43791b5329879821a9dda87f87c7a06c217c4b009a4b4705f6e739c4`.
+
+2026-10-30 — UX01 zintegrowane w `90fd42d`, czyste drzewo O. UX02 rozpoczęte od tej bazy w świeżym Sol high `ux02_navigation`, własny czysty worktree/nowa gałąź. O przekazał stabilne prymitywy i przydzielił minimalną integrację zakresu w tygodniu/podsumowaniu, ponieważ obecne strony ignorowały część kontekstu URL. API, obliczenia, scope i układy kolejnych kart pozostają poza własnością UX02. Dokumentacja/DB/E2E pod kontrolą O. Worktree review oczyszczono przez dokładne odwrócenie własnego patcha, a następnie porównanie identycznego blobu index.html i odświeżenie indeksu bez diffu; bez resetu/clean. Następna bramka: kandydat UX02, testy, review i kontrola 390/768/1024.
 
 2026-10-30 — UX01 odebrane. Finalny autor `258ebb0` (wcześniej e3ade07/3db3d59/559ecae) + patch O v3 SHA256 `f4ecc4cdbe5ae5fdc87ad3c988b5e36e346c04fedb6675d44daf57b22f639997`. Check PASS 590 unit / 292 integration / 443 API / 449 FE, typy/lint/format/build/OpenAPI. PWA85 wpisów1040,25KiB (UX00 68/947,89); modal Reka i nowe ikony/style, bez nowych pakietów. Windows foundation5PASS i visual100PNG na5szerokościach PASS; kontrola pending/błędu/fokusu/większego tekstu. Dwa full Linux E2E24PASS i25PASS (drugi z drukiem), każdy1SKIP wyłącznie osobno wykonanego visual. Trzy P2 zamknięte kodowo i na PNG przez niezależnego Sol reviewera, zero otwartych ustaleń. CSS druku potwierdzony na realnym PNG, bez deklarowania paginowanego wydruku listy. Artefakty backend/data/ux01-results oraz screenshots-ux01; bez nadpisania screenshots-before. Stabilny test-e2e-linux omija Windows vendor issue bez alpha/zmiany lockfile/flags, te same dane i wyłączność O. Kod i dokumentacja utrwalane jednym finalnym commitem UX01, następnie świeży Sol UX02.
 

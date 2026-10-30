@@ -67,6 +67,7 @@ test.describe('uwierzytelnianie (bez współdzielonej sesji)', () => {
     await expect(page.getByTestId('plan-dnia-page')).toBeVisible()
     await expect(page.getByTestId('nav-sidebar')).toBeVisible()
 
+    await page.getByTestId('account-toggle').click()
     await page.getByTestId('logout-button').click()
 
     await expect(page).toHaveURL(/\/login/)

@@ -23,6 +23,16 @@ RecipePicker zachowuje własny formularz create-in-context, który nie może
 wysłać zewnętrznej akcji planowania. Walidacja na żywo używa
 `validationMessage`, błędy API `error`; wyłącznie te drugie przejmują fokus.
 
+Regresja obowiązkowa częściowego składu rodziny: pozycja 2,2 porcji dla
+dwóch profili po 1,1 przy trzech profilach w rodzinie pozostaje 2,2 i dwoma
+wpisami po samej zamianie przepisu. Panel nie dopisuje trzeciej osoby przy
+otwarciu i nie zwiększa sumy do 3,3. Fixture właśnie tak reprezentuje
+„częściowy podział”; API nadal wymaga sumy podziału równej servings, a nie
+nieprzypisanej reszty. Bez zmiany porcji PATCH wysyła samo recipe_id;
+auto-sumowanie dotyczy jawnej edycji/wyboru rodzinnego trybu. Historyczne
+i nieaktywne wpisy nie znikają przy odczycie. To doprecyzowanie zachowania
+z CONTRACTS §3–4, bez nowej reguły API ani sposobu obliczeń.
+
 - [ ] UX03.1 Przebudować dzień według makiety: jedzenie przed bilansem, pasek dat, pełne nazwy, akcja w kontekście posiłku. Oddzielić puste dane, błąd pobierania i stare dane w cache.
 - [ ] UX03.2 Wyodrębnić współdzielony panel Zaplanuj z propsami: przepis, data, opcjonalny istniejący posiłek i opcjonalna pozycja do zamiany. Wynik po sukcesie zawiera rzeczywisty dzień/posiłek/pozycję; konsument odświeża właściwe klucze cache. UX04 i UX07 korzystają z tego samego komponentu.
 - [ ] UX03.3 Automatycznie sumować podział rodzinny przez `sumDecimals`. Pole 0 lub świadome wyłączenie osoby pomija profil w payloadzie; pozostałe wartości dodatnie, suma dodatnia, maksima i dokładność jak w API. Nie wymagać ręcznego dopasowywania osobnej sumy. Obsłużyć użytkownika bez profili i zachować planowanie samą liczbą porcji.

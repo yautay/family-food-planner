@@ -1,25 +1,14 @@
-import { VueQueryPlugin } from '@tanstack/vue-query'
-import { mount } from '@vue/test-utils'
+import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
+import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createMemoryHistory, createRouter, type Router } from 'vue-router'
-
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createMemoryHistory, createRouter } from 'vue-router'
 import { routes } from '@/router'
 import { useAuthStore } from '@/stores/auth'
-
 import AppShell from './AppShell.vue'
 
-const { fetchCurrentUser, logoutRequest } = vi.hoisted(() => ({
-  fetchCurrentUser: vi.fn(),
-  logoutRequest: vi.fn(),
-}))
-
-vi.mock('@/api/auth', () => ({
-  fetchCurrentUser,
-  loginRequest: vi.fn(),
-  logoutRequest,
-}))
-
+const { logoutRequest } = vi.hoisted(() => ({ logoutRequest: vi.fn() }))
+vi.mock('@/api/auth', () => ({ fetchCurrentUser: vi.fn(), loginRequest: vi.fn(), logoutRequest }))
 const USER = {
   id: 1,
   email: 'anna@example.com',
@@ -28,102 +17,167 @@ const USER = {
   ui_settings: {},
   household: null,
 }
-
-async function mountShell(role: 'user' | 'admin' = 'user') {
+const wrappers: ReturnType<typeof mount>[] = []
+async function mountShell(path = '/plan-dnia/2031-03-05', role: 'user' | 'admin' = 'user') {
   const pinia = createPinia()
   setActivePinia(pinia)
-  const auth = useAuthStore()
-  auth.user = { ...USER, role }
-
-  const router: Router = createRouter({ history: createMemoryHistory(), routes })
-  await router.push('/plan-dnia')
+  useAuthStore().user = { ...USER, role }
+  const children = routes
+    .find((record) => record.path === '/')!
+    .children!.filter((record) => record.name)
+    .map((record) => ({
+      name: record.name,
+      meta: record.meta,
+      path: `/${record.path}`,
+      component: { template: '<div><input data-testid="view-filter" /><h1>Treść</h1></div>' },
+    }))
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [
+      ...children,
+      { path: '/login', name: 'login', component: { template: '<div>Logowanie</div>' } },
+    ],
+  })
+  await router.push(path)
   await router.isReady()
-
-  return mount(AppShell, { global: { plugins: [pinia, VueQueryPlugin, router] } })
+  const queryClient = new QueryClient()
+  const wrapper = mount(AppShell, {
+    attachTo: document.body,
+    global: { plugins: [pinia, [VueQueryPlugin, { queryClient }], router] },
+  })
+  wrappers.push(wrapper)
+  return { wrapper, router, queryClient }
 }
-
-describe('AppShell', () => {
+describe('AppShell UX02', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    fetchCurrentUser.mockResolvedValue(USER)
+  })
+  afterEach(() => {
+    wrappers.splice(0).forEach((wrapper) => wrapper.unmount())
+    document.body.innerHTML = ''
   })
 
-  it('pokazuje pełną nawigację po polsku', async () => {
-    const wrapper = await mountShell()
-
-    for (const name of [
-      'plan-dnia',
-      'tydzien',
-      'przepisy',
-      'produkty',
-      'spizarnia',
-      'zakupy',
-      'statystyki',
-      'ustawienia',
-    ]) {
-      expect(wrapper.find(`[data-testid="nav-item-${name}"]`).exists()).toBe(true)
-    }
-    expect(wrapper.text()).toContain('Plan dnia')
-    expect(wrapper.text()).toContain('Spiżarnia')
-    // Import jadłospisów PDF wycofany w BATCH_20 (D25) — pozycji menu nie ma,
-    // a kopia danych rodziny jest sekcją Ustawień, nie własnym działem.
-    expect(wrapper.find('[data-testid="nav-item-import"]').exists()).toBe(false)
-    expect(wrapper.text()).not.toContain('Import PDF')
+  it('pokazuje te same cztery sekcje w tej samej kolejności na obu urządzeniach', async () => {
+    const { wrapper } = await mountShell()
+    const desktop = wrapper.get('[data-testid="nav-sidebar"] nav').findAll('a')
+    const mobile = wrapper.get('[data-testid="nav-bottom"]').findAll('a')
+    expect(desktop.map((a) => a.text())).toEqual(['Plan', 'Przepisy', 'Zakupy', 'Spiżarnia'])
+    expect(mobile.map((a) => a.text())).toEqual(desktop.map((a) => a.text()))
+    expect(wrapper.find('[data-testid="nav-more-toggle"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="nav-item-produkty"]').text()).toBe('Biblioteka produktów')
+    expect(wrapper.get('[data-testid="account-toggle-mobile"]').attributes('aria-label')).toBe(
+      'Konto i ustawienia',
+    )
   })
-
-  it('ukrywa wpis Admin przed zwykłym użytkownikiem', async () => {
-    const wrapper = await mountShell('user')
-
-    expect(wrapper.find('[data-testid="nav-item-admin-users"]').exists()).toBe(false)
+  it.each([
+    '/tydzien/2031-03-03',
+    '/statystyki',
+    '/przepisy/17',
+    '/przepisy/17/edytuj',
+    '/przepisy/nowy',
+    '/zakupy/listy/7',
+  ])('aktywuje sekcję także dla %s', async (path) => {
+    const { wrapper } = await mountShell(path)
+    const active = wrapper.get('[data-testid="nav-bottom"] [aria-current="page"]')
+    expect(active.text()).toBe(
+      path.startsWith('/przepisy') ? 'Przepisy' : path.startsWith('/zakupy') ? 'Zakupy' : 'Plan',
+    )
   })
-
-  it('pokazuje wpis Admin administratorowi', async () => {
-    const wrapper = await mountShell('admin')
-
-    expect(wrapper.find('[data-testid="nav-item-admin-users"]').exists()).toBe(true)
+  it('zakładki zachowują środę i przekazują zakres zakupom', async () => {
+    const { wrapper, router } = await mountShell()
+    await wrapper.get('[data-testid="plan-view-tydzien"]').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/tydzien/2031-03-03')
+    expect(router.currentRoute.value.query.selectedDate).toBe('2031-03-05')
+    await wrapper.get('[data-testid="plan-view-plan-dnia"]').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/plan-dnia/2031-03-05')
+    const shopping = router.resolve(
+      wrapper.get('[data-testid="plan-shopping-link"]').attributes('href')!,
+    )
+    expect(shopping.query).toEqual({
+      selectedDate: '2031-03-05',
+      from: '2031-03-03',
+      to: '2031-03-09',
+    })
   })
-
-  it('administracja ma podsekcje pod wspólnym nagłówkiem', async () => {
-    const wrapper = await mountShell('admin')
-
-    expect(wrapper.find('[data-testid="nav-group-Administracja"]').exists()).toBe(true)
-    expect(wrapper.find('[data-testid="nav-item-admin-households"]').exists()).toBe(true)
+  it('przechowuje kontekst podczas wizyty w przepisach', async () => {
+    const { wrapper, router } = await mountShell()
+    await router.push('/przepisy')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="nav-item-plan-dnia"]').attributes('href')).toContain(
+      '/plan-dnia/2031-03-05',
+    )
   })
-
-  it('nagłówek administracji nie pokazuje się zwykłemu użytkownikowi', async () => {
-    const wrapper = await mountShell('user')
-
-    expect(wrapper.find('[data-testid="nav-group-Administracja"]').exists()).toBe(false)
-    expect(wrapper.find('[data-testid="nav-item-admin-households"]').exists()).toBe(false)
+  it('przenosi fokus do treści po zmianie ścieżki, ale nie przy filtrach query', async () => {
+    const { wrapper, router } = await mountShell()
+    const input = wrapper.get<HTMLInputElement>('[data-testid="view-filter"]').element
+    input.focus()
+    await router.replace({ query: { filter: 'owsianka' } })
+    await flushPromises()
+    expect(document.activeElement).toBe(input)
+    await router.push('/przepisy')
+    await flushPromises()
+    expect(document.activeElement).toBe(wrapper.get('main').element)
+    expect(wrapper.get('[data-testid="skip-link"]').attributes('href')).toBe('#main-content')
   })
-
-  it('bottom-nav ma trzy sekcje główne i przycisk Więcej', async () => {
-    const wrapper = await mountShell()
-
-    const bottom = wrapper.get('[data-testid="nav-bottom"]')
-    expect(bottom.find('[data-testid="nav-bottom-plan-dnia"]').exists()).toBe(true)
-    expect(bottom.find('[data-testid="nav-bottom-przepisy"]').exists()).toBe(true)
-    expect(bottom.find('[data-testid="nav-bottom-zakupy"]').exists()).toBe(true)
-    expect(bottom.find('[data-testid="nav-more-toggle"]').exists()).toBe(true)
+  it('konto na telefonie udostępnia ustawienia i bibliotekę bez administracji USER-owi', async () => {
+    const { wrapper } = await mountShell()
+    await wrapper.get('[data-testid="account-toggle-mobile"]').trigger('keydown', { key: 'Enter' })
+    await flushPromises()
+    expect(
+      document.querySelector('[data-testid="account-item-ustawienia-mobile"]')?.textContent,
+    ).toContain('Dom i ustawienia')
+    expect(document.querySelector('[data-testid="account-item-produkty-mobile"]')).not.toBeNull()
+    expect(document.querySelector('[data-testid="account-item-admin-users-mobile"]')).toBeNull()
+    expect(
+      document
+        .querySelector('[data-testid="account-menu-mobile"]')
+        ?.classList.contains('print:hidden'),
+    ).toBe(true)
+    document
+      .querySelector('[data-testid="account-menu-mobile"]')!
+      .dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    await flushPromises()
+    expect(document.querySelector('[data-testid="account-menu-mobile"]')).toBeNull()
+    expect(document.activeElement).toBe(
+      wrapper.get('[data-testid="account-toggle-mobile"]').element,
+    )
   })
-
-  it('Więcej rozwija pozostałe sekcje', async () => {
-    const wrapper = await mountShell()
-    expect(wrapper.find('[data-testid="nav-more-panel"]').exists()).toBe(false)
-
-    await wrapper.get('[data-testid="nav-more-toggle"]').trigger('click')
-
-    expect(wrapper.find('[data-testid="nav-more-panel"]').exists()).toBe(true)
-    expect(wrapper.find('[data-testid="nav-more-item-spizarnia"]').exists()).toBe(true)
+  it('ADMIN ma osobną grupę i wszystkie cztery ekrany administracji', async () => {
+    const { wrapper } = await mountShell('/plan-dnia', 'admin')
+    await wrapper.get('[data-testid="account-toggle"]').trigger('keydown', { key: 'Enter' })
+    await flushPromises()
+    expect(document.querySelector('[data-testid="nav-group-Administracja"]')).not.toBeNull()
+    expect(
+      document.querySelector('[data-testid="account-menu"]')?.classList.contains('print:hidden'),
+    ).toBe(true)
+    for (const name of ['users', 'households', 'verification', 'transfer'])
+      expect(document.querySelector(`[data-testid="account-item-admin-${name}"]`)).not.toBeNull()
   })
-
-  it('wylogowanie woła API i czyści sesję', async () => {
+  it('wybranie ustawień w menu konta zamyka menu i oddaje fokus nowej treści', async () => {
+    const { wrapper, router } = await mountShell()
+    await wrapper.get('[data-testid="account-toggle-mobile"]').trigger('keydown', { key: 'Enter' })
+    await flushPromises()
+    ;(
+      document.querySelector('[data-testid="account-item-ustawienia-mobile"]') as HTMLAnchorElement
+    ).click()
+    await flushPromises()
+    expect(router.currentRoute.value.name).toBe('ustawienia')
+    expect(document.querySelector('[data-testid="account-menu-mobile"]')).toBeNull()
+    expect(document.activeElement).toBe(wrapper.get('main').element)
+  })
+  it('wylogowanie w menu konta usuwa sesję i cache', async () => {
     logoutRequest.mockResolvedValue(undefined)
-    const wrapper = await mountShell()
-
-    await wrapper.get('[data-testid="logout-button"]').trigger('click')
-    await vi.waitFor(() => expect(logoutRequest).toHaveBeenCalledOnce())
-
+    const { wrapper, queryClient, router } = await mountShell()
+    queryClient.setQueryData(['prywatne'], { content: 'plan' })
+    await wrapper.get('[data-testid="account-toggle"]').trigger('keydown', { key: 'Enter' })
+    await flushPromises()
+    ;(document.querySelector('[data-testid="logout-button"]') as HTMLButtonElement).click()
+    await flushPromises()
+    expect(logoutRequest).toHaveBeenCalledOnce()
     expect(useAuthStore().isAuthenticated).toBe(false)
+    expect(queryClient.getQueryData(['prywatne'])).toBeUndefined()
+    expect(router.currentRoute.value.name).toBe('login')
   })
 })

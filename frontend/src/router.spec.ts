@@ -1,7 +1,8 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { authGuard, routes } from './router'
+import { authGuard, routes, scrollBehavior } from './router'
+import { createMemoryHistory, createRouter } from 'vue-router'
 import { useAuthStore } from './stores/auth'
 
 const { fetchCurrentUser } = vi.hoisted(() => ({ fetchCurrentUser: vi.fn() }))
@@ -34,9 +35,15 @@ describe('guard routera', () => {
   it('bez sesji odsyła na /login i zapamiętuje adres powrotu', async () => {
     fetchCurrentUser.mockResolvedValue(null)
 
-    const result = await authGuard(target('/plan-dnia'), useAuthStore())
+    const result = await authGuard(
+      target('/plan-dnia/2031-03-05?from=2031-03-03&to=2031-03-09'),
+      useAuthStore(),
+    )
 
-    expect(result).toEqual({ name: 'login', query: { next: '/plan-dnia' } })
+    expect(result).toEqual({
+      name: 'login',
+      query: { next: '/plan-dnia/2031-03-05?from=2031-03-03&to=2031-03-09' },
+    })
   })
 
   it('z sesją przepuszcza na trasę chronioną', async () => {
@@ -75,6 +82,18 @@ describe('guard routera', () => {
     expect(result).toBe(true)
   })
 
+  it.each([null, USER])(
+    'publiczna lista omija odczyt sesji także przy istniejącej sesji',
+    async (user) => {
+      const auth = useAuthStore()
+      auth.user = user
+      const ensure = vi.spyOn(auth, 'ensureLoaded')
+      expect(await authGuard(target('/l/test', { anonymous: true }), auth)).toBe(true)
+      expect(ensure).not.toHaveBeenCalled()
+      expect(fetchCurrentUser).not.toHaveBeenCalled()
+    },
+  )
+
   it('trasa rodzin jest zamknięta dla zwykłego użytkownika', async () => {
     fetchCurrentUser.mockResolvedValue(USER)
 
@@ -85,6 +104,22 @@ describe('guard routera', () => {
 })
 
 describe('mapa tras', () => {
+  it('publiczna lista jest osobnym rekordem poza AppShell', () => {
+    const record = routes.find((route) => route.name === 'publiczna-lista')!
+    expect(record.path).toBe('/l/:token')
+    expect(record.meta?.anonymous).toBe(true)
+    expect(routes.find((route) => route.path === '/')?.children).not.toContain(record)
+  })
+
+  it('odtwarza scroll wstecz, resetuje dla nowej ścieżki i zachowuje przy query', () => {
+    const router = createRouter({ history: createMemoryHistory(), routes })
+    const from = { ...router.resolve('/przepisy'), name: 'przepisy' }
+    const queryOnly = { ...router.resolve('/przepisy?search=owsianka'), name: 'przepisy' }
+    const to = { ...router.resolve('/tydzien/2031-03-03'), name: 'tydzien' }
+    expect(scrollBehavior(queryOnly, from, null)).toBe(false)
+    expect(scrollBehavior(to, from, null)).toEqual({ top: 0, left: 0 })
+    expect(scrollBehavior(to, from, { top: 750, left: 0 })).toEqual({ top: 750, left: 0 })
+  })
   it('zawiera komplet sekcji z 05_FRONTEND §3', () => {
     const shell = routes.find((route) => route.path === '/')
     const names = (shell?.children ?? []).map((child) => child.name).filter(Boolean)

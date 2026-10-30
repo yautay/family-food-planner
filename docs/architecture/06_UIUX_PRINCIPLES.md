@@ -171,8 +171,19 @@ Realizacja: `src/api/pagination.ts` + `components/domain/LoadMoreButton.vue`
 
 ## 5. Mobile = klient równorzędny
 
-- Breakpointy: mobile-first; sidebar → bottom nav (Plan / Przepisy /
-  Zakupy / Więcej) jak w wizualizacji 9.
+- UX02: mobile-first; sidebar od md, cztery dolne wejścia Plan / Przepisy /
+  Zakupy / Spiżarnia na telefonie. Dzień / Tydzień / Podsumowanie są
+  podnawigacją Planu. Biblioteka produktów jest pomocnicza, Dom i ustawienia
+  oraz administracja są w menu konta, dostępnym również w nagłówku telefonu.
+  Administracja widoczna wyłącznie dla ADMIN-a. Stare URL-e nadal działają.
+- Main ma min-w-0 i dolny odstęp 96 px + safe-area; przyciski nawigacji
+  mieszczą się przy 360 px. Nie maskować przepełnień stron przez globalne
+  overflow-hidden/clip. Układy poszczególnych ekranów mają własne karty.
+- Nawigacja ścieżki przenosi fokus do treści, zmiana query/filtra go zachowuje.
+  Skiplink jest pierwszym wejściem klawiatury. Menu konta działa dotykiem,
+  klawiaturą i przez Escape, z widocznym fokusem i zawijanym opisem osoby.
+  Portalowane menu ma własne print:hidden: ukrycie sidebara/nagłówka
+  nie obejmuje portalu do body. Treść strony pozostaje widoczna w druku.
 - Cele dotykowe ≥44 px; checkbox listy zakupów ~48 px.
 - Lista zakupów to widok krytyczny mobilny: jednoręczna obsługa, sekcje
   sticky, odhaczanie natychmiastowe (optimistic), działa offline (05 §6),
