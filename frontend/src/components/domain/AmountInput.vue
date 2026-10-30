@@ -33,6 +33,8 @@ const props = withDefaults(
     disabled?: boolean
     testid?: string
     hint?: string
+    /** Powiązanie z formularzem akcji spoza drzewa DOM (ActionPanel). */
+    form?: string
   }>(),
   {
     unit: undefined,
@@ -44,6 +46,7 @@ const props = withDefaults(
     disabled: false,
     testid: 'amount',
     hint: undefined,
+    form: undefined,
   },
 )
 
@@ -100,6 +103,7 @@ const hasUnits = computed(() => props.units.length > 0)
     <div class="flex gap-2">
       <Input
         :id="inputId"
+        :form="form"
         :model-value="draft"
         inputmode="decimal"
         class="min-h-11 tabular-nums"
@@ -111,6 +115,7 @@ const hasUnits = computed(() => props.units.length > 0)
 
       <select
         v-if="hasUnits"
+        :form="form"
         class="border-border bg-card min-h-11 rounded-lg border px-3 text-sm"
         :value="unit"
         :disabled="disabled"

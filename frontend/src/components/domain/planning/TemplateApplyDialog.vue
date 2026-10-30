@@ -115,13 +115,15 @@ function submit(): void {
 
 <template>
   <PlanningDialog
+    v-slot="{ formId }"
     :open="open"
     :title="texts.templateApplyTitle"
     :subtitle="texts.templateApplySubtitle"
     :submit-label="texts.templateApplyApply"
     :submit-disabled="!canSubmit"
     :pending="pending"
-    :error="error ?? validationMessage"
+    :error="error"
+    :validation-message="validationMessage"
     :warnings="warnings"
     testid="template-apply-dialog"
     @submit="submit()"
@@ -131,11 +133,23 @@ function submit(): void {
       <legend class="text-muted-foreground text-xs">{{ texts.templateKind }}</legend>
       <div class="flex flex-wrap gap-2">
         <label class="flex min-h-11 items-center gap-2 text-sm">
-          <input v-model="kind" type="radio" value="day" data-testid="apply-kind-day" />
+          <input
+            v-model="kind"
+            :form="formId"
+            type="radio"
+            value="day"
+            data-testid="apply-kind-day"
+          />
           {{ texts.templateKindDay }}
         </label>
         <label class="flex min-h-11 items-center gap-2 text-sm">
-          <input v-model="kind" type="radio" value="week" data-testid="apply-kind-week" />
+          <input
+            v-model="kind"
+            :form="formId"
+            type="radio"
+            value="week"
+            data-testid="apply-kind-week"
+          />
           {{ texts.templateKindWeek }}
         </label>
       </div>
@@ -146,6 +160,7 @@ function submit(): void {
         {{ texts.templateApplyPick }}
         <select
           v-model="dayTemplateId"
+          :form="formId"
           class="border-border bg-background min-h-11 rounded-md border px-3"
           data-testid="apply-day-template"
         >
@@ -159,6 +174,7 @@ function submit(): void {
         {{ texts.templateApplyDates }}
         <textarea
           v-model="datesRaw"
+          :form="formId"
           rows="3"
           class="border-border bg-background rounded-md border px-3 py-2 tabular-nums"
           data-testid="apply-dates"
@@ -172,6 +188,7 @@ function submit(): void {
         {{ texts.templateApplyPick }}
         <select
           v-model="weekTemplateId"
+          :form="formId"
           class="border-border bg-background min-h-11 rounded-md border px-3"
           data-testid="apply-week-template"
         >
@@ -185,6 +202,7 @@ function submit(): void {
         {{ texts.templateApplyWeekStart }}
         <Input
           v-model="weekStartValue"
+          :form="formId"
           type="date"
           class="min-h-11"
           data-testid="apply-week-start"

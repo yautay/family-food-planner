@@ -1,6 +1,6 @@
 # Plan przebudowy Paśnika dla Sol
 
-Status: program uruchomiony przez właściciela 2026-10-29; trwa UX00. Bieżący stan i ograniczenia: [PROGRESS.md](PROGRESS.md). Punkt odniesienia kodu: `b8020cd`; dokumentacja dostępna w bazowym commicie `511a249`.
+Status: program uruchomiony przez właściciela 2026-10-29, UX00 odebrane (`1512a09`), realizowane kolejne fale. Bieżący stan i ograniczenia: [PROGRESS.md](PROGRESS.md). Punkt odniesienia starego kodu: `b8020cd`; dokumentacja dostępna przed izolacją w commicie `511a249`.
 
 Celem jest wdrożenie zaakceptowanego kierunku „domowa książka kucharska” oraz uproszczenie planowania i zakupów. Przebudowa obejmuje 11 projektowanych ekranów, wspólną nawigację, logowanie i dopasowanie administracji. Zachowuje istniejące dane, uprawnienia, obliczenia i działanie zakupów offline.
 

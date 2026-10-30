@@ -4,6 +4,35 @@ Vue 3 (Composition API, `<script setup lang="ts">`), TypeScript strict,
 Vite, Tailwind CSS 4, shadcn-vue, Pinia, TanStack Query, vue-router.
 Bez Nuxta, bez i18n (UI wyłącznie PL).
 
+### Wspólne komponenty UX01
+
+`PageHeader` przyjmuje `title`, opcjonalne `description`, `eyebrow`,
+`titleTestid` i `decoration` (`plate/herbs/wheat/pot/false`); slot `actions`
+zawiera istniejące Button/RouterLink, domyślny slot dodatkowy kontekst.
+`RecipeImage` przyjmuje `src`, `alt`, `tone` i `loading`, reaguje na błąd
+obrazu i zmianę URL. `EmptyState`, `ErrorState`, `LoadingState`,
+`FeedbackMessage`, `ActionArea`, `SummaryPanel` standaryzują hierarchię
+treści bez posiadania danych serwera.
+
+`ActionPanel` to modal Reka Dialog, kontrolowany przez `open`. Props:
+`title`, `description`, `submitLabel`, `submitDisabled`, `pending`, `error`,
+`validationMessage`, `warnings`, `testid`; zdarzenia `submit` i `close`.
+Sloty: domyślny scoped slot z `formId`, `context`, `footer-extra`.
+Treść jest rodzeństwem formularza akcji: natywne kontrolki wiążą `:form="formId"`,
+co zachowuje Enter i natywną walidację bez zagnieżdżania formularzy pickerów.
+`AmountInput` ma opcjonalny prop `form`, przekazywany do input i select.
+Formularze create-in-context pozostają samodzielne i nie wysyłają panelu.
+Reka zapewnia trap fokusu
+i modalność; komponent przywraca fokus wywołującemu, blokuje podwójny submit
+i zamknięcie w pending, obsługuje natywną walidację oraz fokus błędu serwera.
+Formularz i mutacja należą do konsumenta. Przewijalny środek i osobna stopka
+utrzymują akcje dostępne na telefonie. `PlanningDialog` pozostaje adapterem
+starych propsów/zdarzeń/testid, mapując `subtitle` na `description`; przekazuje
+również `validationMessage` i scoped slot `formId`. Walidacja na żywo nie
+jest błędem API i nie przejmuje fokusu podczas pisania. Pięciu konsumentów
+tygodnia wiąże pola przez `formId` i korzysta z rzeczywistego modala. Kontrakty panelu
+planowania przepisu UX03 pozostają w `ux-redesign/CONTRACTS.md`.
+
 ## 1. Podział odpowiedzialności stanu (ADR-007)
 
 - **TanStack Query** = cały stan serwera (fetch, cache, invalidation,

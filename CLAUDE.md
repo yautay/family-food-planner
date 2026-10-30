@@ -56,6 +56,7 @@ Start od zera: `cp .env.example .env` → `task install` → `task dev`.
 | `task test-unit` / `test-int` / `test-api` / `test-be` | pytest wg markerów; zawężenie przez `--`, np. `task test-int -- -k wydajnosc -s` |
 | `task fe-test` | vitest |
 | `task test-e2e` (+ `task e2e-install`) | Playwright, chromium; zawężenie przez `--`, np. `task test-e2e -- offline-lista.spec.ts` |
+| `task test-e2e-linux` | ta sama suita i lokalny stack w oficjalnym obrazie Playwright 1.62.1; stabilne Chromium Linux jako obejście `ERR_NO_BUFFER_SPACE` Windows, bez zmiany zależności/flagów; argumenty po `--` |
 | `task typecheck` / `lint` / `format` / `format-check` | mypy+vue-tsc / ruff+eslint / ruff format+prettier |
 | `task db-migrate` / `db-heads` / `db-revision -- --rev-id 0002 -m "opis"` | Alembic |
 | `task fe-types` / `fe-types-check` | OpenAPI → `backend/openapi.json` → `frontend/src/api/generated.ts` (oba commitowane); `-check` = porównanie „wygenerowane teraz" z „w repo" (bramka świeżości kontraktu, w `task check`; NIE `git diff` — bramka DoD chodzi po brudnym drzewie) |

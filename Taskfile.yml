@@ -149,6 +149,28 @@ tasks:
       # jest zawsze ten sam — zawężenie jest narzędziem diagnostycznym.
       - npm run e2e -- {{.CLI_ARGS}}
 
+  test-e2e-linux:
+    desc: 'Te same E2E w stabilnym Chromium Linux (lokalny stack, obejście błędu Chromium/Windows)'
+    vars:
+      FRONTEND_CONTAINER:
+        sh: '{{.COMPOSE}} ps -q frontend'
+    preconditions:
+      - sh: 'test -n "{{.FRONTEND_CONTAINER}}"'
+        msg: 'Uruchom lokalny stack przez task dev-detached.'
+      - sh: >-
+          node -e "if (require('./frontend/node_modules/@playwright/test/package.json').version !== '1.62.1') process.exit(1)"
+        msg: 'Dopasuj wersję oficjalnego obrazu Playwright do zainstalowanego pakietu.'
+    cmds:
+      # Ten sam frontend/API i localhost:5173 we współdzielonej przestrzeni
+      # sieciowej lokalnego kontenera frontend. Bez nowej bazy i bez publikacji portów.
+      # Wersja obrazu musi odpowiadać pakietowi; nie nadpisujemy domyślnych flags.
+      - >-
+        docker run --rm --init --ipc=host --network=container:{{.FRONTEND_CONTAINER}}
+        --env-file .env -e E2E_REUSE_SERVER=1 -e E2E_BASE_URL=http://127.0.0.1:5173
+        --mount "type=bind,source={{.ROOT_DIR}},target=/workspace"
+        -w /workspace/frontend mcr.microsoft.com/playwright:v1.62.1-noble
+        node node_modules/@playwright/test/cli.js test {{.CLI_ARGS}}
+
   e2e-install:
     desc: Instaluje przeglądarkę dla Playwrighta (jednorazowo)
     dir: frontend

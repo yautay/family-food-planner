@@ -92,13 +92,15 @@ function submit(): void {
 
 <template>
   <PlanningDialog
+    v-slot="{ formId }"
     :open="open"
     :title="texts.reuseTitle"
     :subtitle="texts.reuseSubtitle"
     :submit-label="texts.reuseApply"
     :submit-disabled="validationMessage !== null"
     :pending="pending"
-    :error="error ?? validationMessage"
+    :error="error"
+    :validation-message="validationMessage"
     testid="reuse-history-dialog"
     @submit="submit()"
     @close="emit('close')"
@@ -107,6 +109,7 @@ function submit(): void {
       {{ texts.reuseSource }}
       <select
         v-model="sourceDate"
+        :form="formId"
         class="border-border bg-background min-h-11 rounded-md border px-3"
         data-testid="reuse-source"
       >
@@ -120,6 +123,7 @@ function submit(): void {
       {{ texts.reuseTargets }}
       <textarea
         v-model="datesRaw"
+        :form="formId"
         rows="3"
         class="border-border bg-background rounded-md border px-3 py-2 tabular-nums"
         data-testid="reuse-dates"

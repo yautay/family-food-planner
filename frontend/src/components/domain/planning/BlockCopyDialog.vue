@@ -80,13 +80,15 @@ function submit(): void {
 
 <template>
   <PlanningDialog
+    v-slot="{ formId }"
     :open="open"
     :title="texts.blockTitle"
     :subtitle="texts.blockSubtitle"
     :submit-label="texts.blockApply"
     :submit-disabled="!parsed.success"
     :pending="pending"
-    :error="error ?? validationMessage"
+    :error="error"
+    :validation-message="validationMessage"
     testid="block-copy-dialog"
     @submit="submit()"
     @close="emit('close')"
@@ -96,6 +98,7 @@ function submit(): void {
         {{ texts.blockFrom }}
         <Input
           v-model="form.sourceFrom"
+          :form="formId"
           type="date"
           class="min-h-11"
           data-testid="block-source-from"
@@ -105,6 +108,7 @@ function submit(): void {
         {{ texts.blockTargetStart }}
         <Input
           v-model="form.targetStart"
+          :form="formId"
           type="date"
           class="min-h-11"
           data-testid="block-target-start"
@@ -114,6 +118,7 @@ function submit(): void {
         {{ texts.blockDays }}
         <Input
           v-model="form.sourceDays"
+          :form="formId"
           type="number"
           min="1"
           max="31"
@@ -126,6 +131,7 @@ function submit(): void {
         {{ texts.blockRepeat }}
         <Input
           v-model="form.repeatEach"
+          :form="formId"
           type="number"
           min="1"
           max="7"

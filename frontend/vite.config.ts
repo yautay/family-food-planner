@@ -113,8 +113,10 @@ export default defineConfig({
         orientation: 'portrait',
         start_url: '/',
         scope: '/',
-        background_color: '#FAF6EF',
-        theme_color: '#E07A2F',
+        // Metadane instalacji odpowiadają tokenom motywu UX01; manifest nie
+        // obsługuje zmiennych CSS z tailwind.css.
+        background_color: '#FAF7EF',
+        theme_color: '#365E43',
         // Splash na Androidzie składa przeglądarka z ikony 512 + `background_color`
         // + `name`; iOS bierze `apple-touch-icon` z `index.html` (brak wsparcia
         // dla manifestu w tym zakresie) — stąd oba warianty.

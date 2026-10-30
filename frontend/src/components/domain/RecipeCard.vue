@@ -9,6 +9,7 @@ import { Clock, Heart, Star } from '@lucide/vue'
 import { computed } from 'vue'
 
 import type { RecipeSummary } from '@/api/recipes'
+import RecipeImage from '@/components/domain/RecipeImage.vue'
 import { formatDecimal } from '@/lib/format'
 import { recipes as texts } from '@/lib/texts'
 
@@ -41,17 +42,7 @@ const scopeBadge = computed(() => ({
     class="border-border bg-card grid gap-2 overflow-hidden rounded-xl border shadow-sm"
     :data-testid="`recipe-card-${recipe.id}`"
   >
-    <div class="bg-muted relative aspect-[4/3]">
-      <img
-        v-if="recipe.photo_thumb_url"
-        :src="recipe.photo_thumb_url"
-        :alt="`Zdjęcie: ${recipe.name}`"
-        class="size-full object-cover"
-        loading="lazy"
-      />
-      <div v-else class="text-muted-foreground grid size-full place-items-center text-sm">
-        {{ recipe.name.slice(0, 1).toUpperCase() }}
-      </div>
+    <RecipeImage :src="recipe.photo_thumb_url" :alt="`Zdjęcie: ${recipe.name}`">
       <!-- Serce = tag systemowy „ulubione" (świadome uproszczenie domowe z karty B05). -->
       <Heart
         v-if="isFavorite"
@@ -59,7 +50,7 @@ const scopeBadge = computed(() => ({
         aria-label="Ulubiony przepis"
         :data-testid="`recipe-favorite-${recipe.id}`"
       />
-    </div>
+    </RecipeImage>
 
     <div class="grid gap-2 p-3 pt-1">
       <h3 class="truncate font-medium">{{ recipe.name }}</h3>

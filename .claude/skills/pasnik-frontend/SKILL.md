@@ -83,8 +83,9 @@ Katalogu `src/composables/` NIE MA i nie trzeba go tworzyć — wzorcem jest
 - Kolory WYŁĄCZNIE przez klasy semantyczne z tokens zdefiniowanych
   w `src/assets/tailwind.css` (`bg-background`, `text-muted-foreground`,
   `bg-primary`, `border-border`…). Wartość hex w komponencie = błąd review.
-  Paleta 06_UIUX §1: krem #FAF6EF, curry #E07A2F, zieleń #3F7A5E,
-  bursztyn #D9A441, czerwień #C24C3B. Statusy zawsze kolor+tekst.
+  Paleta D34 / UX01 i 06_UIUX §1: krem #FAF7EF, powierzchnia #FFFDF8,
+  zieleń akcji #365E43, ostrzeżenie #805C1B, błąd #A43F32.
+  Georgia w PageHeader, Inter w treści i formularzach. Statusy zawsze kolor+tekst.
 - Ikony: `@lucide/vue` (następca lucide-vue-next, którego shadcn-vue już
   nie używa). Formularze: vee-validate + zod
   (`src/lib/schemas/*`), komunikaty PL; 422 mapowane na pola.

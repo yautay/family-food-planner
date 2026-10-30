@@ -5,6 +5,17 @@ opakowania, tury) jest deterministyczna, czysta i pokryta testami blisko
 100%. Testy są warunkiem DoD każdego batcha — agent raportuje REALNE wyniki
 uruchomień, nigdy „powinno przejść".
 
+UX01 / 2026-10-30: `task test-e2e-linux` uruchamia tę samą suitę, kod i lokalną
+bazę w oficjalnym obrazie Playwright 1.62.1, ze współdzielonym localhost
+kontenera frontend. Nie jest oddzielnym środowiskiem danych: nadal obowiązuje
+jedna rezerwacja DB/E2E. Obraz i zainstalowany pakiet muszą mieć tę samą wersję.
+Windows Chromium dwukrotnie przerwał pobranie modułu bootstrapu błędem
+`ERR_NO_BUFFER_SPACE`, przy niewielkiej liczbie połączeń i dużej wolnej pamięci.
+To odpowiada zgłoszeniu [Playwright #43545](https://github.com/microsoft/playwright/issues/43545);
+związek z `TcpPortRandomizationWin` jest wnioskiem, nie pomiarem NetLog naszego
+hosta. Linux omija tę ścieżkę systemową bez instalacji alpha, zmiany lockfile,
+nadpisania wbudowanych flagów Chromium lub ustawień sieciowych Windows.
+
 ## 1. Piramida i narzędzia
 
 | Poziom | Narzędzie | Zakres | Uruchomienie |

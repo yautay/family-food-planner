@@ -172,13 +172,15 @@ function submit(): void {
 
 <template>
   <PlanningDialog
+    v-slot="{ formId }"
     :open="open"
     :title="mode === 'create' ? texts.cycleTitle : texts.cycleApplyTitle"
     :subtitle="texts.cycleSubtitle"
     :submit-label="mode === 'create' ? texts.cycleSave : texts.cycleApplyApply"
     :submit-disabled="validationMessage !== null"
     :pending="pending"
-    :error="error ?? validationMessage"
+    :error="error"
+    :validation-message="validationMessage"
     :warnings="warnings"
     testid="cycle-editor-dialog"
     @submit="submit()"
@@ -186,11 +188,23 @@ function submit(): void {
   >
     <div class="flex flex-wrap gap-2">
       <label class="flex min-h-11 items-center gap-2 text-sm">
-        <input v-model="mode" type="radio" value="apply" data-testid="cycle-mode-apply" />
+        <input
+          v-model="mode"
+          :form="formId"
+          type="radio"
+          value="apply"
+          data-testid="cycle-mode-apply"
+        />
         {{ texts.cycleApplyApply }}
       </label>
       <label class="flex min-h-11 items-center gap-2 text-sm">
-        <input v-model="mode" type="radio" value="create" data-testid="cycle-mode-create" />
+        <input
+          v-model="mode"
+          :form="formId"
+          type="radio"
+          value="create"
+          data-testid="cycle-mode-create"
+        />
         {{ common.add }}
       </label>
     </div>
@@ -200,6 +214,7 @@ function submit(): void {
         {{ texts.cycleApplyPick }}
         <select
           v-model="cycleId"
+          :form="formId"
           class="border-border bg-background min-h-11 rounded-md border px-3"
           data-testid="cycle-pick"
         >
@@ -212,11 +227,23 @@ function submit(): void {
       <div class="grid gap-3 sm:grid-cols-2">
         <label class="grid gap-1 text-sm">
           {{ texts.cycleApplyFrom }}
-          <Input v-model="dateFrom" type="date" class="min-h-11" data-testid="cycle-date-from" />
+          <Input
+            v-model="dateFrom"
+            :form="formId"
+            type="date"
+            class="min-h-11"
+            data-testid="cycle-date-from"
+          />
         </label>
         <label class="grid gap-1 text-sm">
           {{ texts.cycleApplyTo }}
-          <Input v-model="dateTo" type="date" class="min-h-11" data-testid="cycle-date-to" />
+          <Input
+            v-model="dateTo"
+            :form="formId"
+            type="date"
+            class="min-h-11"
+            data-testid="cycle-date-to"
+          />
         </label>
       </div>
     </template>
@@ -224,7 +251,13 @@ function submit(): void {
     <template v-else>
       <label class="grid gap-1 text-sm">
         {{ texts.cycleName }}
-        <Input v-model="name" class="min-h-11" maxlength="200" data-testid="cycle-name" />
+        <Input
+          v-model="name"
+          :form="formId"
+          class="min-h-11"
+          maxlength="200"
+          data-testid="cycle-name"
+        />
       </label>
 
       <div class="grid gap-2">
@@ -277,6 +310,7 @@ function submit(): void {
         <div v-if="weekTemplates.length > 0" class="flex flex-wrap items-end gap-2">
           <select
             v-model="templateToAdd"
+            :form="formId"
             class="border-border bg-background min-h-11 flex-1 rounded-md border px-3"
             :aria-label="texts.cycleAddTemplate"
             data-testid="cycle-template-to-add"
@@ -299,7 +333,13 @@ function submit(): void {
 
       <label class="grid gap-1 text-sm">
         {{ texts.cycleStartDate }}
-        <Input v-model="startDate" type="date" class="min-h-11" data-testid="cycle-start-date" />
+        <Input
+          v-model="startDate"
+          :form="formId"
+          type="date"
+          class="min-h-11"
+          data-testid="cycle-start-date"
+        />
         <span class="text-muted-foreground text-xs">{{ texts.cycleStartHint }}</span>
       </label>
 
@@ -307,6 +347,7 @@ function submit(): void {
         {{ texts.templateScope }}
         <select
           v-model="scope"
+          :form="formId"
           class="border-border bg-background min-h-11 rounded-md border px-3"
           data-testid="cycle-scope"
         >

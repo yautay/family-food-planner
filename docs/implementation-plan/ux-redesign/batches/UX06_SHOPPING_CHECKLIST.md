@@ -16,6 +16,14 @@ sekwencyjność i backoff. Nie zastępować tej kolejki dla samego wyglądu.
 Rzeczywiste zdjęcia dev korzystają z dodanego proxy Vite `/uploads`;
 backend nadal egzekwuje sesję. Dowody i awarie zastane: `../BASELINE.md`.
 
+Preflight O przed UX06: test buildu musi objąć także ponowne uruchomienie
+prywatnej listy bez sieci i zmianę konta/rodziny w tym samym profilu
+przeglądarki. Do sprawdzenia hipoteza z odczytu kodu: `authGuard` wymaga
+`ensureLoaded()` po reloadzie, `/auth/*` jest wykluczone z cache SW, a klucze
+prywatnego snapshotu/kolejki to obecnie `list:{id}`. Nie uznawać działającej
+otwartej karty za dowód restartu i izolacji cache. Najpierw rzeczywisty test;
+ewentualną wąską naprawę dostępu/storage przydziela O i obejmuje review Sol.
+
 - [ ] UX06.1 Długie nazwy zawijają się, ilości mają własne miejsce, cały wiersz ma wygodne pole trafienia. Ograniczyć ozdobniki; nie zmniejszać obecnego dużego checkboxa.
 - [ ] UX06.2 Ograniczyć wizualny ciężar kupionych pozycji przez zwijanie ich w obrębie kategorii. Zachować serwerową kolejność kategorii, rozróżnienie `checked` i `already_have` oraz dostępność pozycji do ponownej zmiany.
 - [ ] UX06.3 Pokazać prawdziwy stan offline/synchronizacji/błędu. Zachować optimistic update, rollback, snapshot, restart aplikacji i semantykę `checked_at`. Reużywać istniejącej kolejki.

@@ -73,6 +73,7 @@ function submit(): void {
 
 <template>
   <PlanningDialog
+    v-slot="{ formId }"
     :open="open"
     :title="texts.templateSaveTitle"
     :subtitle="texts.templateSaveSubtitle"
@@ -88,11 +89,23 @@ function submit(): void {
       <legend class="text-muted-foreground text-xs">{{ texts.templateKind }}</legend>
       <div class="flex flex-wrap gap-2">
         <label class="flex min-h-11 items-center gap-2 text-sm">
-          <input v-model="kind" type="radio" value="day" data-testid="template-kind-day" />
+          <input
+            v-model="kind"
+            :form="formId"
+            type="radio"
+            value="day"
+            data-testid="template-kind-day"
+          />
           {{ texts.templateKindDay }}
         </label>
         <label class="flex min-h-11 items-center gap-2 text-sm">
-          <input v-model="kind" type="radio" value="week" data-testid="template-kind-week" />
+          <input
+            v-model="kind"
+            :form="formId"
+            type="radio"
+            value="week"
+            data-testid="template-kind-week"
+          />
           {{ texts.templateKindWeek }}
         </label>
       </div>
@@ -102,6 +115,7 @@ function submit(): void {
       {{ texts.templateSourceDay }}
       <select
         v-model="sourceDate"
+        :form="formId"
         class="border-border bg-background min-h-11 rounded-md border px-3"
         data-testid="template-source-day"
       >
@@ -115,6 +129,7 @@ function submit(): void {
       {{ texts.templateName }}
       <Input
         v-model="name"
+        :form="formId"
         class="min-h-11"
         maxlength="200"
         :placeholder="kind === 'day' ? 'np. Dzień warzywny' : 'np. Tydzień bazowy'"
@@ -126,6 +141,7 @@ function submit(): void {
       {{ texts.templateScope }}
       <select
         v-model="scope"
+        :form="formId"
         class="border-border bg-background min-h-11 rounded-md border px-3"
         data-testid="template-scope"
       >

@@ -40,6 +40,7 @@ import DonutChart from '@/components/charts/DonutChart.vue'
 import NutritionBar from '@/components/charts/NutritionBar.vue'
 import AmountInput from '@/components/domain/AmountInput.vue'
 import MealCard from '@/components/domain/MealCard.vue'
+import PageHeader from '@/components/domain/PageHeader.vue'
 import ProductPicker from '@/components/domain/ProductPicker.vue'
 import RecipePicker from '@/components/domain/RecipePicker.vue'
 import ServingsSplitDrawer from '@/components/domain/ServingsSplitDrawer.vue'
@@ -428,40 +429,39 @@ const isMutating = computed(
 
 <template>
   <section class="grid gap-4" data-testid="plan-dnia-page">
-    <header class="grid gap-2">
-      <div class="flex flex-wrap items-center justify-between gap-2">
-        <h1 class="text-2xl font-semibold" data-testid="plan-date">
-          {{ texts.title }} — {{ currentDate }}
-        </h1>
-        <div class="flex gap-2">
-          <Button
-            variant="outline"
-            class="min-h-11 min-w-11"
-            :aria-label="texts.previousDay"
-            data-testid="plan-prev-day"
-            @click="goTo(addDays(currentDate, -1))"
-          >
-            <ChevronLeft class="size-4" aria-hidden="true" />
-          </Button>
-          <Button
-            variant="outline"
-            class="min-h-11"
-            data-testid="plan-today"
-            @click="goTo(isoDate(new Date()))"
-          >
-            {{ texts.today }}
-          </Button>
-          <Button
-            variant="outline"
-            class="min-h-11 min-w-11"
-            :aria-label="texts.nextDay"
-            data-testid="plan-next-day"
-            @click="goTo(addDays(currentDate, 1))"
-          >
-            <ChevronRight class="size-4" aria-hidden="true" />
-          </Button>
-        </div>
-      </div>
+    <PageHeader
+      :title="`${texts.title} — ${currentDate}`"
+      title-testid="plan-date"
+      decoration="plate"
+    >
+      <template #actions>
+        <Button
+          variant="outline"
+          class="min-h-11 min-w-11"
+          :aria-label="texts.previousDay"
+          data-testid="plan-prev-day"
+          @click="goTo(addDays(currentDate, -1))"
+        >
+          <ChevronLeft class="size-4" aria-hidden="true" />
+        </Button>
+        <Button
+          variant="outline"
+          class="min-h-11"
+          data-testid="plan-today"
+          @click="goTo(isoDate(new Date()))"
+        >
+          {{ texts.today }}
+        </Button>
+        <Button
+          variant="outline"
+          class="min-h-11 min-w-11"
+          :aria-label="texts.nextDay"
+          data-testid="plan-next-day"
+          @click="goTo(addDays(currentDate, 1))"
+        >
+          <ChevronRight class="size-4" aria-hidden="true" />
+        </Button>
+      </template>
 
       <p v-if="day.title" class="text-muted-foreground text-sm">{{ day.title }}</p>
       <p
@@ -471,7 +471,7 @@ const isMutating = computed(
       >
         {{ texts.goalsMissing }}
       </p>
-    </header>
+    </PageHeader>
 
     <p v-if="actionError" class="text-destructive text-sm" role="alert" data-testid="plan-error">
       {{ actionError }}

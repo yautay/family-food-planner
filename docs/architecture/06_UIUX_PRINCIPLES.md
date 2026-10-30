@@ -1,8 +1,11 @@
 # 06 — Zasady UI/UX
 
-Kierunek wizualny = załączona wizualizacja koncepcyjna (9 widoków), zapisana
-tu jako kontrakt słowny. Wizualizacja NIE jest pixel-perfect spec — UX można
-poprawiać, charakter wizualny zachować.
+Kierunek wizualny programu UX00–UX11: „domowa książka kucharska”, zatwierdzony
+w D34. Specyfikacja: `docs/implementation-plan/ux-redesign/DESIGN_SPEC.md`,
+referencja 11 ekranów: `references/domowa-kuchnia.html` w tym samym katalogu.
+Makieta określa wygląd; dane, obliczenia i uprawnienia wynikają z aplikacji.
+UX01 wprowadza wspólne tokeny i prymitywy. Przebudowy kolejnych ekranów są
+osobnymi kartami; stan wdrożenia opisuje rejestr programu.
 
 ## 1. Charakter (design direction)
 
@@ -13,18 +16,32 @@ enterprise, ciemny interfejs, gęste tabele.
 ### Tokens (Tailwind theme)
 
 ```
-tło aplikacji      #FAF6EF  (ciepły krem)          --background
-tło kart           #FFFFFF  z cieniem sm            --card
-akcent główny      #E07A2F  (curry/pomarańcz)       --primary
-akcent hover       #C96A26
-akcent wtórny      #3F7A5E  (zieleń ziołowa — statusy OK, wykresy)
-ostrzeżenie        #D9A441  (za mało / uwaga)
-błąd/przekroczenie #C24C3B
-tekst              #2B2620  główny · #6F675C wtórny
-obramowania        #EDE5D8
-promienie          rounded-xl (karty), rounded-lg (kontrolki)
-typografia         Inter (UI); nagłówki font-semibold, cyfry tabular-nums
+tło aplikacji      #FAF7EF                           --color-background
+tło kart           #FFFDF8                           --color-card
+akcja główna       #365E43 / hover #294B34            --color-primary
+akcent wtórny      #3F6A4E                           --color-secondary
+ostrzeżenie        #805C1B                           --color-warning
+błąd/przekroczenie #A43F32                           --color-destructive
+tekst              #293C2C główny / #626B5D pomocniczy
+linie kart         #E3E4D6                           --color-border
+granice pól        #858B7B                           --color-input
+nawigacja          #F3F1E6                           --color-navigation
+promienie          18–24 px karty / 8 px kontrolki
+typografia         Inter UI; Georgia nagłówki PageHeader 32/38 px
 ```
+
+Tekst pomocniczy i granice kontrolek są ciemniejsze od punktu startowego
+makiety, aby zachować kontrast. Cienkie linie kart nie zastępują granic pól.
+Kolory występują jako tokeny w `src/assets/tailwind.css`; tylko metadane
+manifestu i HTML powtarzają wartości tła/akcji, bo nie obsługują zmiennych CSS.
+Cyfry pozostają tabular-nums. Nie przenosić szeryfu do formularzy i tabel.
+
+Wspólne prymitywy UX01: `PageHeader`, `HeaderDecoration`, `RecipeImage`,
+`EmptyState`, `ErrorState`, `LoadingState`, `FeedbackMessage`, `ActionArea`,
+`SummaryPanel` i `ActionPanel`.
+Dekoracje są nieinteraktywne, ukryte przed czytnikiem i w druku; duży motyw
+znika na wąskim ekranie. RecipeImage pokazuje rzeczywiste zdjęcie, a przy
+braku lub błędzie obrazu ilustrację zastępczą bez wielkiej litery nazwy.
 
 Statusy żywieniowe: za mało = bursztyn, prawidłowo = zieleń, za dużo =
 czerwień — zawsze z tekstem/ikoną, nigdy samym kolorem.

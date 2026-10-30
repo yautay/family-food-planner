@@ -16,6 +16,13 @@ daty (własny oraz jawnie edytowany przez ADMIN-a). Obecny `get_day(date)`
 po mutacji może wybrać inny dzień. To ustalenie z kodu, do potwierdzenia
 testem w tej karcie; bez rozszerzenia scope ani przerabiania silników.
 
+Kontrakt prymitywu z UX01: ActionPanel udostępnia w scoped slotach
+`default` i `footer-extra` obiekt `{formId}`. Natywne pola i AmountInput
+wiązać `:form="formId"`; nie otaczać pickera kolejnym formularzem.
+RecipePicker zachowuje własny formularz create-in-context, który nie może
+wysłać zewnętrznej akcji planowania. Walidacja na żywo używa
+`validationMessage`, błędy API `error`; wyłącznie te drugie przejmują fokus.
+
 - [ ] UX03.1 Przebudować dzień według makiety: jedzenie przed bilansem, pasek dat, pełne nazwy, akcja w kontekście posiłku. Oddzielić puste dane, błąd pobierania i stare dane w cache.
 - [ ] UX03.2 Wyodrębnić współdzielony panel Zaplanuj z propsami: przepis, data, opcjonalny istniejący posiłek i opcjonalna pozycja do zamiany. Wynik po sukcesie zawiera rzeczywisty dzień/posiłek/pozycję; konsument odświeża właściwe klucze cache. UX04 i UX07 korzystają z tego samego komponentu.
 - [ ] UX03.3 Automatycznie sumować podział rodzinny przez `sumDecimals`. Pole 0 lub świadome wyłączenie osoby pomija profil w payloadzie; pozostałe wartości dodatnie, suma dodatnia, maksima i dokładność jak w API. Nie wymagać ręcznego dopasowywania osobnej sumy. Obsłużyć użytkownika bez profili i zachować planowanie samą liczbą porcji.

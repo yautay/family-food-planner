@@ -1,13 +1,13 @@
 # Postęp przebudowy UX
 
-Stan na 2026-10-30: UX00 odebrane i integrowane lokalnym commitem; działający izolowany stack, powtarzalny fixture, 40 PNG, niezależny review Sol, pełny `task check` PASS i dwa kolejne pełne E2E po 20 PASS / 1 SKIP opt-in. Następna fala: UX01. UX12 pozostaje poza zakresem; nowy wygląd jeszcze nie jest wdrożony. Wyniki i ograniczenia: [BASELINE.md](BASELINE.md), [CONTRACTS.md](CONTRACTS.md).
+Stan na 2026-10-30: UX00 ZINTEGROWANY (`1512a09`), UX01 odebrane i integrowane lokalnie po pełnym check, niezależnym review Sol i wizualnym odbiorze. Dwa pełne Linux E2E: 24 oraz 25 PASS (drugi dodaje druk), osobny visual 100 PNG na Windows. Następna fala UX02; program trwa do UX11. UX12 poza zakresem. Wyniki wejściowe i ograniczenia: [BASELINE.md](BASELINE.md), [CONTRACTS.md](CONTRACTS.md).
 
 Tylko orkiestrator aktualizuje ten rejestr. Reguły stanów i dowodów: [ORCHESTRATION.md](ORCHESTRATION.md).
 
 | Batch | Stan | Właściciel | Baza/worktree | Dowód i commit integracji |
 |---|---|---|---|---|
-| UX00 | ZINTEGROWANY | O + Sol fixture/offline + niezależny Sol runtime review | `9c4b066`; O: `F:/repo/family-food-planner`; osobne worktree autorów/reviewera | finalny commit `batch(UX00): przygotuj srodowisko i zweryfikuj baseline UX`; 590/292/443/422 check PASS, E2E 20 PASS dwukrotnie, 40 PNG; BASELINE |
-| UX01 | PLANOWANY | — | — | — |
+| UX00 | ZINTEGROWANY | O + Sol fixture/offline + niezależny Sol runtime review | `9c4b066`; O: `F:/repo/family-food-planner`; osobne worktree autorów/reviewera | `1512a09`; 590/292/443/422 check PASS, E2E 20 PASS dwukrotnie, 40 PNG; BASELINE |
+| UX01 | ZINTEGROWANY | Sol `ux01_design`; niezależny `ux01_review`; O runtime | `1512a09`; `C:/Users/yauta/.codex/worktrees/ux00-review/family-food-planner`; `codex/ux01-design-system` | finalny commit `batch(UX01): wprowadz domowy system wizualny i dostepne panele akcji`; check590/292/443/449 PASS, fullE2E24/25 PASS, 100PNG + panel/druk, review3P2 zamknięte |
 | UX02 | PLANOWANY | — | — | — |
 | UX03 | PLANOWANY | — | — | — |
 | UX04 | PLANOWANY | — | — | — |
@@ -24,14 +24,13 @@ Tylko orkiestrator aktualizuje ten rejestr. Reguły stanów i dowodów: [ORCHEST
 
 | Zasób | Właściciel | Od kiedy | Zwolnienie |
 |---|---|---|---|
-| `ux-redesign/PROGRESS.md`, `BASELINE.md`, karta UX00, indeksy historyczne | O / UX00 | 2026-10-29 | checkpoint dokumentacji; przy wznowieniu O uzgadnia stan przed kolejnymi zapisami |
-| `ux-redesign/CONTRACTS.md` | wolne po przekazaniu Sol `ux00_contracts` | 2026-10-29 | wynik odebrany jako dokumentacja, bez odbioru całego UX00 |
-| review niezmiennego patcha dokumentacji | zakończone: Sol `ux00_review`, osobny worktree od `511a249` | 2026-10-29 | bez ustaleń; brak prawa do DB/E2E; nie jest builtin skill ani odbiór UI |
-| skrypt fixture, jego testy, `e2e/ux-visual.spec.ts`, `FIXTURE.md` | Sol `ux00_fixture` / UX00 | 2026-10-30 | przekazanie niezmiennego diffu; bez samodzielnych zapisów do DB |
-| wspólna DB i E2E, `task check`, Taskfile, instalacja stacku | O / UX00 | 2026-10-30 | po domknięciu aktualnych przebiegów; brak równoległych DB/E2E |
-| `stores/offlineQueue.ts`, `.spec.ts`, `lib/offline/db.ts` | wynik Sol `ux00_offline_diagnosis` oddany do O | 2026-10-30 | `9e2c5e3` + `d5d7ca6`; osobny worktree `C:/Users/yauta/.codex/worktrees/ux00-offline/family-food-planner`; review bez nowych ustaleń, runtime O |
-| review wznowienia UX00 | Sol `ux00_runtime_review`, bez DB/E2E | 2026-10-30 | własny worktree `C:/Users/yauta/.codex/worktrees/ux00-runtime-review/family-food-planner`; kod i metadane tylko odczytowo |
-| Vite proxy `/uploads`, `.gitattributes`, dokumentacja architektury | O / UX00 | 2026-10-30 | po końcowej bramce kandydata i commicie |
+| Dokumentacja programu/architektury/skilli i rejestry | O / cały program | 2026-10-30 | po odbiorze UX11 |
+| Wspólna DB, check, migracje, seed, E2E, Taskfile i konfiguracja runtime | O / cały program | 2026-10-30 | jedna operacja naraz; po zakończeniu przebiegu |
+| UX01 tokeny, UI, prymitywy, PlanningDialog i 5 konsumentów, AmountInput.form, nagłówek dnia, RecipeCard image, testy | kandydat autora oddany do O | 2026-10-30 | niezmienny diff do finalnych bramek; nowe poprawki wracają do autora |
+| Niezależny review UX01 | Sol ux01_review / osobny worktree, tylko odczyt | 2026-10-30 | zakończone: 3 P2 zamknięte, finalne PNG/druk obejrzane |
+| Router, nawigacja, queryKeys, texts, OpenAPI, lockfile | O do przydziału w kolejnej karcie | 2026-10-30 | wyłączna rezerwacja zgodnie z ORCHESTRATION |
+
+Rezerwacje UX00 zakończone; hash, własność i przekazania pozostają w dzienniku.
 
 ## Decyzje i ograniczenia
 
@@ -44,6 +43,16 @@ Tylko orkiestrator aktualizuje ten rejestr. Reguły stanów i dowodów: [ORCHEST
 - Bilans osoby, trwałe zakończenie zakupów, osobiste ulubione, trwałe szkice i dopasowanie spiżarni: UX12. Brak tych funkcji nie może być maskowany tekstami z makiety.
 
 ## Dziennik
+
+2026-10-30 — UX01 odebrane. Finalny autor `258ebb0` (wcześniej e3ade07/3db3d59/559ecae) + patch O v3 SHA256 `f4ecc4cdbe5ae5fdc87ad3c988b5e36e346c04fedb6675d44daf57b22f639997`. Check PASS 590 unit / 292 integration / 443 API / 449 FE, typy/lint/format/build/OpenAPI. PWA85 wpisów1040,25KiB (UX00 68/947,89); modal Reka i nowe ikony/style, bez nowych pakietów. Windows foundation5PASS i visual100PNG na5szerokościach PASS; kontrola pending/błędu/fokusu/większego tekstu. Dwa full Linux E2E24PASS i25PASS (drugi z drukiem), każdy1SKIP wyłącznie osobno wykonanego visual. Trzy P2 zamknięte kodowo i na PNG przez niezależnego Sol reviewera, zero otwartych ustaleń. CSS druku potwierdzony na realnym PNG, bez deklarowania paginowanego wydruku listy. Artefakty backend/data/ux01-results oraz screenshots-ux01; bez nadpisania screenshots-before. Stabilny test-e2e-linux omija Windows vendor issue bez alpha/zmiany lockfile/flags, te same dane i wyłączność O. Kod i dokumentacja utrwalane jednym finalnym commitem UX01, następnie świeży Sol UX02.
+
+2026-10-30 — UX01 poprawiony kandydat `3db3d59` po trzech P2. Trzecie ustalenie pochodzi z rzeczywistych PNG: nowe przyciski rozciągały się do ~198 px wysokości w starej siatce dnia. Autor dodał `h-fit`, regresję wymiarów/większego tekstu w realnym E2E, rozdzielił API error od live validation oraz zastosował natywne powiązanie formularza przez scoped `formId`. Pięć dialogów tygodnia i AmountInput migrowane kompatybilnie, integracja rzeczywistego RecipePickera bez zewnętrznego submitu. 449 FE / typy / lint / format / build PASS autora. O przeniósł poprawkę i uruchamia pełne E2E; reviewer dostał nowy niezmienny hash oraz patch O SHA256 `23052087eeb68da4b0d650d14ea29c99eba2479833c5bc1a9f63cadafd9b9995`. Pierwszy visual 100 PNG zachowany jako kandydat, nie odbiór.
+
+2026-10-30 — UX01 kandydat `e3ade07`, 22 pliki, autor: 447 FE / typy / lint / format / build PASS. O przeniósł diff bez commita, dołożył metadane PWA i dokumentację. Rzeczywiste smoke/tydzień/nowa klawiatura panelu: 9 E2E PASS. Niezależny `ux01_review` (osobny worktree, niezmienny hash i patch O) znalazł dwa P2: fokus przejmowany przez walidację na żywo oraz kompozycję z formularzem RecipePickera. Autor dostał poprawki i regresje, dodatkową wyłączność na niezbędnych konsumentów `planning/**`. Bez nowych P0/P1; kontrast obliczony niezależnie poprawny. O wstrzymuje długi finalny check do zamknięcia ustaleń; visual rzeczywistych ekranów na 360/390/768/1024/1440 wykonuje oddzielnie.
+
+2026-10-30 — UX01 rozpoczęte od `1512a09`, świeży Sol high `ux01_design`, izolowany istniejący worktree przełączony na nową gałąź po potwierdzeniu czystości. Wyłączna własność tokenów/prymitywów/UI oraz minimalnych konsumentów nagłówka dnia i zastępstwa obrazu RecipeCard. O ma konfigurację PWA, dokumentację i wszystkie DB/E2E. Stary patch review odwrócono dokładnie przez `git apply --reverse` po kontroli SHA/check; worktree review czysty na zatwierdzonej bazie. Bez resetu/clean i bez zmian użytkownika.
+
+2026-10-30 — dodatkowy `task secrets-scan` po finalnym commicie UX00: PASS, 56 commitów / 7,80 MB, zero wycieków (`secrets-ux00-committed-20261030.log`).
 
 2026-10-30 — UX00 odebrane: `check-ux00-accepted-20261030.log` PASS po całym diffie; dwa kolejne pełne E2E 20/20, osobny visual PASS. Niezależny Sol review kodu i PNG bez otwartych ustaleń. Skille repo użyte; zamiennik builtin zgodny z D35. Fixture, guardy, dokumentacja, proxy zdjęć i wąskie naprawy offline utrwalane w jednym finalnym commicie UX00. Wszystkie rezerwacje autorów/reviewera UX00 zwolnione; O zachowuje dokumentację i wyłączną kontrolę DB/E2E dla następnej fali. Alerty zależności jawne, brak pushu/deployu/produkcji. Następna bramka: świeży Sol UX01 na zatwierdzonej bazie.
 

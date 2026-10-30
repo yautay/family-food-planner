@@ -14,42 +14,69 @@
 @import '@fontsource-variable/inter';
 
 @theme {
-  /* --- kolory (06_UIUX §1) ------------------------------------------- */
-  --color-background: #faf6ef; /* ciepły krem — tło aplikacji */
-  --color-foreground: #2b2620; /* tekst główny */
+  /* --- kolory domowej książki kucharskiej (D34 / DESIGN_SPEC) -------- */
+  --color-background: #faf7ef;
+  --color-foreground: #293c2c;
 
-  --color-card: #ffffff;
-  --color-card-foreground: #2b2620;
-  --color-popover: #ffffff;
-  --color-popover-foreground: #2b2620;
+  --color-card: #fffdf8;
+  --color-card-foreground: #293c2c;
+  --color-popover: #fffdf8;
+  --color-popover-foreground: #293c2c;
 
-  --color-primary: #e07a2f; /* curry/pomarańcz — akcent główny */
-  --color-primary-foreground: #ffffff;
-  --color-primary-hover: #c96a26;
+  --color-primary: #365e43;
+  --color-primary-foreground: #fffdf8;
+  --color-primary-hover: #294b34;
 
-  --color-secondary: #3f7a5e; /* zieleń ziołowa — statusy OK, wykresy */
-  --color-secondary-foreground: #ffffff;
+  --color-secondary: #3f6a4e;
+  --color-secondary-foreground: #fffdf8;
+  --color-secondary-hover: #32563e;
 
-  --color-muted: #ede5d8;
-  --color-muted-foreground: #6f675c; /* tekst wtórny */
-  --color-accent: #ede5d8;
-  --color-accent-foreground: #2b2620;
+  --color-muted: #eef0e2;
+  --color-muted-foreground: #626b5d;
+  --color-accent: #eef0e2;
+  --color-accent-foreground: #293c2c;
 
-  --color-warning: #d9a441; /* za mało / uwaga */
-  --color-warning-foreground: #2b2620;
-  --color-destructive: #c24c3b; /* błąd / przekroczenie */
-  --color-destructive-foreground: #ffffff;
+  --color-warning: #805c1b;
+  --color-warning-foreground: #fffdf8;
+  --color-destructive: #a43f32;
+  --color-destructive-foreground: #fffdf8;
+  --color-destructive-hover: #8c3429;
 
-  --color-border: #ede5d8;
-  --color-input: #ede5d8;
-  --color-ring: #e07a2f;
+  --color-border: #e3e4d6;
+  /* Granice aktywnych pól mają ≥3:1, delikatne linie kart są osobne. */
+  --color-input: #858b7b;
+  --color-ring: #365e43;
+  --color-navigation: #f3f1e6;
+  --color-header: #f0efdf;
+  --color-herb: #667b49;
+  --color-terracotta: #a75e43;
+  --color-honey: #a37a28;
+  --color-recipe-herb: #e7ecd9;
+  --color-recipe-honey: #f2e8d4;
+  --color-recipe-terracotta: #f5e5db;
+  --color-overlay: #293c2c80;
 
-  /* --- promienie (karty rounded-xl, kontrolki rounded-lg) ------------- */
-  --radius-lg: 0.5rem;
-  --radius-xl: 0.75rem;
+  /* --- promienie (karty 18–24 px, kontrolki 8 px) --------------------- */
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1.125rem;
+  --radius-2xl: 1.5rem;
+  --spacing: 0.25rem;
 
   /* --- typografia ---------------------------------------------------- */
   --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-serif: Georgia, 'Times New Roman', serif;
+  --text-page: 2rem;
+  --text-page--line-height: 1.15;
+  --text-page-lg: 2.375rem;
+  --text-page-lg--line-height: 1.15;
+}
+
+/* Kratka zajmuje tylko skraj ilustracji, nigdy tło tekstu ani pól. */
+@utility kitchen-check {
+  background-image:
+    repeating-linear-gradient(90deg, var(--color-herb) 0 5px, transparent 5px 10px),
+    repeating-linear-gradient(0deg, var(--color-herb) 0 5px, transparent 5px 10px);
 }
 
 @layer base {
