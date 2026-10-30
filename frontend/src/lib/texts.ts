@@ -597,6 +597,7 @@ export const admin = {
 } as const
 
 export const shopping = {
+  newListFromPlan: 'Nowa lista z planu',
   title: 'Zakupy',
   subtitle: 'Wygeneruj listy zakupowe z planu posiłków. Nic nie kupujemy w tle.',
 

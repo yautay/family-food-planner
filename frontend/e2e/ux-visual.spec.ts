@@ -158,7 +158,13 @@ test('UX00: prawdziwy interfejs, telefon/desktop i prywatna lista offline', asyn
         [`/recipes/${id('recipe-2')}`],
       ],
       ['week', '/tydzien/2029-06-04', 'plan-tygodnia-page', 'week-grid', ['/plan/days']],
-      ['shopping', '/zakupy', 'zakupy-page', 'zakupy-form', ['/shopping/round-configs']],
+      [
+        'shopping',
+        '/zakupy',
+        'zakupy-page',
+        'zakupy-form',
+        ['/shopping/round-configs', '/shopping/lists'],
+      ],
       [
         'shopping-list',
         `/zakupy/listy/${id('list-plain')}`,
@@ -254,7 +260,8 @@ test('UX00: prawdziwy interfejs, telefon/desktop i prywatna lista offline', asyn
         )
       }
       if (label === 'shopping') {
-        await expect(page.locator('[data-testid^="round-config-"]').first()).toBeVisible()
+        await expect(page.getByTestId('shopping-catalog-list')).toBeVisible()
+        await expect(page.locator('[data-testid^="round-config-"]').first()).toBeAttached()
         await page.getByTestId('zakupy-date-from').fill('2029-06-04')
         await page.getByTestId('zakupy-date-to').fill('2029-06-06')
       }
@@ -278,6 +285,11 @@ test('UX00: prawdziwy interfejs, telefon/desktop i prywatna lista offline', asyn
       }
       await ready(page, testId)
       await capture(page, width, label)
+      if (label === 'shopping') {
+        await page.getByTestId('zakupy-round-settings').locator('summary').click()
+        await expect(page.locator('[data-testid^="round-config-"]').first()).toBeVisible()
+        await capture(page, width, 'shopping-round-settings')
+      }
     }
     // Własna lista: hydratacja online, odcięcie sieci, realna kolejka, powrót i GET.
     // Reload offline wymaga zbudowanego PWA; Vite nie ma shella w cache (ADR-009).

@@ -8,11 +8,11 @@ Ekran Zakupy zaczyna się od zapisanych list, które nie znikają po wyjściu ze
 
 ## Zadania
 
-- [ ] UX05.1 Podłączyć istniejące `fetchShoppingLists` do TanStack Query z paginacją. Pokazać prawdziwą nazwę, sklep, datę i licznik odhaczonych. Zastąpić zależność od lokalnego `createdLists` jako jedynego wejścia do list.
-- [ ] UX05.2 Ustalić neutralne widoki „Zapisane listy”/„Wszystkie” i ewentualne filtry zgodne z `active/expired`. Nie nazywać wygaśnięcia ukończeniem zakupów. Nie udawać pojedynczej aktywnej listy, jeśli serwer nie zapisuje takiego wyboru; wyróżnienie najnowszej nazwać „Ostatnia lista”.
-- [ ] UX05.3 Przebudować generator: zakres dat i jawny wybór spiżarni → podgląd → utworzenie. Konfigurację tur przenieść do niższego poziomu; nowy użytkownik bez tur ma widoczną drogę utworzenia pierwszej.
-- [ ] UX05.4 Zachować wszystkie rozstrzygnięcia podglądu: braki, blokery, ostrzeżenia, warianty sklepowe, opakowania, ilości i resztki. Szczegóły można rozwijać, ale nie ukrywać blokera przed finalizacją.
-- [ ] UX05.5 Przejąć zakres planu zgodnie z kontraktem UX02. Po finalizacji odświeżyć indeks list; gdy powstaje kilka tur, pokazać wszystkie listy. Błąd nie usuwa wybranego zakresu i odpowiedzi podglądu.
+- [x] UX05.1 Podłączyć istniejące `fetchShoppingLists` do TanStack Query z paginacją. Pokazać prawdziwą nazwę, sklep, datę i licznik odhaczonych. Zastąpić zależność od lokalnego `createdLists` jako jedynego wejścia do list.
+- [x] UX05.2 Ustalić neutralne widoki „Zapisane listy”/„Wszystkie” i ewentualne filtry zgodne z `active/expired`. Nie nazywać wygaśnięcia ukończeniem zakupów. Nie udawać pojedynczej aktywnej listy, jeśli serwer nie zapisuje takiego wyboru; wyróżnienie najnowszej nazwać „Ostatnia lista”.
+- [x] UX05.3 Przebudować generator: zakres dat i jawny wybór spiżarni → podgląd → utworzenie. Konfigurację tur przenieść do niższego poziomu; nowy użytkownik bez tur ma widoczną drogę utworzenia pierwszej.
+- [x] UX05.4 Zachować wszystkie rozstrzygnięcia podglądu: braki, blokery, ostrzeżenia, warianty sklepowe, opakowania, ilości i resztki. Szczegóły można rozwijać, ale nie ukrywać blokera przed finalizacją.
+- [x] UX05.5 Przejąć zakres planu zgodnie z kontraktem UX02. Po finalizacji odświeżyć indeks list; gdy powstaje kilka tur, pokazać wszystkie listy. Błąd nie usuwa wybranego zakresu i odpowiedzi podglądu.
 
 ## Pliki i granice
 

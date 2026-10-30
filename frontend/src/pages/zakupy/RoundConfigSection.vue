@@ -22,6 +22,10 @@ import {
   fetchRoundConfigs,
   updateRoundConfig,
 } from '@/api/shopping'
+import EmptyState from '@/components/domain/EmptyState.vue'
+import ErrorState from '@/components/domain/ErrorState.vue'
+import FeedbackMessage from '@/components/domain/FeedbackMessage.vue'
+import LoadingState from '@/components/domain/LoadingState.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -71,7 +75,17 @@ const draft = reactive({
 const formOpen = ref(false)
 
 const formValid = computed(
-  () => draft.name.trim().length > 0 && Number.parseInt(draft.coversDays, 10) > 0,
+  () =>
+    draft.name.trim().length > 0 &&
+    draft.name.trim().length <= 60 &&
+    /^\d+$/.test(draft.coversDays) &&
+    Number(draft.coversDays) >= 1 &&
+    Number(draft.coversDays) <= 366 &&
+    (!needsFreshWindow.value ||
+      draft.freshDays === '' ||
+      (/^\d+$/.test(draft.freshDays) &&
+        Number(draft.freshDays) >= 1 &&
+        Number(draft.freshDays) <= Number(draft.coversDays))),
 )
 const needsFreshWindow = computed(() => draft.mode === 'durable_plus_fresh_window')
 
@@ -80,7 +94,7 @@ function reportError(error: unknown): void {
 }
 
 async function refresh(): Promise<void> {
-  await queryClient.invalidateQueries({ queryKey: queryKeys.shopping.all })
+  await queryClient.invalidateQueries({ queryKey: queryKeys.shopping.roundConfigs })
 }
 
 function openCreate(): void {
@@ -160,7 +174,7 @@ const move = useMutation({
     await updateRoundConfig(config.id, { ...noClears, position: index + delta })
     await updateRoundConfig(neighbour.id, { ...noClears, position: index })
   },
-  onSuccess: refresh,
+  onSettled: refresh,
   onError: reportError,
 })
 
@@ -186,26 +200,39 @@ function weekdayLabel(config: RoundConfig): string {
     </CardHeader>
 
     <CardContent class="grid gap-4">
-      <p v-if="configs.isPending.value" class="text-muted-foreground text-sm">
-        {{ common.loading }}
-      </p>
-      <p
-        v-else-if="items.length === 0"
-        class="text-muted-foreground text-sm"
+      <LoadingState v-if="configs.isPending.value" />
+      <ErrorState
+        v-else-if="configs.isError.value && !configs.data.value"
+        message="Nie udało się wczytać tur zakupów."
+        :pending="configs.isFetching.value"
+        @retry="configs.refetch()"
+      />
+      <ErrorState
+        v-if="configs.isRefetchError.value"
+        compact
+        message="Nie udało się odświeżyć tur. Pokazujemy ostatnio wczytane dane."
+        :pending="configs.isFetching.value"
+        @retry="configs.refetch()"
+      />
+      <FeedbackMessage v-else-if="configs.isRefetching.value" message="Odświeżanie tur zakupów…" />
+      <EmptyState
+        v-if="configs.data.value && items.length === 0"
+        title="Dodaj pierwszą turę zakupów"
+        :description="texts.roundsEmpty"
+        :action-label="texts.addRound"
         data-testid="round-configs-empty"
-      >
-        {{ texts.roundsEmpty }}
-      </p>
+        @action="openCreate()"
+      />
 
-      <ul v-else class="grid gap-2" data-testid="round-configs-list">
+      <ul v-if="items.length > 0" class="grid gap-2" data-testid="round-configs-list">
         <li
           v-for="(config, index) in items"
           :key="config.id"
           class="border-border flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2"
           :data-testid="`round-config-${config.id}`"
         >
-          <div class="grid gap-0.5">
-            <span class="font-medium">{{ config.name }}</span>
+          <div class="grid min-w-0 gap-0.5">
+            <span class="font-medium break-words">{{ config.name }}</span>
             <span class="text-muted-foreground text-xs">
               {{ weekdayLabel(config) }} · {{ MODE_LABELS[config.mode] }} ·
               {{ texts.roundDays(config.covers_days) }}
@@ -256,20 +283,27 @@ function weekdayLabel(config: RoundConfig): string {
         </li>
       </ul>
 
-      <div>
-        <Button class="min-h-11" data-testid="round-add" @click="openCreate()">
+      <div v-if="items.length > 0">
+        <Button variant="outline" class="min-h-11" data-testid="round-add" @click="openCreate()">
           + {{ texts.addRound }}
         </Button>
       </div>
 
-      <div
+      <form
         v-if="formOpen"
         class="border-border grid gap-3 rounded-lg border p-3 md:grid-cols-2"
         data-testid="round-form"
+        @submit.prevent="formValid && !save.isPending.value && save.mutate()"
       >
         <label class="grid gap-1 text-sm">
           {{ texts.roundName }}
-          <Input v-model="draft.name" class="min-h-11" data-testid="round-name" />
+          <Input
+            v-model="draft.name"
+            required
+            maxlength="60"
+            class="min-h-11"
+            data-testid="round-name"
+          />
         </label>
 
         <label class="grid gap-1 text-sm">
@@ -327,14 +361,15 @@ function weekdayLabel(config: RoundConfig): string {
 
         <div class="flex flex-wrap items-end gap-2 md:col-span-2">
           <Button
+            type="submit"
             class="min-h-11"
             :disabled="!formValid || save.isPending.value"
             data-testid="round-submit"
-            @click="save.mutate()"
           >
             {{ save.isPending.value ? common.loading : common.save }}
           </Button>
           <Button
+            type="button"
             variant="outline"
             class="min-h-11"
             data-testid="round-cancel"
@@ -343,7 +378,7 @@ function weekdayLabel(config: RoundConfig): string {
             {{ common.cancel }}
           </Button>
         </div>
-      </div>
+      </form>
 
       <p v-if="actionError" class="text-destructive text-sm" role="alert" data-testid="round-error">
         {{ actionError }}

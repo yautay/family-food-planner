@@ -171,6 +171,15 @@ Realizacja: `src/api/pagination.ts` + `components/domain/LoadMoreButton.vue`
 
 ## 5. Mobile = klient równorzędny
 
+UX05: Zakupy zaczynają się od trwałego katalogu „Zapisane listy”,
+z licznikiem pobranych wierszy i „Pokaż więcej list”. „Ostatnia lista”
+oznacza kolejność serwera, a ważność linku nie oznacza ukończenia zakupów.
+Generator jest poniżej katalogu; przycisk „Nowa lista z planu” przenosi
+fokus do jego nagłówka. Zakres i jawna zgoda na spiżarnię poprzedzają
+podgląd, konfiguracja tur jest domyślnie zwinięta. Podgląd i zapisane listy
+otrzymują fokus po zakończeniu odpowiedniej operacji. Błąd pozostawia
+zakres i dostępny podgląd; sukces finalizacji pokazuje każdą utworzoną turę.
+
 - UX02: mobile-first; sidebar od md, cztery dolne wejścia Plan / Przepisy /
   Zakupy / Spiżarnia na telefonie. Dzień / Tydzień / Podsumowanie są
   podnawigacją Planu. Biblioteka produktów jest pomocnicza, Dom i ustawienia

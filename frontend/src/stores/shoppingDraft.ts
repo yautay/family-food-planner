@@ -17,6 +17,8 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
 import { addDays, isoDate, startOfWeek } from '@/lib/dates'
+import { navigationRange } from '@/lib/navigation'
+import { isValidIsoDate } from '@/lib/schemas/template'
 
 export const usePantryDefault = false
 
@@ -35,7 +37,22 @@ export const useShoppingDraftStore = defineStore('shoppingDraft', () => {
   /** Zwinięte sekcje tur — klucz tury z podglądu. */
   const collapsedRounds = ref<string[]>([])
 
-  const rangeValid = computed(() => dateFrom.value !== '' && dateFrom.value <= dateTo.value)
+  const rangeValid = computed(
+    () =>
+      isValidIsoDate(dateFrom.value) &&
+      isValidIsoDate(dateTo.value) &&
+      dateFrom.value <= dateTo.value,
+  )
+
+  function applyNavigationRange(range: { from: string; to: string }): void {
+    if (!navigationRange(range)) return
+    if (dateFrom.value !== range.from || dateTo.value !== range.to) {
+      openGeneration(null)
+      dateFrom.value = range.from
+      dateTo.value = range.to
+    }
+    usePantry.value = usePantryDefault
+  }
 
   function setWeek(start: string): void {
     dateFrom.value = start
@@ -72,6 +89,7 @@ export const useShoppingDraftStore = defineStore('shoppingDraft', () => {
     generationId,
     collapsedRounds,
     rangeValid,
+    applyNavigationRange,
     setWeek,
     toggleRound,
     isCollapsed,

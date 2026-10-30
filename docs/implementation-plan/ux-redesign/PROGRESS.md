@@ -1,6 +1,6 @@
 # Postęp przebudowy UX
 
-Stan na 2026-10-30: UX00 (`1512a09`), UX01 (`90fd42d`) i UX02 odebrane oraz integrowane lokalnie. UX02: check590/292/443/481 PASS, dwa kolejne Linux E2E po31PASS, visual100PNG Windows, niezależny review bez otwartych ustaleń. Następna fala UX03 + UX05 z jednej podstawy. Program trwa do UX11, UX12 poza zakresem. Ograniczenia wejściowe: [BASELINE.md](BASELINE.md).
+Stan na 2026-10-30: UX00 (`1512a09`), UX01 (`90fd42d`) i UX02 (`fd0b6cc`) ZINTEGROWANE. Fala UX03 + UX05 W_TOKU w dwóch świeżych Sol/worktree od tej samej bazy. Program trwa do UX11, UX12 poza zakresem. Ostatnia bramka: check590/292/443/481PASS, dwa pełne E2E31PASS, visual100PNG i review bez otwartych ustaleń. Ograniczenia wejściowe: [BASELINE.md](BASELINE.md).
 
 Tylko orkiestrator aktualizuje ten rejestr. Reguły stanów i dowodów: [ORCHESTRATION.md](ORCHESTRATION.md).
 
@@ -8,10 +8,10 @@ Tylko orkiestrator aktualizuje ten rejestr. Reguły stanów i dowodów: [ORCHEST
 |---|---|---|---|---|
 | UX00 | ZINTEGROWANY | O + Sol fixture/offline + niezależny Sol runtime review | `9c4b066`; O: `F:/repo/family-food-planner`; osobne worktree autorów/reviewera | `1512a09`; 590/292/443/422 check PASS, E2E 20 PASS dwukrotnie, 40 PNG; BASELINE |
 | UX01 | ZINTEGROWANY | Sol `ux01_design`; niezależny `ux01_review`; O runtime | `1512a09`; `C:/Users/yauta/.codex/worktrees/ux00-review/family-food-planner`; `codex/ux01-design-system` | `90fd42d`; check590/292/443/449 PASS, fullE2E24/25 PASS, 100PNG + panel/druk, review3P2 zamknięte |
-| UX02 | ZINTEGROWANY | Sol `ux02_navigation`, niezależny `ux02_review`, O runtime | `90fd42d`; `C:/Users/yauta/.codex/worktrees/ux00-offline/family-food-planner`; `codex/ux02-navigation` | finalny commit `batch(UX02): uporzadkuj nawigacje i zachowaj kontekst planu`; check590/292/443/481PASS, E2E31PASSdwukrotnie, visual100PNG + menu/print, review3P2 zamknięte |
-| UX03 | PLANOWANY | — | — | — |
+| UX02 | ZINTEGROWANY | Sol `ux02_navigation`, niezależny `ux02_review`, O runtime | `90fd42d`; `C:/Users/yauta/.codex/worktrees/ux00-offline/family-food-planner`; `codex/ux02-navigation` | `fd0b6cc`; check590/292/443/481PASS, E2E31PASSdwukrotnie, visual100PNG + menu/print, review3P2 zamknięte |
+| UX03 | DO_REVIEW | Sol `ux03_day_scheduling`; niezależny `ux03_review` | `fd0b6cc`; `C:/Users/yauta/.codex/worktrees/ux00-review/family-food-planner`; `codex/ux03-day-scheduling` | dd46445+5f456f0;607unit/512FE/43int/41API autora; review1P2/1P3 zamknięte, runtime O przed nami |
 | UX04 | PLANOWANY | — | — | — |
-| UX05 | PLANOWANY | — | — | — |
+| UX05 | ZINTEGROWANY | Sol `ux05_shopping_home`; niezależny `ux05_review`; O runtime | `fd0b6cc`; `C:/Users/yauta/.codex/worktrees/ux00-offline/family-food-planner`; `codex/ux05-shopping-home` | finalny lokalny batch(UX05); check590/292/443/515PASS, fullE2E32PASS, targeted3PASS/53list,42PNG390/1024; review1P2 zamknięte |
 | UX06 | PLANOWANY | — | — | — |
 | UX07 | PLANOWANY | — | — | — |
 | UX08 | PLANOWANY | — | — | — |
@@ -25,12 +25,18 @@ Tylko orkiestrator aktualizuje ten rejestr. Reguły stanów i dowodów: [ORCHEST
 | Zasób | Właściciel | Od kiedy | Zwolnienie |
 |---|---|---|---|
 | Dokumentacja programu/architektury/skilli i rejestry | O / cały program | 2026-10-30 | po odbiorze UX11 |
-| Wspólna DB, check, migracje, seed, E2E, Taskfile i konfiguracja runtime | O / cały program | 2026-10-30 | jedna operacja naraz; po zakończeniu przebiegu |
-| AppShell/spec, navigation/spec, router/spec, nowe komponenty nawigacji, texts, smoke/ux-navigation E2E | Sol `ux02_navigation` | 2026-10-30 | kandydat i odbiór UX02, bez samodzielnych DB/E2E |
-| Kontekst dat/URL w PlanTygodniaPage i StatystykiPage, ewentualnie minimalnie PlanDniaPage, testy | Sol `ux02_navigation` | 2026-10-30 | wyłącznie kontrakt nawigacji; przebudowy stron nadal UX03/07/10 |
-| Tokeny/UI/panel, API/OpenAPI/queryKeys, kolejka, lockfile | O do dalszych przydziałów | 2026-10-30 | nie zmieniać w UX02 bez uzgodnienia |
+| Wspólna DB, check, migracje, seed, E2E, Taskfile i konfiguracja runtime | O / cały program | 2026-10-30 | jedna operacja naraz; autor może dostać jawną rezerwację od O |
+| Bieżący slot DB/E2E | O; odbiór UX03 po zakończeniu UX05 | 2026-10-31 | UX05 check i E2E zakończone; bez równoległych DB/E2E autorów |
+| PlanDniaPage, MealCard, ServingsSplitDrawer, RecipePlanningPanel i ich testy, api/planning.ts | Sol ux03_day_scheduling | 2026-10-30 | kandydat UX03 |
+| backend planning schemas/router/service i bezpośrednie testy; OpenAPI/generated; queryKeys/texts | Sol ux03_day_scheduling | 2026-10-30 | wyłącznie A; UX05 przekazuje prośby o wspólne klucze/teksty przez O |
+| ZakupyPage, ZakupyPreview, RoundConfigSection, shoppingDraft i ich testy, nowe własne komponenty | Sol ux05_shopping_home | 2026-10-30 | kandydat UX05; bez stron konkretnej/publicznej listy/offline |
+| api/pagination.ts i spec | Sol ux05_shopping_home | 2026-10-30 | addytywne isRefreshing/refreshFailed/nextPageFailed/refresh; legacy loadMoreFailed bez zmiany semantyki |
+| Nowe E2E ux-planning oraz planowe smoke/recipe-global/week-template-cycle wg przydziału | Sol UX03 | 2026-10-30 | autor tylko pisze; runtime O |
+| Nowe E2E ux-shopping-home | Sol UX05 | 2026-10-30 | autor tylko pisze; runtime O |
+| Bazowe shopping-generate/offline-lista oraz visual/navigation/foundation E2E | O / most między kartami | 2026-10-30 | adaptacja do prawdziwego UI bez osłabiania asercji |
+| Globalne tokeny/UI/panele, nawigacja/router/layout, API shopping, lockfile | zamrożone; zmiany tylko po przydziale O | 2026-10-30 | brak domyślnej własności autorów |
 
-Rezerwacje UX00/UX01 zakończone; hash, własność i przekazania pozostają w dzienniku.
+Rezerwacje UX00–UX02 zakończone; historia i wyniki pozostają w dzienniku.
 
 ## Decyzje i ograniczenia
 
@@ -43,6 +49,22 @@ Rezerwacje UX00/UX01 zakończone; hash, własność i przekazania pozostają w d
 - Bilans osoby, trwałe zakończenie zakupów, osobiste ulubione, trwałe szkice i dopasowanie spiżarni: UX12. Brak tych funkcji nie może być maskowany tekstami z makiety.
 
 ## Dziennik
+
+2026-10-31 — UX05 odebrane na a816908+e043986 oraz sprawdzonym patchu tekstów/dokumentacji/visual O. Finalny check PASS590unit/292integration/443API/515FE, typy/lint/format/build/OpenAPI; PWA78wpisów1114,18KiB. FullLinuxE2E32PASS/1SKIP wyłącznie opt-in visual wykonanego osobno (1PASS42PNG390/1024); targeted3PASS obejmuje53prawdziwe listy i izolowanego USER-a. Niezależny Sol:1P2 zamknięte, zero otwartych ustaleń, PNG i patch dokumentacji odebrane. Pierwszy409quota i pierwszyformatFAIL zachowane w logach, finalne wyniki zielone. Artefakty ux05-results i screenshots-ux05, bez nadpisania baseline-before. Wszystkie pięć zadań UX05 wykonane, kontrakt indeksu/pagera dla UX06 opisany w arch05/06. Utrwalane jednym lokalnym commitem UX05; następny odbiór UX03, bez rozpoczynania kolejnej fali przed nim.
+
+2026-10-31 — UX03 fix `5f456f0` na dd46445,4własne pliki. Autor odtworzył dwie regresje RED przed zmianą, następnie512FE/typy/lint/format/build PASS. Retry profili emituje do rodzica i uruchamia refetch z blokadą pending; komunikat sukcesu jest ustawiany po nawigacji i nextTick. Niezależny Sol ponownie przejrzał immutablefix:1P2/1P3 zamknięte, zero nowych ustaleń. O jeszcze nie przeniósł źródeł UX03 do main (trwa odbiór UX05). UX05 fullE2E32PASS/1SKIP tylko opt-in visual wykonanego osobno. Pierwszy check590/292/443/515, typy/lint PASS, format wykazał1różnicę po centralizacji tekstu przez O; task format-fe zmienił wyłącznie ten przycisk. Pełny check ponowiony po formatowaniu, bez innych DB/E2E. Audyt aktualny:FE19/10high; BE42/3pakiety z ostrzeżeniem interpretera, próba wskazania projektowego venv FAIL No module named pip; sprawdzenie poprawnego zakresu audytu w toku, bez aktualizacji zależności.
+
+2026-10-31 — UX05 poprawka `e043986`:515FE/typy/lint/format PASS autora. O: targeted E2E3PASS (setup, legacy shopping-generate,53prawdziwe listy własnego USER-a),34,4s; pełny check trwa. Visual1PASS/42PNG390+1024, katalog i rozwinięte tury obejrzane przez O oraz niezależny Sol. Review zamknął1P2, zero otwartych; dokładny tekstpatch i dokumentacja/visualpatch `3F88CFB680DEE7DB910B93471904BDA86E9DB31F10699B44902ECAB281240FC5` również bez ustaleń. USER ma exactmarker, losowe hasło w pamięci, sesję EMPTY_STATE, potwierdzone403admin oraz dezaktywację finally; historia pozostaje zgodnie z FK, pozostałe własne dane sprzątane. UX03 review wykryło1P2 (brak refetch profili po błędzie) i1P3 (sukces kasowany po zmianie daty); autor dostał wąskie poprawki/regresje bez DB/E2E. API/scope/CSRF/rollback/Decimal bez ustaleń review.
+
+2026-10-30 — UX03 kandydat `dd46445` (osobny wspólny klucz UX05 `3ba4369`), autor:607unit/509FE/43integration/41API oraz typy/lint/format/build/OpenAPI PASS. Niezależny świeży Sol `ux03_review` pracuje read-only w osobnym worktree ux03-runtime-review na niezmiennym HEAD; bez DB/E2E. UX05 kandydat `a816908` + patch tekstów O SHA256 `4F6B4A8BD7CAD17B12957DB67EE7BF5BCD5DC002EC512E9545EEAD779E4A18C2`; review Sol znalazło1P2 (poprzedni sukces podczas nowej generacji pending/error), poprawka u autora. Rzeczywisty targeted E2E: setup i legacy shopping-generate PASS, nowy katalog FAIL w beforeAll na409 limit10tur; scenariusz katalogu niewykonany, quota/dane istniejącego konta niezmieniane. Autor izoluje test własnym USER-em i produktem przez API, bez bypassu DB; historyczne rekordy wymagają zachowania i dezaktywacji konta. O dostosował visual do trwałego katalogu i domyślnie zwiniętej konfiguracji. Fullcheck, finalne E2E i PNG nadal przed odbiorem.
+
+2026-10-30 — UX03 zwolnił slot DB po rzeczywistych testach: test-int pierwszy42PASS/1FAIL (rollback404 wygaszał ORM przy dalszym legacy teście), poprawka autoryzacji przed mutacją →43PASS. Następny test-api41PASS obejmuje macierz private/household/owner/member/stranger/admin, globalny przepis, rollback nowego dnia/posiłku, XOR/date/profile/sum/CSRF/null/looseproduct, zachowane2.2/historię i dwa dni ADMIN-a o tej samej dacie. Była wyłącznie lokalna pasnik_ux_test:5433, bez innych równoległych DB/E2E. Autor kończy FE; kandydat i review nadal przed nami. UX05 FE507PASS przed ostatnią zmianą, katalog/generator/range i nowe pola pagera napisane; realne E2E52list z26generacji i2tur pisane, jeszcze nieuruchomione. O dopisał shopping-list-sharing do swojej własności bridge.
+
+2026-10-30 — O ponownie przydzielił UX03 wyłączny slot DB po gotowości testów. Autor potwierdził bez sekretów 127.0.0.1:5433/pasnik_ux_test. Kolejno: `task test-int -- tests/integration/planning/test_recipe_scheduling.py tests/integration/planning/test_planning_service.py`, potem `task test-api -- tests/api/planning/test_recipe_scheduling_api.py tests/api/planning/test_plan_api.py`. Bez dev DB, migracji, seedu, E2E i równoległych testów. Wcześniejsze pure unit planning85PASS oraz typecheck BE+FE PASS autora; pełny kandydat nadal w toku. O czeka na jawne zwolnienie slotu przed innymi DB/E2E.
+
+2026-10-30 — bieżąca fala: UX03 ma napisane nowe POST/PATCH, serializację zmienionego dayID, generatedtypes i panel/dzień; testy w toku, brak odbioru. O przydzielił slot DB do ukierunkowanych testów, autor oddał go przed użyciem podczas kończenia macierzy API; obecnie żadne DB/E2E nie trwają. UX05 dostał wyłączność pagination.ts/spec na jawne odświeżanie i błędy z cache, z kompatybilnością starych konsumentów. O trzyma baseline E2E bridge; autor A przekazał nowe recipe-planning-submit, menu looseproduct i details akcji pozycji do późniejszej adaptacji. Dodatkowy secrets-scan po UX02 PASS66commitów/8,04MB, zero wycieków (`ux02-results/secrets-committed.log`).
+
+2026-10-30 — UX02 zintegrowane w `fd0b6cc`, drzewo O czyste przed falą. Dwa świeże Sol high: ux03_day_scheduling i ux05_shopping_home, osobne czyste worktree/gałęzie od tej samej bazy. A ma backend/frontend planowania, OpenAPI/generated/queryKeys/texts; B tylko start zakupów/preview/config/draft i nowe E2E. O ma dokumentację, runtime, bazowe E2E bridge i wszystkie DB/E2E; autorzy nie uruchamiają bazy bez jawnej rezerwacji. A dostał ignorowany lokalny .env dla Settings/eksportu OpenAPI, bez zgody na samodzielny DB runtime. Kontrakt nawigacji/panelu i zachowany częściowy skład przekazane. Reviewer worktree czysty na bazie po dokładnym odwróceniu własnego patcha.
 
 2026-10-30 — UX02 odebrane na `f617e9e` + sprawdzony patch dokumentacji O. `check-final.log` PASS590/292/443/481, typy/lint/format/build/OpenAPI; PWA75/1098,26KiB. `e2e-final-2.log`31PASS i `e2e-final-3.log`31PASS, po1SKIP tylko opt-in visual wykonanego osobno:100PNG5widths. Rzeczywisty USER/login/role/API403, publiczne obie sesje, fokus/skiplink i oba menu print PASS. O i niezależny Sol reviewer obejrzeli finalne PNG; wszystkie3P2 i gotowość testu zamknięte. Kontrakt selectedDate/from/to i helpery zamrożone w CONTRACTS/arch05 dla UX03/05/07/10. Bez zmiany API, obliczeń, scope ani kolejki. Istniejący overflow i wielostronicowy druk nadal w kolejnych kartach. Jeden finalny commit UX02, potem dwa świeże Sol worktree od wspólnej bazy.
 

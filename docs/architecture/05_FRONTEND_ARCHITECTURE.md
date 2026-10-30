@@ -68,7 +68,7 @@ odpowiedzi API nie piszemy.
 /przepisy, /przepisy/nowy, /przepisy/:id, /przepisy/:id/edytuj   (widoki 2–3)
 /produkty, /produkty/nowy, /produkty/:id/edytuj   (widok 8)
 /spizarnia            SpizarniaPage       (widok 6)
-/zakupy               ZakupyPage — konfig tur + generacja + preview
+/zakupy               ZakupyPage — katalog zapisanych list + generator + preview
 /zakupy/listy/:id     ListaZakupowPage    (widok 5; wariant print) — DOSTARCZONE
                         w B11: sekcje per kategoria wg profilu sklepu, checkboxy
                         48 px z optimistic update, udostępnianie, druk
@@ -91,6 +91,23 @@ odpowiedzi API nie piszemy.
 
 Guard: brak sesji → `/login` (poza `/l/:token`). Layout: `AppShell`
 (sidebar desktop / bottom-nav mobile — patrz 06_UIUX).
+
+UX05: `ShoppingListsCatalog` pobiera rzeczywisty indeks przez
+`usePaginatedList` i `queryKeys.shopping.listsIndexFiltered({ limit: 50 })`.
+Offset jest wyłącznie pageParam. Katalog nie filtruje wygaśniętych list;
+pierwszy wiersz ma neutralną etykietę „Ostatnia lista”. Nazwa, sklep, daty
+i licznik odhaczonych pochodzą z API. `listsIndex` jest wspólnym prefiksem
+invalidacji dla finalizacji oraz zmian konkretnej listy w UX06.
+
+Pager udostępnia addytywne `nextPageFailed`, `refreshFailed`,
+`isRefreshing` i `refresh()`. Pierwszy błąd, błąd kolejnej strony i błąd
+odświeżenia danych z cache mają odrębne komunikaty; dotychczasowa semantyka
+`loadMoreFailed` pozostaje dla starszych konsumentów. Finalizacja zachowuje
+odpowiedź w TanStack Mutation, pokazuje wszystkie rzeczywiste ID list
+i unieważnia indeks. Pinia nie przechowuje kopii zapisanych list.
+Generator przyjmuje poprawny zakres query przez `navigationRange` także
+bez remountu. Zgoda `usePantry` dotyczy jednej generacji i po jej sukcesie
+wraca do false; konfiguracja tur jest rozwijanym poziomem szczegółów.
 
 UX02 zachowuje wszystkie powyższe adresy i nazwy tras. `lib/navigation.ts`
 jest jednym rejestrem sekcji Plan / Przepisy / Zakupy / Spiżarnia oraz

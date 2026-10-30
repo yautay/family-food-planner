@@ -65,6 +65,13 @@ export interface PaginatedList<TItem> {
   isError: ComputedRef<boolean>
   /** Padło DOŁADOWANIE, ale lista stoi — komunikat idzie na przycisk. */
   loadMoreFailed: ComputedRef<boolean>
+  /** Precyzyjny błąd kolejnej strony. loadMoreFailed zachowuje semantykę legacy. */
+  nextPageFailed: ComputedRef<boolean>
+  /** Błąd ponownego pobrania przy zachowanych danych, także na końcu katalogu. */
+  refreshFailed: ComputedRef<boolean>
+  isRefreshing: ComputedRef<boolean>
+  /** Ponawia odczyt wszystkich wczytanych stron. */
+  refresh: () => void
   /** Doładowanie kolejnej strony = spinner NA PRZYCISKU, nie migotanie listy. */
   isLoadingMore: ComputedRef<boolean>
   loadMore: () => void
@@ -123,6 +130,12 @@ export function usePaginatedList<TItem extends { id: number }>(
     isPending: computed(() => query.isPending.value),
     isError: computed(() => query.isError.value && pages.value.length === 0),
     loadMoreFailed: computed(() => query.isError.value && pages.value.length > 0),
+    nextPageFailed: computed(() => query.isFetchNextPageError.value),
+    refreshFailed: computed(() => query.isRefetchError.value),
+    isRefreshing: computed(() => query.isRefetching.value),
+    refresh: () => {
+      void query.refetch()
+    },
     isLoadingMore: computed(() => query.isFetchingNextPage.value),
     loadMore: () => {
       void query.fetchNextPage()
