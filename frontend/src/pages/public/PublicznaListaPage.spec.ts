@@ -1,4 +1,4 @@
-import { VueQueryPlugin } from '@tanstack/vue-query'
+import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as PublicListApi from '@/api/publicList'
 
 import PublicznaListaPage from './PublicznaListaPage.vue'
+import { useOfflineQueueStore } from '@/stores/offlineQueue'
 
 /**
  * Publiczna strona `/l/:token` — AC 5 karty B11.
@@ -57,16 +58,82 @@ function list(overrides: Record<string, unknown> = {}) {
   }
 }
 
-async function mountPage() {
+async function mountPage(client = new QueryClient()) {
   // Pinia od B12: strona czyta kolejkę offline (ADR-009).
   const pinia = createPinia()
   setActivePinia(pinia)
-  const wrapper = mount(PublicznaListaPage, { global: { plugins: [VueQueryPlugin, pinia] } })
+  const wrapper = mount(PublicznaListaPage, {
+    global: { plugins: [[VueQueryPlugin, { queryClient: client }], pinia] },
+  })
   await flushPromises()
   return wrapper
 }
 
 describe('PublicznaListaPage', () => {
+  it('publiczny offline toggle bez IndexedDB jawnie cofa niezapisane odhaczenie', async () => {
+    const wrapper = await mountPage()
+    useOfflineQueueStore().markOffline()
+    await wrapper.get('[data-testid="shopping-check-1"]').trigger('change')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="public-list-toggle-error"]').text()).toContain(
+      'Nie udało się zapisać zmiany',
+    )
+    expect(
+      (wrapper.get('[data-testid="shopping-check-1"]').element as HTMLInputElement).checked,
+    ).toBe(false)
+    expect(checkPublicListItem).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+  it('GET network0 ustawia offline bez zależności od zdarzenia przeglądarki', async () => {
+    const { PublicListRequestError } = await import('@/api/publicList')
+    fetchPublicList.mockRejectedValue(new PublicListRequestError(0))
+    const wrapper = await mountPage()
+    expect(wrapper.get('[data-testid="offline-banner"]').text()).toContain('Tryb offline')
+    wrapper.unmount()
+  })
+  it('410 podczas PATCH usuwa treść i nazwę wcześniej dostępnej listy', async () => {
+    const { PublicListUnavailableError } = await import('@/api/publicList')
+    checkPublicListItem.mockRejectedValue(new PublicListUnavailableError())
+    const wrapper = await mountPage()
+    await wrapper.get('[data-testid="shopping-check-1"]').trigger('change')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="public-list-unavailable"]').exists()).toBe(true)
+    expect(wrapper.text()).not.toContain('Zakupy 07.01')
+    expect(wrapper.find('[data-testid="shopping-item-1"]').exists()).toBe(false)
+  })
+
+  it('410 podczas refetch z cache również ukrywa starą nazwę', async () => {
+    const client = new QueryClient()
+    const wrapper = await mountPage(client)
+    const { PublicListUnavailableError } = await import('@/api/publicList')
+    fetchPublicList.mockRejectedValue(new PublicListUnavailableError())
+    await client.refetchQueries()
+    await flushPromises()
+    expect(wrapper.find('[data-testid="public-list-unavailable"]').exists()).toBe(true)
+    expect(wrapper.text()).not.toContain('Zakupy 07.01')
+    expect(
+      client
+        .getQueryCache()
+        .findAll()
+        .filter((query) => query.queryKey[0] === 'public-list'),
+    ).toHaveLength(0)
+    wrapper.unmount()
+    client.clear()
+  })
+
+  it('odmowa zapisu jest wyjaśniona przy cofniętym checkboxie', async () => {
+    const { PublicListRequestError } = await import('@/api/publicList')
+    checkPublicListItem.mockRejectedValue(new PublicListRequestError(403))
+    const wrapper = await mountPage()
+    await wrapper.get('[data-testid="shopping-check-1"]').trigger('change')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="public-list-toggle-error"]').text()).toContain(
+      'Zmiana została cofnięta',
+    )
+    expect(
+      (wrapper.get('[data-testid="shopping-check-1"]').element as HTMLInputElement).checked,
+    ).toBe(false)
+  })
   beforeEach(() => {
     vi.clearAllMocks()
     fetchPublicList.mockResolvedValue(list())

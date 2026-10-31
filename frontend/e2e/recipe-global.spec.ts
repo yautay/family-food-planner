@@ -1,10 +1,13 @@
 import { randomBytes } from 'node:crypto'
 import { reserveLoginAttempt } from './login-budget.js'
+import { fillSecretPassword } from './secret-password.js'
 
 import { expect, test } from '@playwright/test'
 import type { APIRequestContext } from '@playwright/test'
 
 import { cleanupE2eData, csrfHeaders } from './cleanup.js'
+
+test.use({ trace: 'off' })
 
 /**
  * Core flow BATCH_21 (D32): przepis `global`.
@@ -125,7 +128,7 @@ test('ADMIN publikuje przepis, USER innej rodziny go widzi, planuje, kopiuje i e
     userPage.on('dialog', (dialog) => dialog.accept())
     await userPage.goto('/login')
     await userPage.getByTestId('login-email').fill(email)
-    await userPage.getByTestId('login-password').fill(password)
+    await fillSecretPassword(userPage.getByTestId('login-password'), password)
     await reserveLoginAttempt(baseURL, testInfo)
     await userPage.getByTestId('login-submit').click()
     await expect(userPage).toHaveURL(/\/plan-dnia/)

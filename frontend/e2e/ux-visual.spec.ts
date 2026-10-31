@@ -7,6 +7,7 @@ import { expect, test, type Page } from '@playwright/test'
 import type { components } from '../src/api/generated.js'
 import { EMPTY_STATE } from './auth-state.js'
 import { reserveLoginAttempt } from './login-budget.js'
+import { fillSecretPassword } from './secret-password.js'
 
 // Tylko jawny opt-in. Zwykły E2E zachowuje wszystkie swoje wymagane scenariusze.
 const enabled = process.env.UX_VISUAL === '1'
@@ -65,7 +66,7 @@ test('UX00: prawdziwy interfejs, telefon/desktop i prywatna lista offline', asyn
   }
   await page.goto('/login')
   await page.getByTestId('login-email').fill('ux00-a1@example.com')
-  await page.getByTestId('login-password').fill(password)
+  await fillSecretPassword(page.getByTestId('login-password'), password)
   await reserveLoginAttempt(baseURL, testInfo)
   await page.getByTestId('login-submit').click()
   await expect(page).toHaveURL(/\/plan-dnia/)
@@ -314,7 +315,19 @@ test('UX00: prawdziwy interfejs, telefon/desktop i prywatna lista offline', asyn
     const item = list.sections.flatMap((section) => section.items).find((row) => !row.received_at)
     expect(item).toBeDefined()
     const checkbox = page.getByTestId(`shopping-check-${item!.id}`)
-    await expect(checkbox).toBeVisible()
+    const revealCheckbox = async (): Promise<void> => {
+      if (!(await checkbox.isVisible())) {
+        const section = page.locator('.shopping-category').filter({ has: checkbox })
+        const purchased = section.getByTestId('shopping-purchased-toggle')
+        await expect(purchased).toHaveAttribute('aria-expanded', 'false')
+        await purchased.click()
+      }
+      await expect(checkbox).toBeVisible()
+    }
+    // UX06 hides purchased rows by default. Reveal through the actual category
+    // control before changing an existing checked fixture; keep its real state.
+    await revealCheckbox()
+    await capture(page, width, 'shopping-list-expanded')
     const original = await checkbox.isChecked()
     try {
       await page.context().setOffline(true)
@@ -334,6 +347,7 @@ test('UX00: prawdziwy interfejs, telefon/desktop i prywatna lista offline', asyn
       await expect(checkbox).toBeChecked({ checked: !original })
     } finally {
       await page.context().setOffline(false)
+      await revealCheckbox()
       await checkbox.setChecked(original)
       await expect
         .poll(async () => {
@@ -350,10 +364,26 @@ test('UX00: prawdziwy interfejs, telefon/desktop i prywatna lista offline', asyn
     const publicContext = await browser.newContext({ viewport: { width, height: 900 } })
     try {
       const publicPage = await publicContext.newPage()
-      await publicPage.goto(new URL(share!.url, baseURL).href)
-      await expect(publicPage.locator('[data-testid^="shopping-check-"]').first()).toBeVisible()
+      // Argument evaluate nie ujawnia bearer URL w tytule kroku nawigacji raportu.
+      await publicPage
+        .locator('html')
+        .evaluate(
+          (element, url) => element.ownerDocument.defaultView!.location.assign(url),
+          new URL(share!.url, baseURL).href,
+        )
+      await expect(publicPage.locator('[data-testid^="shopping-check-"]')).toHaveCount(
+        list.sections.flatMap((section) => section.items).length,
+      )
+      for (const row of list.sections.flatMap((section) => section.items)) {
+        await expect(publicPage.getByTestId(`shopping-label-${row.id}`)).toHaveText(row.label)
+      }
       await ready(publicPage, 'public-list-page')
       await capture(publicPage, width, 'shopping-public')
+      for (const toggle of await publicPage.getByTestId('shopping-purchased-toggle').all()) {
+        if ((await toggle.getAttribute('aria-expanded')) === 'false') await toggle.click()
+      }
+      await expect(publicPage.locator('[data-testid^="shopping-check-"]').first()).toBeVisible()
+      await capture(publicPage, width, 'shopping-public-expanded')
       await publicPage.goto(new URL('/login', baseURL).href)
       await ready(publicPage, 'login-submit')
       await capture(publicPage, width, 'login')

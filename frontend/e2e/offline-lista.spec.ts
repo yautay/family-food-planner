@@ -19,8 +19,8 @@ import { cleanupE2eData } from './cleanup.js'
  * service worker jest świadomie WYŁĄCZONY (`devOptions.enabled: false`), żeby
  * precache nie zatruwał pracy. Odświeżenie strony bez sieci nie miałoby więc
  * skąd wziąć shella — to ograniczenie ŚRODOWISKA TESTOWEGO, nie aplikacji;
- * precache z buildu produkcyjnego weryfikuje Lighthouse (Verification checklist).
- * Trwałość snapshotu w IndexedDB pokrywa vitest (`hydrate.spec.ts`).
+ * restart prywatnej/publicznej listy i izolację kont sprawdza oddzielny
+ * preflight O na rzeczywistym buildzie PWA (`ux-pwa.spec.ts`).
  */
 
 /** Poniedziałek–niedziela w oknie E2E; inny tydzień niż pozostałe specy. */
@@ -136,6 +136,15 @@ test('lista zakupowa offline: odhaczenia przeżywają brak sieci i trafiają na 
 
   await anonymous.setOffline(true)
   await expect(anonymousPage.getByTestId('offline-banner')).toContainText('Tryb offline')
+  // Kupione są domyślnie zwinięte we własnej kategorii. Rozwinięcie pozwala
+  // cofnąć wcześniejszą decyzję, także bez sieci.
+  const firstCheckbox = anonymousPage.getByTestId(`shopping-check-${first}`)
+  if (!(await firstCheckbox.isVisible())) {
+    await firstCheckbox
+      .locator('xpath=ancestor::section[1]')
+      .getByTestId('shopping-purchased-toggle')
+      .click()
+  }
   // Odznaczenie offline: decyzja MŁODSZA niż zapisana na serwerze, więc po
   // synchronizacji ma wygrać LWW (ADR-009), a nie zostać odrzucona.
   await anonymousPage.getByTestId(`shopping-check-${first}`).uncheck()

@@ -1,9 +1,28 @@
-import { VueQueryPlugin } from '@tanstack/vue-query'
+vi.mock('@/lib/offline/privateSession', () => ({
+  getPrivateOfflineScope: () => 'test-scope',
+  isPrivateOfflineScopeCurrent: (scope: string) => scope === 'test-scope',
+  isPrivateOfflineScopeConfirmed: (scope: string) => scope === 'test-scope',
+  subscribePrivateOfflineScope: () => () => {},
+}))
+vi.mock('@/stores/auth', () => ({
+  useAuthStore: () => ({
+    user: { id: 1 },
+    household: null,
+    isAuthenticated: true,
+    offlineSession: false,
+    ensureLoaded: vi.fn().mockResolvedValue(undefined),
+    clear: vi.fn(),
+  }),
+}))
+import 'fake-indexeddb/auto'
+import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
+import { resetOfflineDb } from '@/lib/offline/db'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type * as ShoppingListsApi from '@/api/shoppingLists'
+import { queryKeys } from '@/api/queryKeys'
 
 import { useOfflineQueueStore } from '@/stores/offlineQueue'
 
@@ -116,6 +135,9 @@ function detail(overrides: Record<string, unknown> = {}) {
 
 async function mountPage(
   prepare?: (store: ReturnType<typeof useOfflineQueueStore>) => void,
+  client = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { networkMode: 'always' } },
+  }),
 ): Promise<VueWrapper> {
   // Pinia jest potrzebna od B12: strona czyta kolejkę offline (ADR-009).
   // jsdom nie ma IndexedDB, więc `db.ts` degraduje się do „brak snapshotu,
@@ -125,7 +147,7 @@ async function mountPage(
   prepare?.(useOfflineQueueStore())
   const wrapper = mount(ListaZakupowPage, {
     global: {
-      plugins: [VueQueryPlugin, pinia],
+      plugins: [[VueQueryPlugin, { queryClient: client }], pinia],
       stubs: { RouterLink: { template: '<a><slot /></a>' } },
     },
   })
@@ -134,6 +156,170 @@ async function mountPage(
 }
 
 describe('ListaZakupowPage', () => {
+  it('offline bez IndexedDB pokazuje błąd i wycofuje odhaczenie zamiast pozornego zapisu', async () => {
+    const wrapper = await mountPage((store) => store.markOffline())
+    vi.stubGlobal('indexedDB', undefined)
+    try {
+      await wrapper.get('[data-testid="shopping-check-1"]').trigger('change')
+      await vi.waitFor(() =>
+        expect(wrapper.find('[data-testid="lista-error"]').exists()).toBe(true),
+      )
+      expect(wrapper.get('[data-testid="lista-error"]').text()).toContain(
+        'Nie udało się zapisać zmiany',
+      )
+      expect(
+        (wrapper.get('[data-testid="shopping-check-1"]').element as HTMLInputElement).checked,
+      ).toBe(false)
+      expect(wrapper.get('[data-testid="lista-progress"]').text()).toBe('Odhaczone 0 z 3')
+      expect(updateShoppingListItem).not.toHaveBeenCalled()
+    } finally {
+      wrapper.unmount()
+      vi.unstubAllGlobals()
+    }
+  })
+  beforeEach(async () => {
+    await resetOfflineDb()
+    await new Promise<void>((resolve, reject) => {
+      const request = indexedDB.deleteDatabase('pasnik-offline')
+      request.onsuccess = () => resolve()
+      request.onerror = () => reject(request.error)
+    })
+  })
+  it('błąd sieci GET oznacza offline także przy optymistycznym navigator.onLine', async () => {
+    const { ApiError } = await import('@/api/client')
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    client.setQueryData([...queryKeys.shopping.list(5), 'private', 'test-scope'], detail())
+    fetchShoppingList.mockRejectedValue(
+      new ApiError(0, { code: 'network_error', message: 'Brak sieci', details: {} }),
+    )
+    const wrapper = await mountPage(undefined, client)
+    expect(wrapper.get('[data-testid="offline-banner"]').text()).toContain('Tryb offline')
+    wrapper.unmount()
+    client.clear()
+  })
+  it('odmowa jednego PATCH nie cofa potwierdzonego odhaczenia innego produktu', async () => {
+    let rejectFirst: ((reason: unknown) => void) | undefined
+    updateShoppingListItem.mockImplementation((_listId, id) =>
+      id === 1
+        ? new Promise((_resolve, reject) => {
+            rejectFirst = reject
+          })
+        : Promise.resolve(item({ id: 3, checked: true })),
+    )
+    const wrapper = await mountPage()
+    await wrapper.get('[data-testid="shopping-check-1"]').trigger('change')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="shopping-check-1"]').attributes('disabled')).toBeDefined()
+    await wrapper.get('[data-testid="shopping-check-3"]').trigger('change')
+    await flushPromises()
+    const { ApiError } = await import('@/api/client')
+    rejectFirst?.(new ApiError(409, { code: 'conflict', message: 'Odmowa', details: {} }))
+    await flushPromises()
+    expect(
+      (wrapper.get('[data-testid="shopping-check-1"]').element as HTMLInputElement).checked,
+    ).toBe(false)
+    expect(
+      (wrapper.get('[data-testid="shopping-check-3"]').element as HTMLInputElement).checked,
+    ).toBe(true)
+    expect(wrapper.get('[data-testid="lista-progress"]').text()).toBe('Odhaczone 1 z 3')
+  })
+
+  it('potwierdzenie pokazuje wyłącznie nowe zakupy oraz całe opakowania', async () => {
+    fetchShoppingList.mockResolvedValue(
+      detail({
+        sections: [
+          {
+            category_id: 10,
+            category_name: 'Sypkie',
+            items: [
+              item({ checked: true }),
+              item({
+                id: 2,
+                label: 'Już przyjęte',
+                checked: true,
+                received_at: '2030-01-01T00:00:00Z',
+              }),
+              item({ id: 3, label: 'Domowe', checked: true, already_have: true }),
+              item({ id: 4, label: 'Nie kupione' }),
+            ],
+          },
+        ],
+      }),
+    )
+    const wrapper = await mountPage()
+    await wrapper.get('[data-testid="lista-accept-open"]').trigger('click')
+    const preview = wrapper.get('[data-testid="accept-items"]')
+    expect(preview.text()).toContain('2 x 1 kg')
+    expect(preview.text()).toContain('Mąka pszenna')
+    expect(preview.text()).not.toContain('Już przyjęte')
+    expect(preview.text()).not.toContain('Domowe')
+    expect(preview.text()).not.toContain('Nie kupione')
+    expect(acceptListToPantry).not.toHaveBeenCalled()
+  })
+
+  it('utrata sieci po otwarciu potwierdzenia blokuje przyjęcie', async () => {
+    fetchShoppingList.mockResolvedValue(
+      detail({
+        sections: [{ category_id: 10, category_name: 'Sypkie', items: [item({ checked: true })] }],
+      }),
+    )
+    let queue: ReturnType<typeof useOfflineQueueStore> | undefined
+    const wrapper = await mountPage((store) => {
+      queue = store
+    })
+    await wrapper.get('[data-testid="lista-accept-open"]').trigger('click')
+    queue?.markOffline()
+    await flushPromises()
+    expect(wrapper.get('[data-testid="accept-confirm"]').attributes('disabled')).toBeDefined()
+    await wrapper.get('[data-testid="accept-confirm"]').trigger('click')
+    expect(acceptListToPantry).not.toHaveBeenCalled()
+  })
+
+  it('błąd pierwszego GET ma ponowienie, a nie udawany brak listy', async () => {
+    fetchShoppingList.mockRejectedValue(new Error('Sieć'))
+    const wrapper = await mountPage()
+    expect(wrapper.find('[data-testid="lista-load-error"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="lista-zakupowa-brak"]').exists()).toBe(false)
+    fetchShoppingList.mockResolvedValue(detail())
+    await wrapper.get('[data-testid="lista-load-error"] button').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="lista-nazwa"]').exists()).toBe(true)
+  })
+
+  it('błąd odświeżenia zachowuje listę i wyjaśnia nieaktualne dane', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const wrapper = await mountPage(undefined, client)
+    fetchShoppingList.mockRejectedValue(new Error('Brak odpowiedzi'))
+    await client.refetchQueries({
+      queryKey: [...queryKeys.shopping.list(5), 'private', 'test-scope'],
+    })
+    await flushPromises()
+    expect(wrapper.get('[data-testid="lista-nazwa"]').text()).toContain('Zakupy 07.01')
+    expect(wrapper.get('[data-testid="lista-refresh-error"]').text()).toContain(
+      'ostatnio zapisane dane',
+    )
+    expect(wrapper.find('[data-testid="lista-load-error"]').exists()).toBe(false)
+    wrapper.unmount()
+    client.clear()
+  })
+
+  it('checkbox online unieważnia cały prefiks stronicowanego indeksu UX05', async () => {
+    const client = new QueryClient()
+    const invalidate = vi.spyOn(client, 'invalidateQueries')
+    updateShoppingListItem.mockResolvedValue(item({ checked: true }))
+    let queue: ReturnType<typeof useOfflineQueueStore> | undefined
+    const wrapper = await mountPage((store) => {
+      queue = store
+    }, client)
+    await wrapper.get('[data-testid="shopping-check-1"]').trigger('change')
+    await flushPromises()
+    await vi.waitFor(() =>
+      expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.shopping.listsIndex }),
+    )
+    expect(queue).toBeDefined()
+    wrapper.unmount()
+    client.clear()
+  })
   beforeEach(() => {
     vi.clearAllMocks()
     fetchShoppingList.mockResolvedValue(detail())

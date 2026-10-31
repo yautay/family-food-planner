@@ -10,6 +10,7 @@ import { queryKeys } from '@/api/queryKeys'
 import type { RecipeDetail, RatingResponse } from '@/api/recipes'
 import RecipePlanningPanel from '@/components/domain/planning/RecipePlanningPanel.vue'
 import { useAuthStore } from '@/stores/auth'
+import { captureSessionGeneration } from '@/lib/sessionGeneration'
 import PrzepisSzczegolPage from './PrzepisSzczegolPage.vue'
 
 const api = vi.hoisted(() => ({
@@ -92,7 +93,7 @@ async function render(
 ) {
   const pinia = createPinia()
   setActivePinia(pinia)
-  useAuthStore().setUser(account(userId, role))
+  useAuthStore().setUser(account(userId, role), captureSessionGeneration())
   client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } })
   router = createRouter({
     history: createMemoryHistory(),

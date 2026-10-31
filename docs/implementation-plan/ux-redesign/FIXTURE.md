@@ -122,6 +122,27 @@ encje i wykona poprawny POST. Nie kasuje się manifestu ani danych. Ta zgoda
 nie obejmuje timeoutów, HTTP 5xx ani nieznanego wyniku innej operacji: tam
 nadal wymagane jest osobne potwierdzenie faktycznego efektu zapisu.
 
+## Korekta identyfikatorów metadanych
+
+Historyczny `Journal.write` zapisywał `DayRead.id` także pod kluczami posiłku,
+pozycji przepisu i produktu luzem. UX06 wykrył to w rzeczywistym preflight
+planu: dzień 34 miał posiłek 35, podczas gdy manifest wskazywał posiłek 34.
+Nowy zapis wybiera rzeczywiste identyfikatory z odpowiedzi dnia; verify
+porównuje je z API. Nie zmienia to istniejących planów ani podziałów.
+
+Wyłącznie O, z rezerwacją DB/E2E, może wykonać:
+
+```powershell
+task ux-baseline -- --photo data/ux-baseline/food.jpg --repair-manifest-identifiers
+```
+
+Tryb wymaga ukończonego manifestu, potwierdza tożsamość i rodzinę A1/A2,
+czyta wszystkie trzy dni obiema sesjami i sprawdza markery, właściciela,
+scope, przepisy i podziały. Dopiero po wszystkich kontrolach tworzy
+niepodmienialny `manifest.identifiers.bak` i atomowo zapisuje skorygowane
+ID. Zachowuje `done`, `pending` i `complete`; ponowienie jest idempotentne.
+Nie służy do odtwarzania ręcznie usuniętych lub zmienionych danych.
+
 ## Prawdziwe obrazy UI
 
 `frontend/e2e/ux-visual.spec.ts` jest opt-in: bez `UX_VISUAL=1` pomijany jest

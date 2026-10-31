@@ -3,6 +3,9 @@ import { expect, test } from '@playwright/test'
 import { EMPTY_STATE } from './auth-state.js'
 import { cleanupE2eData } from './cleanup.js'
 import { reserveLoginAttempt } from './login-budget.js'
+import { fillSecretPassword } from './secret-password.js'
+
+test.use({ trace: 'off' })
 
 /**
  * Smoke E2E (08_TESTING §3): logowanie → plan dnia → dodanie posiłku i pozycji
@@ -50,7 +53,7 @@ test.describe('uwierzytelnianie (bez współdzielonej sesji)', () => {
     await page.goto('/login')
 
     await page.getByTestId('login-email').fill(email)
-    await page.getByTestId('login-password').fill('na-pewno-zle-haslo-2026')
+    await fillSecretPassword(page.getByTestId('login-password'), 'na-pewno-zle-haslo-2026')
     await reserveLoginAttempt(baseURL, testInfo)
     await page.getByTestId('login-submit').click()
 
@@ -62,7 +65,7 @@ test.describe('uwierzytelnianie (bez współdzielonej sesji)', () => {
     await page.goto('/login')
 
     await page.getByTestId('login-email').fill(email)
-    await page.getByTestId('login-password').fill(password)
+    await fillSecretPassword(page.getByTestId('login-password'), password)
     await reserveLoginAttempt(baseURL, testInfo)
     await page.getByTestId('login-submit').click()
 

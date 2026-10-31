@@ -25,15 +25,24 @@ const props = defineProps<{
   pending: number
   /** Trwa właśnie wysyłka kolejki — komunikat zmienia się na „zapisuję". */
   syncing?: boolean
+  /** Serwer odpowiedział przejściową odmową; kolejka czeka na backoff. */
+  retrying?: boolean
+  error?: string | null
 }>()
 
-const visible = computed(() => props.offline || props.pending > 0 || props.syncing === true)
+const visible = computed(
+  () => props.offline || props.pending > 0 || props.syncing === true || !!props.error,
+)
 
 const message = computed(() => {
+  if (props.error) return props.error
   if (props.offline) {
     return texts.banner
   }
-  return props.pending > 0 || props.syncing === true ? texts.syncing : texts.synced
+  if (props.syncing === true) return texts.syncing
+  return props.retrying
+    ? 'Nie udało się wysłać zmian. Ponowna próba nastąpi automatycznie.'
+    : 'Zmiany czekają na wysłanie.'
 })
 </script>
 
@@ -41,7 +50,7 @@ const message = computed(() => {
   <div
     v-if="visible"
     class="border-border bg-muted text-foreground flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2 text-sm print:hidden"
-    role="status"
+    :role="error ? 'alert' : 'status'"
     aria-live="polite"
     data-testid="offline-banner"
   >

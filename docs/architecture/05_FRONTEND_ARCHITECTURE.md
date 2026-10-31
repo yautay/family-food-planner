@@ -79,6 +79,13 @@ odpowiedzi API nie piszemy.
 
 ## 3. Routing i strony (zgodnie z wizualizacją UI)
 
+Po ponownym potwierdzeniu sesji na `/login` guard zachowuje bezpieczny lokalny
+`next` wraz z oryginalnym query/hash; bez takiego celu przechodzi do planu.
+Cel ponownie przechodzi zwykłe guardy sesji i roli. Zewnętrzny adres,
+zakodowane ucieczki, znaki sterujące i pętle loginu są odrzucane.
+To zachowuje adres listy po unieważnieniu starego `/me` w drugiej karcie,
+bez przyjmowania spóźnionej odpowiedzi i bez odtwarzania uprawnień z markera.
+
 ```
 /                     → redirect /plan-dnia
 /plan-dnia/:date?     PlanDniaPage        (widok 1 wizualizacji)
@@ -288,28 +295,31 @@ prawdą jest walidacja serwera (422 mapowane na pola formularza).
 
 ## 6. PWA i offline (ADR-009)
 
-Stan faktyczny po BATCH_12.
+Stan po UX06; izolację lokalnego zakresu i migrację SW określa ADR-018.
+Wyniki odbioru runtime pozostają w rejestrze programu UX.
 
 **PWA** (`vite.config.ts`, `index.html`):
 
 - manifest PL: `name` i `short_name` „Paśnik" (nazwa mieści się na ekranie
   domowym, więc skrótu nie ma), `lang: pl`,
-  `display: standalone`, `theme_color` #E07A2F, `background_color` #FAF6EF,
+  `display: standalone`, `theme_color` #365E43, `background_color` #FAF7EF,
   ikony PNG 192/512 w wariantach `any` i `maskable` (`public/icons/`).
   Splash na Androidzie składa przeglądarka z ikony 512 + `background_color`;
   iOS nie czyta manifestu w tym zakresie, więc `apple-touch-icon` i metatagi
   `apple-mobile-web-app-*` siedzą w `index.html`.
 - Workbox `generateSW`: precache shella (`**/*.{js,css,html,svg,png,woff2}`),
   `navigateFallback: index.html` z wykluczeniem `/api/` i `/uploads/`
-  (te obsługuje backend, ADR-014). Runtime: `NetworkFirst` dla `/api/*`
-  z `networkTimeoutSeconds: 3` (bez tego offline UX to 30 s spinnera) oraz
-  `CacheFirst` dla `/uploads/*`. **`/api/v1/auth/*` jest wykluczone** —
-  odpowiedzi z `Set-Cookie` nie wchodzą do cache (07_SECURITY).
-- `registerType: 'autoUpdate'`, ale podmiana NIE jest cicha:
-  `src/lib/offline/registerSW.ts` pyta „Dostępna jest nowa wersja aplikacji.
-  Odświeżyć teraz?", żeby przeładowanie nie trafiło w środek odhaczania listy.
-  W dev SW jest wyłączony (`devOptions.enabled: false`) — precache w trakcie
-  pracy zatruwa cache; testuje się go na buildzie produkcyjnym.
+  (te obsługuje backend, ADR-014). **Brak runtime cache API i uploadów**:
+  globalny cache po URL mógł pokazać odpowiedź poprzedniego konta. Dane list
+  offline pochodzą wyłącznie z właściwego snapshotu IDB.
+- Kanoniczny worker `sw-private-v1.js` ma identyczny alias `/sw.js`, dzięki
+  któremu stara rejestracja może pobrać aktualny precache/index. Bootstrap
+  przed routerem/API czeka na znany bezpieczny controller i usuwa legacy
+  `pasnik-api` oraz `pasnik-uploads`; awaria daje jawny alert. Znany bezpieczny
+  controller startuje cold offline bez fetch aktualizacji. Wtyczka pracuje
+  w `autoUpdate`/`clientsClaim`/`skipWaiting`; aktualizacja może przeładować
+  aplikację. Nie obiecujemy utrzymania starego widoku podczas migracji SW.
+  W dev SW jest wyłączony, rzeczywisty odbiór wykonujemy na buildzie/preview.
 
 **Offline listy zakupowej** (`src/lib/offline/*`, `src/stores/offlineQueue.ts`):
 
@@ -319,11 +329,22 @@ Stan faktyczny po BATCH_12.
   po cichu (błąd łykany przez `withDb`), UI wyglądał poprawnie, bo optimistic
   update żyje w pamięci, a kolejka i snapshot zostawały puste.
 - `db.ts` — IndexedDB (`idb`) z dwoma magazynami: `list-snapshots`
-  (klucz `list:{id}` albo `public:{token}`) i `mutation-queue` (klucz
+  (klucz `private:{scope}:list:{id}` albo `public:{token}`) i `mutation-queue` (klucz
   `{target}#{itemId}`, czyli deduplikacja per pozycja za darmo — podwójne
-  odhaczenie tej samej rzeczy daje JEDEN PATCH z ostatnim stanem). Brak
-  IndexedDB (tryb prywatny, zablokowany storage) degraduje się do zachowania
-  sprzed B12, a nie do białego ekranu.
+  odhaczenie tej samej rzeczy daje JEDEN PATCH z ostatnim stanem). Brak IDB
+  wyłącza trwały zapis: kontrolowany OfflineStorageError powoduje błąd i
+  rollback checkboxa, bez fałszywego sukcesu/pustej kolejki. Online nadal działa.
+- `privateSession.ts` utrwala losowy namespace i solone pseudonimy scope oraz
+  cookie zgodnie z ADR-018, bez odtwarzania CurrentUser. Cold offline po
+  błędzie transportu `/me` dopuszcza tylko nazwaną trasę prywatnej listy;
+  user pozostaje null. Legacy `list:*` i obcy scope są niewysyłane w IDB.
+  Przed prywatnym replay konieczne jest rzeczywiste `/me`; publiczny widok
+  pomija prywatne zaległości bez pytania o sesję.
+- `sessionGeneration.ts`, App i SessionQueryBoundary zamykają chroniony widok
+  i tworzą nowy QueryClient dla nowej generacji, z tymi samymi defaultOptions.
+  Spóźnione callbacki i rollback poprzedniej generacji nie zapisują do nowego
+  klienta. HTTP sprawdza generację/cookie także po body; setUser wymaga ticketa
+  z początku żądania, callbacki eksportu sprawdzają go przed pobraniem pliku.
 - `hydrate.ts` — snapshot wchodzi do CACHE'U TanStack Query (`updatedAt: 1`,
   więc jest od razu nieświeży i nie blokuje refetchu przez `staleTime`), a nie
   do osobnego ref-a strony. Dzięki temu render, optimistic update i rollback
@@ -343,12 +364,22 @@ Stan faktyczny po BATCH_12.
   karty i nie przeżywa reloadu; nasza kolejka przeżywa (ADR-009). Wyłapało to
   dopiero E2E z `context.setOffline(true)`.
 - `sync.ts` — klasyfikacja wyniku: `sent` (200, także gdy LWW odrzucił starszy
-  znacznik), `retry` (brak sieci, 429, 5xx — wpis zostaje, backoff 15 s),
+  znacznik), `retry` (429, 5xx — wpis zostaje, backoff 15 s),
   `gone` (404/410 — kolejka tej listy i jej snapshot idą do kosza, strona
   pokazuje ekran „wygasła", bez pętli retry) i `dropped` (4xx trwałe albo
-  wyczerpane 8 prób, żeby jeden wpis nie zablokował kolejki na zawsze).
-- `OfflineBanner.vue` w UI obu stron listy: komunikat trybu offline + licznik
-  oczekujących zmian; niewidoczny, gdy nie ma o czym mówić.
+  wyczerpane 8 prób). `offline` zachowuje wpis bez zwiększania prób;
+  `session-changed` zatrzymuje flush i zachowuje intencję do ponownej weryfikacji.
+  Terminalne dropped zgłasza błąd i atomowo usuwa tylko nadal bieżącą wersję
+  intencji/snapshotu. Nowa intencja i jej snapshot zapisują się atomowo.
+  Udany aktualny `sent` przywraca stan online również po pobudce przez focus,
+  gdy przeglądarka nie wyemitowała online. Sam focus, `/me`, lokalne dropped
+  ani odpowiedź odrzucona przez zmianę sesji nie potwierdzają tego stanu.
+- Pusta kolejka nie potwierdza stanu checkboxów po LWW. Przyjęcie do spiżarni
+  czeka na udany GET aktualnej wersji reconciliation; błąd pozostawia jawne
+  „Odśwież odhaczenia”, także gdy inny refetch usunął wcześniejszy alert.
+- `OfflineBanner.vue` w obu stronach: offline, oczekujące zmiany, synchronizacja
+  i trwały błąd także przy pending=0. Błąd transportu GET również rozpoznaje
+  brak sieci; samo optymistyczne navigator.onLine nie oznacza udanego zapisu.
 - Czego kolejka NIE obsługuje i dlaczego: **zmiany sklepu** (kolejność sekcji
   składa serwer z profilu `store_category_order`, którego przeglądarka nie zna
   — ustalenie R3) i **przyjęcia zakupów do spiżarni** (jego wartością jest

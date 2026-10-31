@@ -1,7 +1,17 @@
-import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { webcrypto } from 'node:crypto'
+import { TextEncoder } from 'node:util'
+
+import { createPinia, disposePinia, setActivePinia } from 'pinia'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError } from '@/api/client'
+import { captureSessionGeneration } from '@/lib/sessionGeneration'
+import {
+  clearPrivateOfflineSession,
+  confirmPrivateOfflineSession,
+  getPrivateOfflineScope,
+  isPrivateOfflineScopeConfirmed,
+} from '@/lib/offline/privateSession'
 
 import { useAuthStore } from './auth'
 
@@ -23,9 +33,20 @@ const USER = {
 }
 
 describe('authStore', () => {
+  let pinia: ReturnType<typeof createPinia>
   beforeEach(() => {
-    setActivePinia(createPinia())
+    vi.stubGlobal('crypto', webcrypto)
+    vi.stubGlobal('TextEncoder', TextEncoder)
+    clearPrivateOfflineSession()
+    pinia = createPinia()
+    setActivePinia(pinia)
     vi.clearAllMocks()
+  })
+  afterEach(() => {
+    disposePinia(pinia)
+    clearPrivateOfflineSession()
+    document.cookie = 'csrf_token=; Max-Age=0; Path=/'
+    vi.unstubAllGlobals()
   })
 
   it('startuje bez sesji i bez rozstrzygnięcia', () => {
@@ -156,5 +177,155 @@ describe('authStore', () => {
     await expect(auth.logout()).rejects.toThrow()
 
     expect(auth.isAuthenticated).toBe(false)
+  })
+
+  it('błąd transportu przy optymistycznym onLine odtwarza tylko zakres listy, bez fake auth', async () => {
+    document.cookie = 'csrf_token=test-credential; Path=/'
+    const scope = await confirmPrivateOfflineSession(USER)
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true)
+    fetchCurrentUser.mockRejectedValue(
+      new ApiError(0, {
+        code: 'network_error',
+        message: 'Brak sieci',
+        details: {},
+      }),
+    )
+    const auth = useAuthStore()
+    await auth.ensureLoaded()
+    expect(auth.user).toBeNull()
+    expect(auth.isAuthenticated).toBe(false)
+    expect(auth.isAdmin).toBe(false)
+    expect(auth.resolved).toBe(false)
+    expect(auth.offlineSession).toBe(true)
+    expect(getPrivateOfflineScope()).toBe(scope)
+    expect(isPrivateOfflineScopeConfirmed(scope!)).toBe(false)
+
+    fetchCurrentUser.mockResolvedValue(USER)
+    await auth.ensureLoaded(true)
+    expect(auth.offlineSession).toBe(false)
+    expect(auth.isAuthenticated).toBe(true)
+    expect(getPrivateOfflineScope()).toBe(scope)
+    expect(isPrivateOfflineScopeConfirmed(scope!)).toBe(true)
+  })
+
+  it('potwierdzony brak sesji usuwa marker także po starcie offline', async () => {
+    document.cookie = 'csrf_token=test-credential; Path=/'
+    await confirmPrivateOfflineSession(USER)
+    fetchCurrentUser.mockResolvedValue(null)
+    const auth = useAuthStore()
+    await auth.ensureLoaded()
+    expect(auth.offlineSession).toBe(false)
+    expect(getPrivateOfflineScope()).toBeNull()
+  })
+
+  it('spóźnione /me po clear nie odtwarza konta ani lokalnego zakresu', async () => {
+    let respond!: (value: typeof USER) => void
+    fetchCurrentUser.mockReturnValue(
+      new Promise<typeof USER>((resolve) => {
+        respond = resolve
+      }),
+    )
+    const auth = useAuthStore()
+    const pending = auth.ensureLoaded()
+    auth.clear()
+    respond(USER)
+    await pending
+    expect(auth.user).toBeNull()
+    expect(getPrivateOfflineScope()).toBeNull()
+  })
+
+  it('spóźnione login po clear nie odtwarza konta ani lokalnego zakresu', async () => {
+    let respond!: (value: typeof USER) => void
+    loginRequest.mockReturnValue(
+      new Promise<typeof USER>((resolve) => {
+        respond = resolve
+      }),
+    )
+    const auth = useAuthStore()
+    const pending = auth.login({ email: USER.email, password: 'haslo-testowe-2026' })
+    auth.clear()
+    respond(USER)
+    await pending
+    expect(auth.user).toBeNull()
+    expect(getPrivateOfflineScope()).toBeNull()
+  })
+
+  it('zmiana konta w drugiej karcie unieważnia również pierwszy trwający GET /me', async () => {
+    document.cookie = 'csrf_token=test-credential; Path=/'
+    await confirmPrivateOfflineSession(USER)
+    const otherTabMarker = localStorage.getItem('pasnik-private-offline-v1')!
+    clearPrivateOfflineSession()
+    let respond!: (value: typeof USER) => void
+    fetchCurrentUser.mockReturnValue(
+      new Promise<typeof USER>((resolve) => {
+        respond = resolve
+      }),
+    )
+    const auth = useAuthStore()
+    const pending = auth.ensureLoaded()
+    localStorage.setItem('pasnik-private-offline-v1', otherTabMarker)
+    window.dispatchEvent(new StorageEvent('storage', { key: 'pasnik-private-offline-v1' }))
+    respond(USER)
+    await pending
+    expect(auth.user).toBeNull()
+    expect(localStorage.getItem('pasnik-private-offline-v1')).toBe(otherTabMarker)
+  })
+
+  it('logout zamyka zakres przed odpowiedzią serwera', async () => {
+    document.cookie = 'csrf_token=test-credential; Path=/'
+    fetchCurrentUser.mockResolvedValue(USER)
+    const auth = useAuthStore()
+    await auth.ensureLoaded()
+    let finish!: () => void
+    logoutRequest.mockReturnValue(
+      new Promise<void>((resolve) => {
+        finish = resolve
+      }),
+    )
+    const pending = auth.logout()
+    expect(auth.isAuthenticated).toBe(false)
+    expect(getPrivateOfflineScope()).toBeNull()
+    finish()
+    await pending
+  })
+
+  it.each(['write', 'read-after-digest'] as const)(
+    'udany force /me zachowuje sesję ONLINE po awarii storage %s aktywnego zakresu offline',
+    async (failure) => {
+      document.cookie = 'csrf_token=test-credential; Path=/'
+      fetchCurrentUser.mockResolvedValue(USER)
+      const auth = useAuthStore()
+      await auth.ensureLoaded()
+      expect(getPrivateOfflineScope()).not.toBeNull()
+      if (failure === 'write') {
+        vi.spyOn(Storage.prototype, 'setItem').mockImplementationOnce(() => {
+          throw new DOMException('full', 'QuotaExceededError')
+        })
+      } else {
+        const record = localStorage.getItem('pasnik-private-offline-v1')
+        vi.spyOn(Storage.prototype, 'getItem')
+          .mockReturnValueOnce(record)
+          .mockImplementationOnce(() => {
+            throw new DOMException('blocked', 'SecurityError')
+          })
+      }
+      await auth.ensureLoaded(true)
+      expect(auth.user).toEqual(USER)
+      expect(auth.resolved).toBe(true)
+      expect(auth.isAuthenticated).toBe(true)
+      expect(auth.offlineSession).toBe(false)
+      expect(getPrivateOfflineScope()).toBeNull()
+    },
+  )
+
+  it('setUser wymaga ticketa z początku operacji i odrzuca brak ticketa', async () => {
+    const auth = useAuthStore()
+    // @ts-expect-error Każda odpowiedź aktualizująca auth wymaga ticketa.
+    expect(auth.setUser(USER)).toBe(false)
+    const ticket = captureSessionGeneration()
+    auth.clear()
+    expect(auth.setUser(USER, ticket)).toBe(false)
+    expect(auth.user).toBeNull()
+    expect(auth.setUser(USER, captureSessionGeneration())).toBe(true)
   })
 })

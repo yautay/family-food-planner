@@ -26,7 +26,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { common, storePicker as texts } from '@/lib/texts'
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     /** Wybrany sklep (kontrolowany przez rodzica) albo `null` = bez sklepu. */
     modelValue?: Store | null
@@ -67,13 +67,16 @@ const items = computed<Store[]>(() => {
 const canCreate = computed(
   () =>
     phrase.value.length > 0 &&
+    stores.isSuccess.value &&
+    !stores.isError.value &&
     !stores.isFetching.value &&
     !items.value.some(
       (store) => store.name.toLocaleLowerCase('pl-PL') === phrase.value.toLocaleLowerCase('pl-PL'),
     ),
 )
 
-function choose(store: Store | null): void {
+function choose(store: Store | null, confirmed = false): void {
+  if (props.disabled || (create.isPending.value && !confirmed)) return
   emit('update:modelValue', store)
   if (store) {
     emit('selected', store)
@@ -97,7 +100,13 @@ const create = useMutation({
   mutationFn: () => createStore({ name: phrase.value }),
   onSuccess: async (store) => {
     await queryClient.invalidateQueries({ queryKey: queryKeys.stores.all })
-    choose(store)
+    // Pending dotyczy tworzenia, nie potwierdzonego wyboru po odpowiedzi.
+    if (!props.disabled) {
+      emit('update:modelValue', store)
+      emit('selected', store)
+      search.value = ''
+      open.value = false
+    }
   },
   onError: async (error: unknown) => {
     if (!(error instanceof ApiError)) {
@@ -117,7 +126,7 @@ const create = useMutation({
     const match = all.items.find((store) => store.id === id)
     if (match) {
       await queryClient.invalidateQueries({ queryKey: queryKeys.stores.all })
-      choose(match)
+      choose(match, true)
     }
   },
 })
@@ -171,6 +180,7 @@ const create = useMutation({
             type="button"
             class="hover:bg-muted text-muted-foreground flex min-h-11 w-full items-center rounded-lg px-2 text-left text-sm"
             data-testid="store-picker-none"
+            :disabled="disabled || create.isPending.value"
             @click="choose(null)"
           >
             {{ texts.none }}
@@ -182,6 +192,7 @@ const create = useMutation({
             type="button"
             class="hover:bg-muted flex min-h-11 w-full items-center justify-between gap-2 rounded-lg px-2 text-left text-sm"
             :data-testid="`store-picker-option-${store.id}`"
+            :disabled="disabled || create.isPending.value"
             @click="choose(store)"
           >
             <span class="min-w-0 truncate">{{ store.name }}</span>
@@ -192,7 +203,7 @@ const create = useMutation({
           <button
             type="button"
             class="text-primary hover:bg-muted min-h-11 rounded-lg px-2 text-left text-sm font-medium"
-            :disabled="create.isPending.value"
+            :disabled="disabled || create.isPending.value"
             data-testid="store-picker-create"
             @click="create.mutate()"
           >
@@ -201,6 +212,23 @@ const create = useMutation({
         </li>
       </ul>
     </template>
+
+    <p
+      v-if="stores.isError.value"
+      class="text-destructive text-sm"
+      role="alert"
+      data-testid="store-picker-load-error"
+    >
+      Nie udało się wczytać sklepów.
+      <button
+        type="button"
+        class="min-h-11 underline"
+        :disabled="disabled"
+        @click="stores.refetch()"
+      >
+        Spróbuj ponownie
+      </button>
+    </p>
 
     <p
       v-if="errorMessage"

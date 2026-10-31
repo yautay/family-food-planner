@@ -15,6 +15,8 @@ import {
   apiFetch,
   observeResponse,
   readCsrfToken,
+  captureSessionRequest,
+  observeResponseHeaders,
 } from '@/api/client'
 import type { components } from '@/api/generated'
 
@@ -46,6 +48,7 @@ export interface ExportedFile {
  * bo tylko on wie, czy działa w przeglądarce (test jednostkowy nie ma DOM-u).
  */
 export async function downloadExport(scope: TransferScope = 'user'): Promise<ExportedFile> {
+  const ticket = captureSessionRequest()
   const token = readCsrfToken()
   const response = await fetch(`${API_PREFIX}/transfer/export?scope=${scope}`, {
     method: 'POST',
@@ -54,7 +57,7 @@ export async function downloadExport(scope: TransferScope = 'user'): Promise<Exp
   })
   // Te same efekty uboczne, co w `apiFetch` — wygasła sesja MUSI odesłać
   // na `/login`, a nie tylko pokazać czerwony komunikat na stronie.
-  observeResponse(response)
+  observeResponseHeaders(response, ticket)
 
   if (!response.ok) {
     let message = 'Nie udało się przygotować eksportu.'
@@ -68,10 +71,13 @@ export async function downloadExport(scope: TransferScope = 'user'): Promise<Exp
     } catch {
       // Odpowiedź bez JSON-a (proxy, timeout) — zostaje komunikat domyślny.
     }
+    observeResponse(response, ticket)
     throw new ApiError(response.status, { code, message, details: {} })
   }
+  const blob = await response.blob()
+  observeResponse(response, ticket)
   return {
-    blob: await response.blob(),
+    blob,
     filename: filenameFromDisposition(response.headers.get('Content-Disposition')),
   }
 }

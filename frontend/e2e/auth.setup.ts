@@ -3,6 +3,10 @@ import { expect, test as setup } from '@playwright/test'
 import { AUTH_STATE_FILE } from './auth-state.js'
 import { purgeE2eLeftovers } from './cleanup.js'
 import { reserveLoginAttempt } from './login-budget.js'
+import { fillSecretPassword } from './secret-password.js'
+
+// Evaluate arguments and login bodies are sensitive even without Fill titles.
+setup.use({ trace: 'off' })
 
 /**
  * Logowanie RAZ na cały przebieg E2E — projekt `setup` z `playwright.config.ts`.
@@ -35,7 +39,7 @@ setup('logowanie raz na przebieg (zapis storageState)', async ({ page, baseURL }
 
   await page.goto('/login')
   await page.getByTestId('login-email').fill(email)
-  await page.getByTestId('login-password').fill(password)
+  await fillSecretPassword(page.getByTestId('login-password'), password)
   await reserveLoginAttempt(baseURL, testInfo)
   await page.getByTestId('login-submit').click()
 

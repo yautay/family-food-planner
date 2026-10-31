@@ -63,6 +63,17 @@ tasks:
     cmds:
       - '{{.COMPOSE}} up -d --no-deps --force-recreate app'
 
+  dev-frontend-reload:
+    desc: Przywraca lokalny frontend Vite dev bez zmiany API i baz
+    cmds:
+      - '{{.COMPOSE}} up -d --no-deps --force-recreate frontend'
+
+  dev-pwa-preview:
+    desc: Buduje i uruchamia lokalny PWA preview na dotychczasowym porcie frontendu
+    cmds:
+      - task: fe-build
+      - '{{.COMPOSE}} -f docker/compose.pwa-preview.yml up -d --no-deps --force-recreate frontend'
+
   down:
     desc: Zatrzymuje stack (dane bazy dev zostają w wolumenie)
     cmds:
@@ -187,6 +198,83 @@ tasks:
         --mount "type=bind,source={{.ROOT_DIR}},target=/workspace"
         -w /workspace/frontend mcr.microsoft.com/playwright:v1.62.1-noble
         node node_modules/@playwright/test/cli.js test {{.CLI_ARGS}}
+
+  test-e2e-pwa:
+    desc: 'Opt-in testy rzeczywistego PWA w lokalnym preview (najpierw dev-pwa-preview)'
+    vars:
+      FRONTEND_CONTAINER:
+        sh: '{{.COMPOSE}} ps -q frontend'
+    preconditions:
+      - sh: 'test -n "{{.FRONTEND_CONTAINER}}"'
+        msg: 'Brak lokalnego frontendu.'
+      - sh: >-
+          node -e "if (require('./frontend/node_modules/@playwright/test/package.json').version !== '1.62.1') process.exit(1)"
+        msg: 'Wersja Playwright musi odpowiadać oficjalnemu obrazowi.'
+    cmds:
+      - >-
+        docker exec {{.FRONTEND_CONTAINER}} node --input-type=module -e "const deadline=Date.now()+30000; for(;;) { try { const r=await fetch('http://127.0.0.1:5173/build-info.json',{signal:AbortSignal.timeout(1000)}); const data=await r.json(); if(r.ok && typeof data.version==='string') break; } catch {} if(Date.now()>=deadline) throw new Error('Lokalny preview nie jest gotowy'); await new Promise(resolve=>setTimeout(resolve,250)); }"
+      - >-
+        docker run --rm --init --ipc=host --network=container:{{.FRONTEND_CONTAINER}}
+        --env-file .env -e E2E_REUSE_SERVER=1 -e E2E_BASE_URL=http://127.0.0.1:5173 -e UX_PWA=1
+        --mount "type=bind,source={{.ROOT_DIR}},target=/workspace"
+        -w /workspace/frontend mcr.microsoft.com/playwright:v1.62.1-noble
+        node node_modules/@playwright/test/cli.js test --project=chromium --no-deps ux-pwa.spec.ts {{.CLI_ARGS}}
+
+  test-pwa:
+    desc: Buduje PWA, testuje cold offline i izolację, zawsze przywraca Vite dev
+    cmds:
+      - defer: { task: dev-frontend-reload }
+      - task: dev-pwa-preview
+      - task: test-e2e-pwa
+
+  test-e2e-pwa-advanced:
+    desc: 'Opt-in dwie karty, zmiana rodziny i migracja rzeczywistego legacy PWA'
+    vars:
+      FRONTEND_CONTAINER:
+        sh: '{{.COMPOSE}} ps -q frontend'
+    preconditions:
+      - sh: 'test -n "{{.FRONTEND_CONTAINER}}"'
+        msg: 'Brak lokalnego frontendu.'
+      - sh: >-
+          node -e "if (require('./frontend/node_modules/@playwright/test/package.json').version !== '1.62.1') process.exit(1)"
+        msg: 'Wersja Playwright musi odpowiadać oficjalnemu obrazowi.'
+    cmds:
+      - >-
+        docker exec {{.FRONTEND_CONTAINER}} node --input-type=module -e "const deadline=Date.now()+30000; for(;;) { try { const r=await fetch('http://127.0.0.1:5173/build-info.json',{signal:AbortSignal.timeout(1000)}); const data=await r.json(); if(r.ok && typeof data.version==='string') break; } catch {} if(Date.now()>=deadline) throw new Error('Lokalny preview nie jest gotowy'); await new Promise(resolve=>setTimeout(resolve,250)); }"
+      - >-
+        docker run --rm --init --ipc=host --network=container:{{.FRONTEND_CONTAINER}}
+        --env-file .env -e E2E_REUSE_SERVER=1 -e E2E_BASE_URL=http://127.0.0.1:5173 -e UX_PWA_ADVANCED=1
+        --mount "type=bind,source={{.ROOT_DIR}},target=/workspace"
+        -w /workspace/frontend mcr.microsoft.com/playwright:v1.62.1-noble
+        node node_modules/@playwright/test/cli.js test --project=chromium --no-deps --workers=1
+        ux-pwa-isolation.spec.ts ux-pwa-upgrade.spec.ts {{.CLI_ARGS}}
+
+  test-pwa-advanced:
+    desc: 'Buduje PWA, sprawdza izolację i upgrade, zawsze przywraca dev frontend'
+    cmds:
+      - defer: { task: dev-frontend-reload }
+      - task: dev-pwa-preview
+      - task: test-e2e-pwa-advanced
+
+  test-shopping-print:
+    desc: 'Opt-in rzeczywiste prywatne i anonimowe wielostronicowe wydruki A4'
+    vars:
+      FRONTEND_CONTAINER:
+        sh: '{{.COMPOSE}} ps -q frontend'
+    preconditions:
+      - sh: 'test -n "{{.FRONTEND_CONTAINER}}"'
+        msg: 'Uruchom lokalny stack przez task dev-detached.'
+      - sh: >-
+          node -e "if (require('./frontend/node_modules/@playwright/test/package.json').version !== '1.62.1') process.exit(1)"
+        msg: 'Wersja Playwright musi odpowiadać oficjalnemu obrazowi.'
+    cmds:
+      - >-
+        docker run --rm --init --ipc=host --network=container:{{.FRONTEND_CONTAINER}}
+        --env-file .env -e E2E_REUSE_SERVER=1 -e E2E_BASE_URL=http://127.0.0.1:5173 -e UX_PRINT=1
+        --mount "type=bind,source={{.ROOT_DIR}},target=/workspace"
+        -w /workspace/frontend mcr.microsoft.com/playwright:v1.62.1-noble
+        node node_modules/@playwright/test/cli.js test --project=chromium --workers=1
+        ux-shopping-print.spec.ts {{.CLI_ARGS}}
 
   e2e-install:
     desc: Instaluje przeglądarkę dla Playwrighta (jednorazowo)

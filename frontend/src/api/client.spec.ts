@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError, apiFetch, setUnauthorizedHandler } from './client'
+import { advanceSessionGeneration } from '@/lib/sessionGeneration'
+import { clockSkewMs, resetClockSkew } from '@/lib/offline/clock'
 
 function mockFetch(response: Response): void {
   vi.stubGlobal(
@@ -81,6 +83,29 @@ describe('apiFetch', () => {
 
     await expect(apiFetch('/health')).rejects.toMatchObject({ status: 0, code: 'network_error' })
   })
+
+  it('czas odczytu body nie przesuwa korekty zegara LWW z nagłówków', async () => {
+    resetClockSkew()
+    const initial = Date.parse('2031-01-01T12:00:00Z')
+    const now = vi.spyOn(Date, 'now').mockReturnValue(initial)
+    let finish!: (value: unknown) => void
+    const response = jsonResponse({})
+    response.headers.set('Date', new Date(initial + 60_000).toUTCString())
+    vi.spyOn(response, 'json').mockReturnValue(
+      new Promise((resolve) => {
+        finish = resolve
+      }),
+    )
+    mockFetch(response)
+    const pending = apiFetch('/shopping/lists/1')
+    await Promise.resolve()
+    expect(clockSkewMs()).toBe(60_000)
+    now.mockReturnValue(initial + 5 * 60_000)
+    finish({ ok: true })
+    await pending
+    expect(clockSkewMs()).toBe(60_000)
+    resetClockSkew()
+  })
 })
 
 describe('CSRF (double-submit cookie, 07_SECURITY §3)', () => {
@@ -156,4 +181,99 @@ describe('reakcja na 401', () => {
 
     expect(onUnauthorized).not.toHaveBeenCalled()
   })
+
+  it('spóźnione 401 A po zmianie cookie nie wylogowuje B', async () => {
+    document.cookie = 'csrf_token=credential-A; Path=/'
+    let respond!: (value: Response) => void
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        () =>
+          new Promise<Response>((resolve) => {
+            respond = resolve
+          }),
+      ),
+    )
+    const onUnauthorized = vi.fn()
+    setUnauthorizedHandler(onUnauthorized)
+    const pending = apiFetch('/plan/days').catch((error: unknown) => error)
+    document.cookie = 'csrf_token=credential-B; Path=/'
+    respond(jsonResponse({ error: { code: 'unauthorized', message: 'expired', details: {} } }, 401))
+    await pending
+    expect(onUnauthorized).not.toHaveBeenCalled()
+    document.cookie = 'csrf_token=; Max-Age=0; Path=/'
+  })
+
+  it('zmiana cookie podczas await body JSON odrzuca stare dane przed onSuccess', async () => {
+    document.cookie = 'csrf_token=credential-A; Path=/'
+    let body!: (value: unknown) => void
+    const response = jsonResponse({})
+    vi.spyOn(response, 'json').mockReturnValue(
+      new Promise((resolve) => {
+        body = resolve
+      }),
+    )
+    mockFetch(response)
+    const pending = apiFetch('/auth/me/ui-settings', { method: 'PATCH', json: {} })
+    await Promise.resolve()
+    document.cookie = 'csrf_token=credential-B; Path=/'
+    body({ account: 'A' })
+    await expect(pending).rejects.toBeInstanceOf(Error)
+    document.cookie = 'csrf_token=; Max-Age=0; Path=/'
+  })
+
+  it('stare 401 po zmianie generacji tej samej sesji/cookie także nie wylogowuje obecnego konta', async () => {
+    let respond!: (value: Response) => void
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        () =>
+          new Promise<Response>((resolve) => {
+            respond = resolve
+          }),
+      ),
+    )
+    const handler = vi.fn()
+    setUnauthorizedHandler(handler)
+    const pending = apiFetch('/recipes').catch((error: unknown) => error)
+    advanceSessionGeneration()
+    respond(jsonResponse({ error: { code: 'unauthorized', message: 'expired', details: {} } }, 401))
+    await pending
+    expect(handler).not.toHaveBeenCalled()
+  })
+
+  it('zmiana sesji podczas odczytu body błędu 401 nie uruchamia handlera', async () => {
+    let body!: (value: unknown) => void
+    const response = jsonResponse({}, 401)
+    vi.spyOn(response, 'json').mockReturnValue(
+      new Promise((resolve) => {
+        body = resolve
+      }),
+    )
+    mockFetch(response)
+    const handler = vi.fn()
+    setUnauthorizedHandler(handler)
+    const pending = apiFetch('/recipes').catch((error: unknown) => error)
+    await Promise.resolve()
+    advanceSessionGeneration()
+    body({ error: { code: 'unauthorized', message: 'expired', details: {} } })
+    await pending
+    expect(handler).not.toHaveBeenCalled()
+  })
+
+  it.each(['/auth/login', '/auth/logout'])(
+    'normalne %s akceptuje oczekiwaną zmianę cookie po nagłówkach',
+    async (path) => {
+      document.cookie = 'csrf_token=before-auth; Path=/'
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => {
+          document.cookie = 'csrf_token=after-auth; Path=/'
+          return jsonResponse({ ok: true })
+        }),
+      )
+      await expect(apiFetch(path, { method: 'POST' })).resolves.toEqual({ ok: true })
+      document.cookie = 'csrf_token=; Max-Age=0; Path=/'
+    },
+  )
 })

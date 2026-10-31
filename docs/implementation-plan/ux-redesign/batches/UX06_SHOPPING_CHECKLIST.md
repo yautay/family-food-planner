@@ -24,11 +24,11 @@ prywatnego snapshotu/kolejki to obecnie `list:{id}`. Nie uznawać działającej
 otwartej karty za dowód restartu i izolacji cache. Najpierw rzeczywisty test;
 ewentualną wąską naprawę dostępu/storage przydziela O i obejmuje review Sol.
 
-- [ ] UX06.1 Długie nazwy zawijają się, ilości mają własne miejsce, cały wiersz ma wygodne pole trafienia. Ograniczyć ozdobniki; nie zmniejszać obecnego dużego checkboxa.
-- [ ] UX06.2 Ograniczyć wizualny ciężar kupionych pozycji przez zwijanie ich w obrębie kategorii. Zachować serwerową kolejność kategorii, rozróżnienie `checked` i `already_have` oraz dostępność pozycji do ponownej zmiany.
-- [ ] UX06.3 Pokazać prawdziwy stan offline/synchronizacji/błędu. Zachować optimistic update, rollback, snapshot, restart aplikacji i semantykę `checked_at`. Reużywać istniejącej kolejki.
-- [ ] UX06.4 Uporządkować Udostępnij / Drukuj / Sklep / Przyjmij do spiżarni. Potwierdzenie przyjęcia mówi co trafi do zapasów; zmiana sklepu i przyjęcie pozostają niedostępne offline z wyjaśnieniem.
-- [ ] UX06.5 Zaktualizować publiczną stronę tymi samymi prymitywami wizualnymi, zachowując jej własny klient i zakres danych. Zamiast fikcyjnego „Zakończ zakupy” dać zgodny z istniejącymi danymi powrót do list lub jawne przyjęcie do spiżarni. Trwałe zakończenie jest w UX12.
+- [x] UX06.1 Długie nazwy zawijają się, ilości mają własne miejsce, cały wiersz ma wygodne pole trafienia. Ograniczyć ozdobniki; nie zmniejszać obecnego dużego checkboxa.
+- [x] UX06.2 Ograniczyć wizualny ciężar kupionych pozycji przez zwijanie ich w obrębie kategorii. Zachować serwerową kolejność kategorii, rozróżnienie `checked` i `already_have` oraz dostępność pozycji do ponownej zmiany.
+- [x] UX06.3 Pokazać prawdziwy stan offline/synchronizacji/błędu. Zachować optimistic update, rollback, snapshot, restart aplikacji i semantykę `checked_at`. Reużywać istniejącej kolejki.
+- [x] UX06.4 Uporządkować Udostępnij / Drukuj / Sklep / Przyjmij do spiżarni. Potwierdzenie przyjęcia mówi co trafi do zapasów; zmiana sklepu i przyjęcie pozostają niedostępne offline z wyjaśnieniem.
+- [x] UX06.5 Zaktualizować publiczną stronę tymi samymi prymitywami wizualnymi, zachowując jej własny klient i zakres danych. Zamiast fikcyjnego „Zakończ zakupy” dać zgodny z istniejącymi danymi powrót do list lub jawne przyjęcie do spiżarni. Trwałe zakończenie jest w UX12.
 
 ## Pliki
 
@@ -41,3 +41,32 @@ Odhaczenie online i offline, odświeżenie offline, powrót sieci, cofnięcie ch
 `task check`; E2E `offline-lista.spec.ts`, `shopping-list-sharing.spec.ts`, właściwe scenariusze pantry. Sprawdzić rzeczywisty zbudowany wariant PWA zgodnie z istniejącą procedurą testu offline, nie tylko tryb Vite. Testy UI nie mogą zastępować realnej próby offline samym mockiem `navigator.onLine`.
 
 Skills: Required SKILL-FE, SKILL-SEC; Review SKILL-REVIEW, SKILL-SECREV. Dokumentacja: offline, publiczny zakres, druk i znaczenie kupionych pozycji.
+
+## Ustalenia odbioru 2026-10-31
+
+- Układ wiersza ma 48 px checkbox i osobną ilość; kupione są zwijane w
+  kategorii bez zmiany kolejności serwera i pozostają w DOM do druku.
+  Fokus po odhaczeniu przechodzi na rozwinięcie kategorii.
+- Błąd terminalnego dropped pozostaje widoczny także przy pustej kolejce.
+  Atomowe porównanie wersji intencji nie usuwa nowszego zapisu; przyjęcie do
+  spiżarni wymaga udanego reconciliation GET i ma dostępne ponowienie.
+- Rzeczywisty preflight ujawnił historyczny wyciek cache między kontami
+  i brak prywatnego cold restart. Techniczna naprawa oraz jej granice są
+  opisane w ADR-018: shell SW bez API/uploadów, nieautoryzujący namespace,
+  kwarantanna legacy, generacje odpowiedzi i osobne QueryClient dla sesji.
+  To nie dodaje offline planów ani odtwarzania uprawnień z localStorage.
+- `test-pwa` potwierdza cold prywatny/publiczny, kolejkę po restarcie i
+  logoutA→B z rzeczywistą odmową404. `test-pwa-advanced` potwierdza dwie
+  karty listy/planu, zmianę rodziny i upgrade prawdziwego starego workera.
+- `test-shopping-print` tworzy rzeczywiste prywatne/publiczne PDF A4
+  z 50 długimi pozycjami. Osobny odbiór obejmuje wszystkie strony PNG,
+  ilości, tekst i zakaz przecięcia wiersza. Puste pola do odhaczenia
+  ołówkiem pozostają zgodne z arch06; `Mam już w domu` zachowuje tekst.
+- Zastępstwo builtin review jest jawnie review Sol zgodnie z D35. Audyty
+  zależności raportują zastane alerty, bez zmiany lockfiles; nie są zielone.
+- Końcowy check O:675unit/300integration/460API/765FE PASS, pełne normalne
+  E2E42PASS/9 jawnych opt-in SKIP, basic PWA3PASS i advanced4PASS wykonane
+  oddzielnie. Potwierdzony błąd upgrade RED3→GREEN3 po zachowaniu bezpiecznego
+  next w guardzie; poprzednie czerwone przebiegi pozostają w rejestrze.
+
+Rzeczywiste finalne wyniki, otwarte bramki i commit integracji: PROGRESS.md.

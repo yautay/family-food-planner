@@ -32,11 +32,36 @@
   /* Cienie kart są na papierze brudem, nie informacją. */
   * {
     box-shadow: none !important;
+    text-shadow: none !important;
   }
 
-  /* Pozycja listy nie może się łamać między stronami w połowie wiersza. */
-  [data-testid^='shopping-item-'] {
+  .shopping-item {
+    background: transparent !important;
+    opacity: 1 !important;
     break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .shopping-item label {
+    grid-template-columns: 1.25rem minmax(0, 1fr) auto;
+  }
+
+  .shopping-item-name {
+    text-decoration: none !important;
+  }
+
+  .shopping-category > header {
+    background: #fff !important;
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  .shopping-category > ul {
+    border-color: #000 !important;
+  }
+
+  .shopping-list {
+    background: #fff !important;
   }
 
   @page {

@@ -16,7 +16,7 @@
 
 import type { QueryClient, QueryKey } from '@tanstack/vue-query'
 
-import { readSnapshot } from '@/lib/offline/db'
+import { isSnapshotKeyCurrent, readSnapshot } from '@/lib/offline/db'
 
 /**
  * Wstaw snapshot do cache'u, jeśli zapytanie nie ma jeszcze danych.
@@ -31,11 +31,15 @@ export async function hydrateFromSnapshot<T>(
   queryKey: QueryKey,
   snapshotKey: string,
 ): Promise<boolean> {
-  if (client.getQueryData(queryKey) !== undefined) {
+  if (!isSnapshotKeyCurrent(snapshotKey) || client.getQueryData(queryKey) !== undefined) {
     return false
   }
   const snapshot = await readSnapshot<T>(snapshotKey)
-  if (snapshot === null || client.getQueryData(queryKey) !== undefined) {
+  if (
+    !isSnapshotKeyCurrent(snapshotKey) ||
+    snapshot === null ||
+    client.getQueryData(queryKey) !== undefined
+  ) {
     return false
   }
   client.setQueryData<T>(queryKey, snapshot, { updatedAt: 1 })

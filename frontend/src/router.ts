@@ -7,6 +7,7 @@ import {
 
 import AppShell from '@/layouts/AppShell.vue'
 import LoginPage from '@/pages/LoginPage.vue'
+import { getPrivateOfflineScope } from '@/lib/offline/privateSession'
 import { useAuthStore } from '@/stores/auth'
 
 /**
@@ -166,15 +167,50 @@ export const routes: RouteRecordRaw[] = [
   },
 ]
 
+/** Cel wraca przez zwykłą nawigację, więc jego guard ponownie sprawdzi sesję i rolę. */
+function loginReturnTarget(next: unknown): string | null {
+  if (
+    typeof next !== 'string' ||
+    !next.startsWith('/') ||
+    next.startsWith('//') ||
+    [...next].some((character) => character === '\\' || character.charCodeAt(0) <= 32)
+  ) {
+    return null
+  }
+  try {
+    const path = decodeURIComponent(next.split(/[?#]/, 1)[0]!)
+    // Odrzuć także zakodowane separatory/sterowanie oraz wielokrotne kodowanie.
+    if (
+      path.startsWith('//') ||
+      [...path].some((character) => character === '\\' || character.charCodeAt(0) <= 32) ||
+      /%[0-9a-f]{2}/i.test(path)
+    )
+      return null
+    const normalized = new URL(path, window.location.origin)
+    if (normalized.origin !== window.location.origin || normalized.pathname.startsWith('//')) {
+      return null
+    }
+    if (router.resolve(normalized.pathname).meta.public === true) return null
+    return next
+  } catch {
+    return null
+  }
+}
+
 /**
  * Guard sesji (05_FRONTEND §3): brak sesji → `/login`, zalogowany na `/login`
- * → `/plan-dnia`, trasa administracyjna dla nie-admina → `/plan-dnia`
+ * → bezpieczny `next` albo `/plan-dnia`, trasa administracyjna dla nie-admina → `/plan-dnia`
  * (nie pokazujemy, że coś takiego istnieje).
  */
 export async function authGuard(
-  to: { name?: unknown; fullPath: string; meta: Record<string, unknown> },
+  to: {
+    name?: unknown
+    fullPath: string
+    meta: Record<string, unknown>
+    query?: Record<string, unknown>
+  },
   auth: ReturnType<typeof useAuthStore>,
-): Promise<true | { name: string; query?: Record<string, string> }> {
+): Promise<true | string | { name: string; query?: Record<string, string> }> {
   // Publiczny link jest dostępny dla WSZYSTKICH i nie wymaga wiedzy o sesji:
   // sprawdzamy to PRZED `ensureLoaded`, żeby otwarcie `/l/{token}` nie strzelało
   // do `/auth/me` i żeby zalogowany nie został odesłany na plan dnia (co robi
@@ -183,12 +219,23 @@ export async function authGuard(
     return true
   }
 
-  await auth.ensureLoaded()
+  try {
+    await auth.ensureLoaded()
+  } catch {
+    // Odpowiedź HTTP nie jest dowodem pracy offline. Guard zawsze kończy
+    // nawigację kontrolowanie; tylko status 0 w store może odtworzyć marker.
+    return to.meta.public === true ? true : { name: 'login', query: { next: to.fullPath } }
+  }
 
   if (to.meta.public === true) {
-    return auth.isAuthenticated ? { name: 'plan-dnia' } : true
+    return auth.isAuthenticated
+      ? (loginReturnTarget(to.query?.next) ?? { name: 'plan-dnia' })
+      : true
   }
   if (!auth.isAuthenticated) {
+    if (to.name === 'zakupy-lista' && auth.offlineSession && getPrivateOfflineScope() !== null) {
+      return true
+    }
     return { name: 'login', query: { next: to.fullPath } }
   }
   if (to.meta.admin === true && !auth.isAdmin) {

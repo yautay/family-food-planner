@@ -43,6 +43,23 @@ async function mountDialog(props: Record<string, unknown> = {}) {
 }
 
 describe('ShareListDialog', () => {
+  it('offline blokuje tworzenie i odwołanie z widocznym powodem', async () => {
+    const empty = await mountDialog({ offline: true })
+    expect(empty.get('[data-testid="share-create"]').attributes('disabled')).toBeDefined()
+    expect(empty.get('[data-testid="share-needs-network"]').text()).toContain('wymaga połączenia')
+    const active = await mountDialog({ offline: true, share: share() })
+    expect(active.get('[data-testid="share-revoke"]').attributes('disabled')).toBeDefined()
+    expect(shareShoppingList).not.toHaveBeenCalled()
+    expect(revokeShoppingListShare).not.toHaveBeenCalled()
+  })
+
+  it('wygasły link nie jest reklamowany jako aktywny', async () => {
+    const wrapper = await mountDialog({ share: share({ expires_at: '2020-01-01T00:00:00Z' }) })
+    expect(wrapper.find('[data-testid="share-active"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="share-url"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="share-expired"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="share-create"]').exists()).toBe(true)
+  })
   beforeEach(() => {
     vi.clearAllMocks()
     shareShoppingList.mockResolvedValue(share())

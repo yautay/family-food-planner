@@ -99,15 +99,18 @@ Core flows (rozbudowywane w batchach, które je dostarczają):
    raport kolizji → wczytanie → podsumowanie (`transfer.spec.ts`). Spec jedzie
    po `data-testid`, więc przemianowanie sekcji na „Kopia danych rodziny"
    (B20) go nie dotyka.
-Konwencje: selektory `data-testid`, bez sleepów (expect z timeoutem),
-seed przez API, nie przez UI.
+Konwencje: selektory `data-testid`, gotowość UI przez expect z timeoutem,
+seed przez API, nie przez UI. Wyjątek czasu w UX06 dotyczy jawnego wygaśnięcia
+rzeczywistego staleTime (31 s przy 30 s konfiguracji): test dwóch kart wymaga
+potem rzeczywistego GET po nawigacji UI. Nie zastępuje to asercji gotowości,
+nie zmienia ustawień aplikacji i nie jest ponawianiem nieudanego żądania.
 
 ### 3.1 Izolacja danych (stan faktyczny po review R2, 2026-08-21)
 
-Suita jedzie na bazie DEWELOPERSKIEJ i na JEDNYM koncie (07_SECURITY §2 — w
-repozytorium nie ma i nie może być działającego hasła), a katalog produktów
-jest globalny. Specy nie są więc od siebie niezależne i pięć reguł jest
-WIĄŻĄCE dla każdego nowego specu:
+Suita jedzie na bazie DEWELOPERSKIEJ. Bazowe specy dzielą konto ADMIN,
+scenariusze izolowane mają oznaczonych własnych aktorów i EMPTY_STATE.
+Hasła pochodzą z env albo są losowane wyłącznie w pamięci; katalog produktów
+jest globalny. Specy nie są niezależne, poniższe reguły są wiążące:
 
 1. **Jedno logowanie na przebieg.** Projekt `setup` (`e2e/auth.setup.ts`)
    loguje się raz i zapisuje `storageState`; pozostałe projekty z niego
@@ -142,6 +145,65 @@ WIĄŻĄCE dla każdego nowego specu:
    import historii generacji/tur jest addytywny, więc powtarzany roundtrip
    kopiuje całą jego historię. Nie odwiedzać Zakupów w tym scenariuszu —
    odczyt konfiguracji zasiewa domyślne tury. Limity importu pozostają aktywne.
+7. **Generator zakupów ma własnego oznaczonego USER-a i dwie tury.**
+   `shopping-generate.spec.ts` nie używa historii ADMIN-a. Exact marker,
+   rzeczywiste /me i odmowa administracji poprzedzają sprzątanie własnych dat,
+   list i tur. Finally dezaktywuje aktora; historia z FK pozostaje. Nie kasować
+   konfiguracji współdzielonego konta ani nie zwiększać timeoutu zamiast izolacji.
+
+### 3.2 Odbiór zbudowanego PWA (UX06)
+
+`task test-pwa` buduje frontend, przełącza wyłącznie lokalny frontend na preview,
+wykonuje `ux-pwa.spec.ts` w oficjalnym Playwright 1.62.1 i przez defer przywraca
+Vite dev również po FAIL. Readiness działa we wskazanym kontenerze, niezależnie
+od hostowego FRONTEND_PORT. Nie restartuje API/baz i nie tworzy nowego środowiska.
+
+`task test-pwa-advanced` uruchamia oddzielne opt-in UX_PWA_ADVANCED: dwie karty
+listy/planu z rzeczywistą opóźnioną odpowiedzią, potwierdzoną zmianę rodziny A2
+z przywróceniem dokładnych składów w finally oraz aktualizację starego buildu
+SW na tym samym originie. Upgrade wymaga zachowanego legacy artefaktu
+`backend/data/ux06-results/legacy-dist-before-isolation`; test sprawdza ścieżki,
+kopiuje wyłącznie wygenerowane dist i zawsze przywraca nowy build. Nie używa
+syntetycznego service workera. Brak artefaktu przy opt-in jest błędem, nie skipem.
+
+Oba runnery używają --no-deps (bez szerokiego purge setup), workers=1,
+prawdziwego context.setOffline i rzeczywistych odmów backendu. PWA odczyty
+kontrolne i opóźniony GET używają bezpiecznego Node fetch, bez instrumentowanych
+context.request/route.fetch, które przy awarii zapisują Cookie w krokach raportu.
+Opóźniony GET nadal dostarcza rzeczywiste status/nagłówki/body z backendu.
+Publiczne tokeny, cookie i hasła nie trafiają do raportów tych prób;
+trace/video/screenshot są wyłączone.
+Świadectwa observera sprawdzają też krótkotrwałe ujawnienie po zamknięciu sesji.
+Samo działanie otwartej karty nie dowodzi cold restartu ani izolacji kont.
+
+Próba pending po prywatnym cold restarcie obejmuje rzeczywiste ponowne otwarcie
+aplikacji online po przywróceniu transportu. Chromium może po cold reload
+optymistycznie podawać navigator.onLine=true i nie wyemitować nowego online;
+Playwright domyślnie emuluje fokus, więc bringToFront nie dowodzi jego zmiany.
+Reload sprawdza udokumentowaną pobudkę kolejki przy starcie z ADR-009,
+bez syntetycznych zdarzeń i bez zmiany navigatora. Obowiązkowe pozostają browser /me przed PATCH,
+niezależny serwerowy GET, zniknięcie bannera oraz przywrócenie jednej pozycji.
+To dowód recovery po ponownym otwarciu aplikacji, nie zdarzenia online/focus.
+
+Wypełnianie pola hasła przez `fill` zapisuje jego wartość w tytule kroku HTML.
+`e2e/secret-password.ts` używa osobnego argumentu evaluate, natywnego settera
+input i zdarzenia input; nadal działa zwykły formularz i żądanie logowania.
+Wywołujący muszą również wyłączyć trace: ślad zawiera argumenty evaluate
+i body logowania, także przy retry CI. Dotyczy setup/smoke/global/navigation
+oraz PWA/visual. Kontrola raportu odczytuje embedded ZIP bez wypisywania
+sekretów; stary artefakt po redakcji zachowuje wynik i dowody testu.
+
+`task test-shopping-print` uruchamia oddzielny opt-in `UX_PRINT=1` na dev,
+z normalnym projektem setup i jednym workerem. Własny oznaczony USER tworzy
+50 rzeczywistych długich produktów i listę, a finally sprząta wyłącznie jego
+dane oraz dezaktywuje konto. HTTP setup/cleanup używa natywnego Node fetch,
+aby wyjątek transportu nie zapisał Cookie/CSRF jako kroku APIRequestContext
+w raporcie Playwright. Błędy transportu/body są ogólne, bez raw cause.
+Trace, video i screenshot są wyłączone. Anonimowy GET potwierdza brak Cookie,
+CSRF i prywatnych pól; oba rzeczywiste PDF A4 mają wszystkie wiersze,
+również kupione zwinięte na ekranie. O renderuje każdą stronę do PNG,
+sprawdza tekst/ilości, granice stron i brak podziału wiersza oraz wykonuje
+niezależny odbiór wizualny. Sama emulacja print CSS nie zastępuje tego odbioru.
 
 Każda rzeczywista próba logowania API/UI, także niepoprawne hasło i opt-in
 visual, wywołuje `reserveLoginAttempt` z `e2e/login-budget.ts`. Helper

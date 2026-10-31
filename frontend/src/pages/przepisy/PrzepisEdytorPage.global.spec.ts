@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CurrentUser } from '@/api/auth'
 import type { RecipeDetail } from '@/api/recipes'
 import { useAuthStore } from '@/stores/auth'
+import { captureSessionGeneration } from '@/lib/sessionGeneration'
 
 import PrzepisEdytorPage from './PrzepisEdytorPage.vue'
 
@@ -87,7 +88,7 @@ function globalRecipe(): RecipeDetail {
 
 async function mountEditor(role: CurrentUser['role']) {
   setActivePinia(createPinia())
-  useAuthStore().setUser(account(role))
+  useAuthStore().setUser(account(role), captureSessionGeneration())
   const wrapper = mount(PrzepisEdytorPage, {
     global: { plugins: [VueQueryPlugin], stubs: { RouterLink: true } },
   })

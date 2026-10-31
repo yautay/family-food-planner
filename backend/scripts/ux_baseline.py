@@ -10,8 +10,10 @@ import argparse
 import asyncio
 import hashlib
 import os
+from collections.abc import Callable
 from contextlib import AsyncExitStack
 from datetime import date, timedelta
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -31,6 +33,8 @@ EMPTY_DAY = "2029-06-10"
 DATA_DIR = Path(__file__).resolve().parents[1] / "data" / "ux-baseline"
 MANIFEST_PATH = DATA_DIR / "manifest.json"
 EMAILS = {key: f"ux00-{key}@example.com" for key in ("a1", "a2", "b1", "solo")}
+DAY_TITLES = ("bez podziału", "częściowy podział", "pełny podział")
+MEAL_NAME = "Późny obiad po spacerze"
 Json = dict[str, Any]
 
 
@@ -94,14 +98,23 @@ class Journal:
                 "Sprawdź jej wynik w izolowanej instancji przed ręcznym uzgodnieniem manifestu."
             )
 
-    def save(self) -> None:
+    def save(self, state: Manifest | None = None) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         temporary = self.path.with_suffix(".tmp")
-        temporary.write_text(self.state.model_dump_json(indent=2) + "\n", encoding="utf-8")
+        temporary.write_text(
+            (state or self.state).model_dump_json(indent=2) + "\n", encoding="utf-8"
+        )
         temporary.replace(self.path)
 
     async def write(
-        self, api: Api, key: str, method: str, path: str, payload: Json | None = None
+        self,
+        api: Api,
+        key: str,
+        method: str,
+        path: str,
+        payload: Json | None = None,
+        *,
+        identifier_from: Callable[[Json], int] | None = None,
     ) -> int:
         if key in self.state.done:
             return self.state.ids.get(key, 0)
@@ -109,7 +122,7 @@ class Journal:
         self.state.pending = key
         self.save()  # PRZED żądaniem: nie ponawiamy niepotwierdzonego POST-a.
         result = await api.call(method, path, payload)
-        identifier = int(result.get("id", 0))
+        identifier = identifier_from(result) if identifier_from else int(result.get("id", 0))
         if identifier:
             self.state.ids[key] = identifier
         self.state.done.append(key)
@@ -146,6 +159,180 @@ class Api:
                 raise FixtureError("API zwróciło pustą stronę przed końcem zbioru.")
 
 
+def fixture_meal(day: Json, ids: dict[str, int], offset: int) -> Json:
+    """Rozpoznaj wyłącznie własny dzień i jego jednoznaczny posiłek UX00."""
+    if (
+        day.get("id") != ids[f"day-{offset}"]
+        or day.get("day") != (WEEK_START + timedelta(days=offset)).isoformat()
+        or day.get("title") != f"{PREFIX} — {DAY_TITLES[offset]}"
+        or day.get("scope") != "household"
+        or day.get("owner_user_id") != ids["user-a1"]
+    ):
+        raise FixtureError("Dzień UX00 ma obcy marker, datę, ID, właściciela lub scope.")
+    meals: list[Json] = day.get("meals", [])
+    if (
+        len(meals) != 1
+        or meals[0].get("name") != MEAL_NAME
+        or Decimal(str(meals[0].get("kcal_target"))) != Decimal("600")
+    ):
+        raise FixtureError("Nie znaleziono jednoznacznego posiłku UX00.")
+    return meals[0]
+
+
+def fixture_recipe_item(day: Json, ids: dict[str, int], offset: int) -> Json:
+    """Przepis, liczba porcji i pełny split identyfikują pozycję bez zgadywania."""
+    meal = fixture_meal(day, ids, offset)
+    items: list[Json] = [
+        item for item in meal["items"] if item.get("recipe_id") == ids[f"recipe-{offset}"]
+    ]
+    suffix = (
+        "Pełnoziarnista zapiekanka z pieczoną papryką, cukinią i serem"
+        if offset == 0
+        else f"Przepis próbny — śniadanie, obiad i kolacja {offset + 1:03}"
+    )
+    if len(items) != 1:
+        raise FixtureError("Nie znaleziono jednoznacznej pozycji przepisu UX00.")
+    item = items[0]
+    split = item.get("servings_split", [])
+    count = (0, 2, 3)[offset]
+    if (
+        item.get("recipe_name") != f"{PREFIX} — {offset + 1:03} {suffix}"
+        or item.get("product_id") is not None
+        or Decimal(str(item.get("servings"))) != Decimal("2.20" if offset == 1 else "3.30")
+        or len(split) != count
+        or {entry["member_profile_id"] for entry in split}
+        != {ids[f"profile-{index}"] for index in range(count)}
+        or any(Decimal(str(entry["multiplier"])) != Decimal("1.10") for entry in split)
+    ):
+        raise FixtureError("Pozycja przepisu UX00 ma obcy marker, przepis, porcje lub podział.")
+    return item
+
+
+def fixture_loose_item(day: Json, ids: dict[str, int]) -> Json:
+    """API przechowuje 1.5 łyżki produktu jako 15 g, bez podziału porcji."""
+    meal = fixture_meal(day, ids, 0)
+    items: list[Json] = [
+        item for item in meal["items"] if item.get("product_id") == ids["product-0"]
+    ]
+    if len(items) != 1:
+        raise FixtureError("Nie znaleziono jednoznacznego produktu luzem UX00.")
+    item = items[0]
+    if (
+        item.get("recipe_id") is not None
+        or item.get("product_name")
+        != f"{PREFIX} — 001 Płatki owsiane pełnoziarniste z otrębami i pestkami dyni"
+        or Decimal(str(item.get("amount"))) != Decimal("15")
+        or item.get("amount_unit") != "g"
+        or Decimal(str(item.get("servings"))) != Decimal("1")
+        or item.get("servings_split") != []
+    ):
+        raise FixtureError("Produkt luzem UX00 ma inny marker, ilość lub podział.")
+    return item
+
+
+async def plan_identifiers(a1: Api, journal: Journal, *, household_reader: Api) -> dict[str, int]:
+    """Tylko GET: potwierdź kontekst rodziny i wszystkie trzy dni przed zmianą pliku."""
+    ids = journal.state.ids
+    me = await a1.call("GET", "/auth/me")
+    family = await a1.call("GET", "/households/my")
+    household = {"id": ids["household-a"], "name": f"{PREFIX} — Dom A"}
+    if (
+        me.get("id") != ids["user-a1"]
+        or me.get("email") != EMAILS["a1"]
+        or me.get("display_name") != f"{PREFIX} — konto A1"
+        or me.get("role") != "user"
+        or me.get("household") != household
+        or family.get("household") != household
+        or {member["id"] for member in family.get("members", [])}
+        != {ids["user-a1"], ids["user-a2"]}
+        or {profile["id"] for profile in family.get("profiles", [])}
+        != {ids[f"profile-{index}"] for index in range(3)}
+        or any(
+            profile.get("household_id") != ids["household-a"]
+            for profile in family.get("profiles", [])
+        )
+    ):
+        raise FixtureError("Konto lub rodzina UX00 nie odpowiadają manifestowi.")
+    reader = await household_reader.call("GET", "/auth/me")
+    if (
+        reader.get("id") != ids["user-a2"]
+        or reader.get("email") != EMAILS["a2"]
+        or reader.get("display_name") != f"{PREFIX} — konto A2"
+        or reader.get("role") != "user"
+        or reader.get("household") != household
+    ):
+        raise FixtureError("Konto A2 nie potwierdza rodziny UX00.")
+    found: dict[str, int] = {}
+    for offset in range(3):
+        day = await a1.call("GET", f"/plan/days/{WEEK_START + timedelta(days=offset)}")
+        # DayRead nie ujawnia household_id. A2 nie jest właścicielem, więc jego
+        # dostęp do dokładnie tego day ID potwierdza widoczność w rodzinie A.
+        shared_day = await household_reader.call(
+            "GET", f"/plan/days/{WEEK_START + timedelta(days=offset)}"
+        )
+        fixture_meal(shared_day, ids, offset)
+        meal = fixture_meal(day, ids, offset)
+        recipe = fixture_recipe_item(day, ids, offset)
+        if len(meal["items"]) != (2 if offset == 0 else 1):
+            raise FixtureError("Dzień UX00 ma nieoczekiwane dodatkowe pozycje.")
+        found[f"meal-{offset}"] = meal["id"]
+        found[f"plan-item-{offset}"] = recipe["id"]
+        if offset == 0:
+            found["loose-product"] = fixture_loose_item(day, ids)["id"]
+    if any(type(value) is not int or value <= 0 for value in found.values()):
+        raise FixtureError("Niepoprawne identyfikatory posiłków lub pozycji UX00.")
+    if (
+        len({found[f"meal-{i}"] for i in range(3)}) != 3
+        or len({found[f"plan-item-{i}"] for i in range(3)} | {found["loose-product"]}) != 4
+    ):
+        raise FixtureError("Powtórzone identyfikatory posiłków lub pozycji UX00.")
+    return found
+
+
+def guard_identifier_repair(journal: Journal) -> None:
+    required = {f"{kind}-{i}" for kind in ("day", "meal", "plan-item") for i in range(3)}
+    required.add("loose-product")
+    if (
+        not journal.path.exists()
+        or journal.state.complete is not True
+        or journal.state.pending is not None
+        or not required.issubset(journal.state.done)
+        or not required.issubset(journal.state.ids)
+    ):
+        raise FixtureError(
+            "Naprawa identyfikatorów wymaga istniejącego COMPLETE manifestu bez pending."
+        )
+
+
+async def repair_manifest_identifiers(a1: Api, journal: Journal, *, household_reader: Api) -> None:
+    """Opt-in: bez mutacji API, stary manifest zachowany przed atomową zmianą samych ID."""
+    guard_identifier_repair(journal)
+    original = journal.path.read_bytes()
+    if Manifest.model_validate_json(original) != journal.state:
+        raise FixtureError("Manifest zmienił się od odczytu; nie nadpisano go.")
+    found = await plan_identifiers(a1, journal, household_reader=household_reader)
+    for key, identifier in found.items():
+        offset = 0 if key == "loose-product" else int(key.rsplit("-", 1)[1])
+        if journal.state.ids[key] not in {identifier, journal.state.ids[f"day-{offset}"]}:
+            raise FixtureError("Manifest zawiera ID inne niż potwierdzony błąd DayRead; przerwano.")
+    if all(journal.state.ids[key] == identifier for key, identifier in found.items()):
+        return
+    if journal.path.read_bytes() != original:
+        raise FixtureError("Manifest zmienił się podczas kontroli; nie nadpisano go.")
+    candidate = journal.state.model_copy(deep=True)
+    candidate.ids.update(found)
+    backup = journal.path.with_suffix(".identifiers.bak")
+    try:
+        with backup.open("xb") as stream:
+            stream.write(original)
+    except FileExistsError:
+        raise FixtureError(
+            "Kopia manifest.identifiers.bak już istnieje; nie nadpisano plików."
+        ) from None
+    journal.save(candidate)
+    journal.state = candidate
+
+
 async def preflight(admin: Api, journal: Journal) -> None:
     """Nie adoptuj encji o podobnej nazwie po utracie lokalnego manifestu."""
     for path, prefix in (
@@ -162,12 +349,14 @@ async def preflight(admin: Api, journal: Journal) -> None:
                 raise FixtureError(f"Znaleziono dane UX00 bez wpisu w manifeście: {path}.")
 
 
-async def prepare(settings: Settings, photo: Path) -> None:
+async def prepare(settings: Settings, photo: Path, *, repair_identifiers: bool = False) -> None:
     database = guard_environment(settings)
     admin_email = os.environ.get("E2E_ADMIN_EMAIL", "")
     admin_password = os.environ.get("E2E_ADMIN_PASSWORD", "")
     fixture_password = os.environ.get("UX_BASELINE_PASSWORD", "")
-    if not admin_email or not admin_password or len(fixture_password) < 12:
+    if len(fixture_password) < 12 or (
+        not repair_identifiers and (not admin_email or not admin_password)
+    ):
         raise FixtureError(
             "Wymagane E2E_ADMIN_EMAIL/PASSWORD i UX_BASELINE_PASSWORD (min. 12 znaków)."
         )
@@ -177,6 +366,8 @@ async def prepare(settings: Settings, photo: Path) -> None:
     with Image.open(photo) as image:
         image.verify()
     journal = Journal(MANIFEST_PATH, database, hashlib.sha256(photo_bytes).hexdigest())
+    if repair_identifiers:
+        guard_identifier_repair(journal)
     app = create_app(settings)
     async with AsyncExitStack() as stack:
 
@@ -190,6 +381,14 @@ async def prepare(settings: Settings, photo: Path) -> None:
             await api.call("POST", "/auth/login", {"email": email, "password": password})
             return api
 
+        if repair_identifiers:
+            await repair_manifest_identifiers(
+                await login(EMAILS["a1"], fixture_password),
+                journal,
+                household_reader=await login(EMAILS["a2"], fixture_password),
+            )
+            print("UX00: zweryfikowano i uzgodniono wyłącznie identyfikatory manifestu.")
+            return
         admin = await login(admin_email, admin_password)
         if (await admin.call("GET", "/auth/me"))["role"] != "admin":
             raise FixtureError("Konto E2E musi mieć rolę ADMIN.")
@@ -385,7 +584,7 @@ async def prepare(settings: Settings, photo: Path) -> None:
             current = await a1.call("GET", f"/plan/days/{day}")
             if current["id"] is not None and current["id"] != ids.get(f"day-{offset}"):
                 raise FixtureError("Data UX00 jest zajęta przez dzień spoza manifestu.")
-            title = ("bez podziału", "częściowy podział", "pełny podział")[offset]
+            title = DAY_TITLES[offset]
             await write(
                 a1,
                 f"day-{offset}",
@@ -397,22 +596,31 @@ async def prepare(settings: Settings, photo: Path) -> None:
                 },
             )
             meal_key = f"meal-{offset}"
-            # Endpoint posiłku zwraca DayRead: ID posiłku odczytujemy po własnej nazwie.
-            await write(
+
+            def meal_identifier(result: Json, current_offset: int = offset) -> int:
+                return int(fixture_meal(result, ids, current_offset)["id"])
+
+            def item_identifier(result: Json, current_offset: int = offset) -> int:
+                return int(fixture_recipe_item(result, ids, current_offset)["id"])
+
+            # DayRead.id identyfikuje dzień, nigdy utworzony posiłek ani pozycję.
+            mid = await write(
                 a1,
                 meal_key,
                 "POST",
                 f"/plan/days/{day}/meals",
                 {
-                    "name": "Późny obiad po spacerze",
+                    "name": MEAL_NAME,
                     "kcal_target": "600",
                 },
+                identifier_from=meal_identifier,
             )
             current = await a1.call("GET", f"/plan/days/{day}")
-            meals = current["meals"]
-            if len(meals) != 1:
-                raise FixtureError("Dzień UX00 ma nieoczekiwaną liczbę posiłków.")
-            mid = meals[0]["id"]
+            if fixture_meal(current, ids, offset)["id"] != mid:
+                raise FixtureError(
+                    "Błędne ID posiłku w manifeście; użyj --repair-manifest-identifiers "
+                    "wyłącznie dla COMPLETE manifestu."
+                )
             count = 0 if offset == 0 else offset + 1
             await write(
                 a1,
@@ -427,6 +635,7 @@ async def prepare(settings: Settings, photo: Path) -> None:
                         for p in range(count)
                     ],
                 },
+                identifier_from=item_identifier,
             )
             if offset == 0:
                 await write(
@@ -440,6 +649,7 @@ async def prepare(settings: Settings, photo: Path) -> None:
                         "unit": "łyżka",
                         "servings": "1",
                     },
+                    identifier_from=lambda result: fixture_loose_item(result, ids)["id"],
                 )
         if (await a1.call("GET", f"/plan/days/{EMPTY_DAY}"))["id"] is not None:
             raise FixtureError("Pusta data UX00 jest zajęta; nie usunięto jej danych.")
@@ -595,6 +805,12 @@ async def prepare(settings: Settings, photo: Path) -> None:
 async def verify(a1: Api, actors: dict[str, Api], journal: Journal) -> None:
     """Rzeczywiste odczyty po setupie i po każdym ponownym uruchomieniu."""
     ids = journal.state.ids
+    found = await plan_identifiers(a1, journal, household_reader=actors["a2"])
+    if any(ids.get(key) != identifier for key, identifier in found.items()):
+        raise FixtureError(
+            "Błędne ID posiłku lub pozycji w manifeście UX00. "
+            "Po kontroli użyj --repair-manifest-identifiers dla COMPLETE manifestu."
+        )
     for path, keys in (
         ("/products", [f"product-{i}" for i in range(55)]),
         ("/recipes", [f"recipe-{i}" for i in range(55)]),
@@ -606,11 +822,6 @@ async def verify(a1: Api, actors: dict[str, Api], journal: Journal) -> None:
     profiles = (await a1.call("GET", "/households/my"))["profiles"]
     if len(profiles) != 3 or {p["id"] for p in profiles} != {ids[f"profile-{i}"] for i in range(3)}:
         raise FixtureError("Rodzina UX00 nie ma trzech oczekiwanych profili.")
-    for offset, count in enumerate((0, 2, 3)):
-        day = await a1.call("GET", f"/plan/days/2029-06-0{4 + offset}")
-        item = day["meals"][0]["items"][0]
-        if len(item["servings_split"]) != count:
-            raise FixtureError("Nieoczekiwany podział porcji UX00.")
     photo_recipe = await a1.call("GET", f"/recipes/{ids['recipe-0']}")
     if (
         not photo_recipe["photo_url"]
@@ -634,13 +845,18 @@ def main() -> None:
     parser.add_argument(
         "--photo", type=Path, required=True, help="Publiczne zdjęcie testowe, poza Git"
     )
+    parser.add_argument(
+        "--repair-manifest-identifiers",
+        action="store_true",
+        help="Tylko COMPLETE manifest: GET-y planu, kopia .identifiers.bak i atomowa naprawa ID",
+    )
     args = parser.parse_args()
 
     async def run() -> None:
         settings = get_settings()  # To samo cache Settings, którego używa fabryka sesji DB.
         guard_environment(settings)  # Przed utworzeniem app/sesji/manifestu.
         try:
-            await prepare(settings, args.photo)
+            await prepare(settings, args.photo, repair_identifiers=args.repair_manifest_identifiers)
         finally:
             await get_engine().dispose()
 

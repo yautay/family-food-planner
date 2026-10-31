@@ -28,6 +28,17 @@ function mountRow(overrides: Record<string, unknown> = {}) {
 }
 
 describe('ShoppingItemRow', () => {
+  it('pełna długa nazwa zawija się, a ilość ma osobną kolumnę', () => {
+    const label = 'Płatki owsiane pełnoziarniste z otrębami, pestkami dyni i suszoną żurawiną'
+    const wrapper = mountRow({ label })
+    const name = wrapper.get('[data-testid="shopping-label-7"]')
+    expect(name.text()).toBe(label)
+    expect(name.classes()).not.toContain('truncate')
+    expect(name.classes()).toContain('whitespace-normal')
+    expect(name.element.parentElement).not.toBe(
+      wrapper.get('[data-testid="shopping-amount-7"]').element.parentElement,
+    )
+  })
   it('checkbox ma ~48 px celu dotykowego (06_UIUX §5)', () => {
     const wrapper = mountRow()
 

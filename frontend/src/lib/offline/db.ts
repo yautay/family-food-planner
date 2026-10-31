@@ -17,18 +17,20 @@
  * PATCH-e, z których pierwszy niósłby stan już nieaktualny. Kolejność wysyłki
  * bierzemy z `queuedAt`, nie z klucza.
  *
- * **Zero PII** (niezmiennik 02_DOMAIN §13.5): w snapshotcie leży wyłącznie
- * treść listy, którą serwer i tak pokazuje osobie z linkiem. Token publiczny
- * jest częścią klucza — to akceptowalne, bo mieszka na tym samym urządzeniu,
- * na którym jest URL z tym tokenem; do konsoli ani do raportów błędów nie trafia.
+ * Snapshot prywatny zachowuje prywatną odpowiedź listy, także received_at.
+ * Izoluje go losowy scope potwierdzonej sesji; odczyt i każdy zapis sprawdzają
+ * aktualność scope ponownie po await. Starsze list:* pozostają w kwarantannie.
+ * Publiczny snapshot nadal ma wyłącznie PublicListRead i osobny klucz tokenu.
+ * Tokeny ani namespace nie trafiają do konsoli i raportów błędów.
  *
- * Środowisko bez IndexedDB (prerender, testy node, przeglądarka w trybie
- * prywatnym z zablokowanym storage) nie może wysadzić strony: każda operacja
- * degraduje się wtedy do „brak snapshotu / pusta kolejka", a aplikacja działa
- * jak przed B12, czyli online.
+ * Bez IndexedDB odczyt snapshotu zwraca brak danych. Zapis intencji i odczyt
+ * kolejki zgłaszają kontrolowany OfflineStorageError: UI wycofuje checkbox
+ * i pokazuje błąd zamiast udawać trwały zapis lub pustą kolejkę. Dostępna
+ * sesja online nadal pozwala korzystać z API.
  */
 
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
+import { isPrivateOfflineScopeCurrent } from './privateSession'
 
 const DB_NAME = 'pasnik-offline'
 const DB_VERSION = 1
@@ -36,15 +38,38 @@ const SNAPSHOTS = 'list-snapshots'
 const QUEUE = 'mutation-queue'
 
 /** Adresat mutacji: lista zalogowanego albo publiczny link (ADR-010). */
-export type QueueTarget = { kind: 'list'; listId: number } | { kind: 'public'; token: string }
+export type QueueTarget =
+  { kind: 'list'; listId: number; scope: string } | { kind: 'public'; token: string }
 
 /** Klucz obu magazynów — ta sama lista ma ten sam klucz w snapshotcie i kolejce. */
 export function targetKey(target: QueueTarget): string {
-  return target.kind === 'list' ? `list:${target.listId}` : `public:${target.token}`
+  return target.kind === 'list'
+    ? `private:${target.scope}:list:${target.listId}`
+    : `public:${target.token}`
+}
+
+/** Nie przypisujemy starych list:* ani obcego scope do bieżącego konta. */
+export function isQueueTargetCurrent(target: QueueTarget): boolean {
+  return (
+    target.kind === 'public' ||
+    (typeof target.scope === 'string' && isPrivateOfflineScopeCurrent(target.scope))
+  )
+}
+
+export function isSnapshotKeyCurrent(key: string): boolean {
+  if (key.startsWith('public:')) return true
+  const match = /^private:([^:]+):list:\d+(?:#\d+)?$/.exec(key)
+  return match !== null && isPrivateOfflineScopeCurrent(match[1]!)
+}
+
+export class OfflineStorageError extends Error {
+  constructor() {
+    super('Nie udało się zapisać zmiany na tym urządzeniu. Połącz się z siecią i spróbuj ponownie.')
+  }
 }
 
 export interface ListSnapshot {
-  /** `list:{id}` albo `public:{token}` — patrz `targetKey`. */
+  /** `private:{scope}:list:{id}` albo `public:{token}`. */
   key: string
   /** Payload odpowiedzi w kształcie, w jakim renderuje go strona. */
   payload: unknown
@@ -130,23 +155,36 @@ function plain<T>(value: T): T {
 
 // --- snapshot treści listy ------------------------------------------------------
 
-export async function saveSnapshot(key: string, payload: unknown): Promise<void> {
-  await withDb(async (database) => {
-    await database.put(SNAPSHOTS, {
+export async function saveSnapshot(key: string, payload: unknown): Promise<boolean> {
+  if (!isSnapshotKeyCurrent(key)) return false
+  return withDb(async (database) => {
+    if (!isSnapshotKeyCurrent(key)) return false
+    const transaction = database.transaction(SNAPSHOTS, 'readwrite')
+    await transaction.store.put({
       key,
       payload: plain(payload),
       fetchedAt: new Date().toISOString(),
     })
-  }, undefined)
+    if (!isSnapshotKeyCurrent(key)) {
+      transaction.abort()
+      await transaction.done.catch(() => {})
+      return false
+    }
+    await transaction.done
+    return isSnapshotKeyCurrent(key)
+  }, false)
 }
 
 export async function readSnapshot<T>(key: string): Promise<T | null> {
+  if (!isSnapshotKeyCurrent(key)) return null
   const row = await withDb((database) => database.get(SNAPSHOTS, key), undefined)
-  return row === undefined ? null : (row.payload as T)
+  return row === undefined || !isSnapshotKeyCurrent(key) ? null : (row.payload as T)
 }
 
 export async function deleteSnapshot(key: string): Promise<void> {
+  if (!isSnapshotKeyCurrent(key)) return
   await withDb(async (database) => {
+    if (!isSnapshotKeyCurrent(key)) return
     await database.delete(SNAPSHOTS, key)
   }, undefined)
 }
@@ -170,11 +208,21 @@ export async function enqueueCheck(
   itemId: number,
   checked: boolean,
   checkedAt: Date,
+  snapshot?: unknown,
 ): Promise<void> {
+  if (!isQueueTargetCurrent(target)) throw new OfflineStorageError()
   const key = queueKey(target, itemId)
-  await withDb(async (database) => {
-    const existing = await database.get(QUEUE, key)
-    await database.put(QUEUE, {
+  const saved = await withDb(async (database) => {
+    if (!isQueueTargetCurrent(target)) return false
+    const transaction = database.transaction([QUEUE, SNAPSHOTS], 'readwrite')
+    const queue = transaction.objectStore(QUEUE)
+    const existing = await queue.get(key)
+    if (!isQueueTargetCurrent(target)) {
+      transaction.abort()
+      await transaction.done.catch(() => {})
+      return false
+    }
+    await queue.put({
       key,
       target: plain(target),
       itemId,
@@ -183,26 +231,53 @@ export async function enqueueCheck(
       queuedAt: existing?.queuedAt ?? new Date().toISOString(),
       attempts: 0,
     })
-  }, undefined)
+    // UI zapisuje optimistic snapshot już PRZED żądaniem online. Starsza
+    // odmowa mogła go w tym czasie unieważnić. Fallback network0 odtwarza go
+    // atomowo razem z NOWĄ intencją, także gdy cache nie zmienił się ponownie.
+    if (snapshot !== undefined) {
+      await transaction.objectStore(SNAPSHOTS).put({
+        key: targetKey(target),
+        payload: plain(snapshot),
+        fetchedAt: new Date().toISOString(),
+      })
+    }
+    if (!isQueueTargetCurrent(target)) {
+      transaction.abort()
+      await transaction.done.catch(() => {})
+      return false
+    }
+    await transaction.done
+    return isQueueTargetCurrent(target)
+  }, false)
+  if (!saved) throw new OfflineStorageError()
 }
 
 /** Cała kolejka w kolejności wejścia — flush idzie po niej sekwencyjnie. */
 export async function readQueue(): Promise<QueuedCheck[]> {
-  const rows = await withDb((database) => database.getAll(QUEUE), [] as QueuedCheck[])
+  const rows = await withDb((database) => database.getAll(QUEUE), null)
+  if (rows === null) throw new OfflineStorageError()
   return [...rows].sort((a, b) => a.queuedAt.localeCompare(b.queuedAt))
 }
 
 export async function deleteQueued(key: string): Promise<void> {
+  if (!isSnapshotKeyCurrent(key)) return
   await withDb(async (database) => {
+    if (!isSnapshotKeyCurrent(key)) return
     await database.delete(QUEUE, key)
   }, undefined)
 }
 
 /** Usuń tylko wysłaną decyzję — w trakcie PATCH mogła powstać nowa pod tym samym kluczem. */
 export async function deleteQueuedIfUnchanged(entry: QueuedCheck): Promise<void> {
+  if (!isQueueTargetCurrent(entry.target)) return
   await withDb(async (database) => {
     const transaction = database.transaction(QUEUE, 'readwrite')
     const row = await transaction.store.get(entry.key)
+    if (!isQueueTargetCurrent(entry.target)) {
+      transaction.abort()
+      await transaction.done.catch(() => {})
+      return
+    }
     if (row && row.checkedAt === entry.checkedAt && row.checked === entry.checked) {
       await transaction.store.delete(entry.key)
     }
@@ -210,11 +285,40 @@ export async function deleteQueuedIfUnchanged(entry: QueuedCheck): Promise<void>
   }, undefined)
 }
 
+/**
+ * Terminalna odmowa bieżącej decyzji unieważnia jej optimistic snapshot.
+ * Porównanie wersji, ack i usunięcie snapshotu należą do JEDNEJ transakcji:
+ * enqueue nowszej decyzji nie może wejść pomiędzy ack a kasowanie snapshotu.
+ */
+export async function rejectQueuedIfUnchanged(entry: QueuedCheck): Promise<boolean> {
+  if (!isQueueTargetCurrent(entry.target)) return false
+  return withDb(async (database) => {
+    const transaction = database.transaction([QUEUE, SNAPSHOTS], 'readwrite')
+    const queue = transaction.objectStore(QUEUE)
+    const row = await queue.get(entry.key)
+    if (!isQueueTargetCurrent(entry.target)) {
+      transaction.abort()
+      await transaction.done.catch(() => {})
+      return false
+    }
+    const current =
+      row !== undefined && row.checkedAt === entry.checkedAt && row.checked === entry.checked
+    if (current) {
+      await queue.delete(entry.key)
+      await transaction.objectStore(SNAPSHOTS).delete(targetKey(entry.target))
+    }
+    await transaction.done
+    return current
+  }, false)
+}
+
 /** Wpisy jednej listy — używane po 410 (token wygasł, nie ma dokąd wysyłać). */
 export async function clearQueueFor(target: QueueTarget): Promise<void> {
+  if (!isQueueTargetCurrent(target)) return
   const prefix = `${targetKey(target)}#`
   await withDb(async (database) => {
     for (const row of await database.getAll(QUEUE)) {
+      if (!isQueueTargetCurrent(target)) return
       if (row.key.startsWith(prefix)) {
         await database.delete(QUEUE, row.key)
       }
@@ -245,9 +349,15 @@ export async function resetOfflineDb(): Promise<void> {
 
 /** Odmowa dotyczy wysłanej decyzji, nie jej ewentualnego następcy pod tym samym kluczem. */
 export async function bumpAttempts(entry: QueuedCheck): Promise<void> {
+  if (!isQueueTargetCurrent(entry.target)) return
   await withDb(async (database) => {
     const transaction = database.transaction(QUEUE, 'readwrite')
     const row = await transaction.store.get(entry.key)
+    if (!isQueueTargetCurrent(entry.target)) {
+      transaction.abort()
+      await transaction.done.catch(() => {})
+      return
+    }
     if (row && row.checkedAt === entry.checkedAt && row.checked === entry.checked) {
       await transaction.store.put({ ...row, attempts: row.attempts + 1 })
     }

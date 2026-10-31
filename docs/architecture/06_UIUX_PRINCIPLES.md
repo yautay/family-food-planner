@@ -201,6 +201,17 @@ podgląd, konfiguracja tur jest domyślnie zwinięta. Podgląd i zapisane listy
 otrzymują fokus po zakończeniu odpowiedniej operacji. Błąd pozostawia
 zakres i dostępny podgląd; sukces finalizacji pokazuje każdą utworzoną turę.
 
+UX06: sekcje checklisty zachowują kolejność serwera. Długie nazwy zawijają
+się, ilość ma osobne miejsce, pole checkboxa ma48px. Kupione pozycje są
+domyślnie zwinięte per kategoria; „mam już w domu” pozostaje osobnym stanem.
+Wiersze pozostają w DOM dla rozwinięcia i druku, który pokazuje wszystkie.
+Udostępnij/Drukuj są na górze, sklep w rozwinięciu. Potwierdzenie przyjęcia
+podaje rzeczywiste nazwy i ilości, jest niedostępne offline i przed udanym
+potwierdzeniem checkboxów po synchronizacji. Sama pusta kolejka nie dowodzi
+sukcesu LWW. Trwałe odrzucenie zmiany ma błąd również przy pending=0.
+Publiczna lista używa tych samych wierszy i własnego klienta bez sesji/CSRF;
+odwołany lub wygasły link usuwa treść z widoku. Brak trwałego „Zakończ zakupy”.
+
 - UX02: mobile-first; sidebar od md, cztery dolne wejścia Plan / Przepisy /
   Zakupy / Spiżarnia na telefonie. Dzień / Tydzień / Podsumowanie są
   podnawigacją Planu. Biblioteka produktów jest pomocnicza, Dom i ustawienia
@@ -233,6 +244,10 @@ nawigacji, pod którą jest osadzona. Wszystko siedzi w `@media print`, więc na
 ekranie ten plik nic nie zmienia. Znak `☐` rysuje `ShoppingItemRow` (checkbox
 przeglądarki dostaje `print:hidden`), a pozycje mają `break-inside: avoid`,
 żeby wiersz nie łamał się między stronami.
+
+UX06 wymusza widoczność zwiniętych kupionych wierszy w druku; cały wiersz
+ma break-inside:avoid, nazwy i ilości zachowują osobne kolumny. Odbiór obejmuje
+rzeczywiste strony A4 długiej listy prywatnej i publicznej, a nie sam kolor CSS.
 
 ## 7. Język interfejsu
 

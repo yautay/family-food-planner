@@ -31,3 +31,4 @@ Zasady:
 | 015 | Dostęp do bazy asynchronicznie: SQLAlchemy async + psycopg 3 |
 | 016 | Transfer jedynym importem/eksportem; importer PDF wycofany |
 | 017 | Produkcja w LXC przez ansistrano; PostgreSQL we współdzielonym klastrze |
+| 018 | Prywatna lista offline: lokalny scope, generacje odpowiedzi i izolacja cache |

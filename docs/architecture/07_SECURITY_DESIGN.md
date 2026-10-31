@@ -212,13 +212,19 @@ Dziewięć szczegółów wykonawczych, które trzeba utrzymać:
    ignorowany, a znacznik z przyszłości ponad 5 minut przycinany do czasu
    serwera, więc najgorsze, co da się zrobić, to „przypiąć" własny stan na te
    kilka minut. Wymagana jest strefa czasowa (naiwna data to 422).
-11. **Snapshot listy w IndexedDB (BATCH_12)** trzyma WYŁĄCZNIE treść, którą
-   serwer i tak pokazuje osobie z linkiem: `label`, ilość, kategoria, `checked`.
-   Zero PII (02_DOMAIN §13.5). Token publiczny jest częścią klucza rekordu —
-   akceptowalne, bo mieszka na tym samym urządzeniu, na którym jest URL z tym
-   tokenem; do konsoli, logów ani raportów błędów nie trafia. Runtime cache
-   service workera świadomie POMIJA `/api/v1/auth/*`, żeby odpowiedzi
-   z `Set-Cookie` nie lądowały w Cache Storage.
+11. **Publiczny snapshot listy w IndexedDB** ma wyłącznie PublicListRead:
+   bez profili, kont, planów i prywatnych pól przyjęcia. Token jest częścią
+   lokalnego klucza urządzenia z tym URL; nie trafia do konsoli ani raportów.
+   Prywatny snapshot zachowuje prywatną odpowiedź, w tym received_at,
+   i należy do oddzielnego losowego namespace potwierdzonego konta/rodziny.
+   Szczegóły markerów, kwarantanny legacy i sprawdzania po await: ADR-018.
+   Marker offline nie uwierzytelnia; cold offline user=null i tylko trasa listy.
+12. **Izolacja UX06:** SW nie przechowuje żadnego API ani chronionych uploadów.
+   Przed routerem bootstrap przejmuje bezpieczny worker i usuwa stare globalne
+   cache. Chroniony widok ma klienta Query dla swojej generacji; spóźniony
+   callback, rollback, 401 lub eksport starego konta nie wpływa na nowe konto.
+   Backend nadal autoryzuje każde żądanie sesją i scope. Offline nie można
+   wykryć zdalnego odwołania; prywatny replay wymaga ponownego rzeczywistego /me.
 
 ## 6. Uploady
 

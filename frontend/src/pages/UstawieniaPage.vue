@@ -12,7 +12,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { computed, reactive, ref } from 'vue'
 
-import { ApiError } from '@/api/client'
+import { ApiError, assertSessionRequestCurrent, captureSessionRequest } from '@/api/client'
 import type { Goal } from '@/api/goals'
 import {
   DEFAULT_THRESHOLDS,
@@ -41,6 +41,7 @@ import { statusFor, statusLabel, statusToken } from '@/lib/nutrition'
 import { downloadExport } from '@/api/transfer'
 import { saveBlob } from '@/lib/download'
 import { useAuthStore } from '@/stores/auth'
+import { captureSessionGeneration } from '@/lib/sessionGeneration'
 import {
   common,
   goals as goalTexts,
@@ -259,8 +260,11 @@ const transferError = ref<string | null>(null)
 const exportedFilename = ref<string | null>(null)
 
 const exportData = useMutation({
+  onMutate: () => ({ sessionTicket: captureSessionRequest() }),
   mutationFn: () => downloadExport('user'),
-  onSuccess: (file) => {
+  onSuccess: (file, _variables, context) => {
+    if (!context) return
+    assertSessionRequestCurrent(context.sessionTicket)
     transferError.value = null
     exportedFilename.value = file.filename
     saveBlob(file.blob, file.filename)
@@ -271,10 +275,11 @@ const exportData = useMutation({
 })
 
 const saveThresholds = useMutation({
+  onMutate: () => ({ sessionTicket: captureSessionGeneration() }),
   mutationFn: () => updateThresholds(parsedThresholds.value),
-  onSuccess: async (user) => {
+  onSuccess: async (user, _variables, context) => {
+    if (!context || !auth.setUser(user, context.sessionTicket)) return
     thresholdError.value = null
-    auth.setUser(user)
     await queryClient.invalidateQueries({ queryKey: queryKeys.planDays.all })
   },
   onError: (error: unknown) => {

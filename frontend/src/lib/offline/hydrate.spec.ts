@@ -1,3 +1,19 @@
+vi.mock('@/lib/offline/privateSession', () => ({
+  getPrivateOfflineScope: () => 'test-scope',
+  isPrivateOfflineScopeCurrent: (scope: string) => scope === 'test-scope',
+  isPrivateOfflineScopeConfirmed: (scope: string) => scope === 'test-scope',
+  subscribePrivateOfflineScope: () => () => {},
+}))
+vi.mock('@/stores/auth', () => ({
+  useAuthStore: () => ({
+    user: { id: 1 },
+    household: null,
+    isAuthenticated: true,
+    offlineSession: false,
+    ensureLoaded: vi.fn().mockResolvedValue(undefined),
+    clear: vi.fn(),
+  }),
+}))
 /**
  * Hydratacja listy ze snapshotu IndexedDB (karta B12 §Tests — komponenty).
  *
@@ -9,13 +25,13 @@
 import 'fake-indexeddb/auto'
 
 import { QueryClient } from '@tanstack/vue-query'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { resetOfflineDb, saveSnapshot } from '@/lib/offline/db'
 import { hydrateFromSnapshot } from '@/lib/offline/hydrate'
 
 const KEY = ['shopping', 'lists', 'detail', 7] as const
-const SNAPSHOT_KEY = 'list:7'
+const SNAPSHOT_KEY = 'private:test-scope:list:7'
 
 interface Lista {
   name: string

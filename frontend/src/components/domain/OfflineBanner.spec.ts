@@ -14,6 +14,25 @@ import OfflineBanner from '@/components/domain/OfflineBanner.vue'
 import { offline as texts } from '@/lib/texts'
 
 describe('OfflineBanner', () => {
+  it('terminalny błąd pozostaje alertem mimo pustej kolejki i dostępnej sieci', () => {
+    const wrapper = mount(OfflineBanner, {
+      props: { offline: false, pending: 0, syncing: false, error: 'Odhaczenie odrzucone.' },
+    })
+    expect(wrapper.get('[data-testid="offline-banner"]').attributes('role')).toBe('alert')
+    expect(wrapper.text()).toContain('Odhaczenie odrzucone.')
+  })
+  it('oczekiwanie na backoff nie udaje trwającej wysyłki', () => {
+    const wrapper = mount(OfflineBanner, {
+      props: { offline: false, pending: 2, syncing: false, retrying: true },
+    })
+    expect(wrapper.text()).toContain('Nie udało się wysłać zmian')
+    expect(wrapper.text()).not.toContain(texts.syncing)
+  })
+
+  it('online z oczekującą kolejką mówi o oczekiwaniu', () => {
+    const wrapper = mount(OfflineBanner, { props: { offline: false, pending: 2, syncing: false } })
+    expect(wrapper.text()).toContain('Zmiany czekają na wysłanie')
+  })
   it('nie renderuje niczego, gdy jest połączenie i pusta kolejka', () => {
     const wrapper = mount(OfflineBanner, { props: { offline: false, pending: 0 } })
 

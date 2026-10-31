@@ -15,7 +15,7 @@ import { Info } from '@lucide/vue'
 import { useMutation } from '@tanstack/vue-query'
 import { ref } from 'vue'
 
-import { ApiError } from '@/api/client'
+import { ApiError, assertSessionRequestCurrent, captureSessionRequest } from '@/api/client'
 import { downloadExport } from '@/api/transfer'
 import TransferImportDialog from '@/components/domain/TransferImportDialog.vue'
 import { Button } from '@/components/ui/button'
@@ -29,8 +29,11 @@ const errorMessage = ref<string | null>(null)
 const exportedFilename = ref<string | null>(null)
 
 const exportInstance = useMutation({
+  onMutate: () => ({ sessionTicket: captureSessionRequest() }),
   mutationFn: () => downloadExport('instance'),
-  onSuccess: (file) => {
+  onSuccess: (file, _variables, context) => {
+    if (!context) return
+    assertSessionRequestCurrent(context.sessionTicket)
     errorMessage.value = null
     exportedFilename.value = file.filename
     saveBlob(file.blob, file.filename)

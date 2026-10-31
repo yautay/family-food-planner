@@ -59,15 +59,17 @@ const packagesLine = computed(() => {
 
 <template>
   <li
-    class="border-border bg-card rounded-xl border print:rounded-none print:border-0 print:border-b print:border-black print:bg-transparent"
+    class="shopping-item border-border border-b print:border-black print:bg-transparent"
     :class="alreadyHave ? 'opacity-60' : ''"
     :data-testid="`shopping-item-${itemId}`"
   >
-    <label class="flex min-h-14 cursor-pointer items-center gap-3 p-2 print:p-1">
+    <label
+      class="grid min-h-20 cursor-pointer grid-cols-[3rem_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 py-3 print:min-h-0 print:py-2"
+    >
       <!-- Checkbox interaktywny: ~48 px celu dotykowego (06_UIUX §5). -->
       <input
         type="checkbox"
-        class="size-12 shrink-0 accent-primary print:hidden"
+        class="size-12 shrink-0 accent-primary focus-visible:ring-ring rounded focus-visible:ring-2 focus-visible:ring-offset-2 print:hidden"
         :checked="checked"
         :disabled="disabled"
         :aria-label="texts.toggleAria(label)"
@@ -77,9 +79,9 @@ const packagesLine = computed(() => {
       <!-- Wariant do druku: kwadrat do odhaczenia ołówkiem (06_UIUX §6). -->
       <span class="hidden shrink-0 text-lg print:inline" aria-hidden="true">☐</span>
 
-      <span class="grid min-w-0 flex-1 gap-0.5">
+      <span class="grid min-w-0 gap-1">
         <span
-          class="truncate font-medium print:whitespace-normal"
+          class="shopping-item-name font-medium wrap-anywhere whitespace-normal"
           :class="checked ? 'line-through print:no-underline' : ''"
           :data-testid="`shopping-label-${itemId}`"
         >
@@ -88,7 +90,6 @@ const packagesLine = computed(() => {
         <span
           class="text-muted-foreground flex flex-wrap items-center gap-2 text-xs print:text-black"
         >
-          <span :data-testid="`shopping-amount-${itemId}`">{{ formatAmount(amount, unit) }}</span>
           <span v-if="packagesLine" :data-testid="`shopping-packages-${itemId}`">
             {{ packagesLine }}
           </span>
@@ -107,10 +108,17 @@ const packagesLine = computed(() => {
         </span>
       </span>
 
+      <span
+        class="max-w-24 text-right text-sm font-semibold wrap-anywhere tabular-nums sm:max-w-32"
+        :data-testid="`shopping-amount-${itemId}`"
+      >
+        {{ formatAmount(amount, unit) }}
+      </span>
+
       <!-- Resztka jest ZAWSZE eksponowana, gdy znamy opakowanie (02_DOMAIN §9.3). -->
       <LeftoverBadge
         v-if="packagesCount != null"
-        class="shrink-0 print:hidden"
+        class="col-span-2 col-start-2 justify-self-start print:hidden"
         :leftover="leftover"
         :unit="unit"
       />

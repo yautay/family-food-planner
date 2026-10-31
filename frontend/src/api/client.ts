@@ -13,6 +13,11 @@
  */
 
 import { recordServerDate } from '@/lib/offline/clock'
+import {
+  captureSessionGeneration,
+  isSessionGenerationCurrent,
+  StaleSessionResponseError,
+} from '@/lib/sessionGeneration'
 
 export const API_PREFIX = '/api/v1'
 
@@ -76,8 +81,31 @@ export function setUnauthorizedHandler(handler: UnauthorizedHandler | undefined)
  * czyta JSON). Bez tego wygasła sesja na takiej ścieżce nie odsyłałaby na
  * `/login`, a kolejka offline nie znałaby zegara serwera (ADR-009).
  */
-export function observeResponse(response: Response): void {
+export interface SessionRequestTicket {
+  readonly generation: number
+  /** Wyłącznie transient memory; nigdy persistence/logi. */
+  readonly credential: string | undefined
+}
+
+export function captureSessionRequest(): SessionRequestTicket {
+  return { generation: captureSessionGeneration(), credential: readCsrfToken() }
+}
+
+export function assertSessionRequestCurrent(ticket: SessionRequestTicket): void {
+  if (!isSessionGenerationCurrent(ticket.generation) || ticket.credential !== readCsrfToken()) {
+    throw new StaleSessionResponseError()
+  }
+}
+
+/** Korekta LWW następuje przy nagłówkach, niezależnie od czasu odczytu body. */
+export function observeResponseHeaders(response: Response, ticket: SessionRequestTicket): void {
+  assertSessionRequestCurrent(ticket)
   recordServerDate(response.headers.get('Date'))
+}
+
+/** Efekty sesji dopiero po sprawdzeniu generacji kompletnej odpowiedzi. */
+export function observeResponse(response: Response, ticket: SessionRequestTicket): void {
+  assertSessionRequestCurrent(ticket)
   if (response.status === 401) {
     unauthorizedHandler?.()
   }
@@ -178,6 +206,7 @@ async function toApiError(response: Response): Promise<ApiError> {
  * (wtedy `status = 0`) — obsługę komunikatu robi warstwa wywołująca.
  */
 export async function apiFetch<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
+  const ticket = captureSessionRequest()
   const { json, form, query, headers, ...rest } = options
   const method = (rest.method ?? 'GET').toUpperCase()
 
@@ -202,6 +231,7 @@ export async function apiFetch<T>(path: string, options: ApiRequestOptions = {})
       body: form ?? (json === undefined ? undefined : JSON.stringify(json)),
     })
   } catch (cause) {
+    assertSessionRequestCurrent(ticket)
     throw new ApiError(
       0,
       { code: 'network_error', message: FALLBACK_MESSAGE, details: {} },
@@ -209,19 +239,25 @@ export async function apiFetch<T>(path: string, options: ApiRequestOptions = {})
     )
   }
 
-  // Zegar serwera z nagłówka `Date`: kolejka offline stempluje nim `checked_at`,
-  // bo LWW ma rozstrzygać, KTO odhaczył później, a nie czyj telefon się spieszy
-  // (ADR-009). Czytamy z KAŻDEJ odpowiedzi, także błędnej — nagłówek jest tam
-  // tak samo dobry, a im świeższe przesunięcie, tym lepiej.
-  observeResponse(response)
+  // Login/logout normalnie zmieniają cookie przy nagłówkach. Późniejsza
+  // zmiana podczas czytania body jest już inną sesją, tak jak dla reszty API.
+  const changesCookie = method === 'POST' && ['/auth/login', '/auth/logout'].includes(path)
+  if (!isSessionGenerationCurrent(ticket.generation)) throw new StaleSessionResponseError()
+  const responseTicket = changesCookie ? { ...ticket, credential: readCsrfToken() } : ticket
+  observeResponseHeaders(response, responseTicket)
 
   if (!response.ok) {
-    throw await toApiError(response)
+    const error = await toApiError(response)
+    observeResponse(response, responseTicket)
+    throw error
   }
 
   if (response.status === 204 || response.headers.get('Content-Length') === '0') {
+    observeResponse(response, responseTicket)
     return undefined as T
   }
 
-  return (await response.json()) as T
+  const result = (await response.json()) as T
+  observeResponse(response, responseTicket)
+  return result
 }

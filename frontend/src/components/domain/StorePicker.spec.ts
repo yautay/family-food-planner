@@ -38,6 +38,16 @@ async function mountPicker() {
 }
 
 describe('StorePicker', () => {
+  it('disabled blokuje wszystkie opcje już otwartego pickera', async () => {
+    const wrapper = await mountPicker()
+    await wrapper.get('[data-testid="store-picker-input"]').setValue('Nowy sklep')
+    await wrapper.setProps({ disabled: true })
+    expect(wrapper.get('[data-testid="store-picker-none"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-testid="store-picker-create"]').attributes('disabled')).toBeDefined()
+    await wrapper.get('[data-testid="store-picker-none"]').trigger('click')
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+    expect(createStore).not.toHaveBeenCalled()
+  })
   beforeEach(() => {
     vi.clearAllMocks()
     fetchStores.mockResolvedValue({ items: [store()], total: 1 })

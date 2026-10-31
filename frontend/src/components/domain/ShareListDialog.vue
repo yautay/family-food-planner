@@ -38,6 +38,7 @@ const props = defineProps<{
   listId: number
   /** Aktualny stan udostępnienia z odpowiedzi listy (`null` = nigdy nie udostępniona). */
   share: Share | null
+  offline?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -51,20 +52,24 @@ const errorMessage = ref<string | null>(null)
 const copied = ref(false)
 const qrDataUrl = ref<string | null>(null)
 
-const activeShare = computed(() => (props.share && !props.share.revoked ? props.share : null))
+const expiredShare = computed(
+  () =>
+    props.share && !props.share.revoked && new Date(props.share.expires_at).getTime() <= Date.now(),
+)
+const activeShare = computed(() =>
+  props.share && !props.share.revoked && !expiredShare.value ? props.share : null,
+)
 const revokedShare = computed(() => (props.share && props.share.revoked ? props.share : null))
 const fullUrl = computed(() => (activeShare.value ? absoluteShareUrl(activeShare.value.url) : null))
 const canSystemShare = computed(() => typeof navigator !== 'undefined' && 'share' in navigator)
 
 /** Zamknięcie panelu czyści stan pomocniczy — QR i komunikaty nie mogą „przeciekać". */
 watch(
-  () => props.open,
-  (open) => {
-    if (!open) {
-      qrDataUrl.value = null
-      copied.value = false
-      errorMessage.value = null
-    }
+  () => [props.open, props.listId, props.share?.url] as const,
+  () => {
+    qrDataUrl.value = null
+    copied.value = false
+    errorMessage.value = null
   },
 )
 
@@ -79,27 +84,27 @@ function reportError(error: unknown): void {
   errorMessage.value = error instanceof ApiError ? error.message : common.unexpectedError
 }
 
-async function invalidate(): Promise<void> {
-  await queryClient.invalidateQueries({ queryKey: queryKeys.shopping.list(props.listId) })
+async function invalidate(id: number): Promise<void> {
+  await queryClient.invalidateQueries({ queryKey: queryKeys.shopping.list(id) })
   await queryClient.invalidateQueries({ queryKey: queryKeys.shopping.listsIndex })
 }
 
 const create = useMutation({
-  mutationFn: () => shareShoppingList(props.listId, { expires_in_days: validity.value }),
-  onSuccess: async () => {
+  mutationFn: (id: number) => shareShoppingList(id, { expires_in_days: validity.value }),
+  onSuccess: async (_share, id) => {
     errorMessage.value = null
     copied.value = false
     qrDataUrl.value = null
-    await invalidate()
+    await invalidate(id)
   },
   onError: reportError,
 })
 
 const revoke = useMutation({
-  mutationFn: () => revokeShoppingListShare(props.listId),
-  onSuccess: async () => {
+  mutationFn: (id: number) => revokeShoppingListShare(id),
+  onSuccess: async (_result, id) => {
     errorMessage.value = null
-    await invalidate()
+    await invalidate(id)
   },
   onError: reportError,
 })
@@ -139,13 +144,20 @@ async function toggleQr(): Promise<void> {
   }
   // Import dynamiczny: biblioteka QR jest potrzebna dopiero po kliknięciu, więc
   // nie ma powodu ciągnąć jej w głównym bundlu (dotyczy też strony listy).
-  const { toDataURL } = await import('qrcode')
-  qrDataUrl.value = await toDataURL(fullUrl.value, { width: 240, margin: 1 })
+  const url = fullUrl.value
+  try {
+    const { toDataURL } = await import('qrcode')
+    const image = await toDataURL(url, { width: 240, margin: 1 })
+    if (props.open && fullUrl.value === url) qrDataUrl.value = image
+  } catch {
+    errorMessage.value = common.unexpectedError
+  }
 }
 
 function askRevoke(): void {
+  if (props.offline || revoke.isPending.value) return
   if (window.confirm(texts.shareRevokeConfirm)) {
-    revoke.mutate()
+    revoke.mutate(props.listId)
   }
 }
 </script>
@@ -165,14 +177,17 @@ function askRevoke(): void {
 
     <!-- Stan 1: linku nie ma (albo został odwołany) — wybór ważności + utworzenie. -->
     <div v-if="!activeShare" class="grid gap-2">
+      <p v-if="expiredShare" class="text-muted-foreground text-sm" data-testid="share-expired">
+        Link wygasł. Możesz utworzyć nowy.
+      </p>
       <p v-if="revokedShare" class="text-muted-foreground text-xs" data-testid="share-revoked">
         {{ texts.shareRevoked }}
       </p>
-      <p v-else class="text-muted-foreground text-xs" data-testid="share-none">
+      <p v-else-if="!expiredShare" class="text-muted-foreground text-xs" data-testid="share-none">
         {{ texts.shareNone }}
       </p>
 
-      <fieldset class="grid gap-1">
+      <fieldset class="grid gap-1" :disabled="offline || create.isPending.value">
         <legend class="text-xs font-medium">{{ texts.shareValidity }}</legend>
         <div class="flex flex-wrap gap-2">
           <label
@@ -197,14 +212,14 @@ function askRevoke(): void {
         <Button
           type="button"
           class="min-h-11"
-          :disabled="create.isPending.value"
+          :disabled="offline || create.isPending.value"
           data-testid="share-create"
-          @click="create.mutate()"
+          @click="create.mutate(listId)"
         >
           {{
             create.isPending.value
               ? common.loading
-              : revokedShare
+              : revokedShare || expiredShare
                 ? texts.shareRecreate
                 : texts.shareCreate
           }}
@@ -218,7 +233,7 @@ function askRevoke(): void {
         {{ texts.shareActiveUntil(formatDate(activeShare.expires_at.slice(0, 10))) }}
       </p>
       <p
-        class="border-border text-muted-foreground overflow-x-auto rounded-lg border px-3 py-2 font-mono text-xs"
+        class="border-border text-muted-foreground rounded-lg border px-3 py-2 font-mono text-xs break-all select-all"
         data-testid="share-url"
       >
         {{ fullUrl }}
@@ -257,7 +272,7 @@ function askRevoke(): void {
           type="button"
           variant="ghost"
           class="text-destructive min-h-11"
-          :disabled="revoke.isPending.value"
+          :disabled="offline || revoke.isPending.value"
           data-testid="share-revoke"
           @click="askRevoke()"
         >
@@ -277,6 +292,10 @@ function askRevoke(): void {
         data-testid="share-qr-image"
       />
     </div>
+
+    <p v-if="offline" class="text-warning text-sm" data-testid="share-needs-network">
+      Utworzenie lub odwołanie linku wymaga połączenia z siecią.
+    </p>
 
     <p v-if="errorMessage" class="text-destructive text-sm" role="alert" data-testid="share-error">
       {{ errorMessage }}

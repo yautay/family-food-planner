@@ -20,6 +20,13 @@ Dokończyć spójność aplikacji, zachowując poprawne znaczenie danych i opera
 
 ## Kryteria i testy
 
+Handoff UX06: `auth.setUser(next, ticket)` wymaga ticketu generacji pobranego
+przed mutacją. Zachować ochronę spóźnionych callbacków ustawień/eksportu
+oraz osobne QueryClient dla chronionych generacji. Router zachowuje bezpieczny
+lokalny `next` po ponownym potwierdzeniu sesji, z ponowną kontrolą roli;
+nie zastępować tego bezwarunkowym powrotem do planu. Testy wypełniające
+hasło używają `e2e/secret-password.ts` i jawnego `trace: 'off'`.
+
 Użytkownik odnajduje każdy wcześniejszy formularz ustawień. Konto i profil osoby są jasno rozróżnione. Brak planu nie staje się zerowym spożyciem. Wykres i legenda nadal opisują właściwą jednostkę. Nie zmienia się zakres kopii danych rodziny, prawa USER/ADMIN ani identyfikatory encji przez przestawienie zakładek.
 
 `task check`; `statystyki.spec.ts`, `retail-stores.spec.ts`, `households.spec.ts`, `transfer.spec.ts`, smoke logowania/admin. `households.spec.ts` wykonuje się w kolejności przewidzianej konfiguracją E2E; nie równolegle z tworzeniem danych innych kart. Test błędu zapisu, klawiatury i długich nazw.

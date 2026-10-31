@@ -6,7 +6,7 @@
  * „co zrobić z tym wpisem po próbie wysłania" — bo od tej odpowiedzi zależy,
  * czy kolejka posuwa się do przodu, czy kręci się w kółko.
  *
- * Cztery wyniki i uzasadnienie każdego:
+ * Wyniki i uzasadnienie każdego:
  *
  * - `sent` — serwer przyjął (albo świadomie odrzucił po LWW, bo znacznik był
  *   starszy). W obu przypadkach wpis jest ZAŁATWIONY: odpowiedź 200 niesie stan
@@ -29,6 +29,9 @@
  * - `dropped` — 400/403/422 albo wyczerpane próby. Żądanie jest trwale
  *   niepoprawne; zostawienie go w kolejce zablokowałoby wszystkie następne wpisy,
  *   bo flush jest SEKWENCYJNY.
+ * - `session-changed` — odpowiedź należy do wcześniejszej generacji sesji.
+ *   Nie potwierdza ani nie odrzuca bieżącej intencji: wpis i licznik prób
+ *   zostają, a kolejny flush musi ponownie potwierdzić aktualną sesję.
  *
  * Sekwencyjność nie jest szczegółem implementacji, tylko wymogiem 07_SECURITY §5:
  * równoległy flush wystrzeliłby całą kolejkę w limit rate limitu naraz.
@@ -41,6 +44,7 @@ import {
   checkPublicListItem,
 } from '@/api/publicList'
 import { updateShoppingListItem } from '@/api/shoppingLists'
+import { StaleSessionResponseError } from '@/lib/sessionGeneration'
 
 import type { QueuedCheck } from '@/lib/offline/db'
 
@@ -52,7 +56,7 @@ import type { QueuedCheck } from '@/lib/offline/db'
  */
 export const MAX_ATTEMPTS = 8
 
-export type SyncOutcome = 'sent' | 'offline' | 'retry' | 'gone' | 'dropped'
+export type SyncOutcome = 'sent' | 'offline' | 'retry' | 'gone' | 'dropped' | 'session-changed'
 
 /** Statusy, po których ponowienie ma sens: przejściowe, nie „złe żądanie". */
 function isTransient(status: number): boolean {
@@ -87,6 +91,9 @@ export async function sendQueued(entry: QueuedCheck): Promise<SyncOutcome> {
 
 /** Mapowanie błędu na decyzję o wpisie — jedyne miejsce, które zna te reguły. */
 export function classify(error: unknown): SyncOutcome {
+  if (error instanceof StaleSessionResponseError) {
+    return 'session-changed'
+  }
   // Ścieżka publiczna: 404 i 410 mają wspólny typ, bo dla użytkownika to jeden
   // stan („już nie działa"), a rozróżnianie ich zdradzałoby istnienie tokenu.
   if (error instanceof PublicListUnavailableError) {

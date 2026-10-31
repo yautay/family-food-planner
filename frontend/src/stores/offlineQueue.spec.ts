@@ -1,3 +1,19 @@
+vi.mock('@/lib/offline/privateSession', () => ({
+  getPrivateOfflineScope: () => 'test-scope',
+  isPrivateOfflineScopeCurrent: (scope: string) => scope === 'test-scope',
+  isPrivateOfflineScopeConfirmed: (scope: string) => scope === 'test-scope',
+  subscribePrivateOfflineScope: () => () => {},
+}))
+vi.mock('@/stores/auth', () => ({
+  useAuthStore: () => ({
+    user: { id: 1 },
+    household: null,
+    isAuthenticated: true,
+    offlineSession: false,
+    ensureLoaded: vi.fn().mockResolvedValue(undefined),
+    clear: vi.fn(),
+  }),
+}))
 /**
  * Kolejka offline — pięć scenariuszy wymaganych przez ADR-009 (karta B12 §Tests).
  *
@@ -44,7 +60,7 @@ vi.mock('@/api/publicList', async () => {
   return { ...actual, checkPublicListItem }
 })
 
-const LIST: QueueTarget = { kind: 'list', listId: 7 }
+const LIST: QueueTarget = { kind: 'list', listId: 7, scope: 'test-scope' }
 const PUBLIC: QueueTarget = { kind: 'public', token: 'a'.repeat(43) }
 
 function gate() {
@@ -76,6 +92,159 @@ beforeEach(async () => {
 })
 
 describe('kolejka offline', () => {
+  it('tylko GET aktualnej wersji może potwierdzić rekonsyliację po opróżnieniu kolejki', async () => {
+    const store = useOfflineQueueStore()
+    store.markOffline()
+    await store.enqueue(LIST, 1, true)
+    updateShoppingListItem.mockResolvedValue({ id: 1, checked: false })
+    store.online = true
+    await store.flush()
+    const first = store.reconciliationVersion(LIST)
+    expect(store.pendingCount).toBe(0)
+    expect(store.needsReconciliation(LIST)).toBe(true)
+    store.confirmReconciled(LIST, first - 1)
+    expect(store.needsReconciliation(LIST)).toBe(true)
+    store.markOffline()
+    await store.enqueue(LIST, 2, true)
+    store.confirmReconciled(LIST, first)
+    expect(store.needsReconciliation(LIST)).toBe(true)
+    store.online = true
+    await store.flush()
+    store.confirmReconciled(LIST, first)
+    expect(store.needsReconciliation(LIST)).toBe(true)
+    store.confirmReconciled(LIST, store.reconciliationVersion(LIST))
+    expect(store.needsReconciliation(LIST)).toBe(false)
+  })
+
+  it('snapshot nowego kliknięcia PRZED enqueue przeżywa old422 i późniejszy network0', async () => {
+    const store = useOfflineQueueStore()
+    store.markOffline()
+    await store.enqueue(LIST, 1, true)
+    const sending = gate()
+    const finish = gate()
+    updateShoppingListItem.mockImplementationOnce(async () => {
+      sending.release()
+      await finish.promise
+      throw new ApiError(422, { code: 'validation_error', message: 'Stara odmowa', details: {} })
+    })
+    store.markOnline()
+    await sending.promise
+    const optimistic = { items: [{ id: 1, checked: false }], name: 'Nowsze kliknięcie' }
+    await saveSnapshot(targetKey(LIST), optimistic)
+    finish.release()
+    await vi.waitFor(() => expect(store.flushing).toBe(false))
+    // Nowy PATCH skończył się network0 dopiero PO terminalnej odmowie starego.
+    updateShoppingListItem.mockRejectedValueOnce(
+      new ApiError(0, { code: 'network_error', message: 'Brak sieci', details: {} }),
+    )
+    await expect(updateShoppingListItem(7, 1, { checked: false })).rejects.toMatchObject({
+      status: 0,
+    })
+    store.markOffline()
+    await store.enqueue(LIST, 1, false, optimistic)
+    expect(await readQueue()).toEqual([expect.objectContaining({ checked: false })])
+    expect(await readSnapshot(targetKey(LIST))).toEqual(optimistic)
+  })
+
+  it('odmowa starej wersji nie zgłasza błędu ani nie usuwa nowszego snapshotu przed kolejną wysyłką', async () => {
+    const store = useOfflineQueueStore()
+    const reconciled = vi.fn()
+    store.subscribeToSync(LIST, reconciled)
+    const first = new Date('2030-01-01T00:00:00.000Z')
+    vi.spyOn(offlineClock, 'nowWithSkew')
+      .mockReturnValueOnce(first)
+      .mockReturnValueOnce(new Date(first.getTime() + 1))
+    store.markOffline()
+    await store.enqueue(LIST, 1, true)
+    const sending = gate()
+    const finishFirst = gate()
+    const sendingNew = gate()
+    const finishNew = gate()
+    updateShoppingListItem
+      .mockImplementationOnce(async () => {
+        sending.release()
+        await finishFirst.promise
+        throw new ApiError(422, { code: 'validation_error', message: 'Stara odmowa', details: {} })
+      })
+      .mockImplementationOnce(async () => {
+        sendingNew.release()
+        await finishNew.promise
+        return { id: 1, checked: false }
+      })
+    store.markOnline()
+    await sending.promise
+    await store.enqueue(LIST, 1, false)
+    await saveSnapshot(targetKey(LIST), { checked: false, name: 'Nowy snapshot' })
+    finishFirst.release()
+    await sendingNew.promise
+    try {
+      expect(store.errorFor(LIST)).toBeNull()
+      expect(reconciled).not.toHaveBeenCalled()
+      expect(await readSnapshot(targetKey(LIST))).toEqual({ checked: false, name: 'Nowy snapshot' })
+      expect(await readQueue()).toEqual([expect.objectContaining({ checked: false })])
+    } finally {
+      finishNew.release()
+    }
+    await vi.waitFor(() => expect(store.flushing).toBe(false))
+    expect(store.errorFor(LIST)).toBeNull()
+  })
+
+  it('sukces innej pozycji nie kasuje terminalnego błędu pierwszej', async () => {
+    const store = useOfflineQueueStore()
+    store.markOffline()
+    await store.enqueue(LIST, 1, true)
+    await store.enqueue(LIST, 2, true)
+    updateShoppingListItem
+      .mockRejectedValueOnce(
+        new ApiError(403, { code: 'forbidden', message: 'Odmowa', details: {} }),
+      )
+      .mockResolvedValue({ id: 2, checked: true })
+    store.online = true
+    expect(await store.flush()).toBe(1)
+    expect(store.errorFor(LIST)).not.toBeNull()
+    expect(store.errorFor(PUBLIC)).toBeNull()
+    await store.forget(LIST, 2)
+    expect(store.errorFor(LIST)).not.toBeNull()
+    // forget wywołuje widok po potwierdzonej odpowiedzi ONLINE tej pozycji.
+    await store.forget(LIST, 1)
+    expect(store.errorFor(LIST)).toBeNull()
+  })
+
+  it('terminalna odmowa flush zgłasza błąd tej listy i odświeżenie zamiast pozornej synchronizacji', async () => {
+    const store = useOfflineQueueStore()
+    const reconciled = vi.fn()
+    store.subscribeToSync(LIST, reconciled)
+    store.markOffline()
+    await saveSnapshot(targetKey(LIST), { items: [{ id: 1, checked: true }] })
+    await store.enqueue(LIST, 1, true)
+    updateShoppingListItem.mockRejectedValue(
+      new ApiError(422, {
+        code: 'validation_error',
+        message: 'Odhaczenie odrzucone.',
+        details: {},
+      }),
+    )
+
+    store.online = true
+    expect(await store.flush()).toBe(0)
+    expect(updateShoppingListItem).toHaveBeenCalledWith(7, 1, {
+      checked: true,
+      checked_at: expect.any(String),
+    })
+    expect(await readQueue()).toEqual([])
+    expect(store.pendingCount).toBe(0)
+    expect(store.flushing).toBe(false)
+    // RED: obecnie wszystkie trzy pola bannera oznaczają ciszę/sukces,
+    // a optimistic snapshot zostaje. Kontrakt addytywny do przydziału O:
+    // errorFor(target): string | null + notify także po terminalnym dropped.
+    expect(reconciled).toHaveBeenCalledTimes(1)
+    expect(store).toHaveProperty('errorFor', expect.any(Function))
+    const reported = store as unknown as { errorFor: (target: QueueTarget) => string | null }
+    expect(reported.errorFor(LIST)).toEqual(expect.any(String))
+    expect(reported.errorFor(PUBLIC)).toBeNull()
+    expect(await readSnapshot(targetKey(LIST))).toBeNull()
+  })
+
   it.each([
     { status: 200, nextChecked: false, sameTime: false },
     { status: 200, nextChecked: false, sameTime: true },

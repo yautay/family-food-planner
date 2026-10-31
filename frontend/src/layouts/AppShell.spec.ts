@@ -138,11 +138,13 @@ describe('AppShell UX02', () => {
     document
       .querySelector('[data-testid="account-menu-mobile"]')!
       .dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
-    await flushPromises()
-    expect(document.querySelector('[data-testid="account-menu-mobile"]')).toBeNull()
-    expect(document.activeElement).toBe(
-      wrapper.get('[data-testid="account-toggle-mobile"]').element,
-    )
+    // Reka przywraca fokus przez setTimeout(0); flushPromises nie czeka na ten timer.
+    await vi.waitFor(() => {
+      expect(document.querySelector('[data-testid="account-menu-mobile"]')).toBeNull()
+      expect(document.activeElement).toBe(
+        wrapper.get('[data-testid="account-toggle-mobile"]').element,
+      )
+    })
   })
   it('ADMIN ma osobną grupę i wszystkie cztery ekrany administracji', async () => {
     const { wrapper } = await mountShell('/plan-dnia', 'admin')

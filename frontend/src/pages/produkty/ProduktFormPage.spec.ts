@@ -4,6 +4,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { useAuthStore } from '@/stores/auth'
+import { captureSessionGeneration } from '@/lib/sessionGeneration'
 
 import ProduktFormPage from './ProduktFormPage.vue'
 
@@ -83,14 +84,17 @@ const PRODUCT = {
 async function mountPage(role: 'admin' | 'user') {
   setActivePinia(createPinia())
   const auth = useAuthStore()
-  auth.setUser({
-    id: 1,
-    email: 'kto@example.com',
-    display_name: 'Kto',
-    role,
-    ui_settings: {},
-    household: null,
-  })
+  auth.setUser(
+    {
+      id: 1,
+      email: 'kto@example.com',
+      display_name: 'Kto',
+      role,
+      ui_settings: {},
+      household: null,
+    },
+    captureSessionGeneration(),
+  )
   const wrapper = mount(ProduktFormPage, { global: { plugins: [VueQueryPlugin] } })
   await flushPromises()
   return wrapper
