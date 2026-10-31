@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto'
+import { reserveLoginAttempt } from './login-budget.js'
 
 import { expect, test } from '@playwright/test'
 import type { APIRequestContext } from '@playwright/test'
@@ -66,7 +67,7 @@ test('ADMIN publikuje przepis, USER innej rodziny go widzi, planuje, kopiuje i e
   request,
   browser,
   baseURL,
-}) => {
+}, testInfo) => {
   // Pełny flow dwóch sesji (publikacja, plan, kopia, edycja) nie mieści się w 30 s.
   test.setTimeout(90_000)
 
@@ -125,6 +126,7 @@ test('ADMIN publikuje przepis, USER innej rodziny go widzi, planuje, kopiuje i e
     await userPage.goto('/login')
     await userPage.getByTestId('login-email').fill(email)
     await userPage.getByTestId('login-password').fill(password)
+    await reserveLoginAttempt(baseURL, testInfo)
     await userPage.getByTestId('login-submit').click()
     await expect(userPage).toHaveURL(/\/plan-dnia/)
 
@@ -155,7 +157,7 @@ test('ADMIN publikuje przepis, USER innej rodziny go widzi, planuje, kopiuje i e
     await userPage.getByTestId('recipe-picker-input').fill(recipeName)
     await userPage.getByTestId(`recipe-picker-option-${recipeId}`).click()
     await expect(userPage.getByTestId('recipe-picker-selected')).toContainText(recipeName)
-    await userPage.getByTestId('item-submit').click()
+    await userPage.getByTestId('recipe-planning-submit').click()
     await expect(userPage.locator('[data-testid^="plan-item-servings-"]').first()).toBeVisible()
 
     // Kopiuje do swojej rodziny i dostaje WŁASNY, edytowalny przepis.

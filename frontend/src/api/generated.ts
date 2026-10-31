@@ -698,6 +698,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/plan/days/{day}/recipe-items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Zaplanuj przepis w istniejącym lub nowym posiłku atomowo */
+        post: operations["create_recipe_item_api_v1_plan_days__day__recipe_items_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/plan/days/{day}/meals": {
         parameters: {
             query?: never;
@@ -2257,6 +2274,8 @@ export interface components {
          *     rozkładu); pominięte zostawia go nietkniętym.
          */
         ItemUpdateRequest: {
+            /** Recipe Id */
+            recipe_id?: number | null;
             /** Servings */
             servings?: number | string | null;
             /** Servings Split */
@@ -3173,6 +3192,36 @@ export interface components {
             note: string;
             /** Position */
             position: number;
+        };
+        /**
+         * RecipeItemCreateRequest
+         * @description Jedna decyzja: przepis do istniejącego albo nowego posiłku.
+         */
+        RecipeItemCreateRequest: {
+            /** Meal Id */
+            meal_id?: number | null;
+            /** New Meal Name */
+            new_meal_name?: string | null;
+            /** Recipe Id */
+            recipe_id: number;
+            /**
+             * Servings
+             * @default 1
+             */
+            servings: number | string;
+            /** Servings Split */
+            servings_split?: components["schemas"]["PlanServingSplitInput"][];
+        };
+        /**
+         * RecipeItemCreatedResponse
+         * @description Potwierdzone identyfikatory pozycji oraz faktycznie zmieniony dzień.
+         */
+        RecipeItemCreatedResponse: {
+            day: components["schemas"]["DayRead"];
+            /** Meal Id */
+            meal_id: number;
+            /** Item Id */
+            item_id: number;
         };
         /** RecipeListResponse */
         RecipeListResponse: {
@@ -6557,6 +6606,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DayRead"];
+                };
+            };
+            /** @description Błąd */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_recipe_item_api_v1_plan_days__day__recipe_items_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                day: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecipeItemCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecipeItemCreatedResponse"];
                 };
             };
             /** @description Błąd */

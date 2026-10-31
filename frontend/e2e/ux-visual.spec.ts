@@ -6,6 +6,7 @@ import { expect, test, type Page } from '@playwright/test'
 
 import type { components } from '../src/api/generated.js'
 import { EMPTY_STATE } from './auth-state.js'
+import { reserveLoginAttempt } from './login-budget.js'
 
 // Tylko jawny opt-in. Zwykły E2E zachowuje wszystkie swoje wymagane scenariusze.
 const enabled = process.env.UX_VISUAL === '1'
@@ -65,6 +66,7 @@ test('UX00: prawdziwy interfejs, telefon/desktop i prywatna lista offline', asyn
   await page.goto('/login')
   await page.getByTestId('login-email').fill('ux00-a1@example.com')
   await page.getByTestId('login-password').fill(password)
+  await reserveLoginAttempt(baseURL, testInfo)
   await page.getByTestId('login-submit').click()
   await expect(page).toHaveURL(/\/plan-dnia/)
   const meResponse = await page.request.get('/api/v1/auth/me')

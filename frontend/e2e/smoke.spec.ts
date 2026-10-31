@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test'
 
 import { EMPTY_STATE } from './auth-state.js'
 import { cleanupE2eData } from './cleanup.js'
+import { reserveLoginAttempt } from './login-budget.js'
 
 /**
  * Smoke E2E (08_TESTING §3): logowanie → plan dnia → dodanie posiłku i pozycji
@@ -45,22 +46,24 @@ test.describe('uwierzytelnianie (bez współdzielonej sesji)', () => {
     await expect(page).toHaveURL(/\/login/)
   })
 
-  test('błędne hasło pokazuje neutralny komunikat', async ({ page }) => {
+  test('błędne hasło pokazuje neutralny komunikat', async ({ page, baseURL }, testInfo) => {
     await page.goto('/login')
 
     await page.getByTestId('login-email').fill(email)
     await page.getByTestId('login-password').fill('na-pewno-zle-haslo-2026')
+    await reserveLoginAttempt(baseURL, testInfo)
     await page.getByTestId('login-submit').click()
 
     await expect(page.getByTestId('login-error')).toHaveText('Nieprawidłowy email lub hasło.')
     await expect(page).toHaveURL(/\/login/)
   })
 
-  test('logowanie → plan dnia → wylogowanie', async ({ page }) => {
+  test('logowanie → plan dnia → wylogowanie', async ({ page, baseURL }, testInfo) => {
     await page.goto('/login')
 
     await page.getByTestId('login-email').fill(email)
     await page.getByTestId('login-password').fill(password)
+    await reserveLoginAttempt(baseURL, testInfo)
     await page.getByTestId('login-submit').click()
 
     await expect(page).toHaveURL(/\/plan-dnia/)
@@ -134,7 +137,7 @@ test.describe('plan dnia (własne dane, sprzątane po obu stronach)', () => {
     await expect(page.getByTestId('recipe-create-drawer')).toBeVisible()
     await page.getByTestId('recipe-create-submit').click()
     await expect(page.getByTestId('recipe-picker-selected')).toContainText(recipeName)
-    await page.getByTestId('item-submit').click()
+    await page.getByTestId('recipe-planning-submit').click()
 
     const item = page.locator('[data-testid^="plan-item-servings-"]').first()
     await expect(item).toHaveText('1')
@@ -143,9 +146,9 @@ test.describe('plan dnia (własne dane, sprzątane po obu stronach)', () => {
     await page.locator('[data-testid^="plan-item-plus-"]').first().click()
     await expect(item).toHaveText('1,5')
 
-    // Donut i kafelki są zasilane tą samą odpowiedzią, więc muszą być widoczne
-    // razem z przeliczonym dniem (spójność 02_DOMAIN §13.3).
-    await expect(page.getByTestId('plan-donut')).toBeVisible()
+    // Jedzenie i zwięzłe podsumowanie Cały plan pochodzą z tego samego planu
+    // (spójność 02_DOMAIN §13.3), bez porównania z indywidualnym celem.
+    await expect(page.getByTestId('plan-summary')).toBeVisible()
     await expect(page.getByTestId('plan-tile-kcal')).toBeVisible()
 
     // --- sprzątanie: usuwamy posiłek (kaskada zabiera pozycję) i przepis ---------------

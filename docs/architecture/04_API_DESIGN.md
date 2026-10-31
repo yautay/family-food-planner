@@ -75,6 +75,7 @@ U      /plan/days/{date}                   — GET + PUT (tytuł, widoczność);
                                              patrz „Cykl życia dnia planu"
 U      /plan/days/{date}/meals, /plan/meals/{id}, /plan/items/{id}
                                            — POST|PATCH|DELETE posiłków i pozycji
+U      /plan/days/{date}/recipe-items      — POST atomowo posiłek z pierwszym daniem
 U      /plan/items/{id}/fit-to-target      — PROPOZYCJA mnożnika (nic nie zapisuje)
 U      /plan/copy                          — {source, target(s), what: day|meal|block}
                                              block: {source_from, source_days,
@@ -137,6 +138,23 @@ Dzień planu NIE jest zasobem tworzonym i usuwanym wprost:
   `household_id` z FK RESTRICT i blokował usunięcie rodziny (dług U17 z R2),
 - `DELETE /plan/days/{date}` świadomie **nie istnieje**: nie ma go co usuwać
   poza tytułem, a ten zdejmuje `PUT` z `title: null`.
+
+### Planowanie przepisu (UX03)
+
+`POST /plan/days/{date}/recipe-items` przyjmuje dokładnie jedno z `meal_id`
+i `new_meal_name`, wymagane `recipe_id` oraz `servings` i `servings_split`
+według dotychczasowych reguł Decimal. Odpowiedź 201 to `{day, meal_id, item_id}`.
+Walidacja przepisu, podziału i zakresu poprzedza commit; błąd wycofuje także
+nowy dzień/posiłek. Istniejący meal musi należeć do daty z URL. Resolver daty
+zachowuje `select_owned`, jawne ID zachowuje D16 dla ADMIN-a.
+
+`PATCH /plan/items/{id}` przyjmuje addytywne `recipe_id`. Samo recipe_id
+zachowuje ID, pozycję, porcje i zapisany podział. Null i konwersja produktu
+luzem są odrzucane. Dostęp do nowego przepisu jest walidowany tak jak przy
+dodawaniu. Odpowiedź mutacji pochodzi z faktycznie zmienionego day ID, także
+gdy ADMIN ma własny dzień o tej samej dacie. Nie dodano migracji ani reguł
+obliczeń. Po utracie odpowiedzi klient odczytuje plan i pokazuje niepewność;
+endpoint nie deklaruje idempotencji ani gwarancji exactly-once.
 
 ### Statystyki dzienne (`GET /stats/daily`, stan faktyczny BATCH_13)
 

@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto'
+import { reserveLoginAttempt } from './login-budget.js'
 
 import {
   expect,
@@ -210,11 +211,12 @@ async function finalizeInUi(
   return lists
 }
 
-test.beforeAll(async ({ request: admin, browser, baseURL }) => {
+test.beforeAll(async ({ request: admin, browser, baseURL }, testInfo) => {
   test.setTimeout(180_000)
   const password = await prepareActor(admin)
   actorContext = await browser.newContext({ baseURL, storageState: EMPTY_STATE })
   const request = actorContext.request
+  await reserveLoginAttempt(baseURL, testInfo, 180_000)
   const logged = await body<CurrentUser>(
     await request.post(`${API}/auth/login`, {
       data: { email: ACTOR_EMAIL, password },

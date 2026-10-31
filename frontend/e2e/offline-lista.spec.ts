@@ -58,8 +58,10 @@ test('lista zakupowa offline: odhaczenia przeżywają brak sieci i trafiają na 
   await page.getByTestId('meal-name-input').fill(`Obiad ${PREFIX}`)
   await page.getByTestId('meal-submit').click()
   for (const product of [DURABLE_PRODUCT, FRESH_PRODUCT]) {
-    await page.locator('[data-testid^="meal-add-item-"]').first().click()
-    await page.getByTestId('item-mode-product').click()
+    const addProduct = page.locator('[data-testid^="meal-add-product-"]').first()
+    if (!(await addProduct.isVisible()))
+      await page.locator('[data-testid^="meal-menu-"]').first().click()
+    await addProduct.click()
     await page.getByTestId('picker-input').fill(product)
     await page.locator('[data-testid^="picker-option-"]').first().click()
     await expect(page.getByTestId('picker-selected')).toContainText(product)

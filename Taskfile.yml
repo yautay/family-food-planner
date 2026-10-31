@@ -16,6 +16,8 @@ dotenv: ['.env']
 
 vars:
   COMPOSE: docker compose --env-file .env -f docker/compose.dev.yml
+  # Opt-in: task check DB_TEST_RUNTIME=linux. Pozostałe bramki nadal na hoście.
+  DB_TEST_RUNTIME: host
   # Stack TESTOWY obrazu prod (B17): czysta baza + pasnik-app:<tag> + profil backup.
   COMPOSE_TEST: docker compose --env-file .env -f docker/compose.test.yml
   # Wersja obrazu prod = tag gita; bez tagów — sha (09_DEPLOYMENT §1 i §4).
@@ -55,6 +57,11 @@ tasks:
     desc: Podnosi wyłącznie bazy (db + db-test) — testy uruchamiane z hosta
     cmds:
       - '{{.COMPOSE}} up -d db db-test'
+
+  dev-app-reload:
+    desc: Przeładowuje wyłącznie dev API (np. po lokalnej zmianie sekretów)
+    cmds:
+      - '{{.COMPOSE}} up -d --no-deps --force-recreate app'
 
   down:
     desc: Zatrzymuje stack (dane bazy dev zostają w wolumenie)
@@ -112,14 +119,24 @@ tasks:
   test-int:
     desc: Testy integracyjne backendu (wymagają db-test — `task dev-db`)
     dir: backend
+    preconditions:
+      - sh: '{{if or (eq .DB_TEST_RUNTIME "host") (eq .DB_TEST_RUNTIME "linux")}}true{{else}}false{{end}}'
+        msg: 'DB_TEST_RUNTIME musi mieć wartość host albo linux.'
     cmds:
-      - uv run pytest -m integration {{.CLI_ARGS}}
+      - >-
+        {{if eq .DB_TEST_RUNTIME "linux"}}uv run python -m scripts.db_tests_linux --root "{{.ROOT_DIR}}" integration -- {{.CLI_ARGS}}
+        {{else}}uv run pytest -m integration {{.CLI_ARGS}}{{end}}
 
   test-api:
     desc: Testy kontraktu HTTP (httpx AsyncClient)
     dir: backend
+    preconditions:
+      - sh: '{{if or (eq .DB_TEST_RUNTIME "host") (eq .DB_TEST_RUNTIME "linux")}}true{{else}}false{{end}}'
+        msg: 'DB_TEST_RUNTIME musi mieć wartość host albo linux.'
     cmds:
-      - uv run pytest -m api {{.CLI_ARGS}}
+      - >-
+        {{if eq .DB_TEST_RUNTIME "linux"}}uv run python -m scripts.db_tests_linux --root "{{.ROOT_DIR}}" api -- {{.CLI_ARGS}}
+        {{else}}uv run pytest -m api {{.CLI_ARGS}}{{end}}
 
   test-be:
     desc: Wszystkie testy backendu naraz
@@ -406,8 +423,14 @@ tasks:
 
   audit-be:
     dir: backend
+    vars:
+      # Narzędzie --with ma własne środowisko; audytujemy pakiety projektu.
+      AUDIT_PURELIB:
+        sh: uv run --locked python -c "import sysconfig; print(sysconfig.get_path('purelib'))"
+      AUDIT_PLATLIB:
+        sh: uv run --locked python -c "import sysconfig; print(sysconfig.get_path('platlib'))"
     cmds:
-      - uv run --with pip-audit pip-audit --strict
+      - uv run --locked --with pip-audit python -m pip_audit --strict --path "{{.AUDIT_PURELIB}}" --path "{{.AUDIT_PLATLIB}}"
 
   audit-fe:
     dir: frontend

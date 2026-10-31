@@ -3306,6 +3306,59 @@
         }
       }
     },
+    "/api/v1/plan/days/{day}/recipe-items": {
+      "post": {
+        "tags": [
+          "planning"
+        ],
+        "summary": "Zaplanuj przepis w istniejącym lub nowym posiłku atomowo",
+        "operationId": "create_recipe_item_api_v1_plan_days__day__recipe_items_post",
+        "parameters": [
+          {
+            "name": "day",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "Day"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecipeItemCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecipeItemCreatedResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Błąd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/plan/days/{day}/meals": {
       "post": {
         "tags": [
@@ -7793,6 +7846,18 @@
       },
       "ItemUpdateRequest": {
         "properties": {
+          "recipe_id": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recipe Id"
+          },
           "servings": {
             "anyOf": [
               {
@@ -10559,6 +10624,92 @@
         ],
         "title": "RecipeIngredientRead",
         "description": "Składnik w odczycie: zapis użytkownika + postać znormalizowana + przeskalowana."
+      },
+      "RecipeItemCreateRequest": {
+        "properties": {
+          "meal_id": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meal Id"
+          },
+          "new_meal_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "New Meal Name"
+          },
+          "recipe_id": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Recipe Id"
+          },
+          "servings": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 9999.99,
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,4}|(?=[\\d.]{1,7}0*$)\\d{0,4}\\.\\d{0,2}0*$)"
+              }
+            ],
+            "title": "Servings",
+            "default": "1"
+          },
+          "servings_split": {
+            "items": {
+              "$ref": "#/components/schemas/PlanServingSplitInput"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Servings Split"
+          }
+        },
+        "type": "object",
+        "required": [
+          "recipe_id"
+        ],
+        "title": "RecipeItemCreateRequest",
+        "description": "Jedna decyzja: przepis do istniejącego albo nowego posiłku."
+      },
+      "RecipeItemCreatedResponse": {
+        "properties": {
+          "day": {
+            "$ref": "#/components/schemas/DayRead"
+          },
+          "meal_id": {
+            "type": "integer",
+            "title": "Meal Id"
+          },
+          "item_id": {
+            "type": "integer",
+            "title": "Item Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "day",
+          "meal_id",
+          "item_id"
+        ],
+        "title": "RecipeItemCreatedResponse",
+        "description": "Potwierdzone identyfikatory pozycji oraz faktycznie zmieniony dzień."
       },
       "RecipeListResponse": {
         "properties": {

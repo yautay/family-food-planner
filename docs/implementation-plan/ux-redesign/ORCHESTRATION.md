@@ -73,6 +73,14 @@ Każda karta dziedziczy reguły `CLAUDE.md`, `implementation_prompt.md` i `03_AI
 
 Tylko jeden agent naraz ma prawo używać wspólnej bazy i przeglądarkowego środowiska E2E. Rezerwacja obejmuje `task check`, testy backendu korzystające z DB, migracje, seed, E2E i operacje czyszczące. Osobny worktree nie izoluje bazy, portów ani danych. Suity E2E zachowują `workers: 1`. Nie równoleglić ich z `pdfx-roundtrip`, importami, resetami ani innymi suitami.
 
+Po ustaleniach UX03 O może wykonywać pełną bramkę przez
+`task check DB_TEST_RUNTIME=linux`; zmienia to wyłącznie platformę integration/API,
+z tym samym kodem worktree i lokalną `db-test`. Nadal jeden właściciel runtime.
+Każde nowe logowanie E2E wymaga `reserveLoginAttempt` z `e2e/login-budget.ts`,
+także w hookach i visual. Budżet respektuje limit 5/min bez ponawiania żądań po 429.
+TransferE2E używa świeżego USER-a i sprząta wyłącznie jego dane; nie wykonuje
+roundtripu całej historii współdzielonego ADMIN-a. Szczegóły w arch08.
+
 Każda karta kodu: `task check` oraz E2E wskazane w karcie; końcowa bramka UI: pełne `task test-e2e`. O uruchamia sprawdzenie integracyjne po połączeniu gotowych zmian; nie powtarza wszystkich testów po samym czytaniu plików. Awaria infrastruktury pozostaje awarią, nie zielonym wynikiem.
 
 ## Pakiet zlecenia dla agenta

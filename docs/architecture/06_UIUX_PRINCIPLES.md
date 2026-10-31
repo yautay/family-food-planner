@@ -171,6 +171,15 @@ Realizacja: `src/api/pagination.ts` + `components/domain/LoadMoreButton.vue`
 
 ## 5. Mobile = klient równorzędny
 
+UX03: dzień pokazuje najpierw posiłki i pełne nazwy dań, potem
+„Cały plan”. „Dzisiaj jemy” dotyczy lokalnej bieżącej daty; inny dzień ma
+nagłówek „Plan posiłków”. Pasek dat zachowuje podnawigację UX02. Dodanie
+i zamiana korzystają ze wspólnego panelu z jawną datą, posiłkiem i porcjami.
+Produkty luzem, cel posiłku, dopasowanie, kopiowanie i usuwanie pozostają
+w kontekście posiłku/pozycji. Wartości całego planu nie są oceną realizacji
+indywidualnego celu. Podział dwóch profili po 1,1 przy trzech osobach zostaje
+2,2 po samej zamianie dania; brakujące dane i historyczne wpisy są jawne.
+
 UX05: Zakupy zaczynają się od trwałego katalogu „Zapisane listy”,
 z licznikiem pobranych wierszy i „Pokaż więcej list”. „Ostatnia lista”
 oznacza kolejność serwera, a ważność linku nie oznacza ukończenia zakupów.

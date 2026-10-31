@@ -2,21 +2,20 @@
 /**
  * Plan dnia — widok 1 wizualizacji (06_UIUX §4.1), trasa `/plan-dnia/:date?`.
  *
- * Układ: nagłówek z nawigacją dat → cztery kafelki wartość/cel/delta/status →
- * karty posiłków z pozycjami → panel boczny (donut makro + mini-słupki tygodnia).
- * Na telefonie panel schodzi pod listę; kolejność treści jest ta sama.
+ * Jedzenie przed zwięzłym podsumowaniem „Cały plan”, bez porównywania rodzinnej
+ * sumy z indywidualnym celem konta. Cel konkretnego posiłku pozostaje jawny.
  *
  * Stan serwera trzyma WYŁĄCZNIE TanStack Query (ADR-007) — komponent nie kopiuje
  * dnia do własnych ref-ów. Ref-y opisują tylko intencje UI (otwarty formularz,
  * wybrana pozycja, treść dialogu). Każda mutacja zwraca cały dzień, ale i tak
- * unieważniamy zakres tygodnia, bo panel boczny pokazuje sąsiednie dni.
+ * unieważniamy zakres planu i statystyki. Panel przepisu robi to sam.
  *
  * Żadna wartość odżywcza nie jest tu liczona: wszystko przychodzi z backendu
  * jako stringi dziesiętne (ADR-008), a strona tylko formatuje.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { CalendarPlus, ChevronLeft, ChevronRight, Plus } from '@lucide/vue'
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { ApiError } from '@/api/client'
@@ -35,23 +34,19 @@ import {
 } from '@/api/planning'
 import { queryKeys } from '@/api/queryKeys'
 import type { Product, ProductDetail } from '@/api/catalog'
-import type { RecipeSummary } from '@/api/recipes'
-import DonutChart from '@/components/charts/DonutChart.vue'
-import NutritionBar from '@/components/charts/NutritionBar.vue'
 import AmountInput from '@/components/domain/AmountInput.vue'
+import EmptyState from '@/components/domain/EmptyState.vue'
 import MealCard from '@/components/domain/MealCard.vue'
 import PageHeader from '@/components/domain/PageHeader.vue'
 import ProductPicker from '@/components/domain/ProductPicker.vue'
-import RecipePicker from '@/components/domain/RecipePicker.vue'
+import RecipePlanningPanel from '@/components/domain/planning/RecipePlanningPanel.vue'
 import ServingsSplitDrawer from '@/components/domain/ServingsSplitDrawer.vue'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { addDays, isoDate, startOfWeek, weekDayLabel } from '@/lib/dates'
 import { isValidDecimal, normalizeDecimalInput } from '@/lib/decimal'
 import { formatDecimal } from '@/lib/format'
-import { validNavigationDate } from '@/lib/navigation'
-import { statusLabel, statusToken } from '@/lib/nutrition'
+import { planNavigationContext, planNavigationTarget, validNavigationDate } from '@/lib/navigation'
 import { common, plan as texts, recipes as recipeTexts } from '@/lib/texts'
 
 const route = useRoute()
@@ -118,50 +113,21 @@ const day = computed<PlanDay>(
 )
 const profiles = computed(() => profilesQuery.data.value?.items ?? [])
 
-const tiles = computed(() => [
-  {
-    key: 'kcal',
-    label: texts.tileKcal,
-    unit: recipeTexts.kcalUnit,
-    metric: day.value.goal_progress.kcal,
-  },
-  {
-    key: 'protein_g',
-    label: texts.tileProtein,
-    unit: 'g',
-    metric: day.value.goal_progress.protein_g,
-  },
-  { key: 'fat_g', label: texts.tileFat, unit: 'g', metric: day.value.goal_progress.fat_g },
-  { key: 'carbs_g', label: texts.tileCarbs, unit: 'g', metric: day.value.goal_progress.carbs_g },
-])
-
-const macroSegments = computed(() => [
-  {
-    label: texts.tileProtein,
-    value: day.value.nutrition.protein_g,
-    colorClass: 'stroke-secondary',
-  },
-  { label: texts.tileFat, value: day.value.nutrition.fat_g, colorClass: 'stroke-warning' },
-  { label: texts.tileCarbs, value: day.value.nutrition.carbs_g, colorClass: 'stroke-primary' },
-])
-
 const week = computed(() =>
   Array.from({ length: 7 }, (_value, index) => {
     const date = addDays(weekStart.value, index)
-    const entry = days.data.value?.items.find((item) => item.day === date)
     return {
       date,
       label: weekDayLabel(date),
-      kcal: entry?.nutrition.kcal ?? '0',
-      target: entry?.goal_progress.kcal.target ?? null,
-      status: entry?.goal_progress.kcal.status ?? null,
       isCurrent: date === currentDate.value,
     }
   }),
 )
 
-function goTo(date: string): void {
-  void router.push({ name: 'plan-dnia', params: { date } })
+async function goTo(date: string): Promise<void> {
+  await router.push(
+    planNavigationTarget('plan-dnia', { ...planNavigationContext(route), selectedDate: date }),
+  )
 }
 
 // --- mutacje ---------------------------------------------------------------------
@@ -174,7 +140,10 @@ function reportError(error: unknown): void {
 
 async function refresh(): Promise<void> {
   actionError.value = null
-  await queryClient.invalidateQueries({ queryKey: queryKeys.planDays.all })
+  await Promise.all([
+    queryClient.invalidateQueries({ queryKey: queryKeys.planDays.all }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.stats.all }),
+  ])
 }
 
 const mealForm = ref<{ open: boolean; id: number | null; name: string; target: string }>({
@@ -195,11 +164,14 @@ function openMealForm(id: number | null): void {
   actionError.value = null
 }
 
-const mealNameValid = computed(() => mealForm.value.name.trim().length > 0)
+const mealNameValid = computed(
+  () => mealForm.value.name.trim().length > 0 && mealForm.value.name.trim().length <= 100,
+)
 const mealTargetValid = computed(
   () =>
     mealForm.value.target.trim() === '' ||
-    isValidDecimal(mealForm.value.target, { decimalPlaces: 0, positive: true }),
+    (isValidDecimal(mealForm.value.target, { decimalPlaces: 0, positive: true }) &&
+      normalizeDecimalInput(mealForm.value.target).replace(/^0+/, '').length <= 5),
 )
 
 const saveMeal = useMutation({
@@ -264,66 +236,66 @@ function confirmRemoveItem(itemId: number): void {
   }
 }
 
-// --- dodawanie pozycji ------------------------------------------------------------
-
+// --- wspólny panel dania i zachowana ścieżka produktów luzem -----------------------
+const planningOpen = ref(false)
+const planningMealId = ref<number | null>(null)
+const replaceItemId = ref<number | null>(null)
+const planningMeal = computed(
+  () => day.value.meals.find((meal) => meal.id === planningMealId.value) ?? null,
+)
+const replacement = computed(
+  () => planningMeal.value?.items.find((item) => item.id === replaceItemId.value) ?? null,
+)
+const successMessage = ref<string | null>(null)
+function openRecipePanel(mealId: number | null = null): void {
+  planningMealId.value = mealId
+  replaceItemId.value = null
+  planningOpen.value = true
+  successMessage.value = null
+}
+function openReplacement(itemId: number): void {
+  planningMealId.value =
+    day.value.meals.find((meal) => meal.items.some((item) => item.id === itemId))?.id ?? null
+  replaceItemId.value = itemId
+  planningOpen.value = true
+  successMessage.value = null
+}
+async function recipeSaved(result: { day: PlanDay; mode: 'add' | 'replace' }): Promise<void> {
+  planningOpen.value = false
+  if (result.day.day !== currentDate.value) {
+    await goTo(result.day.day)
+    // Zmiana daty najpierw sprząta stan poprzedniego dnia, w tym jego komunikaty.
+    await nextTick()
+  }
+  if (currentDate.value !== result.day.day) return
+  successMessage.value =
+    result.mode === 'add'
+      ? 'Danie dodane do planu.'
+      : 'Danie zamienione. Porcje zapisane zgodnie z wyborem.'
+  actionError.value = null
+}
 const itemForm = ref<{
   open: boolean
   mealId: number | null
-  mode: 'recipe' | 'product'
-  recipe: RecipeSummary | null
   product: Product | ProductDetail | null
   quantity: string | null
   unit: string
-  servings: string
-}>({
-  open: false,
-  mealId: null,
-  mode: 'recipe',
-  recipe: null,
-  product: null,
-  quantity: null,
-  unit: 'g',
-  servings: '1',
-})
-
+}>({ open: false, mealId: null, product: null, quantity: null, unit: 'g' })
+const amountValid = ref(false)
 function openItemForm(mealId: number): void {
-  itemForm.value = {
-    open: true,
-    mealId,
-    mode: 'recipe',
-    recipe: null,
-    product: null,
-    quantity: null,
-    unit: 'g',
-    servings: '1',
-  }
+  itemForm.value = { open: true, mealId, product: null, quantity: null, unit: 'g' }
+  amountValid.value = false
   actionError.value = null
 }
-
-const itemValid = computed(() => {
-  if (itemForm.value.mode === 'recipe') {
-    return itemForm.value.recipe !== null
-  }
-  return itemForm.value.product !== null && (itemForm.value.quantity ?? '').length > 0
-})
-
+const itemValid = computed(() => itemForm.value.product !== null && amountValid.value)
 const saveItem = useMutation({
-  mutationFn: () => {
-    const mealId = itemForm.value.mealId as number
-    if (itemForm.value.mode === 'recipe') {
-      return addItem(mealId, {
-        recipe_id: itemForm.value.recipe?.id ?? 0,
-        servings: normalizeDecimalInput(itemForm.value.servings || '1'),
-      })
-    }
-    // Produkt luzem ma jedną porcję: „ile" opisuje ilość, nie mnożnik.
-    return addItem(mealId, {
+  mutationFn: () =>
+    addItem(itemForm.value.mealId as number, {
       product_id: itemForm.value.product?.id ?? 0,
       quantity: itemForm.value.quantity ?? '0',
       unit: itemForm.value.unit,
       servings: '1',
-    })
-  },
+    }),
   onSuccess: async () => {
     itemForm.value.open = false
     await refresh()
@@ -403,6 +375,8 @@ const copyDay = useMutation({
 
 // Zmiana daty zamyka wszystko, co dotyczyło poprzedniego dnia.
 watch(currentDate, () => {
+  planningOpen.value = false
+  successMessage.value = null
   mealForm.value.open = false
   itemForm.value.open = false
   splitItemId.value = null
@@ -429,8 +403,8 @@ const isMutating = computed(
 <template>
   <section class="grid gap-4" data-testid="plan-dnia-page">
     <PageHeader
-      :title="`${texts.title} — ${currentDate}`"
-      title-testid="plan-date"
+      :title="currentDate === isoDate(new Date()) ? 'Dzisiaj jemy' : 'Plan posiłków'"
+      title-testid="plan-heading"
       decoration="plate"
     >
       <template #actions>
@@ -463,78 +437,100 @@ const isMutating = computed(
       </template>
 
       <p v-if="day.title" class="text-muted-foreground text-sm">{{ day.title }}</p>
-      <p
-        v-if="day.goal_valid_from === null"
-        class="text-muted-foreground text-sm"
-        data-testid="plan-no-goal"
-      >
-        {{ texts.goalsMissing }}
-      </p>
+      <p class="text-muted-foreground text-sm" data-testid="plan-date">{{ currentDate }}</p>
     </PageHeader>
 
     <p v-if="actionError" class="text-destructive text-sm" role="alert" data-testid="plan-error">
       {{ actionError }}
     </p>
 
-    <p v-if="days.isPending.value" class="text-muted-foreground text-sm">{{ common.loading }}</p>
-
-    <template v-else>
-      <!-- Kafelki: wartość / cel / delta / status słowny (06_UIUX §3.5). -->
-      <ul class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" data-testid="plan-tiles">
-        <li
-          v-for="tile in tiles"
-          :key="tile.key"
-          class="border-border bg-card grid gap-2 rounded-xl border p-3 shadow-sm"
-          :data-testid="`plan-tile-${tile.key}`"
-        >
-          <p class="text-muted-foreground text-sm">{{ tile.label }}</p>
-          <p class="text-xl font-semibold tabular-nums">
-            {{ formatDecimal(tile.metric.value) }}
-            <span class="text-muted-foreground text-sm font-normal">
-              /
-              {{ tile.metric.target === null ? texts.noTarget : formatDecimal(tile.metric.target) }}
-              {{ tile.unit }}
-            </span>
-          </p>
-          <NutritionBar
-            :label="tile.label"
-            :value="tile.metric.value"
-            :target="tile.metric.target"
-            :status="tile.metric.status"
-            :unit="tile.unit"
-            :testid="`plan-bar-${tile.key}`"
-          />
-          <p class="text-sm tabular-nums">
-            <span v-if="tile.metric.delta !== null" class="text-muted-foreground">
-              {{ formatDecimal(tile.metric.delta) }} {{ tile.unit }}
-            </span>
-            <span
-              v-if="tile.metric.status"
-              :class="statusToken(tile.metric.status).text"
-              :data-testid="`plan-status-${tile.key}`"
-            >
-              <span aria-hidden="true"> · </span>{{ statusLabel(tile.metric.status) }}
-            </span>
-          </p>
-        </li>
-      </ul>
-
-      <div class="grid gap-4 lg:grid-cols-[1fr_20rem]">
+    <p v-if="successMessage" role="status" class="text-primary text-sm" data-testid="plan-success">
+      {{ successMessage }}
+    </p>
+    <nav
+      class="grid grid-cols-4 gap-0.5 rounded-xl bg-muted p-1 min-[360px]:grid-cols-7"
+      aria-label="Wybierz dzień tygodnia"
+      data-testid="plan-week"
+    >
+      <button
+        v-for="entry in week"
+        :key="entry.date"
+        type="button"
+        class="grid min-h-14 min-w-11 justify-items-center rounded-lg px-1 py-2 text-sm"
+        :class="
+          entry.isCurrent
+            ? 'bg-primary text-primary-foreground'
+            : 'text-muted-foreground hover:bg-accent'
+        "
+        :aria-current="entry.isCurrent ? 'date' : undefined"
+        :aria-label="`Pokaż plan na ${entry.date}`"
+        :data-testid="`week-day-${entry.date}`"
+        @click="goTo(entry.date)"
+      >
+        <span>{{ entry.label }}</span
+        ><strong>{{ entry.date.slice(-2) }}</strong>
+      </button>
+    </nav>
+    <p
+      v-if="days.isPending.value"
+      role="status"
+      class="text-muted-foreground text-sm"
+      data-testid="plan-loading"
+    >
+      {{ common.loading }}
+    </p>
+    <div
+      v-else-if="days.isError.value && !days.data.value"
+      role="alert"
+      class="border-border bg-card grid gap-3 rounded-xl border p-6"
+      data-testid="plan-load-error"
+    >
+      <h2 class="text-lg font-medium">Nie udało się pobrać planu</h2>
+      <p>Nie możemy teraz sprawdzić zaplanowanych dań.</p>
+      <Button variant="outline" class="justify-self-start" @click="days.refetch()"
+        >Spróbuj ponownie</Button
+      >
+    </div>
+    <template v-else-if="days.data.value">
+      <div
+        v-if="days.isError.value"
+        role="alert"
+        class="text-warning flex flex-wrap items-center gap-2 text-sm"
+        data-testid="plan-refetch-error"
+      >
+        Nie udało się odświeżyć planu. Pokazujemy ostatnio pobrane dane.
+        <Button variant="outline" @click="days.refetch()">Ponów odczyt</Button>
+      </div>
+      <Button
+        v-if="day.meals.length"
+        class="justify-self-start"
+        data-testid="plan-add-recipe"
+        @click="openRecipePanel()"
+        ><Plus class="size-4" aria-hidden="true" />Dodaj danie</Button
+      >
+      <div class="grid gap-6">
         <div class="grid gap-3">
-          <p
+          <EmptyState
             v-if="day.meals.length === 0"
-            class="text-muted-foreground text-sm"
+            title="Co zjemy tego dnia?"
+            :description="texts.emptyDay"
             data-testid="plan-empty"
           >
-            {{ texts.emptyDay }}
-          </p>
+            <template #action
+              ><Button data-testid="plan-add-recipe" @click="openRecipePanel()"
+                >Wybierz pierwsze danie</Button
+              ></template
+            >
+          </EmptyState>
 
           <MealCard
             v-for="meal in day.meals"
             :key="meal.id"
             :meal="meal"
             :pending="isMutating"
-            @add-item="openItemForm"
+            @add-item="openRecipePanel"
+            @add-product="openItemForm"
+            @replace-item="openReplacement"
             @edit="openMealForm"
             @duplicate="duplicateMeal.mutate($event)"
             @remove="confirmRemoveMeal"
@@ -551,6 +547,9 @@ const isMutating = computed(
                 :split="item.servings_split"
                 :servings="item.servings"
                 :pending="isMutating"
+                :profiles-error="profilesQuery.isError.value"
+                :profiles-pending="profilesQuery.isFetching.value"
+                @retry="profilesQuery.refetch()"
                 @apply="(split, servings) => saveSplit.mutate({ itemId: item.id, split, servings })"
                 @clear="clearSplit.mutate(item.id)"
                 @close="splitItemId = null"
@@ -588,6 +587,8 @@ const isMutating = computed(
               <Input
                 id="meal-name"
                 v-model="mealForm.name"
+                maxlength="100"
+                required
                 class="min-h-11"
                 data-testid="meal-name-input"
               />
@@ -631,83 +632,47 @@ const isMutating = computed(
             </div>
           </form>
 
-          <!-- Dodawanie pozycji: przepis (RecipePicker) albo produkt luzem. -->
-          <form
+          <!-- Picker ma własny formularz; form= wiąże zewnętrzną akcję bez zagnieżdżania. -->
+          <div
             v-if="itemForm.open"
-            class="border-border bg-card grid gap-3 rounded-xl border p-3"
+            class="border-border bg-card grid gap-3 rounded-xl border p-4"
             data-testid="item-form"
-            @submit.prevent="saveItem.mutate()"
           >
-            <div class="flex gap-2">
-              <Button
-                type="button"
-                :variant="itemForm.mode === 'recipe' ? 'default' : 'outline'"
-                class="min-h-11"
-                data-testid="item-mode-recipe"
-                @click="itemForm.mode = 'recipe'"
-              >
-                {{ recipeTexts.title }}
-              </Button>
-              <Button
-                type="button"
-                :variant="itemForm.mode === 'product' ? 'default' : 'outline'"
-                class="min-h-11"
-                data-testid="item-mode-product"
-                @click="itemForm.mode = 'product'"
-              >
-                {{ texts.productItem }}
-              </Button>
-            </div>
-
-            <template v-if="itemForm.mode === 'recipe'">
-              <RecipePicker v-model="itemForm.recipe" />
-              <div class="grid gap-2">
-                <label class="text-sm font-medium" for="item-servings">
-                  {{ texts.servingsLabel }}
-                </label>
-                <Input
-                  id="item-servings"
-                  v-model="itemForm.servings"
-                  inputmode="decimal"
-                  class="min-h-11 tabular-nums"
-                  data-testid="item-servings-input"
-                />
-              </div>
-            </template>
-
-            <template v-else>
-              <ProductPicker v-model="itemForm.product" />
-              <AmountInput
-                v-model="itemForm.quantity"
-                :unit="itemForm.unit"
-                :units="['g', 'kg', 'ml', 'l', 'szt.']"
-                :decimal-places="3"
-                required
-                testid="item-amount"
-                @update:unit="itemForm.unit = $event"
-              />
-            </template>
-
+            <h3 class="font-medium">Dodaj produkt luzem</h3>
+            <form
+              id="loose-item-form"
+              @submit.prevent="itemValid && !saveItem.isPending.value && saveItem.mutate()"
+            />
+            <ProductPicker v-model="itemForm.product" :disabled="saveItem.isPending.value" />
+            <AmountInput
+              v-model="itemForm.quantity"
+              form="loose-item-form"
+              :unit="itemForm.unit"
+              :units="['g', 'kg', 'ml', 'l', 'szt.']"
+              :decimal-places="3"
+              required
+              testid="item-amount"
+              @update:unit="itemForm.unit = $event"
+              @update:valid="amountValid = $event"
+            />
             <div class="flex gap-2">
               <Button
                 type="submit"
-                class="min-h-11"
+                form="loose-item-form"
                 :disabled="!itemValid || saveItem.isPending.value"
                 data-testid="item-submit"
+                >{{ common.add }}</Button
               >
-                {{ common.add }}
-              </Button>
               <Button
                 type="button"
                 variant="ghost"
-                class="min-h-11"
+                :disabled="saveItem.isPending.value"
                 data-testid="item-cancel"
                 @click="itemForm.open = false"
+                >{{ common.cancel }}</Button
               >
-                {{ common.cancel }}
-              </Button>
             </div>
-          </form>
+          </div>
 
           <!-- Kopiowanie dnia na inne daty (dopisuje, nie nadpisuje). -->
           <form
@@ -796,60 +761,54 @@ const isMutating = computed(
           </div>
         </div>
 
-        <!-- Panel boczny: donut makro + mini-słupki tygodnia (ten sam fetch). -->
-        <aside class="grid gap-4" data-testid="plan-side-panel">
-          <Card class="rounded-xl">
-            <CardHeader>
-              <CardTitle class="text-base">{{ texts.macroTitle }}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <DonutChart
-                :segments="macroSegments"
-                :center-value="formatDecimal(day.nutrition.kcal)"
-                :center-label="recipeTexts.kcalUnit"
-                :title="texts.macroTitle"
-                testid="plan-donut"
-              />
-            </CardContent>
-          </Card>
-
-          <Card class="rounded-xl">
-            <CardHeader>
-              <CardTitle class="text-base">{{ texts.weekTitle }}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ul class="grid grid-cols-7 gap-1" data-testid="plan-week">
-                <li v-for="entry in week" :key="entry.date" class="grid justify-items-center gap-1">
-                  <div class="h-24 w-4">
-                    <NutritionBar
-                      :label="`${entry.label} ${entry.date}`"
-                      :value="entry.kcal"
-                      :target="entry.target"
-                      :status="entry.status"
-                      unit="kcal"
-                      orientation="vertical"
-                      :testid="`week-bar-${entry.date}`"
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    class="min-h-11 text-xs"
-                    :class="
-                      entry.isCurrent ? 'text-primary font-semibold' : 'text-muted-foreground'
-                    "
-                    :aria-label="`Pokaż plan na ${entry.date}`"
-                    :data-testid="`week-day-${entry.date}`"
-                    @click="goTo(entry.date)"
-                  >
-                    {{ entry.label }}
-                  </button>
-                </li>
-              </ul>
-              <p class="text-muted-foreground mt-2 text-xs">{{ texts.weekSubtitle }}</p>
-            </CardContent>
-          </Card>
-        </aside>
+        <section
+          v-if="day.meals.length"
+          class="border-border bg-card grid gap-3 rounded-xl border p-4 sm:p-6"
+          aria-label="Cały plan"
+          data-testid="plan-summary"
+        >
+          <h2 class="font-medium">
+            Cały plan
+            <span class="text-muted-foreground text-sm font-normal">· zaplanowane jedzenie</span>
+          </h2>
+          <p class="text-muted-foreground text-sm">
+            Suma wszystkich porcji. To wartości planu, nie bilans spożycia jednej osoby.
+          </p>
+          <ul class="grid grid-cols-2 gap-3 sm:grid-cols-4" data-testid="plan-tiles">
+            <li
+              v-for="metric in [
+                ['kcal', 'Kalorie', 'kcal'],
+                ['protein_g', 'Białko', 'g'],
+                ['fat_g', 'Tłuszcze', 'g'],
+                ['carbs_g', 'Węglowodany', 'g'],
+              ] as const"
+              :key="metric[0]"
+              :data-testid="`plan-tile-${metric[0]}`"
+            >
+              <span class="text-muted-foreground block text-xs">{{ metric[1] }}</span>
+              <strong class="tabular-nums"
+                >{{ formatDecimal(day.nutrition[metric[0]]) }} {{ metric[2] }}</strong
+              >
+            </li>
+          </ul>
+          <p
+            v-if="!day.nutrition.complete"
+            class="text-warning text-sm"
+            data-testid="plan-incomplete"
+          >
+            Niepełne dane odżywcze: {{ day.nutrition.missing.join(', ') }}
+          </p>
+        </section>
       </div>
     </template>
+    <RecipePlanningPanel
+      :open="planningOpen"
+      :recipe="null"
+      :date="currentDate"
+      :meal="planningMeal"
+      :replace-item="replacement"
+      @close="planningOpen = false"
+      @saved="recipeSaved"
+    />
   </section>
 </template>

@@ -22,6 +22,8 @@ export type MealCreate = components['schemas']['MealCreateRequest']
 export type MealUpdate = components['schemas']['MealUpdateRequest']
 export type ItemCreate = components['schemas']['ItemCreateRequest']
 export type ItemUpdate = components['schemas']['ItemUpdateRequest']
+export type RecipeItemCreate = components['schemas']['RecipeItemCreateRequest']
+export type RecipeItemCreated = components['schemas']['RecipeItemCreatedResponse']
 export type PlanCopy = components['schemas']['PlanCopyRequest']
 export type PlanDayUpsert = components['schemas']['PlanDayUpsertRequest']
 
@@ -51,6 +53,13 @@ export function deleteMeal(mealId: number): Promise<PlanDay> {
 
 export function addItem(mealId: number, payload: ItemCreate): Promise<PlanDay> {
   return apiFetch<PlanDay>(`/plan/meals/${mealId}/items`, { method: 'POST', json: payload })
+}
+
+export function planRecipe(day: string, payload: RecipeItemCreate): Promise<RecipeItemCreated> {
+  return apiFetch<RecipeItemCreated>(`/plan/days/${day}/recipe-items`, {
+    method: 'POST',
+    json: payload,
+  })
 }
 
 export function updateItem(itemId: number, payload: ItemUpdate): Promise<PlanDay> {

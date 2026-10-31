@@ -15,6 +15,7 @@ import { computed, ref } from 'vue'
 
 import type { PlanItem, PlanMeal } from '@/api/planning'
 import NutritionBar from '@/components/charts/NutritionBar.vue'
+import RecipeImage from '@/components/domain/RecipeImage.vue'
 import { Button } from '@/components/ui/button'
 import { sumDecimals } from '@/lib/decimal'
 import { formatAmount, formatDecimal } from '@/lib/format'
@@ -25,6 +26,8 @@ const props = defineProps<{ meal: PlanMeal; pending?: boolean }>()
 
 const emit = defineEmits<{
   (event: 'add-item', mealId: number): void
+  (event: 'add-product', mealId: number): void
+  (event: 'replace-item', itemId: number): void
   (event: 'edit', mealId: number): void
   (event: 'duplicate', mealId: number): void
   (event: 'remove', mealId: number): void
@@ -64,13 +67,16 @@ function itemAmount(item: PlanItem): string | null {
 
 <template>
   <article
-    class="border-border bg-card grid gap-3 rounded-xl border p-3 shadow-sm"
+    class="border-border bg-card grid min-w-0 gap-4 rounded-xl border p-4 sm:p-6"
     :data-testid="`meal-card-${meal.id}`"
   >
     <header class="grid gap-2">
       <div class="flex items-start justify-between gap-2">
         <div class="min-w-0">
-          <h3 class="truncate font-medium" :data-testid="`meal-name-${meal.id}`">
+          <h3
+            class="text-muted-foreground text-sm font-medium break-words"
+            :data-testid="`meal-name-${meal.id}`"
+          >
             {{ meal.name }}
           </h3>
           <p class="text-muted-foreground text-sm tabular-nums">
@@ -118,6 +124,14 @@ function itemAmount(item: PlanItem): string | null {
       <Button
         type="button"
         variant="outline"
+        :disabled="pending"
+        :data-testid="`meal-add-product-${meal.id}`"
+        @click="emit('add-product', meal.id)"
+        >Dodaj produkt luzem</Button
+      >
+      <Button
+        type="button"
+        variant="outline"
         class="min-h-11"
         :data-testid="`meal-edit-${meal.id}`"
         @click="emit('edit', meal.id)"
@@ -160,20 +174,19 @@ function itemAmount(item: PlanItem): string | null {
       <li
         v-for="item in meal.items"
         :key="item.id"
-        class="border-border grid gap-2 rounded-lg border p-2"
+        class="border-border grid min-w-0 gap-3 border-t pt-4"
         :data-testid="`plan-item-${item.id}`"
       >
-        <div class="flex items-start justify-between gap-2">
+        <div class="flex min-w-0 flex-wrap items-start justify-between gap-3">
           <div class="flex min-w-0 items-center gap-2">
-            <img
-              v-if="item.recipe_photo_thumb_url"
+            <RecipeImage
+              v-if="item.recipe_id"
               :src="item.recipe_photo_thumb_url"
               :alt="`Zdjęcie: ${itemLabel(item)}`"
-              class="size-10 rounded-lg object-cover"
-              loading="lazy"
+              class="!aspect-square size-14 shrink-0 rounded-lg"
             />
             <div class="min-w-0">
-              <p class="truncate text-sm font-medium">{{ itemLabel(item) }}</p>
+              <h4 class="text-lg leading-snug font-medium break-words">{{ itemLabel(item) }}</h4>
               <p class="text-muted-foreground text-xs tabular-nums">
                 <span :data-testid="`plan-item-kcal-${item.id}`">
                   {{ formatDecimal(item.nutrition.kcal) }} {{ recipeTexts.kcalUnit }}
@@ -197,7 +210,12 @@ function itemAmount(item: PlanItem): string | null {
               type="button"
               variant="outline"
               class="min-h-11 min-w-11"
-              :disabled="pending"
+              :disabled="pending || item.servings_split.length > 0"
+              :title="
+                item.servings_split.length
+                  ? 'Zmień porcje przez rozkład rodzinny w Więcej działań.'
+                  : undefined
+              "
               :aria-label="texts.decreaseServings"
               :data-testid="`plan-item-minus-${item.id}`"
               @click="step(item, -1)"
@@ -214,7 +232,12 @@ function itemAmount(item: PlanItem): string | null {
               type="button"
               variant="outline"
               class="min-h-11 min-w-11"
-              :disabled="pending"
+              :disabled="pending || item.servings_split.length > 0"
+              :title="
+                item.servings_split.length
+                  ? 'Zmień porcje przez rozkład rodzinny w Więcej działań.'
+                  : undefined
+              "
               :aria-label="texts.increaseServings"
               :data-testid="`plan-item-plus-${item.id}`"
               @click="step(item, 1)"
@@ -233,38 +256,59 @@ function itemAmount(item: PlanItem): string | null {
           {{ texts.incompleteData }}
         </p>
 
-        <div class="flex flex-wrap gap-2">
+        <div class="flex flex-wrap items-start gap-2">
           <Button
+            v-if="item.recipe_id"
             type="button"
-            variant="ghost"
-            class="min-h-11"
-            :data-testid="`plan-item-split-open-${item.id}`"
-            @click="emit('open-split', item.id)"
-          >
-            <Users class="size-4" aria-hidden="true" />
-            {{ texts.splitOpen }}
-          </Button>
-          <Button
-            v-if="meal.kcal_target"
-            type="button"
-            variant="ghost"
-            class="min-h-11"
-            :data-testid="`plan-item-fit-${item.id}`"
-            @click="emit('fit-to-target', item.id)"
-          >
-            <Target class="size-4" aria-hidden="true" />
-            {{ texts.fitToTarget }}
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            class="min-h-11"
+            variant="outline"
             :disabled="pending"
-            :data-testid="`plan-item-remove-${item.id}`"
-            @click="emit('remove-item', item.id)"
+            :data-testid="`plan-item-replace-${item.id}`"
+            @click="emit('replace-item', item.id)"
+            >Zamień danie</Button
           >
-            {{ common.remove }}
-          </Button>
+          <details class="min-w-0">
+            <summary
+              class="text-muted-foreground flex min-h-11 cursor-pointer items-center rounded-md px-3 text-sm"
+              :data-testid="`plan-item-actions-${item.id}`"
+            >
+              Więcej działań
+            </summary>
+            <div class="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                class="min-h-11"
+                :disabled="pending"
+                :data-testid="`plan-item-split-open-${item.id}`"
+                @click="emit('open-split', item.id)"
+              >
+                <Users class="size-4" aria-hidden="true" />
+                {{ texts.splitOpen }}
+              </Button>
+              <Button
+                v-if="meal.kcal_target"
+                type="button"
+                variant="ghost"
+                class="min-h-11"
+                :disabled="pending"
+                :data-testid="`plan-item-fit-${item.id}`"
+                @click="emit('fit-to-target', item.id)"
+              >
+                <Target class="size-4" aria-hidden="true" />
+                {{ texts.fitToTarget }}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                class="min-h-11"
+                :disabled="pending"
+                :data-testid="`plan-item-remove-${item.id}`"
+                @click="emit('remove-item', item.id)"
+              >
+                {{ common.remove }}
+              </Button>
+            </div>
+          </details>
         </div>
 
         <slot name="item-extra" :item="item" />
@@ -275,11 +319,12 @@ function itemAmount(item: PlanItem): string | null {
       type="button"
       variant="outline"
       class="min-h-11 justify-self-start"
+      :disabled="pending"
       :data-testid="`meal-add-item-${meal.id}`"
       @click="emit('add-item', meal.id)"
     >
       <Plus class="size-4" aria-hidden="true" />
-      {{ texts.addItem }}
+      Dodaj danie
     </Button>
   </article>
 </template>

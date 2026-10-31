@@ -16,6 +16,18 @@ związek z `TcpPortRandomizationWin` jest wnioskiem, nie pomiarem NetLog naszego
 hosta. Linux omija tę ścieżkę systemową bez instalacji alpha, zmiany lockfile,
 nadpisania wbudowanych flagów Chromium lub ustawień sieciowych Windows.
 
+UX03 / 2026-10-31: `task check DB_TEST_RUNTIME=linux` zachowuje wszystkie
+bramki, a `test-int` i `test-api` wykonuje w jednorazowym kontenerze z obrazu
+lokalnego dev API. Backend konkretnego worktree jest montowany tylko do
+odczytu; baza pozostaje tą samą `db-test`, po wewnętrznym adresie sieci compose.
+Runner dopuszcza wyłącznie dev/test, localhost i nazwy `pasnik_test` lub
+`pasnik_ux_test`; oba URL-e są kierowane do testowej bazy, a poświadczenia
+przechodzą przez env. Cache i uploady są tymczasowe. Domyślny runtime nadal
+jest hostowy; `CLI_ARGS` działają w obu wariantach. Tryb Linux omija ścieżkę
+połączeń hosta, która przerwała jeden test Windows błędem 10048. Nie ustalono
+dokładnej przyczyny tego błędu ani wyczerpania portów. Nadal obowiązuje jedna
+rezerwacja DB/E2E i rzeczywiste kody wyjścia wszystkich testów.
+
 ## 1. Piramida i narzędzia
 
 | Poziom | Narzędzie | Zakres | Uruchomienie |
@@ -123,6 +135,28 @@ WIĄŻĄCE dla każdego nowego specu:
    `households.spec.ts` ma własny projekt Playwrighta zależny od `chromium`,
    bo encje ze scope zapisują `household_id` także dla `private` (ADR-006)
    i sprzątające `DELETE /admin/households/{id}` trafiałoby na FK RESTRICT.
+6. **Roundtrip transferu ma świeżego USER-a i pusty browser context.**
+   `transfer.spec.ts` eksportuje i importuje dane wyłącznie tego konta,
+   zachowuje pobrany ZIP oraz sprawdza rzeczywistą kolizję i kopię przepisu.
+   Finally usuwa własne przepisy i konto. Nie używać wspólnego ADMIN-a:
+   import historii generacji/tur jest addytywny, więc powtarzany roundtrip
+   kopiuje całą jego historię. Nie odwiedzać Zakupów w tym scenariuszu —
+   odczyt konfiguracji zasiewa domyślne tury. Limity importu pozostają aktywne.
+
+Każda rzeczywista próba logowania API/UI, także niepoprawne hasło i opt-in
+visual, wywołuje `reserveLoginAttempt` z `e2e/login-budget.ts`. Helper
+rezerwuje slot przed wysłaniem i zapisuje tylko timestampy w ignorowanym
+`e2e/.auth/login-attempts.json`. Wspólny budżet pięciu prób na 60 sekund
+z buforem obejmuje restarty workerów i kolejne przebiegi Windows/Linux.
+Oczekiwanie wynika z końca okna; helper nie ponawia odrzuconych żądań i nie
+zmienia limitu backendu. Nieprawidłowy plik lub rozbieżny zegar przerywa test
+bez resetowania budżetu. Timeout testu/hooka rośnie tylko o wyliczony czas
+oczekiwania, a timeouty asercji pozostają bez zmian.
+
+`server.watch.ignored` Vite pomija `e2e/.auth/**` obok raportów i wyników
+Playwrighta. Zapis cookies lub budżetu nie jest zmianą kodu. Trace UX03
+wykazał, że Tailwind wysyłał dla niego `full-reload` bez standardowego logu
+Vite; po wykluczeniu katalogu oba ślady setup/smoke mają zero takich zdarzeń.
 
 Kryterium sprawności tej izolacji to DWA kolejne przebiegi z tym samym
 wynikiem, nie jednorazowe zielone.
@@ -223,6 +257,13 @@ Cztery rzeczy, o których muszą wiedzieć kolejne batche:
   jedyny nieodrobiony punkt pierwotnego zakresu §5.
 
 ## 6. Definicja zieloności
+
+Audyt zależności backendu uruchamia `task audit-be`. Target najpierw pobiera
+`purelib` i `platlib` z projektowego interpretera przez `uv run --locked`,
+następnie przekazuje oba katalogi jako `--path` do `python -m pip_audit`
+w osobnym środowisku narzędzia. Dzięki temu audyt nie wybiera pakietów
+overlayu `--with` i nie wymaga pip w venv aplikacji. Kod wyjścia z alertami
+pozostaje niezerowy; wykonanie audytu nie oznacza zielonego wyniku.
 
 Zero known-failing testów na masterze. Test flaky = naprawiany albo usuwany
 świadomą decyzją w PROGRESS — nigdy retry-until-green.

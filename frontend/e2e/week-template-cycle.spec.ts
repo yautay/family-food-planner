@@ -115,12 +115,12 @@ test('tydzień przez szablon i cykl: dzień → szablon → daty → tydzień �
   await expect(page.getByTestId('recipe-create-drawer')).toBeVisible()
   await page.getByTestId('recipe-create-submit').click()
   await expect(page.getByTestId('recipe-picker-selected')).toContainText(recipeName)
-  await page.getByTestId('item-submit').click()
+  await page.getByTestId('recipe-planning-submit').click()
   await expect(page.locator('[data-testid^="plan-item-servings-"]').first()).toBeVisible()
 
   // --- druga pozycja: produkt luzem z seedu (dzień musi mieć realne kcal) ------------
-  await page.locator('[data-testid^="meal-add-item-"]').first().click()
-  await page.getByTestId('item-mode-product').click()
+  await page.locator('[data-testid^="meal-menu-"]').first().click()
+  await page.locator('[data-testid^="meal-add-product-"]').first().click()
   await page.getByTestId('picker-input').fill(SEED_PRODUCT)
   await page.locator('[data-testid^="picker-option-"]').first().click()
   await expect(page.getByTestId('picker-selected')).toContainText(SEED_PRODUCT)

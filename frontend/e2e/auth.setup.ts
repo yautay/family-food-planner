@@ -2,6 +2,7 @@ import { expect, test as setup } from '@playwright/test'
 
 import { AUTH_STATE_FILE } from './auth-state.js'
 import { purgeE2eLeftovers } from './cleanup.js'
+import { reserveLoginAttempt } from './login-budget.js'
 
 /**
  * Logowanie RAZ na cały przebieg E2E — projekt `setup` z `playwright.config.ts`.
@@ -24,7 +25,7 @@ import { purgeE2eLeftovers } from './cleanup.js'
 const email = process.env.E2E_ADMIN_EMAIL ?? ''
 const password = process.env.E2E_ADMIN_PASSWORD ?? ''
 
-setup('logowanie raz na przebieg (zapis storageState)', async ({ page, baseURL }) => {
+setup('logowanie raz na przebieg (zapis storageState)', async ({ page, baseURL }, testInfo) => {
   if (!email || !password) {
     throw new Error(
       'Brak E2E_ADMIN_EMAIL / E2E_ADMIN_PASSWORD w .env. Utwórz konto komendą ' +
@@ -35,6 +36,7 @@ setup('logowanie raz na przebieg (zapis storageState)', async ({ page, baseURL }
   await page.goto('/login')
   await page.getByTestId('login-email').fill(email)
   await page.getByTestId('login-password').fill(password)
+  await reserveLoginAttempt(baseURL, testInfo)
   await page.getByTestId('login-submit').click()
 
   // Czekamy na skutek logowania, nie na samo kliknięcie — inaczej zapisalibyśmy

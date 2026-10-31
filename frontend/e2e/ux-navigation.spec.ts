@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto'
+import { reserveLoginAttempt } from './login-budget.js'
 
 import { expect, test } from '@playwright/test'
 import type { APIRequestContext } from '@playwright/test'
@@ -159,6 +160,7 @@ test.describe('rzeczywista sesja USER i granica administracji', () => {
       await userPage.goto('/login')
       await userPage.getByTestId('login-email').fill(email)
       await userPage.getByTestId('login-password').fill(password)
+      await reserveLoginAttempt(baseURL, testInfo)
       await userPage.getByTestId('login-submit').click()
       await expect(userPage).toHaveURL(/\/plan-dnia$/)
 

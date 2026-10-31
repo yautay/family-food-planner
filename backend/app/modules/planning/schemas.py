@@ -55,6 +55,8 @@ __all__ = [
     "PlanItemRead",
     "PlanServingSplitInput",
     "PlanServingSplitRead",
+    "RecipeItemCreateRequest",
+    "RecipeItemCreatedResponse",
     "StatsAveragesRead",
     "StatsDailyResponse",
     "StatsDayRead",
@@ -153,6 +155,7 @@ class ItemUpdateRequest(BaseModel):
     rozkładu); pominięte zostawia go nietkniętym.
     """
 
+    recipe_id: int | None = Field(default=None, ge=1)
     servings: Servings | None = None
     servings_split: list[PlanServingSplitInput] | None = Field(default=None, max_length=20)
     quantity: ItemQuantity | None = None
@@ -161,6 +164,8 @@ class ItemUpdateRequest(BaseModel):
 
     @model_validator(mode="after")
     def _amount_needs_both_parts(self) -> Self:
+        if "recipe_id" in self.model_fields_set and self.recipe_id is None:
+            raise ValueError("Przepisu nie można usunąć przez null ani zmienić w produkt.")
         if (self.quantity is None) != (self.unit is None):
             raise ValueError("Zmiana ilości wymaga podania i liczby, i jednostki.")
         return self
@@ -262,6 +267,32 @@ class DaysResponse(BaseModel):
 
     items: list[DayRead]
     total: int
+
+
+class RecipeItemCreateRequest(BaseModel):
+    """Jedna decyzja: przepis do istniejącego albo nowego posiłku."""
+
+    meal_id: int | None = Field(default=None, ge=1)
+    new_meal_name: MealName | None = None
+    recipe_id: int = Field(ge=1)
+    servings: Servings = Decimal("1")
+    servings_split: list[PlanServingSplitInput] = Field(default_factory=list, max_length=20)
+
+    @model_validator(mode="after")
+    def _meal_xor_name(self) -> Self:
+        if (self.meal_id is None) == (self.new_meal_name is None):
+            raise ValueError(
+                "Wybierz istniejący posiłek albo podaj nazwę nowego — dokładnie jedno."
+            )
+        return self
+
+
+class RecipeItemCreatedResponse(BaseModel):
+    """Potwierdzone identyfikatory pozycji oraz faktycznie zmieniony dzień."""
+
+    day: DayRead
+    meal_id: int
+    item_id: int
 
 
 # --- statystyki (BATCH_13) ----------------------------------------------------------

@@ -48,27 +48,50 @@ const highlighted = ref(0)
 const drawerOpen = ref(false)
 const draftServings = ref('1')
 const createError = ref<string | null>(null)
+const createName = ref('')
 
 const phrase = computed(() => debouncedSearch.value.trim())
+const phraseCurrent = computed(() => phrase.value === search.value.trim())
 const filters = computed(() => ({ limit: props.limit, offset: 0, q: phrase.value }))
 
 const results = useQuery({
   queryKey: computed(() => queryKeys.recipes.list(filters.value)),
   queryFn: () => fetchRecipes(filters.value),
-  enabled: computed(() => open.value && phrase.value.length > 0),
+  enabled: computed(() => open.value && phrase.value.length > 0 && phraseCurrent.value),
 })
 
-const items = computed<RecipeSummary[]>(() => results.data.value?.items ?? [])
-const isSearching = computed(() => phrase.value.length > 0)
-const canCreate = computed(
-  () => isSearching.value && items.value.length === 0 && !results.isFetching.value,
+const items = computed<RecipeSummary[]>(() =>
+  phraseCurrent.value ? (results.data.value?.items ?? []) : [],
 )
+const isSearching = computed(() => open.value && search.value.trim().length > 0)
+const canCreate = computed(
+  () =>
+    !props.disabled &&
+    isSearching.value &&
+    phraseCurrent.value &&
+    results.isSuccess.value &&
+    items.value.length === 0 &&
+    !results.isFetching.value,
+)
+const creationAllowed = computed(
+  () => drawerOpen.value && canCreate.value && createName.value === phrase.value,
+)
+
+watch(search, () => {
+  // Jawna zmiana kontekstu wyszukiwania zamyka szkic dla poprzedniej frazy.
+  if (drawerOpen.value && search.value.trim() !== createName.value) drawerOpen.value = false
+})
 
 watch(items, () => {
   highlighted.value = 0
 })
 
 function choose(recipe: RecipeSummary): void {
+  if (props.disabled || create.isPending.value || !phraseCurrent.value) return
+  selectRecipe(recipe)
+}
+
+function selectRecipe(recipe: RecipeSummary): void {
   emit('update:modelValue', recipe)
   emit('selected', recipe)
   search.value = ''
@@ -77,6 +100,7 @@ function choose(recipe: RecipeSummary): void {
 }
 
 function clear(): void {
+  if (props.disabled || create.isPending.value) return
   emit('update:modelValue', null)
   open.value = true
 }
@@ -84,7 +108,7 @@ function clear(): void {
 const create = useMutation({
   mutationFn: () =>
     createRecipe({
-      name: phrase.value,
+      name: createName.value,
       base_servings: Number.parseInt(draftServings.value, 10) || 1,
       instructions: '',
       // Nowy przepis jest PRYWATNY; udostępnienie rodzinie to świadoma decyzja
@@ -95,14 +119,26 @@ const create = useMutation({
     createError.value = null
     await queryClient.invalidateQueries({ queryKey: queryKeys.recipes.all })
     // Auto-wybór i powrót do przerwanego flow (06_UIUX §3.1).
-    choose(recipe)
+    selectRecipe(recipe)
   },
   onError: (error: unknown) => {
     createError.value = error instanceof ApiError ? error.message : common.unexpectedError
   },
 })
 
+function openCreate(): void {
+  if (!canCreate.value || create.isPending.value) return
+  createName.value = phrase.value
+  createError.value = null
+  drawerOpen.value = true
+}
+
+function submitCreate(): void {
+  if (creationAllowed.value && !create.isPending.value) create.mutate()
+}
+
 function onKeydown(event: KeyboardEvent): void {
+  if (props.disabled || create.isPending.value) return
   if (event.key === 'Escape') {
     open.value = false
     return
@@ -122,27 +158,29 @@ function onKeydown(event: KeyboardEvent): void {
     if (recipe) {
       choose(recipe)
     } else if (canCreate.value) {
-      drawerOpen.value = true
+      openCreate()
     }
   }
 }
 </script>
 
 <template>
-  <div class="grid gap-2" data-testid="recipe-picker">
+  <div class="grid min-w-0 max-w-full grid-cols-1 gap-2" data-testid="recipe-picker">
     <label class="text-sm font-medium" for="recipe-picker-input">{{ label }}</label>
 
     <div
       v-if="modelValue && !open"
-      class="border-border flex min-h-11 items-center justify-between gap-2 rounded-lg border px-3"
+      class="border-border flex min-h-11 min-w-0 max-w-full items-center justify-between gap-2 rounded-lg border px-3"
       data-testid="recipe-picker-selected"
     >
-      <span class="min-w-0 truncate text-sm">{{ modelValue.name }}</span>
+      <span class="min-w-0 flex-1 text-sm break-words whitespace-normal">{{
+        modelValue.name
+      }}</span>
       <Button
         type="button"
         variant="ghost"
         class="min-h-11"
-        :disabled="disabled"
+        :disabled="disabled || create.isPending.value"
         data-testid="recipe-picker-change"
         @click="clear()"
       >
@@ -155,11 +193,11 @@ function onKeydown(event: KeyboardEvent): void {
         id="recipe-picker-input"
         v-model="search"
         role="combobox"
-        aria-expanded="true"
+        :aria-expanded="isSearching"
         aria-controls="recipe-picker-results"
         :placeholder="texts.placeholder"
-        :disabled="disabled"
-        class="min-h-11"
+        :disabled="disabled || create.isPending.value"
+        class="min-h-11 w-full min-w-0 max-w-full"
         data-testid="recipe-picker-input"
         @focus="open = true"
         @keydown="onKeydown"
@@ -168,43 +206,71 @@ function onKeydown(event: KeyboardEvent): void {
       <ul
         v-if="isSearching"
         id="recipe-picker-results"
-        class="border-border grid gap-1 rounded-lg border p-1"
+        class="border-border grid min-w-0 max-w-full grid-cols-1 gap-1 rounded-lg border p-1"
         role="listbox"
         data-testid="recipe-picker-results"
       >
-        <li v-if="results.isPending.value" class="text-muted-foreground px-2 py-2 text-sm">
+        <li
+          v-if="!phraseCurrent || results.isPending.value"
+          class="text-muted-foreground px-2 py-2 text-sm"
+          role="status"
+          data-testid="recipe-picker-loading"
+        >
           {{ common.loading }}
+        </li>
+
+        <li
+          v-if="phraseCurrent && results.isError.value"
+          class="text-destructive grid gap-2 px-2 py-2 text-sm"
+          role="alert"
+          :data-testid="results.data.value ? 'recipe-picker-refetch-error' : 'recipe-picker-error'"
+        >
+          {{
+            results.data.value
+              ? 'Nie udało się odświeżyć przepisów. Pokazujemy ostatnio pobrane wyniki.'
+              : 'Nie udało się pobrać przepisów. Nie możemy teraz potwierdzić wyników wyszukiwania.'
+          }}
+          <Button
+            type="button"
+            variant="outline"
+            :disabled="results.isFetching.value || disabled"
+            data-testid="recipe-picker-retry"
+            @click="results.refetch()"
+            >Ponów wyszukiwanie</Button
+          >
         </li>
 
         <li
           v-for="(recipe, index) in items"
           :key="recipe.id"
+          class="min-w-0"
           role="option"
           :aria-selected="index === highlighted"
         >
           <button
             type="button"
-            class="hover:bg-muted flex min-h-11 w-full items-center justify-between gap-2 rounded-lg px-2 text-left text-sm"
+            class="hover:bg-muted flex min-h-11 w-full min-w-0 max-w-full items-center justify-between gap-2 rounded-lg px-2 text-left text-sm"
             :class="index === highlighted ? 'bg-muted' : ''"
+            :disabled="disabled || create.isPending.value"
             :data-testid="`recipe-picker-option-${recipe.id}`"
             @click="choose(recipe)"
           >
-            <span class="min-w-0 truncate">{{ recipe.name }}</span>
+            <span class="min-w-0 flex-1 break-words whitespace-normal">{{ recipe.name }}</span>
             <span class="text-muted-foreground shrink-0 text-xs tabular-nums">
               {{ recipe.nutrition.kcal }} kcal
             </span>
           </button>
         </li>
 
-        <li v-if="canCreate" class="grid gap-1">
+        <li v-if="canCreate" class="grid min-w-0 grid-cols-1 gap-1">
           <p class="text-muted-foreground px-2 text-sm" data-testid="recipe-picker-empty">
             {{ texts.noResults }}
           </p>
           <button
             type="button"
-            class="text-primary hover:bg-muted min-h-11 rounded-lg px-2 text-left text-sm font-medium"
+            class="text-primary hover:bg-muted min-h-11 min-w-0 max-w-full rounded-lg px-2 text-left text-sm font-medium break-words whitespace-normal"
             data-testid="recipe-picker-create"
-            @click="drawerOpen = true"
+            @click="openCreate"
           >
             {{ texts.createPrefix }} „{{ phrase }}”
           </button>
@@ -215,40 +281,43 @@ function onKeydown(event: KeyboardEvent): void {
     <!-- Minimalny drawer inline create: nazwa (z pickera) + porcja bazowa. -->
     <form
       v-if="drawerOpen"
-      class="border-border grid gap-3 rounded-lg border p-3"
+      class="border-border grid min-w-0 max-w-full grid-cols-1 gap-3 rounded-lg border p-3"
       data-testid="recipe-create-drawer"
-      @submit.prevent="create.mutate()"
+      @submit.prevent="submitCreate"
     >
       <div class="grid gap-1">
         <h3 class="text-sm font-medium">{{ texts.drawerTitle }}</h3>
         <p class="text-muted-foreground text-xs">{{ texts.drawerHint }}</p>
       </div>
 
-      <p class="text-sm">
+      <p class="min-w-0 text-sm break-words">
         <span class="text-muted-foreground">Nazwa:</span>
-        <span class="font-medium"> {{ phrase }}</span>
+        <span class="font-medium break-words"> {{ createName }}</span>
       </p>
 
-      <div class="grid gap-2">
+      <div class="grid min-w-0 grid-cols-1 gap-2">
         <label class="text-sm font-medium" for="recipe-create-servings">
           Porcje (na ile porcji jest przepis)
         </label>
         <Input
           id="recipe-create-servings"
           v-model="draftServings"
+          :disabled="create.isPending.value"
           inputmode="numeric"
-          class="min-h-11 tabular-nums"
+          class="min-h-11 w-full min-w-0 max-w-full tabular-nums"
           data-testid="recipe-create-servings"
         />
       </div>
 
-      <p v-if="createError" class="text-destructive text-sm" role="alert">{{ createError }}</p>
+      <p v-if="createError" class="text-destructive min-w-0 text-sm break-words" role="alert">
+        {{ createError }}
+      </p>
 
       <div class="flex gap-2">
         <Button
           type="submit"
           class="min-h-11"
-          :disabled="create.isPending.value || phrase.length === 0"
+          :disabled="create.isPending.value || !creationAllowed"
           data-testid="recipe-create-submit"
         >
           {{ common.save }}
@@ -258,6 +327,7 @@ function onKeydown(event: KeyboardEvent): void {
           variant="ghost"
           class="min-h-11"
           data-testid="recipe-create-cancel"
+          :disabled="create.isPending.value"
           @click="drawerOpen = false"
         >
           {{ common.cancel }}

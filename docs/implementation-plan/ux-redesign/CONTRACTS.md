@@ -76,9 +76,9 @@ wymagają uzgodnienia z O, aby obie równoległe karty miały tę samą podstaw�
 
 ### Panel przepisu
 
-Nazwa docelowa: `frontend/src/components/domain/planning/RecipePlanningPanel.vue`. To proponowany nowy komponent UX03; istniejący `PlanningDialog.vue` pozostaje wspólną oprawą operacji tygodnia do czasu świadomego uzgodnienia z UX07. Nie zakładać, że zmiana tej oprawy automatycznie realizuje panel przepisu.
+Komponent wdrożony w UX03: `frontend/src/components/domain/planning/RecipePlanningPanel.vue`. Istniejący `PlanningDialog.vue` pozostaje wspólną oprawą operacji tygodnia do czasu uzgodnienia z UX07. Panel przepisu korzysta bezpośrednio z ActionPanel; nie jest zmianą samej oprawy tygodnia.
 
-Proponowane wejście:
+Wejście wdrożone w UX03 (kontrakt dla UX04/UX07):
 
 | Pole | Typ/znaczenie |
 |---|---|
@@ -98,9 +98,9 @@ Dane domenowe korzystają z aliasów `api/planning.ts` i `api/recipes.ts`, bez r
 - Zablokować ponowny submit podczas pending. Walidacja/API 4xx zachowuje szkic i pokazuje błąd przy polu lub role=alert. Po utracie odpowiedzi POST stan jest „Nie udało się potwierdzić zapisu”: odczyt dnia, pokazanie rzeczywistego wyniku; bez automatycznego drugiego POST i bez obietnicy exactly-once. Zbieżne wiersze nie są dowodem, który request je utworzył; przy niepewności użytkownik dostaje jawny stan i link do planu.
 - Desktop drawer, telefon dostępny dialog z przewijalnym środkiem i osiągalną stopką. Jeśli modal: prawdziwe role=dialog/aria-modal, etykieta, początkowy fokus, Tab/Shift+Tab w panelu, Escape/zamknij, powrót do wywołującego, zablokowana interakcja tła. Samo `aria-modal` na istniejącym `role=group` nie wystarcza. Zagnieżdżony picker/create-in-context nie gubi szkicu ani fokusu.
 
-## 4. Projektowane rozszerzenia domenowego API UX03
+## 4. Rozszerzenia domenowego API wdrożone w UX03
 
-Poniższe nazwy i odpowiedź są propozycją zamrożenia przez O. Nie istnieją na bazie audytu. Nie wymagają nowej tabeli ani migracji, bo istniejące modele trzymają wszystkie dane; inna potrzeba wymaga zgłoszenia przed kodem.
+Poniższy kontrakt zaproponowano w historycznym audycie UX00, następnie zamrożono i wdrożono w UX03. Nie wymagał nowej tabeli ani migracji; istniejące modele przechowują wszystkie dane.
 
 ### Dodanie przepisu do nowego albo istniejącego posiłku
 
@@ -133,9 +133,9 @@ Addytywne `recipe_id: int >=1` w `PATCH /api/v1/plan/items/{item_id}`. Pominięt
 
 Przy samym recipe_id pozostają: item.id, meal ID, pozycja, servings i cały zapisany split. Serwer przelicza nutrition z nowego przepisu. Jeśli panel zmienia też porcje, przesyła zgodne servings/split w tym samym PATCH. Błąd walidacji/uprawnień pozostawia poprzedni przepis i podział. Odpowiedź pozostaje DayRead; panel zna item ID i potwierdza jego obecność oraz docelowy recipe ID w odpowiedzi.
 
-Uwaga do obu operacji: obecne `add_item/update_item` po zapisie robią `get_day(user, day_entity.day)`. Przy jawnym cudzym dniu ADMIN-a i innym własnym dniu z tej samej daty resolver może zwrócić inny wiersz niż zmieniony. UX03 ma objąć testem ten przypadek i budować odpowiedź ze zmienionego day ID, bez zmiany reguł widoczności. Nie potwierdzać sukcesu na podstawie innego dnia.
+UX00 wykrył, że `add_item/update_item` potwierdzały zapis przez resolver daty. UX03 serializuje faktycznie zmieniony day ID i obejmuje regresją jawny cudzy dzień ADMIN-a oraz jego własny dzień o tej samej dacie. Reguły widoczności i D16 pozostają bez zmian.
 
-Weryfikacja wymagana przy implementacji: pełna macierz ról/scope, globalny przepis, profil obcej rodziny, zła data meal ID, brak CSRF, XOR, granice liczb, istniejący split, rollback nowego dnia/posiłku, zachowane ID zamiany, utrata odpowiedzi i cache. Źródła testów do rozszerzenia: `backend/tests/api/planning/test_plan_api.py`, `backend/tests/integration/planning/test_planning_service.py`, `backend/tests/unit/planning/test_split_rules.py`, testy global usage, Vitest panelu i `frontend/e2e/recipe-global.spec.ts` oraz przepływ dnia. Te testy nie zostały uruchomione w tym audycie.
+Testy UX03 obejmują pełną macierz ról/scope, globalny przepis, profil obcej rodziny, złą datę meal ID, brak CSRF, XOR, granice liczb, istniejący split, rollback nowego dnia/posiłku i zachowane ID zamiany. Źródła: `test_recipe_scheduling_api.py`, `test_recipe_scheduling.py`, `test_recipe_scheduling_schemas.py` oraz dotychczasowe testy planowania. Vitest panelu i `ux-planning.spec.ts` obejmują błędy, cache i utratę odpowiedzi po rzeczywistym zapisie; `recipe-global.spec.ts` sprawdza planowanie globalnego przepisu przez USER-a. Faktyczne wyniki i zakres odbioru pozostają w PROGRESS, bez przypisywania tych testów historycznemu audytowi UX00.
 
 ## 5. Reguły braku danych i odstępstwa od makiety
 

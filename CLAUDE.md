@@ -52,7 +52,9 @@ Start od zera: `cp .env.example .env` → `task install` → `task dev`.
 | `task dev` | cały stack w Dockerze (app + frontend + db + db-test), hot reload |
 | `task dev-db` | same bazy (gdy testy uruchamiasz z hosta) |
 | `task down` / `task logs` | zatrzymanie / logi |
+| `task dev-app-reload` | przeładowanie wyłącznie lokalnego dev API po zmianie jego konfiguracji, bez baz i frontendu |
 | `task check` | **BRAMKA DoD**: migrations-check + unit + int + api + fe-test + typecheck + lint + format-check + fe-build + fe-types-check |
+| `task check DB_TEST_RUNTIME=linux` | cała ta sama bramka, integration/API w lokalnym kontenerze dev z backendem callera i `db-test`; opt-in dla problemów połączeń Windows, nadal jedna rezerwacja DB/E2E |
 | `task test-unit` / `test-int` / `test-api` / `test-be` | pytest wg markerów; zawężenie przez `--`, np. `task test-int -- -k wydajnosc -s` |
 | `task fe-test` | vitest |
 | `task test-e2e` (+ `task e2e-install`) | Playwright, chromium; zawężenie przez `--`, np. `task test-e2e -- offline-lista.spec.ts` |

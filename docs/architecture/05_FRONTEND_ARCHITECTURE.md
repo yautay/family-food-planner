@@ -33,6 +33,24 @@ jest błędem API i nie przejmuje fokusu podczas pisania. Pięciu konsumentów
 tygodnia wiąże pola przez `formId` i korzysta z rzeczywistego modala. Kontrakty panelu
 planowania przepisu UX03 pozostają w `ux-redesign/CONTRACTS.md`.
 
+UX03: `components/domain/planning/RecipePlanningPanel.vue` ma props
+`open`, `recipe: RecipeSummary | null`, `date` oraz opcjonalne `meal`
+i `replaceItem`; emituje `close` i
+`saved({ day, mealId, itemId, mode: 'add' | 'replace' })` po potwierdzonej
+odpowiedzi. Konsumenci UX04/07 używają tego panelu, bez drugiej implementacji
+POST/PATCH. Panel unieważnia `planDays.all` i `stats.all`; wynik zawiera
+rzeczywiste ID. Przy utracie odpowiedzi blokuje kolejny zapis, odczytuje
+stan serwera i pozwala sprawdzić dzień bez uznawania podobnej pozycji za
+pewne potwierdzenie własnej mutacji.
+
+`planning/portions.ts` buduje podział ze stringów Decimal i zachowuje wpisy
+historyczne. Nowy rodzinny tryb jest jawnym wyborem; wyłączone/zerowe osoby
+nie trafiają do payloadu. Sama zamiana przepisu nie zmienia istniejącego
+podziału ani nie dopisuje nieobecnych profili. `ServingsSplitDrawer` emituje
+`retry` do rodzica, który odświeża profile i przekazuje `isFetching` jako
+pending. RecipePicker rozróżnia błąd GET od braku wyników; tworzenie dotyczy
+wyłącznie aktualnej, poprawnie odczytanej frazy po debounce.
+
 ## 1. Podział odpowiedzialności stanu (ADR-007)
 
 - **TanStack Query** = cały stan serwera (fetch, cache, invalidation,

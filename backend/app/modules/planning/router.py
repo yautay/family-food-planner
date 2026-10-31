@@ -56,6 +56,8 @@ from app.modules.planning.schemas import (
     PlanDayUpsertRequest,
     PlanItemRead,
     PlanServingSplitRead,
+    RecipeItemCreatedResponse,
+    RecipeItemCreateRequest,
     StatsAveragesRead,
     StatsDailyResponse,
     StatsDayRead,
@@ -231,6 +233,18 @@ def build_plan_router() -> APIRouter:
     ) -> DayRead:
         view = await service.upsert_day(user, day, title=payload.title, scope=payload.scope)
         return _to_day(view)
+
+    @router.post(
+        "/days/{day}/recipe-items",
+        response_model=RecipeItemCreatedResponse,
+        status_code=status.HTTP_201_CREATED,
+        summary="Zaplanuj przepis w istniejącym lub nowym posiłku atomowo",
+    )
+    async def create_recipe_item(
+        day: date, payload: RecipeItemCreateRequest, user: CurrentUser, service: ServiceDep
+    ) -> RecipeItemCreatedResponse:
+        view, meal_id, item_id = await service.create_recipe_item(user, day, payload)
+        return RecipeItemCreatedResponse(day=_to_day(view), meal_id=meal_id, item_id=item_id)
 
     @router.post(
         "/days/{day}/meals",

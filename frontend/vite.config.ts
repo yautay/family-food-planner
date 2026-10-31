@@ -20,7 +20,9 @@ const usePolling = process.env.VITE_USE_POLLING === 'true'
 // strony (w logach: „page reload playwright-report/index.html"), a reload gubi
 // stan UI — spec listy zakupowej tracił w połowie otwarty panel udostępniania
 // i padał bez winy aplikacji (ustalenie BATCH_11).
-const watchIgnored = ['**/test-results/**', '**/playwright-report/**']
+// Rezerwacja logowania i zapis cookies są artefaktami testów, nie zmianą UI.
+// Tailwind potrafi wysłać dla nich full-reload bez zwykłego logu Vite.
+const watchIgnored = ['**/test-results/**', '**/playwright-report/**', '**/e2e/.auth/**']
 
 // Stempel wersji builda (B18a): `dist/build-info.json` = {version, built_at}.
 // Deploy (`deploy/playbook-deploy.yml`) porównuje `version` z plikiem VERSION

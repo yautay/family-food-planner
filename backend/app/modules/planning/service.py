@@ -79,6 +79,7 @@ from app.modules.planning.schemas import (
     MealUpdateRequest,
     PlanCopyRequest,
     PlanServingSplitInput,
+    RecipeItemCreateRequest,
     TemplateItemPayload,
     TemplateMealPayload,
     TemplateSplitPayload,
@@ -362,6 +363,10 @@ class PlanningService:
         views = await self._build_days([entity] if entity is not None else [], user, dates=[day])
         return views[0]
 
+    async def _changed_day(self, user: User, entity: PlanDay) -> DayView:
+        """Serializacja po ID: ADMIN może mieć też własny dzień z tą samą datą."""
+        return (await self._build_days([entity], user, dates=[entity.day]))[0]
+
     # --- dzień --------------------------------------------------------------------
 
     async def upsert_day(
@@ -483,6 +488,69 @@ class PlanningService:
         """Pozycja z przepisu (mnożnik porcji) albo produkt luzem (ilość → ADR-005)."""
         meal, day_entity = await self._meal_or_404(meal_id, user)
 
+        await self._insert_item(meal, day_entity, user=user, payload=payload)
+        await self._session.commit()
+        return await self._changed_day(user, day_entity)
+
+    async def create_recipe_item(
+        self, user: User, day: date, payload: RecipeItemCreateRequest
+    ) -> tuple[DayView, int, int]:
+        """Dzień, posiłek i pierwsze danie w jednej transakcji, także przy odmowie."""
+        try:
+            if payload.meal_id is not None:
+                meal, entity = await self._meal_or_404(payload.meal_id, user)
+                if entity.day != day:
+                    raise PlanValidationError("Wybrany posiłek należy do innego dnia.")
+            else:
+                resolved = await self._resolve_day(user, day, for_write=True)
+                if resolved is None:
+                    entity = PlanDay(
+                        day=day, **ScopedQuery.ownership_for_create(user, Scope.PRIVATE)
+                    )
+                    self._session.add(entity)
+                    await self._session.flush()
+                else:
+                    entity = resolved
+                count = (
+                    await self._session.execute(
+                        select(func.count())
+                        .select_from(PlanMeal)
+                        .where(PlanMeal.plan_day_id == entity.id)
+                    )
+                ).scalar_one()
+                if count >= MEALS_PER_DAY_LIMIT:
+                    raise PlanValidationError(MEALS_LIMIT_REACHED)
+                assert payload.new_meal_name is not None
+                meal = PlanMeal(
+                    plan_day_id=entity.id,
+                    name=payload.new_meal_name,
+                    kcal_target=None,
+                    position=await self._next_meal_position(entity.id),
+                )
+                self._session.add(meal)
+                await self._session.flush()
+            item = await self._insert_item(
+                meal,
+                entity,
+                user=user,
+                payload=ItemCreateRequest(
+                    recipe_id=payload.recipe_id,
+                    servings=payload.servings,
+                    servings_split=payload.servings_split,
+                ),
+            )
+            meal_id, item_id = meal.id, item.id
+            await self._session.commit()
+        except Exception:
+            await self._session.rollback()
+            raise
+        return await self._changed_day(user, entity), meal_id, item_id
+
+    async def _insert_item(
+        self, meal: PlanMeal, day_entity: PlanDay, *, user: User, payload: ItemCreateRequest
+    ) -> PlanMealItem:
+        """Wspólny zapis i walidacje pozycji; commit należy do operacji użytkownika."""
+
         amount: Decimal | None = None
         amount_unit = None
         if payload.recipe_id is not None:
@@ -514,12 +582,27 @@ class PlanningService:
         await self._session.flush()
 
         await self._replace_split(item, payload.servings_split, day_entity, servings=item.servings)
-        await self._session.commit()
-        return await self.get_day(user, day_entity.day)
+        return item
 
     async def update_item(self, item_id: int, *, user: User, payload: ItemUpdateRequest) -> DayView:
         """Zmiana mnożnika, ilości, kolejności albo rozkładu rodzinnego pozycji."""
         item, _meal, day_entity = await self._item_or_404(item_id, user)
+        try:
+            return await self._update_item(item, day_entity, user=user, payload=payload)
+        except Exception:
+            await self._session.rollback()
+            raise
+
+    async def _update_item(
+        self, item: PlanMealItem, day_entity: PlanDay, *, user: User, payload: ItemUpdateRequest
+    ) -> DayView:
+        if payload.recipe_id is not None:
+            if item.recipe_id is None:
+                raise PlanValidationError(
+                    "Zamiana przepisu jest dostępna tylko dla dania z przepisu."
+                )
+            await self._assert_recipe_available(payload.recipe_id, user)
+            item.recipe_id = payload.recipe_id
 
         if payload.quantity is not None and payload.unit is not None:
             if item.product_id is None:
@@ -543,7 +626,7 @@ class PlanningService:
             await self._assert_existing_split_matches(item)
 
         await self._session.commit()
-        return await self.get_day(user, day_entity.day)
+        return await self._changed_day(user, day_entity)
 
     async def delete_item(self, item_id: int, *, user: User) -> DayView:
         """Usunięcie pozycji razem z jej rozkładem (kaskada bazy)."""
