@@ -14,31 +14,39 @@
 import { Info } from '@lucide/vue'
 import { useMutation } from '@tanstack/vue-query'
 import { ref } from 'vue'
+import { captureSessionGeneration, isSessionGenerationCurrent } from '@/lib/sessionGeneration'
 
 import { ApiError, assertSessionRequestCurrent, captureSessionRequest } from '@/api/client'
 import { downloadExport } from '@/api/transfer'
 import TransferImportDialog from '@/components/domain/TransferImportDialog.vue'
+import PageHeader from '@/components/domain/PageHeader.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { saveBlob } from '@/lib/download'
 import { common, transfer as texts } from '@/lib/texts'
 
+const pageTicket = captureSessionGeneration()
 const importOpen = ref(false)
 const helpOpen = ref(false)
 const errorMessage = ref<string | null>(null)
 const exportedFilename = ref<string | null>(null)
 
 const exportInstance = useMutation({
-  onMutate: () => ({ sessionTicket: captureSessionRequest() }),
+  onMutate: () => {
+    errorMessage.value = null
+    exportedFilename.value = null
+    return { sessionTicket: captureSessionRequest() }
+  },
   mutationFn: () => downloadExport('instance'),
   onSuccess: (file, _variables, context) => {
-    if (!context) return
+    if (!context || !isSessionGenerationCurrent(pageTicket)) return
     assertSessionRequestCurrent(context.sessionTicket)
     errorMessage.value = null
     exportedFilename.value = file.filename
     saveBlob(file.blob, file.filename)
   },
   onError: (error: unknown) => {
+    if (!isSessionGenerationCurrent(pageTicket)) return
     errorMessage.value = error instanceof ApiError ? error.message : common.unexpectedError
   },
 })
@@ -47,8 +55,11 @@ const exportInstance = useMutation({
 <template>
   <section class="grid gap-6" data-testid="admin-dane-page">
     <header class="grid gap-1">
-      <h1 class="text-2xl font-semibold">{{ texts.instanceTitle }}</h1>
-      <p class="text-muted-foreground text-sm">{{ texts.instanceSubtitle }}</p>
+      <PageHeader
+        :title="texts.instanceTitle"
+        :description="texts.instanceSubtitle"
+        eyebrow="Administracja"
+      />
       <div class="grid gap-2">
         <Button
           type="button"
@@ -74,7 +85,7 @@ const exportInstance = useMutation({
       </div>
     </header>
 
-    <Card class="rounded-xl">
+    <Card class="rounded-2xl">
       <CardHeader>
         <CardTitle>{{ texts.instanceTitle }}</CardTitle>
         <CardDescription>{{ texts.exportHint }}</CardDescription>

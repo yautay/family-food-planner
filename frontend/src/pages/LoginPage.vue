@@ -16,9 +16,9 @@ import * as z from 'zod'
 import type { LoginPayload } from '@/api/auth'
 import { ApiError } from '@/api/client'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { APP_TAGLINE, auth as texts, common } from '@/lib/texts'
+import { APP_NAME, APP_TAGLINE, auth as texts, common } from '@/lib/texts'
 import { useAuthStore } from '@/stores/auth'
 
 const authStore = useAuthStore()
@@ -82,9 +82,10 @@ const onSubmit = handleSubmit((values) => {
 
 <template>
   <div class="bg-background flex min-h-dvh items-center justify-center px-4 py-10">
-    <Card class="w-full max-w-sm rounded-xl" data-testid="login-card">
+    <Card class="w-full max-w-sm rounded-2xl" data-testid="login-card">
       <CardHeader>
-        <CardTitle>{{ texts.loginTitle }}</CardTitle>
+        <p class="text-primary font-serif text-3xl">{{ APP_NAME }}</p>
+        <h1 class="pt-3 text-xl font-semibold">{{ texts.loginTitle }}</h1>
         <CardDescription>{{ APP_TAGLINE }}</CardDescription>
       </CardHeader>
 
@@ -100,9 +101,15 @@ const onSubmit = handleSubmit((values) => {
               autocomplete="username"
               class="min-h-11"
               :aria-invalid="Boolean(errors.email)"
+              :aria-describedby="errors.email ? 'login-email-error' : undefined"
               data-testid="login-email"
             />
-            <p v-if="errors.email" class="text-destructive text-sm" data-testid="login-email-error">
+            <p
+              v-if="errors.email"
+              id="login-email-error"
+              class="text-destructive text-sm"
+              data-testid="login-email-error"
+            >
               {{ errors.email }}
             </p>
           </div>
@@ -119,10 +126,12 @@ const onSubmit = handleSubmit((values) => {
               autocomplete="current-password"
               class="min-h-11"
               :aria-invalid="Boolean(errors.password)"
+              :aria-describedby="errors.password ? 'login-password-error' : undefined"
               data-testid="login-password"
             />
             <p
               v-if="errors.password"
+              id="login-password-error"
               class="text-destructive text-sm"
               data-testid="login-password-error"
             >

@@ -124,6 +124,7 @@ describe('odpowiedź ustawień należy do generacji sesji, w której rozpoczęto
       })
       disposers.push(() => wrapper.unmount())
       await flushPromises()
+      await wrapper.get('[data-testid="settings-tab-goals"]').trigger('click')
       await wrapper.get('[data-testid="thresholds-form"]').trigger('submit')
       await flushPromises()
       expect(api.updateThresholds).toHaveBeenCalledOnce()
@@ -182,6 +183,8 @@ describe('plik eksportu przed callbackiem zapisu na dysk', () => {
       )
       const wrapper = mount(page, { global: { plugins: [pinia, VueQueryPlugin] } })
       disposers.push(() => wrapper.unmount())
+      if (page === UstawieniaPage)
+        await wrapper.get('[data-testid="settings-tab-data"]').trigger('click')
       await wrapper.get(`[data-testid="${button}"]`).trigger('click')
       await flushPromises()
       finish({ blob: new Blob(['private-A']), filename: 'private-A.zip' })
@@ -198,4 +201,53 @@ describe('plik eksportu przed callbackiem zapisu na dysk', () => {
       }
     },
   )
+  it.each([
+    { page: UstawieniaPage, button: 'transfer-export', alert: 'transfer-error' },
+    { page: AdminDanePage, button: 'admin-transfer-export', alert: 'admin-transfer-error' },
+  ])(
+    'spóźniony błąd eksportu nie pojawia się w wycofanej stronie: $button',
+    async ({ page, button, alert }) => {
+      const pinia = createPinia()
+      setActivePinia(pinia)
+      disposers.push(() => disposePinia(pinia))
+      let reject!: (error: Error) => void
+      api.download.mockReturnValue(
+        new Promise((_resolve, fail) => {
+          reject = fail
+        }),
+      )
+      const wrapper = mount(page, { global: { plugins: [pinia, VueQueryPlugin] } })
+      disposers.push(() => wrapper.unmount())
+      if (page === UstawieniaPage)
+        await wrapper.get('[data-testid="settings-tab-data"]').trigger('click')
+      await wrapper.get(`[data-testid="${button}"]`).trigger('click')
+      await flushPromises()
+      advanceSessionGeneration()
+      reject(new Error('private-old-session-error'))
+      await flushPromises()
+      expect(wrapper.find(`[data-testid="${alert}"]`).exists()).toBe(false)
+      expect(api.saveBlob).not.toHaveBeenCalled()
+    },
+  )
+
+  it('spóźniony błąd progów nie pojawia się po zmianie generacji', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    disposers.push(() => disposePinia(pinia))
+    let reject!: (error: Error) => void
+    api.updateThresholds.mockReturnValue(
+      new Promise((_resolve, fail) => {
+        reject = fail
+      }),
+    )
+    const wrapper = mount(UstawieniaPage, { global: { plugins: [pinia, VueQueryPlugin] } })
+    disposers.push(() => wrapper.unmount())
+    await wrapper.get('[data-testid="settings-tab-goals"]').trigger('click')
+    await wrapper.get('[data-testid="thresholds-form"]').trigger('submit')
+    await flushPromises()
+    advanceSessionGeneration()
+    reject(new Error('retired thresholds'))
+    await flushPromises()
+    expect(wrapper.find('[data-testid="thresholds-error"]').exists()).toBe(false)
+  })
 })

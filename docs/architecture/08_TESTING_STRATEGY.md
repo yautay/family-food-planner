@@ -128,6 +128,17 @@ Core flows (rozbudowywane w batchach, które je dostarczają):
    bibliotekę390/1024 i panel390. Unit testy dodatkowo dowodzą budżetu żądań
    przy ogromnym `pages`, zachowania głębszego cache/fokusu oraz ręcznego
    pobierania po częściowym odtworzeniu.
+6. Ustawienia i podsumowanie UX10: `ux-settings-summary.spec.ts` używa
+   własnego USER-a i rodziny, sprawdza cztery zakładki klawiaturą, błąd422
+   z zachowanym szkicem, profile, historię celów i progi na390/1024.
+   `statystyki.spec.ts` sprawdza rzeczywiste luki i neutralne średnie całego
+   planu, odrębną historię celu konta oraz zakres92dni. `retail-stores`
+   otwiera Zakupy także po reload i potwierdza trwałość kolejności przez API.
+   Opt-in `UX_ADMIN_VISUAL=1` / `ux-admin-visual.spec.ts` wykonuje odczyty
+   czterech ekranów administracji z rzeczywistą sesją ADMIN, bez mutacji.
+   Włączenie `households.spec.ts` uruchamia cały projekt chromium jako
+   zależność; taki przebieg należy raportować według faktycznych testów,
+   a nie przedstawiać jako małą suitę zawężoną argumentami CLI.
 Konwencje: selektory `data-testid`, gotowość UI przez expect z timeoutem,
 seed przez API, nie przez UI. Wyjątek czasu w UX06 dotyczy jawnego wygaśnięcia
 rzeczywistego staleTime (31 s przy 30 s konfiguracji): test dwóch kart wymaga

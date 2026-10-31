@@ -1,4 +1,4 @@
-import { VueQueryPlugin } from '@tanstack/vue-query'
+import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -6,6 +6,8 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 
 import StatystykiPage from './StatystykiPage.vue'
 import type { DailyStats, StatsDay } from '@/api/stats'
+import { queryKeys } from '@/api/queryKeys'
+import ErrorState from '@/components/domain/ErrorState.vue'
 
 /**
  * Strona statystyk nie liczy niczego domenowego — testujemy to, co robi
@@ -94,7 +96,10 @@ const WEEK = [
   day('2026-08-23', { kcal: '1900', goalKcal: '2400' }),
 ]
 
-async function mountPage(path = '/statystyki') {
+async function mountPage(
+  path = '/statystyki',
+  queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+) {
   setActivePinia(createPinia())
   const router = createRouter({
     history: createMemoryHistory(),
@@ -109,10 +114,7 @@ async function mountPage(path = '/statystyki') {
     global: {
       // `retry: false` — aplikacja ponawia raz (main.ts), a test ma sprawdzać
       // komunikat błędu, nie czekać na politykę ponowień.
-      plugins: [
-        router,
-        [VueQueryPlugin, { queryClientConfig: { defaultOptions: { queries: { retry: false } } } }],
-      ],
+      plugins: [router, [VueQueryPlugin, { queryClient }]],
       stubs: { RouterLink: { template: '<a><slot /></a>' } },
     },
   })
@@ -234,13 +236,13 @@ describe('StatystykiPage', () => {
   it('pokazuje obie zakładki i przełącza wykres', async () => {
     const wrapper = await mountPage()
 
-    expect(wrapper.get('[data-testid="stats-tab-kcal"]').attributes('aria-selected')).toBe('true')
+    expect(wrapper.get('[data-testid="stats-tab-kcal"]').attributes('aria-pressed')).toBe('true')
     expect(wrapper.find('[data-testid="stats-chart-kcal"]').exists()).toBe(true)
 
     await wrapper.get('[data-testid="stats-tab-macros"]').trigger('click')
 
     expect(wrapper.find('[data-testid="stats-chart-macros"]').exists()).toBe(true)
-    expect(wrapper.get('[data-testid="stats-tab-macros"]').attributes('aria-selected')).toBe('true')
+    expect(wrapper.get('[data-testid="stats-tab-macros"]').attributes('aria-pressed')).toBe('true')
   })
 
   it('zmiana presetu zakresu przeładowuje dane', async () => {
@@ -314,13 +316,16 @@ describe('StatystykiPage', () => {
     expect(levels[1]).toBe('0,0,0,0')
   })
 
-  it('podsumowanie pokazuje trio wartość/cel/delta + status słowny', async () => {
+  it('pokazuje średnią całego planu oddzielnie od archiwalnego celu konta bez oceny realizacji', async () => {
     const wrapper = await mountPage()
 
     const tile = wrapper.get('[data-testid="stats-tile-kcal"]')
     expect(tile.text()).toContain('1900')
-    expect(tile.text()).toContain('2000')
-    expect(wrapper.get('[data-testid="stats-status-kcal"]').text()).toContain('prawidłowo')
+    expect(tile.text()).not.toContain('2000')
+    expect(wrapper.find('[data-testid="stats-status-kcal"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="stats-account-averages"]').text()).toContain('2000')
+    expect(wrapper.get('[data-testid="stats-goal-legend"]').text()).toContain('odczyt archiwalny')
+    expect(wrapper.get('[data-testid="stats-semantics"]').text()).toContain('cały plan')
     expect(wrapper.get('[data-testid="stats-days"]').text()).toContain('6 z 7')
   })
 
@@ -333,7 +338,8 @@ describe('StatystykiPage', () => {
     expect(wrapper.find('[data-testid="stats-tile-fat_g"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="stats-tile-carbs_g"]').exists()).toBe(true)
     // Cel tłuszczu nie jest ustawiony w podsumowaniu — kafelek mówi „brak celu".
-    expect(wrapper.get('[data-testid="stats-tile-fat_g"]').text()).toContain('brak celu')
+    expect(wrapper.get('[data-testid="stats-tile-fat_g"]').text()).toContain('60 g')
+    expect(wrapper.get('[data-testid="stats-account-averages"]').text()).toContain('brak celu')
   })
 
   it('trend średniej kroczącej rysuje się w układzie współrzędnych słupków', async () => {
@@ -401,4 +407,101 @@ describe('StatystykiPage', () => {
 
     expect(wrapper.find('[data-testid="stats-fetch-error"]').exists()).toBe(true)
   })
+  it('nie używa osobistych statusów ani wartości goal_progress jako średniej planu', async () => {
+    const data = response(WEEK)
+    data.summary.goal_progress.kcal = {
+      value: '99999',
+      target: '2000',
+      delta: '97999',
+      status: 'above',
+    }
+    data.days.forEach((entry) => {
+      entry.status.kcal = 'above'
+    })
+    statsApi.fetchDailyStats.mockResolvedValue(data)
+    const wrapper = await mountPage()
+    expect(wrapper.get('[data-testid="stats-tile-kcal"]').text()).toContain('1900')
+    expect(wrapper.get('[data-testid="stats-tile-kcal"]').text()).not.toContain('99999')
+    expect(wrapper.text()).not.toContain('za dużo')
+    expect(
+      wrapper
+        .findAll('[data-testid^="stats-kcal-chart-bar-"]')
+        .every((bar) => bar.classes().includes('fill-primary')),
+    ).toBe(true)
+    expect(wrapper.get('[data-testid="stats-kcal-chart"] svg').attributes('aria-label')).toContain(
+      'historyczny cel konta',
+    )
+  })
+
+  it('historia celów konta jest osiągalna także w zakresie bez planu', async () => {
+    statsApi.fetchDailyStats.mockResolvedValue(response([day('2030-01-01', { goalKcal: '2200' })]))
+    const wrapper = await mountPage()
+    expect(wrapper.find('[data-testid="stats-empty"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="stats-account-history"]').text()).toContain(
+      'nie wyliczono średnich',
+    )
+    expect(wrapper.get('[data-testid="stats-goal-history"]').text()).toContain('2200')
+    expect(wrapper.find('[data-testid="stats-account-averages"]').exists()).toBe(false)
+  })
+  it.each([
+    {
+      label: 'pusty plan',
+      cached: response([day('2026-08-17', { goalKcal: '2200' })]),
+      visible: 'stats-empty',
+    },
+    { label: 'plan z posiłkami', cached: response(WEEK), visible: 'stats-chart-kcal' },
+  ])(
+    'zachowuje potwierdzone dane i ujawnia błąd odświeżenia z ponowieniem: $label',
+    async ({ cached, visible }) => {
+      let failRefresh!: (error: Error) => void
+      let finishRetry!: (data: DailyStats) => void
+      const failedRefresh = new Promise<DailyStats>((_resolve, reject) => {
+        failRefresh = reject
+      })
+      const pendingRetry = new Promise<DailyStats>((resolve) => {
+        finishRetry = resolve
+      })
+      statsApi.fetchDailyStats
+        .mockReset()
+        .mockResolvedValueOnce(cached)
+        .mockReturnValueOnce(failedRefresh)
+        .mockReturnValueOnce(pendingRetry)
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+      const wrapper = await mountPage('/statystyki', client)
+      try {
+        expect(wrapper.get(`[data-testid="${visible}"]`).isVisible()).toBe(true)
+        expect(wrapper.findComponent(ErrorState).exists()).toBe(false)
+        const refresh = client.refetchQueries({ queryKey: queryKeys.stats.all })
+        await flushPromises()
+        expect(statsApi.fetchDailyStats).toHaveBeenCalledTimes(2)
+        expect(wrapper.get(`[data-testid="${visible}"]`).isVisible()).toBe(true)
+        expect(wrapper.findComponent(ErrorState).exists()).toBe(false)
+        failRefresh(new Error('odświeżenie nie powiodło się'))
+        await refresh
+        await flushPromises()
+        const error = wrapper.getComponent(ErrorState)
+        expect(error.get('[role="alert"]').text()).toContain('Nie udało się odświeżyć podsumowania')
+        expect(error.text()).toContain('ostatnio odczytane dane')
+        expect(wrapper.get(`[data-testid="${visible}"]`).isVisible()).toBe(true)
+        expect(wrapper.find('[data-testid="stats-fetch-error"]').exists()).toBe(false)
+        expect(wrapper.get('[data-testid="stats-account-history"]').isVisible()).toBe(true)
+        const retry = error.get('button')
+        expect(retry.attributes('disabled')).toBeUndefined()
+        await retry.trigger('click')
+        await flushPromises()
+        expect(statsApi.fetchDailyStats).toHaveBeenCalledTimes(3)
+        expect(retry.attributes('disabled')).toBeDefined()
+        expect(wrapper.get(`[data-testid="${visible}"]`).isVisible()).toBe(true)
+        finishRetry(response(WEEK))
+        await flushPromises()
+        expect(wrapper.findComponent(ErrorState).exists()).toBe(false)
+        expect(wrapper.find('[data-testid="stats-empty"]').exists()).toBe(false)
+        expect(wrapper.get('[data-testid="stats-tile-kcal"]').text()).toContain('1900')
+        expect(wrapper.find('[data-testid="stats-status-kcal"]').exists()).toBe(false)
+      } finally {
+        wrapper.unmount()
+        client.clear()
+      }
+    },
+  )
 })

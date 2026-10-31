@@ -125,4 +125,14 @@ describe('StoreCategoryOrderEditor', () => {
 
     expect(wrapper.get('[data-testid="order-empty"]').text()).toContain('profilu')
   })
+  it('podczas zapisu zamraża szkic, strzałki i przeciąganie', async () => {
+    const wrapper = mountEditor()
+    await wrapper.get('[data-testid="order-down-1"]').trigger('click')
+    await wrapper.setProps({ pending: true })
+    expect(wrapper.get('[data-testid="order-up-1"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-testid="order-add-3"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-testid="order-remove-1"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-testid="order-row-1"]').attributes('draggable')).toBe('false')
+    expect(visibleOrder(wrapper)).toEqual(['order-row-2', 'order-row-1'])
+  })
 })

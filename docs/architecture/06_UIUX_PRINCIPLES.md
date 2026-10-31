@@ -68,7 +68,9 @@ przyciskową (mobile/dostępność).
 4. **Stany ładowania**: skeleton do pierwszej zakończonej odpowiedzi, potem
    nigdy migających skeletonów (lekcja netQArnera); mutacje = spinner na
    przycisku, nie blokada całej strony.
-5. **Liczby żywieniowe**: zawsze trio wartość/cel/delta + status słowny;
+5. **Liczby żywieniowe**: wartość/cel/delta + status słowny tylko wtedy,
+   gdy obie wartości opisują ten sam zakres. UX03/UX10 pokazują cały plan
+   bez oceny realizacji indywidualnego celu; cel konta pozostaje osobno.
    niepełne dane (brak IG itp.) = wyraźna plakietka „niepełne dane" z
    tooltipem czego brakuje.
 
@@ -108,6 +110,12 @@ NIE MA: przewijanie bez końca zabiera stopkę i orientację „ile jeszcze zost
 a wirtualizacja to koszt złożoności przy zbiorach rzędu setek pozycji.
 Realizacja: `src/api/pagination.ts` + `components/domain/LoadMoreButton.vue`
 (05_FRONTEND §3).
+
+Wyjątek kontraktu UX10: GET konfiguracji tur zwraca całą listę bez offsetu.
+`RoundConfigSection` nie zmienia API: zachowuje pełny cache w kolejności
+serwera, pokazuje początkowo20wierszy oraz jawny licznik i przycisk następnych
+20. Odkrycie wszystkich jest możliwe. Zmiana pozycji korzysta z pełnej listy,
+również gdy sąsiednia tura jest jeszcze ukryta. Nie jest to wirtualizacja.
 
 ## 4. Widoki kluczowe (mapowanie wizualizacji)
 
@@ -174,8 +182,10 @@ Realizacja: `src/api/pagination.ts` + `components/domain/LoadMoreButton.vue`
    kolejny. Przycisk nakłada filtr terminu, zachowując kategorię/szukanie.
    „Brak daty” oznacza brak informacji; etykieta „Termin” nie obiecuje
    bezpieczeństwa produktu. Ilości korzystają z dotychczasowego parsera.
-7. **Statystyki** — zakładki Kalorie/Makroskładniki; słupki stacked
-   tydzień/zakres, linie celów; średnie dzienne vs cele.
+7. **Podsumowanie planu (UX10)** — zakładki Kalorie/Makroskładniki;
+   słupki wartości wszystkich porcji, bez potwierdzania spożycia i bez
+   przypisywania konta do profilu po imieniu. Średnie całego planu są
+   neutralne; historia i średnie historycznych celów konta są osobno.
    Stan po BATCH_13: zakres jako presety **Tydzień / Miesiąc / Własny** (dwa
    date-pickery, sufit 92 dni walidowany tak jak na serwerze); linia celu jest
    **schodkowa** (cele historyczne — bez interpolacji), a dzień bez planu to
@@ -183,7 +193,7 @@ Realizacja: `src/api/pagination.ts` + `components/domain/LoadMoreButton.vue`
    bo średnia dzieli się przez dni Z PLANEM. Zakładka makro dokłada legendę
    składników i **średnią kroczącą (7 dni)** jako nakładkę w tej samej skali;
    przy zakresie krótszym niż 7 dni w jej miejscu stoi zdanie wyjaśniające.
-   Podsumowanie to znane trio wartość/cel/delta + status słowny; przy dniu
+   Nie pokazujemy oceny realizacji celu osoby ani delty plan–cel; przy dniu
    z niepełnymi danymi dochodzi plakietka „Niepełne dane" z listą braków,
    a zakres bez planu dostaje pusty stan z akcją „Przejdź do planu".
    Wykresy ŁG świadomie NIE MA (ŁG jest w odpowiedzi API, ale nie w UI).
@@ -198,7 +208,14 @@ Realizacja: `src/api/pagination.ts` + `components/domain/LoadMoreButton.vue`
    Odtwarzanie katalogu zachowuje filtry, rzeczywiste strony i fokus;
    budżet automatyczny nie ogranicza ręcznego „Pokaż więcej”.
 9. **Mobile** — patrz §5.
-10. **Ustawienia → „Sklepy"** (BATCH_09, bez osobnej wizualizacji) — lista
+10. **Dom i ustawienia (UX10)** — zakładki Rodzina / Moje cele / Zakupy /
+   Dane. Rodzina rozróżnia konta z dostępem od profili osób, dla których
+   gotujemy; zachowuje dezaktywację i usunięcie profilu. Moje cele zachowują
+   historię oraz progi konta. Sklepy i istniejący komponent tur montują się
+   dopiero przy pierwszym wejściu w Zakupy, potem zachowują stan po zmianie
+   zakładki. Dane zawierają rzeczywisty zakres kopii danych rodziny i
+   ostrzeżenia importu; administracja pozostaje osobnym obszarem ADMIN-a.
+   **Zakupy → Sklepy** — lista
    sklepów (nazwa, kolor, archiwum) z edycją w miejscu oraz edytor profilu:
    kolejność kategorii przestawiana **przeciąganiem ORAZ strzałkami** (§2 —
    alternatywa przyciskowa jest obowiązkowa, nie opcjonalna), zapis podmienia

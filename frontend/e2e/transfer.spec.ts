@@ -115,6 +115,8 @@ test('transfer: eksport moich danych, import tego pliku, kolizje i podsumowanie'
     const page = await context.newPage()
     await page.goto('/ustawienia')
     await expect(page.getByTestId('ustawienia-page')).toBeVisible()
+    await page.getByTestId('settings-tab-data').click()
+    await expect(page.getByTestId('transfer-scope')).toContainText('Nie zawiera prywatnych danych')
 
     // --- eksport: plik faktycznie się pobiera ---------------------------------------
     const [download] = await Promise.all([

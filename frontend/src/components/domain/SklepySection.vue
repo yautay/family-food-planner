@@ -28,6 +28,8 @@ import {
   setCategoryOrder,
   updateStore,
 } from '@/api/stores'
+import LoadingState from '@/components/domain/LoadingState.vue'
+import ErrorState from '@/components/domain/ErrorState.vue'
 import StoreCategoryOrderEditor from '@/components/domain/StoreCategoryOrderEditor.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -117,6 +119,9 @@ const save = useMutation({
     const payload = { name: draft.name.trim(), color: draft.color.trim() || null }
     return draft.id === null ? createStore(payload) : updateStore(draft.id, payload)
   },
+  onMutate: () => {
+    actionError.value = null
+  },
   onSuccess: async () => {
     actionError.value = null
     formOpen.value = false
@@ -169,6 +174,10 @@ const order = computed(() => orderQuery.data.value?.items ?? [])
 const orderSaved = ref(false)
 
 const saveOrder = useMutation({
+  onMutate: () => {
+    orderSaved.value = false
+    actionError.value = null
+  },
   mutationFn: (categoryIds: number[]) =>
     setCategoryOrder(openOrderStoreId.value as number, categoryIds),
   onSuccess: async () => {
@@ -186,7 +195,7 @@ function toggleOrder(store: Store): void {
 </script>
 
 <template>
-  <Card class="rounded-xl" data-testid="stores-section">
+  <Card class="rounded-2xl" data-testid="stores-section">
     <CardHeader>
       <CardTitle>{{ texts.sectionTitle }}</CardTitle>
       <CardDescription>{{ texts.sectionSubtitle }}</CardDescription>
@@ -218,8 +227,21 @@ function toggleOrder(store: Store): void {
         {{ texts.showArchived }}
       </label>
 
+      <ErrorState
+        v-if="storesQuery.isError.value && storesQuery.data.value"
+        message="Nie udało się odświeżyć sklepów. Pozostają ostatnio odczytane dane."
+        :pending="storesQuery.isFetching.value"
+        @retry="storesQuery.refetch()"
+      />
+      <LoadingState v-if="storesQuery.isPending.value" />
+      <ErrorState
+        v-else-if="storesQuery.isError.value && !storesQuery.data.value"
+        :message="common.unexpectedError"
+        :pending="storesQuery.isFetching.value"
+        @retry="storesQuery.refetch()"
+      />
       <p
-        v-if="items.length === 0 && !storesQuery.isPending.value"
+        v-else-if="items.length === 0"
         class="text-muted-foreground text-sm"
         data-testid="stores-empty"
       >
@@ -233,9 +255,12 @@ function toggleOrder(store: Store): void {
           class="border-border grid gap-3 rounded-lg border p-3"
           :data-testid="`store-row-${store.id}`"
         >
-          <div class="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
+          <div class="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] md:items-center">
             <div class="min-w-0">
-              <p class="truncate font-medium" :data-testid="`store-name-${store.id}`">
+              <p
+                class="font-medium [overflow-wrap:anywhere]"
+                :data-testid="`store-name-${store.id}`"
+              >
                 {{ store.name }}
               </p>
               <p class="text-muted-foreground text-sm">
@@ -251,6 +276,8 @@ function toggleOrder(store: Store): void {
                 variant="outline"
                 class="min-h-11"
                 :data-testid="`store-order-${store.id}`"
+                :aria-expanded="openOrderStoreId === store.id"
+                :disabled="saveOrder.isPending.value"
                 @click="toggleOrder(store)"
               >
                 {{ openOrderStoreId === store.id ? texts.orderClose : texts.orderEdit }}
@@ -285,15 +312,47 @@ function toggleOrder(store: Store): void {
           </div>
 
           <template v-if="openOrderStoreId === store.id">
+            <ErrorState
+              v-if="
+                (orderQuery.isError.value && orderQuery.data.value) ||
+                (categoriesQuery.isError.value && categoriesQuery.data.value)
+              "
+              message="Nie udało się odświeżyć kategorii. Pozostaje ostatnio odczytana kolejność i Twój szkic."
+              :pending="orderQuery.isFetching.value || categoriesQuery.isFetching.value"
+              @retry="
+                () => {
+                  orderQuery.refetch()
+                  categoriesQuery.refetch()
+                }
+              "
+            />
             <p v-if="orderQuery.isPending.value" class="text-muted-foreground text-sm">
               {{ common.loading }}
             </p>
+            <ErrorState
+              v-else-if="
+                (orderQuery.isError.value && !orderQuery.data.value) ||
+                (categoriesQuery.isError.value && !categoriesQuery.data.value)
+              "
+              title="Nie udało się odczytać kolejności kategorii"
+              :message="common.unexpectedError"
+              :pending="orderQuery.isFetching.value || categoriesQuery.isFetching.value"
+              @retry="
+                () => {
+                  orderQuery.refetch()
+                  categoriesQuery.refetch()
+                }
+              "
+            />
+            <LoadingState v-else-if="categoriesQuery.isPending.value" />
             <StoreCategoryOrderEditor
               v-else
+              :key="store.id"
               :categories="categories"
               :order="order"
               :pending="saveOrder.isPending.value"
               @save="saveOrder.mutate($event)"
+              @changed="orderSaved = false"
             />
             <p v-if="orderSaved" class="text-secondary text-sm" data-testid="order-saved">
               {{ texts.orderSaved }}
@@ -315,7 +374,7 @@ function toggleOrder(store: Store): void {
         v-else
         class="border-border grid gap-3 rounded-lg border p-3 md:grid-cols-2 md:items-end"
         data-testid="store-form"
-        @submit.prevent="save.mutate()"
+        @submit.prevent="nameValid && !save.isPending.value && save.mutate()"
       >
         <div class="grid gap-2">
           <label class="text-sm font-medium" for="store-name">{{ texts.nameLabel }}</label>
@@ -341,7 +400,7 @@ function toggleOrder(store: Store): void {
             :disabled="!nameValid || save.isPending.value"
             data-testid="store-submit"
           >
-            {{ common.save }}
+            {{ save.isPending.value ? 'Zapisywanie…' : common.save }}
           </Button>
           <Button
             type="button"

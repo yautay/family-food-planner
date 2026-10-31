@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import type { APIRequestContext } from '@playwright/test'
+import type { components } from '../src/api/generated.js'
 
 import { cleanupE2eData, csrfHeaders } from './cleanup.js'
 
@@ -87,9 +88,9 @@ test.afterAll(async ({ request }) => {
   await cleanupE2eData(request, { namePrefix: PREFIX, dates: TOUCHED_DATES })
 })
 
-test('statystyki: słupki dni, luka bez planu, średnia ze statusem i zmiana zakresu', async ({
+test('statystyki: słupki dni, luka bez planu, średnia całego planu i odrębna historia celu i zmiana zakresu', async ({
   page,
-}) => {
+}, testInfo) => {
   await page.goto('/statystyki')
   await expect(page.getByTestId('statystyki-page')).toBeVisible()
 
@@ -117,13 +118,35 @@ test('statystyki: słupki dni, luka bez planu, średnia ze statusem i zmiana zak
   // --- średnia dzienna + status wobec celu ----------------------------------------
   await expect(page.getByTestId('stats-days')).toContainText('3 z 7')
   await expect(page.getByTestId('stats-tile-kcal')).toBeVisible()
-  await expect(page.getByTestId('stats-tile-kcal')).toContainText('2000')
-  await expect(page.getByTestId('stats-status-kcal')).toBeVisible()
+  const statsBody = (await loaded.json()) as components['schemas']['StatsDailyResponse']
+  await expect(page.getByTestId('stats-tile-kcal')).toContainText(
+    statsBody.summary.avg!.kcal.replace(/\.0+$/, ''),
+  )
+  await expect(page.getByTestId('stats-account-averages')).toContainText('2000')
+  await expect(page.getByTestId('stats-status-kcal')).toHaveCount(0)
+  await expect(page.getByTestId('stats-goal-legend')).toContainText('odczyt archiwalny')
+  await expect(page.getByTestId('stats-semantics')).toContainText('cały plan')
+
+  for (const width of [390, 1024]) {
+    await page.setViewportSize({ width, height: 900 })
+    await page.screenshot({
+      path: testInfo.outputPath(`ux10-summary-kcal-${width}.png`),
+      fullPage: true,
+    })
+  }
 
   // --- zakładka makroskładników ----------------------------------------------------
   await page.getByTestId('stats-tab-macros').click()
   await expect(page.getByTestId('stats-chart-macros')).toBeVisible()
   await expect(page.getByTestId('stats-tile-protein_g')).toBeVisible()
+
+  for (const width of [390, 1024]) {
+    await page.setViewportSize({ width, height: 900 })
+    await page.screenshot({
+      path: testInfo.outputPath(`ux10-summary-macros-${width}.png`),
+      fullPage: true,
+    })
+  }
 
   // --- zmiana zakresu przeładowuje dane -------------------------------------------
   const [reloaded] = await Promise.all([
@@ -135,4 +158,32 @@ test('statystyki: słupki dni, luka bez planu, średnia ze statusem i zmiana zak
   ])
   expect(reloaded.status(), await reloaded.text()).toBe(200)
   await expect(page.getByTestId('stats-days')).toContainText('2 z 3')
+  const [longRange] = await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        response.url().includes('/stats/daily') && response.url().includes('to=2031-08-03'),
+    ),
+    page.getByTestId('stats-to').fill('2031-08-03'),
+  ])
+  expect(longRange.status()).toBe(200)
+  await expect(page.getByTestId('stats-days')).toContainText('3 z 92')
+  await page.setViewportSize({ width: 390, height: 900 })
+  const chart = page.getByRole('region', {
+    name: 'Makroskładniki całego planu na dzień — przewijany wykres',
+  })
+  await expect(chart).toHaveAttribute('tabindex', '0')
+  await chart.focus()
+  await page.keyboard.press('End')
+  const geometry = await page.locator('html').evaluate((element) => {
+    const html = element as unknown as { scrollWidth: number; clientWidth: number }
+    return { content: html.scrollWidth, viewport: html.clientWidth }
+  })
+  expect(geometry.content).toBeLessThanOrEqual(geometry.viewport + 1)
+  await page.screenshot({
+    path: testInfo.outputPath('ux10-summary-92days-390.png'),
+    fullPage: true,
+  })
+  await page.getByTestId('stats-to').fill('2031-08-04')
+  await expect(page.getByTestId('stats-error')).toContainText('92')
+  await expect(page.getByTestId('stats-range-blocked')).toBeVisible()
 })

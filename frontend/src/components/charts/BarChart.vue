@@ -69,6 +69,8 @@ const props = withDefaults(
     data: BarDatum[]
     /** Wspólna linia celu (string dziesiętny); `null` gdy celu nie ma. */
     target?: string | null
+    /** Scope of this chart's target; other consumers retain meal goals. */
+    targetLabel?: string
     /** Jednostka do opisów tekstowych. */
     unit?: string
     title?: string
@@ -78,6 +80,7 @@ const props = withDefaults(
   }>(),
   {
     target: null,
+    targetLabel: 'cel',
     unit: 'kcal',
     title: 'Kalorie w tygodniu',
     emptyText: 'Dodaj posiłki, żeby zobaczyć rozkład tygodnia.',
@@ -221,7 +224,7 @@ const ariaLabel = computed(() => {
       // w którym czytnik ekranu może go usłyszeć, jest przy dniu.
       const goal =
         hasStepTargets.value && bar.target
-          ? ` (cel ${formatDecimal(bar.target)} ${props.unit})`
+          ? ` (${props.targetLabel} ${formatDecimal(bar.target)} ${props.unit})`
           : ''
       return `${name} ${value}${goal}`
     })
@@ -229,113 +232,122 @@ const ariaLabel = computed(() => {
   const goal =
     props.target === null || hasStepTargets.value
       ? ''
-      : `; cel ${formatDecimal(props.target)} ${props.unit}`
+      : `; ${props.targetLabel} ${formatDecimal(props.target)} ${props.unit}`
   return `${props.title}: ${days}${goal}`
 })
 </script>
 
 <template>
-  <figure class="grid gap-2" :data-testid="testid">
-    <svg
-      :viewBox="`0 0 ${chartWidth} ${CHART_HEIGHT}`"
-      class="h-32 w-full"
-      preserveAspectRatio="none"
-      role="img"
-      :aria-label="ariaLabel"
+  <div class="grid min-w-0 gap-2" :data-testid="testid">
+    <div
+      class="overflow-x-auto"
+      :tabindex="data.length > 7 ? 0 : undefined"
+      :role="data.length > 7 ? 'region' : undefined"
+      :aria-label="data.length > 7 ? `${title} — przewijany wykres` : undefined"
     >
-      <!-- Segmenty od dołu: pierwszy w danych leży najniżej. -->
-      <g v-for="(bar, index) in bars" :key="`${bar.key}-${index}`">
-        <!-- Dzień bez planu: przerywany obrys zamiast tła słupka (luka ≠ zero). -->
-        <rect
-          v-if="bar.empty"
-          class="fill-muted/40 stroke-border"
-          :x="bar.x"
-          y="0"
-          :width="BAR_WIDTH"
-          :height="CHART_HEIGHT"
-          rx="2"
-          stroke-width="0.6"
-          stroke-dasharray="2 2"
-          :data-testid="`${testid}-gap-${bar.key}`"
-        />
-        <rect
-          v-else
-          class="fill-muted"
-          :x="bar.x"
-          y="0"
-          :width="BAR_WIDTH"
-          :height="CHART_HEIGHT"
-          rx="2"
-        />
-        <rect
-          v-for="segment in bar.positioned"
-          :key="segment.label"
-          :class="segment.colorClass"
-          :x="bar.x"
-          :y="segment.y"
-          :width="BAR_WIDTH"
-          :height="segment.height"
-          rx="1"
-          :data-testid="`${testid}-bar-${bar.key}-${segment.label}`"
-          :data-height="Math.round(segment.height)"
-        />
-      </g>
+      <figure :style="{ minWidth: `${data.length * 24}px` }">
+        <svg
+          :viewBox="`0 0 ${chartWidth} ${CHART_HEIGHT}`"
+          class="h-32 w-full"
+          preserveAspectRatio="none"
+          role="img"
+          :aria-label="ariaLabel"
+        >
+          <!-- Segmenty od dołu: pierwszy w danych leży najniżej. -->
+          <g v-for="(bar, index) in bars" :key="`${bar.key}-${index}`">
+            <!-- Dzień bez planu: przerywany obrys zamiast tła słupka (luka ≠ zero). -->
+            <rect
+              v-if="bar.empty"
+              class="fill-muted/40 stroke-border"
+              :x="bar.x"
+              y="0"
+              :width="BAR_WIDTH"
+              :height="CHART_HEIGHT"
+              rx="2"
+              stroke-width="0.6"
+              stroke-dasharray="2 2"
+              :data-testid="`${testid}-gap-${bar.key}`"
+            />
+            <rect
+              v-else
+              class="fill-muted"
+              :x="bar.x"
+              y="0"
+              :width="BAR_WIDTH"
+              :height="CHART_HEIGHT"
+              rx="2"
+            />
+            <rect
+              v-for="segment in bar.positioned"
+              :key="segment.label"
+              :class="segment.colorClass"
+              :x="bar.x"
+              :y="segment.y"
+              :width="BAR_WIDTH"
+              :height="segment.height"
+              rx="1"
+              :data-testid="`${testid}-bar-${bar.key}-${segment.label}`"
+              :data-height="Math.round(segment.height)"
+            />
+          </g>
 
-      <!-- Linia celu na wierzchu słupków, żeby była czytelna także przy przekroczeniu. -->
-      <line
-        v-if="targetY !== null"
-        class="stroke-foreground"
-        x1="0"
-        :x2="chartWidth"
-        :y1="targetY"
-        :y2="targetY"
-        stroke-width="0.8"
-        stroke-dasharray="2 2"
-        :data-testid="`${testid}-target-line`"
-        :data-y="Math.round(targetY)"
-      />
-      <polyline
-        v-for="(run, index) in targetSteps"
-        :key="`target-${index}`"
-        class="stroke-foreground"
-        fill="none"
-        :points="run.points"
-        stroke-width="0.8"
-        stroke-dasharray="2 2"
-        :data-testid="`${testid}-target-step-${index}`"
-        :data-levels="run.levels.join(',')"
-      />
+          <!-- Linia celu na wierzchu słupków, żeby była czytelna także przy przekroczeniu. -->
+          <line
+            v-if="targetY !== null"
+            class="stroke-foreground"
+            x1="0"
+            :x2="chartWidth"
+            :y1="targetY"
+            :y2="targetY"
+            stroke-width="0.8"
+            stroke-dasharray="2 2"
+            :data-testid="`${testid}-target-line`"
+            :data-y="Math.round(targetY)"
+          />
+          <polyline
+            v-for="(run, index) in targetSteps"
+            :key="`target-${index}`"
+            class="stroke-foreground"
+            fill="none"
+            :points="run.points"
+            stroke-width="0.8"
+            stroke-dasharray="2 2"
+            :data-testid="`${testid}-target-step-${index}`"
+            :data-levels="run.levels.join(',')"
+          />
 
-      <!--
+          <!--
         Nakładka rysowana W TYM SAMYM układzie współrzędnych, co słupki
         (np. `TrendLine` średniej kroczącej) — dzięki temu trend i słupki
         mają jedną skalę, a nie dwie, które da się porównać tylko na oko.
       -->
-      <slot name="overlay" :width="chartWidth" :height="CHART_HEIGHT" :scale-max="scaleMax" />
-    </svg>
+          <slot name="overlay" :width="chartWidth" :height="CHART_HEIGHT" :scale-max="scaleMax" />
+        </svg>
 
-    <figcaption class="grid gap-1">
-      <ul class="flex justify-between gap-1 text-xs">
-        <li
-          v-for="(bar, index) in bars"
-          :key="`${bar.key}-${index}`"
-          class="flex-1 text-center tabular-nums"
-          :class="
-            bar.empty
-              ? 'text-muted-foreground/60'
-              : bar.highlighted
-                ? 'text-foreground font-semibold'
-                : 'text-muted-foreground'
-          "
-          :data-testid="`${testid}-label-${bar.key}`"
-        >
-          {{ bar.label }}
-        </li>
-      </ul>
+        <figcaption class="grid gap-1">
+          <ul class="flex justify-between gap-1 text-xs">
+            <li
+              v-for="(bar, index) in bars"
+              :key="`${bar.key}-${index}`"
+              class="flex-1 text-center tabular-nums"
+              :class="
+                bar.empty
+                  ? 'text-muted-foreground/60'
+                  : bar.highlighted
+                    ? 'text-foreground font-semibold'
+                    : 'text-muted-foreground'
+              "
+              :data-testid="`${testid}-label-${bar.key}`"
+            >
+              {{ bar.label }}
+            </li>
+          </ul>
 
-      <p v-if="isEmpty" class="text-muted-foreground text-sm" :data-testid="`${testid}-empty`">
-        {{ emptyText }}
-      </p>
-    </figcaption>
-  </figure>
+          <p v-if="isEmpty" class="text-muted-foreground text-sm" :data-testid="`${testid}-empty`">
+            {{ emptyText }}
+          </p>
+        </figcaption>
+      </figure>
+    </div>
+  </div>
 </template>

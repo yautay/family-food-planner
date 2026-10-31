@@ -28,6 +28,7 @@ import { PAGE_SIZE, usePaginatedList } from '@/api/pagination'
 import type { ProductsFilters } from '@/api/queryKeys'
 import { queryKeys } from '@/api/queryKeys'
 import LoadMoreButton from '@/components/domain/LoadMoreButton.vue'
+import PageHeader from '@/components/domain/PageHeader.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatNutrient } from '@/lib/format'
@@ -79,16 +80,13 @@ function formatDate(value: string): string {
 
 <template>
   <section class="grid gap-6" data-testid="admin-weryfikacja-page">
-    <header class="grid gap-1">
-      <h1 class="text-2xl font-semibold">{{ texts.title }}</h1>
-      <p class="text-muted-foreground text-sm">{{ texts.subtitle }}</p>
-    </header>
+    <PageHeader :title="texts.title" :description="texts.subtitle" eyebrow="Administracja" />
 
     <p v-if="actionError" class="text-destructive text-sm" role="alert" data-testid="verify-error">
       {{ actionError }}
     </p>
 
-    <Card class="rounded-xl">
+    <Card class="rounded-2xl">
       <CardHeader>
         <CardTitle>{{ productTexts.unverified }}</CardTitle>
         <CardDescription class="tabular-nums">
@@ -112,12 +110,12 @@ function formatDate(value: string): string {
           <li
             v-for="product in items"
             :key="product.id"
-            class="border-border grid gap-3 rounded-lg border p-3 md:grid-cols-[1fr_auto] md:items-center"
+            class="border-border grid gap-3 rounded-lg border p-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center"
             :data-testid="`verification-row-${product.id}`"
           >
             <div class="min-w-0">
-              <p class="truncate font-medium">{{ product.name }}</p>
-              <p class="text-muted-foreground truncate text-sm">
+              <p class="[overflow-wrap:anywhere] font-medium">{{ product.name }}</p>
+              <p class="text-muted-foreground [overflow-wrap:anywhere] text-sm">
                 {{ product.category_name }}
                 <span aria-hidden="true"> · </span>
                 {{ texts.addedAt }}: {{ formatDate(product.created_at) }}

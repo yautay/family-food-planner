@@ -16,6 +16,7 @@ import { PAGE_SIZE, usePaginatedList } from '@/api/pagination'
 import type { AdminUsersFilters } from '@/api/queryKeys'
 import { queryKeys } from '@/api/queryKeys'
 import LoadMoreButton from '@/components/domain/LoadMoreButton.vue'
+import PageHeader from '@/components/domain/PageHeader.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -129,18 +130,22 @@ const isSelf = (user: AdminUser): boolean => user.id === auth.user?.id
 
 <template>
   <section class="grid gap-6" data-testid="admin-users-page">
-    <header class="grid gap-1">
-      <h1 class="text-2xl font-semibold">{{ texts.usersTitle }}</h1>
-      <p class="text-muted-foreground text-sm">{{ texts.usersSubtitle }}</p>
-    </header>
+    <PageHeader
+      :title="texts.usersTitle"
+      :description="texts.usersSubtitle"
+      eyebrow="Administracja"
+    />
 
-    <Card class="rounded-xl">
+    <Card class="rounded-2xl">
       <CardHeader>
         <CardTitle>{{ texts.createUser }}</CardTitle>
         <CardDescription>{{ texts.passwordHint }}</CardDescription>
       </CardHeader>
       <CardContent>
-        <form class="grid gap-3 md:grid-cols-4 md:items-end" @submit.prevent="create.mutate()">
+        <form
+          class="grid gap-3 xl:grid-cols-4 sm:grid-cols-2 md:items-end"
+          @submit.prevent="create.mutate()"
+        >
           <div class="grid gap-2">
             <label class="text-sm font-medium" for="new-email">Adres e-mail</label>
             <Input
@@ -183,7 +188,7 @@ const isSelf = (user: AdminUser): boolean => user.id === auth.user?.id
 
           <p
             v-if="formError"
-            class="text-destructive text-sm md:col-span-4"
+            class="text-destructive text-sm xl:col-span-4 sm:col-span-2"
             role="alert"
             data-testid="new-user-error"
           >
@@ -193,7 +198,7 @@ const isSelf = (user: AdminUser): boolean => user.id === auth.user?.id
       </CardContent>
     </Card>
 
-    <Card class="rounded-xl">
+    <Card class="rounded-2xl">
       <CardHeader>
         <CardTitle>{{ texts.usersTitle }}</CardTitle>
         <CardDescription>
@@ -241,12 +246,12 @@ const isSelf = (user: AdminUser): boolean => user.id === auth.user?.id
           <li
             v-for="user in users.items.value"
             :key="user.id"
-            class="border-border grid gap-3 rounded-lg border p-3 md:grid-cols-[1fr_auto] md:items-center"
+            class="border-border grid gap-3 rounded-lg border p-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center"
             :data-testid="`user-row-${user.id}`"
           >
             <div class="min-w-0">
-              <p class="truncate font-medium">{{ user.display_name }}</p>
-              <p class="text-muted-foreground truncate text-sm">{{ user.email }}</p>
+              <p class="[overflow-wrap:anywhere] font-medium">{{ user.display_name }}</p>
+              <p class="text-muted-foreground [overflow-wrap:anywhere] text-sm">{{ user.email }}</p>
               <p class="text-sm">
                 <span>{{ user.role === 'admin' ? texts.roleAdmin : texts.roleUser }}</span>
                 <span aria-hidden="true"> · </span>
@@ -287,7 +292,7 @@ const isSelf = (user: AdminUser): boolean => user.id === auth.user?.id
 
             <form
               v-if="passwordFor === user.id"
-              class="flex flex-wrap gap-2 md:col-span-2"
+              class="flex flex-wrap gap-2 xl:col-span-2"
               @submit.prevent="submitPassword(user.id)"
             >
               <Input

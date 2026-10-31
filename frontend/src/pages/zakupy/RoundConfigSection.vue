@@ -3,7 +3,7 @@
  * Sekcja „Tury zakupów" na stronie Zakupy (karta B10 §Frontend).
  *
  * Tury to KONFIGURACJA, nie wynik: lista, edycja inline, kolejność strzałkami
- * (bez DnD — tur jest kilka, a strzałki działają też na telefonie i z klawiatury,
+ * (bez DnD — strzałki działają też na telefonie i z klawiatury,
  * 06_UIUX §2). Preset niedziela/środa zasiewa backend przy pierwszym GET, więc
  * ta sekcja nigdy nie jest pusta przy pierwszym wejściu — pusty stan zobaczy
  * dopiero ten, kto usunie wszystkie tury.
@@ -63,6 +63,14 @@ const configs = useQuery({
   queryFn: fetchRoundConfigs,
 })
 const items = computed(() => configs.data.value?.items ?? [])
+// Import może przynieść tysiące tur. Ograniczamy tylko DOM; mutacje i cache
+// nadal korzystają z pełnej listy, także przy zamianie z ukrytym sąsiadem.
+const VISIBLE_BATCH_SIZE = 20
+const visibleLimit = ref(VISIBLE_BATCH_SIZE)
+const visibleItems = computed(() => items.value.slice(0, visibleLimit.value))
+const nextBatchSize = computed(() =>
+  Math.min(VISIBLE_BATCH_SIZE, items.value.length - visibleItems.value.length),
+)
 
 const draft = reactive({
   id: null as number | null,
@@ -226,7 +234,7 @@ function weekdayLabel(config: RoundConfig): string {
 
       <ul v-if="items.length > 0" class="grid gap-2" data-testid="round-configs-list">
         <li
-          v-for="(config, index) in items"
+          v-for="(config, index) in visibleItems"
           :key="config.id"
           class="border-border flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2"
           :data-testid="`round-config-${config.id}`"
@@ -282,6 +290,21 @@ function weekdayLabel(config: RoundConfig): string {
           </div>
         </li>
       </ul>
+
+      <div v-if="items.length > VISIBLE_BATCH_SIZE" class="grid justify-items-start gap-2">
+        <p class="text-muted-foreground text-sm" role="status" data-testid="round-configs-count">
+          Pokazano {{ visibleItems.length }} z {{ items.length }} tur.
+        </p>
+        <Button
+          v-if="nextBatchSize > 0"
+          variant="outline"
+          class="min-h-11"
+          data-testid="round-configs-more"
+          @click="visibleLimit += VISIBLE_BATCH_SIZE"
+        >
+          Pokaż kolejne {{ nextBatchSize }}
+        </Button>
+      </div>
 
       <div v-if="items.length > 0">
         <Button variant="outline" class="min-h-11" data-testid="round-add" @click="openCreate()">

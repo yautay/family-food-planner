@@ -3,6 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { ApiError } from '@/api/client'
 import UstawieniaPage from './UstawieniaPage.vue'
 
 const { fetchMyHousehold, fetchMyProfiles, createProfile, updateProfile, deleteProfile } =
@@ -36,6 +37,22 @@ vi.mock('@/api/stores', () => storesApi)
 
 const catalogApi = vi.hoisted(() => ({ fetchCategories: vi.fn() }))
 vi.mock('@/api/catalog', () => catalogApi)
+
+const goalsApi = vi.hoisted(() => ({
+  fetchGoals: vi.fn(),
+  createGoal: vi.fn(),
+  deleteGoal: vi.fn(),
+  updateThresholds: vi.fn(),
+  DEFAULT_THRESHOLDS: { low: 90, high: 110 },
+}))
+vi.mock('@/api/goals', () => goalsApi)
+const shoppingApi = vi.hoisted(() => ({
+  fetchRoundConfigs: vi.fn(),
+  createRoundConfig: vi.fn(),
+  deleteRoundConfig: vi.fn(),
+  updateRoundConfig: vi.fn(),
+}))
+vi.mock('@/api/shopping', () => shoppingApi)
 
 const STORE = {
   id: 5,
@@ -76,6 +93,21 @@ async function mountPage() {
 describe('UstawieniaPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    goalsApi.fetchGoals.mockResolvedValue({
+      items: [
+        {
+          id: 51,
+          user_id: 1,
+          valid_from: '2030-01-01',
+          kcal: '2000',
+          protein_g: '100',
+          fat_g: null,
+          carbs_g: null,
+        },
+      ],
+      current: null,
+    })
+    shoppingApi.fetchRoundConfigs.mockResolvedValue({ items: [], total: 0 })
     fetchMyHousehold.mockResolvedValue({
       household: HOUSEHOLD,
       members: [MEMBER],
@@ -240,7 +272,11 @@ describe('UstawieniaPage', () => {
   it('pokazuje sekcję „Sklepy" z listą sklepów (BATCH_09)', async () => {
     const wrapper = await mountPage()
 
-    expect(wrapper.find('[data-testid="stores-section"]').exists()).toBe(true)
+    expect(storesApi.fetchStores).not.toHaveBeenCalled()
+    expect(shoppingApi.fetchRoundConfigs).not.toHaveBeenCalled()
+    await wrapper.get('[data-testid="settings-tab-shopping"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="stores-section"]').isVisible()).toBe(true)
     expect(wrapper.get('[data-testid="store-name-5"]').text()).toBe('Lidl')
   })
 
@@ -255,6 +291,8 @@ describe('UstawieniaPage', () => {
     })
     const wrapper = await mountPage()
 
+    await wrapper.get('[data-testid="settings-tab-shopping"]').trigger('click')
+    await flushPromises()
     await wrapper.get('[data-testid="store-order-5"]').trigger('click')
     await flushPromises()
 
@@ -269,6 +307,8 @@ describe('UstawieniaPage', () => {
     // mają po imporcie jego nazwisko przy właścicielu.
     const wrapper = await mountPage()
 
+    await wrapper.get('[data-testid="settings-tab-data"]').trigger('click')
+    expect(wrapper.get('[data-testid="transfer-export"]').isVisible()).toBe(true)
     expect(wrapper.text()).toContain('Kopia danych rodziny')
     expect(wrapper.get('[data-testid="transfer-export"]').text()).toBe(
       'Pobierz kopię danych rodziny',
@@ -278,4 +318,110 @@ describe('UstawieniaPage', () => {
       'będzie należeć do Twojego konta',
     )
   })
+  it('rozdziela konta od profili, a zakładki zachowują niezapisany szkic', async () => {
+    const wrapper = await mountPage()
+    expect(wrapper.text()).toContain('Konta z dostępem do rodziny')
+    expect(wrapper.text()).toContain('Nie są kontami i nie dają dostępu')
+    await wrapper.get('[data-testid="profile-add"]').trigger('click')
+    await wrapper
+      .get('[data-testid="profile-name"]')
+      .setValue('Aleksandra z bardzo długim nazwiskiem')
+    await wrapper.get('[data-testid="settings-tab-goals"]').trigger('click')
+    expect(wrapper.get('[data-testid="goal-form"]').isVisible()).toBe(true)
+    expect(wrapper.get('[data-testid="thresholds-form"]').isVisible()).toBe(true)
+    expect(wrapper.get('[data-testid="profile-form"]').isVisible()).toBe(false)
+    await wrapper.get('[data-testid="settings-tab-family"]').trigger('click')
+    expect(wrapper.get<HTMLInputElement>('[data-testid="profile-name"]').element.value).toBe(
+      'Aleksandra z bardzo długim nazwiskiem',
+    )
+  })
+
+  it('błąd profilu zachowuje cały szkic i pozwala ponowić zapis', async () => {
+    createProfile.mockRejectedValueOnce(
+      new ApiError(422, { code: 'validation', message: 'Nazwa jest zajęta', details: {} }),
+    )
+    const wrapper = await mountPage()
+    await wrapper.get('[data-testid="profile-add"]').trigger('click')
+    await wrapper.get('[data-testid="profile-name"]').setValue('Nowy profil')
+    await wrapper.get('[data-testid="profile-multiplier"]').setValue('0,8')
+    await wrapper.get('[data-testid="profile-kcal"]').setValue('1400')
+    await wrapper.get('[data-testid="profile-form"]').trigger('submit')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="profiles-error"]').text()).toContain('Nazwa jest zajęta')
+    expect(wrapper.get<HTMLInputElement>('[data-testid="profile-name"]').element.value).toBe(
+      'Nowy profil',
+    )
+    expect(wrapper.get<HTMLInputElement>('[data-testid="profile-multiplier"]').element.value).toBe(
+      '0,8',
+    )
+    expect(wrapper.get<HTMLInputElement>('[data-testid="profile-kcal"]').element.value).toBe('1400')
+    expect(wrapper.find('[data-testid="profile-saved"]').exists()).toBe(false)
+    createProfile.mockResolvedValueOnce(PROFILE)
+    await wrapper.get('[data-testid="profile-form"]').trigger('submit')
+    await flushPromises()
+    expect(createProfile).toHaveBeenCalledTimes(2)
+    expect(wrapper.get('[data-testid="profile-saved"]').text()).toContain('zapisany')
+  })
+
+  it('cele mają historię, zachowują pola po błędzie i zapisują liczby dziesiętne', async () => {
+    goalsApi.createGoal
+      .mockRejectedValueOnce(new Error('brak sieci'))
+      .mockResolvedValueOnce({ id: 52 })
+    const wrapper = await mountPage()
+    await wrapper.get('[data-testid="settings-tab-goals"]').trigger('click')
+    expect(wrapper.get('[data-testid="goal-row-51"]').text()).toContain('2030-01-01')
+    await wrapper.get('[data-testid="goal-valid-from"]').setValue('2030-02-01')
+    await wrapper.get('[data-testid="goal-kcal"]').setValue('2300')
+    await wrapper.get('[data-testid="goal-protein"]').setValue('110,5')
+    await wrapper.get('[data-testid="goal-form"]').trigger('submit')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="goals-error"]').isVisible()).toBe(true)
+    expect(wrapper.get<HTMLInputElement>('[data-testid="goal-kcal"]').element.value).toBe('2300')
+    expect(wrapper.get<HTMLInputElement>('[data-testid="goal-protein"]').element.value).toBe(
+      '110,5',
+    )
+    expect(wrapper.find('[data-testid="goal-saved"]').exists()).toBe(false)
+    await wrapper.get('[data-testid="goal-form"]').trigger('submit')
+    await flushPromises()
+    expect(goalsApi.createGoal).toHaveBeenLastCalledWith({
+      valid_from: '2030-02-01',
+      kcal: '2300',
+      protein_g: '110.5',
+      fat_g: null,
+      carbs_g: null,
+    })
+    expect(wrapper.get('[data-testid="goal-saved"]').text()).toContain('historii')
+  })
+
+  it('nie zamienia błędu odczytu profili w pustą rodzinę', async () => {
+    fetchMyProfiles.mockRejectedValueOnce(new Error('sieć'))
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const wrapper = mount(UstawieniaPage, {
+      global: {
+        plugins: [
+          pinia,
+          [
+            VueQueryPlugin,
+            { queryClientConfig: { defaultOptions: { queries: { retry: false } } } },
+          ],
+        ],
+      },
+    })
+    await flushPromises()
+    expect(wrapper.text()).toContain('Nie udało się odczytać profili')
+    expect(wrapper.find('[data-testid="profiles-empty"]').exists()).toBe(false)
+  })
+
+  it.each(['90x', '90.5', '-1', '0'])(
+    'odrzuca niecałkowity lub niedodatni próg: %s',
+    async (value) => {
+      const wrapper = await mountPage()
+      await wrapper.get('[data-testid="settings-tab-goals"]').trigger('click')
+      await wrapper.get('[data-testid="threshold-low"]').setValue(value)
+      expect(wrapper.get('[data-testid="thresholds-submit"]').attributes('disabled')).toBeDefined()
+      await wrapper.get('[data-testid="thresholds-form"]').trigger('submit')
+      expect(goalsApi.updateThresholds).not.toHaveBeenCalled()
+    },
+  )
 })

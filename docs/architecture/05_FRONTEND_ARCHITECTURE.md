@@ -97,14 +97,15 @@ bez przyjmowania spóźnionej odpowiedzi i bez odtwarzania uprawnień z markera.
 /zakupy/listy/:id     ListaZakupowPage    (widok 5; wariant print) — DOSTARCZONE
                         w B11: sekcje per kategoria wg profilu sklepu, checkboxy
                         48 px z optimistic update, udostępnianie, druk
-/statystyki           StatystykiPage      (widok 7) — DOSTARCZONE w B13:
+/statystyki           StatystykiPage      (widok 7; Podsumowanie planu, UX10):
                         zakres tydzień/miesiąc/własny (max 92 dni), zakładki
                         Kalorie/Makroskładniki, luki dni bez planu, średnia
-                        dzienna vs średnia celów ze statusem
-/ustawienia           UstawieniaPage      (cele, profile rodziny, sklepy, konto)
+                        całego planu; historia i średnie celów konta osobno,
+                        bez oceny realizacji indywidualnego celu
+/ustawienia           UstawieniaPage      (Rodzina / Moje cele / Zakupy / Dane)
 /admin/uzytkownicy · /admin/rodziny · /admin/weryfikacja · /admin/dane
                       (AdminDanePage: kopia CAŁEJ instancji, B14);
-                      sekcja „Kopia danych rodziny" mieszka w /ustawienia
+                      sekcja „Kopia danych rodziny" mieszka w /ustawienia → Dane
                       (B20 — jedyna droga importu i eksportu dla użytkownika).
                       **Ekranu `/admin/audit` NIE MA** — `GET /api/v1/audit`
                       istnieje i jest ADMIN-only, ale B03 miał ten widok jako
@@ -210,6 +211,19 @@ filtrów, bez kopiowania danych do magazynu UI. Edycja zachowuje listę w DOM.
 `missing` z API; nie interpretuje ich jako kluczy pól ani nie przelicza danych.
 Warianty sklepowe używają paginacji istniejącego GET, z błędem odświeżenia
 i zachowaniem wcześniej pobranych wierszy.
+
+UX10: `SettingsTabs` przechowuje wyłącznie wybór sekcji (Rodzina / Moje cele /
+Zakupy / Dane), z roving tabindex, strzałkami i Home/End. Odczyty rodziny,
+profili i celów pozostają eager. `SklepySection` i współdzielony
+`RoundConfigSection` montują się przy pierwszym wejściu do Zakupów, potem
+pozostają zamontowane. Tury zachowują pełny cache i globalne indeksy mutacji;
+początkowy DOM pokazuje20wierszy z licznikiem i ręcznym odkrywaniem następnych.
+Nie jest to wirtualizacja ani ograniczenie danych serwera. Podsumowanie
+używa dotychczasowego API i własnego SVG; ocena celu osoby jest ukryta,
+historia konta i jej średnie pozostają osobne. Błąd refetch jest widoczny
+także przy cached-empty, z retry i zachowaniem ostatniego odczytu.
+Callbacki ustawień i eksportu zachowują ochronę generacji sesji UX06;
+przestawienie sekcji nie zmienia zakresu importu/eksportu ani uprawnień.
 
 AppShell przechowuje wyłącznie kalendarzowy kontekst UI, nie dane planu.
 Zmiana path kieruje fokus do `main#main-content`, query zachowuje fokus

@@ -27,6 +27,7 @@ import { PAGE_SIZE, usePaginatedList } from '@/api/pagination'
 import type { AdminHouseholdsFilters } from '@/api/queryKeys'
 import { queryKeys } from '@/api/queryKeys'
 import LoadMoreButton from '@/components/domain/LoadMoreButton.vue'
+import PageHeader from '@/components/domain/PageHeader.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -189,12 +190,9 @@ function detach(userId: number): void {
 
 <template>
   <section class="grid gap-6" data-testid="admin-households-page">
-    <header class="grid gap-1">
-      <h1 class="text-2xl font-semibold">{{ texts.title }}</h1>
-      <p class="text-muted-foreground text-sm">{{ texts.subtitle }}</p>
-    </header>
+    <PageHeader :title="texts.title" :description="texts.subtitle" eyebrow="Administracja" />
 
-    <Card class="rounded-xl">
+    <Card class="rounded-2xl">
       <CardHeader>
         <CardTitle>{{ texts.createHousehold }}</CardTitle>
       </CardHeader>
@@ -219,7 +217,7 @@ function detach(userId: number): void {
       </CardContent>
     </Card>
 
-    <Card class="rounded-xl">
+    <Card class="rounded-2xl">
       <CardHeader>
         <CardTitle>{{ texts.title }}</CardTitle>
         <CardDescription>{{ texts.subtitle }}</CardDescription>
@@ -261,9 +259,9 @@ function detach(userId: number): void {
             class="border-border grid gap-3 rounded-lg border p-3"
             :data-testid="`household-row-${household.id}`"
           >
-            <div class="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
+            <div class="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
               <div class="min-w-0">
-                <p class="truncate font-medium">{{ household.name }}</p>
+                <p class="[overflow-wrap:anywhere] font-medium">{{ household.name }}</p>
                 <p class="text-muted-foreground text-sm tabular-nums">
                   {{ texts.membersCount }}: {{ household.members_count }}
                   <span aria-hidden="true"> · </span>
@@ -351,7 +349,7 @@ function detach(userId: number): void {
                     class="flex flex-wrap items-center justify-between gap-2"
                     :data-testid="`household-member-${member.id}`"
                   >
-                    <span class="min-w-0 truncate text-sm">
+                    <span class="min-w-0 [overflow-wrap:anywhere] text-sm">
                       {{ member.display_name }} ({{ member.email }})
                     </span>
                     <Button
@@ -373,7 +371,7 @@ function detach(userId: number): void {
                   <select
                     :id="`assign-${household.id}`"
                     v-model="userToAssign"
-                    class="border-border bg-card min-h-11 max-w-xs rounded-lg border px-3 text-sm"
+                    class="border-border bg-card min-h-11 min-w-0 w-full sm:max-w-xs rounded-lg border px-3 text-sm"
                     data-testid="household-assign-select"
                   >
                     <option :value="null">—</option>

@@ -40,6 +40,7 @@ const props = withDefaults(
 const emit = defineEmits<{
   /** Nowa kolejność do zapisania (pełna podmiana, PUT). */
   (event: 'save', categoryIds: number[]): void
+  (event: 'changed'): void
 }>()
 
 /** Szkic kolejności — lista id. Stan UI, więc mieszka w komponencie. */
@@ -91,6 +92,7 @@ const isDirty = computed(
 
 /** Przestawia pozycję o `offset` miejsc; poza zakresem nie robi nic. */
 function move(index: number, offset: number): void {
+  if (props.pending) return
   const target = index + offset
   if (target < 0 || target >= draft.value.length) {
     return
@@ -99,17 +101,23 @@ function move(index: number, offset: number): void {
   const [item] = next.splice(index, 1)
   next.splice(target, 0, item as number)
   draft.value = next
+  emit('changed')
 }
 
 function add(categoryId: number): void {
+  if (props.pending) return
   draft.value = [...draft.value, categoryId]
+  emit('changed')
 }
 
 function remove(categoryId: number): void {
+  if (props.pending) return
   draft.value = draft.value.filter((id) => id !== categoryId)
+  emit('changed')
 }
 
 function onDragStart(categoryId: number): void {
+  if (props.pending) return
   dragged.value = categoryId
 }
 
@@ -143,8 +151,8 @@ function onDrop(index: number): void {
       <li
         v-for="(categoryId, index) in draft"
         :key="categoryId"
-        class="border-border bg-card flex items-center justify-between gap-2 rounded-lg border p-2"
-        draggable="true"
+        class="border-border bg-card grid gap-2 rounded-lg border p-3 sm:flex sm:items-center sm:justify-between"
+        :draggable="!pending"
         :data-testid="`order-row-${categoryId}`"
         @dragstart="onDragStart(categoryId)"
         @dragover.prevent
@@ -152,7 +160,7 @@ function onDrop(index: number): void {
       >
         <span class="flex min-w-0 items-center gap-2">
           <span class="text-muted-foreground text-sm tabular-nums">{{ index + 1 }}.</span>
-          <span class="min-w-0 truncate text-sm">{{ nameFor(categoryId) }}</span>
+          <span class="min-w-0 text-sm [overflow-wrap:anywhere]">{{ nameFor(categoryId) }}</span>
         </span>
 
         <span class="flex shrink-0 items-center gap-1">
@@ -160,7 +168,7 @@ function onDrop(index: number): void {
             type="button"
             variant="outline"
             class="min-h-11 min-w-11"
-            :disabled="index === 0"
+            :disabled="pending || index === 0"
             :aria-label="`${texts.orderMoveUp}: ${nameFor(categoryId)}`"
             :data-testid="`order-up-${categoryId}`"
             @click="move(index, -1)"
@@ -171,7 +179,7 @@ function onDrop(index: number): void {
             type="button"
             variant="outline"
             class="min-h-11 min-w-11"
-            :disabled="index === draft.length - 1"
+            :disabled="pending || index === draft.length - 1"
             :aria-label="`${texts.orderMoveDown}: ${nameFor(categoryId)}`"
             :data-testid="`order-down-${categoryId}`"
             @click="move(index, 1)"
@@ -182,6 +190,7 @@ function onDrop(index: number): void {
             type="button"
             variant="ghost"
             class="min-h-11"
+            :disabled="pending"
             :aria-label="`${texts.orderRemove}: ${nameFor(categoryId)}`"
             :data-testid="`order-remove-${categoryId}`"
             @click="remove(categoryId)"
@@ -195,11 +204,12 @@ function onDrop(index: number): void {
     <template v-if="available.length">
       <h4 class="text-sm font-medium">{{ texts.orderAvailable }}</h4>
       <ul class="flex flex-wrap gap-2" data-testid="order-available">
-        <li v-for="category in available" :key="category.id">
+        <li v-for="category in available" :key="category.id" class="min-w-0 max-w-full">
           <Button
             type="button"
             variant="outline"
-            class="min-h-11"
+            class="min-h-11 max-w-full h-auto whitespace-normal text-left [overflow-wrap:anywhere]"
+            :disabled="pending"
             :aria-label="`${texts.orderAdd}: ${category.name}`"
             :data-testid="`order-add-${category.id}`"
             @click="add(category.id)"
@@ -217,7 +227,7 @@ function onDrop(index: number): void {
       data-testid="order-save"
       @click="emit('save', [...draft])"
     >
-      {{ texts.orderSave }}
+      {{ pending ? 'Zapisywanie…' : texts.orderSave }}
     </Button>
   </section>
 </template>

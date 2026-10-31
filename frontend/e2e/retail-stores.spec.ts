@@ -83,6 +83,7 @@ test('kolejność kategorii w profilu sklepu zmieniona strzałkami jest trwała'
   page.on('dialog', (dialog) => dialog.accept())
 
   await page.goto('/ustawienia')
+  await page.getByTestId('settings-tab-shopping').click()
   await expect(page.getByTestId('stores-section')).toBeVisible()
 
   // --- nowy sklep -----------------------------------------------------------------
@@ -110,12 +111,20 @@ test('kolejność kategorii w profilu sklepu zmieniona strzałkami jest trwała'
   await expect(page.getByTestId('order-saved')).toBeVisible()
 
   // --- przestawienie STRZAŁKĄ i zapis ---------------------------------------------
-  await page.getByTestId(`order-down-${firstId}`).click()
+  await page.getByTestId(`order-down-${firstId}`).focus()
+  await page.keyboard.press('Enter')
+  const persistedOrder = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === `/api/v1/stores/${storeId}/category-order` &&
+      response.request().method() === 'PUT',
+  )
   await page.getByTestId('order-save').click()
+  expect((await persistedOrder).ok()).toBe(true)
   await expect(page.getByTestId('order-saved')).toBeVisible()
 
   // --- kolejność przetrwała odświeżenie (dane, nie stan komponentu) ----------------
   await page.reload()
+  await page.getByTestId('settings-tab-shopping').click()
   await page.getByTestId(`store-order-${storeId}`).click()
   await expect(page.getByTestId('category-order-editor')).toBeVisible()
   const rows = page.locator('[data-testid^="order-row-"]')

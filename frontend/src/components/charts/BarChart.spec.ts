@@ -251,4 +251,23 @@ describe('BarChart', () => {
       'font-semibold',
     )
   })
+  it('opisuje jawny zakres linii celu bez zmiany domyślnego celu posiłku', () => {
+    const wrapper = mount(BarChart, {
+      props: {
+        data: [{ ...day('pon', '1800'), target: '2000' }],
+        targetLabel: 'historyczny cel konta',
+      },
+    })
+    expect(wrapper.get('svg').attributes('aria-label')).toContain('historyczny cel konta 2000 kcal')
+    expect(wrapper.find('[data-testid="bar-chart-target-step-0"]').exists()).toBe(true)
+  })
+
+  it('długi zakres ma region dostępny z klawiatury i zachowuje wszystkie dni', () => {
+    const wrapper = mount(BarChart, {
+      props: { data: Array.from({ length: 92 }, (_, i) => day(String(i), '1000')) },
+    })
+    expect(wrapper.get('[role="region"]').attributes('tabindex')).toBe('0')
+    expect(wrapper.get('figure').attributes('style')).toContain('2208px')
+    expect(wrapper.findAll('[data-testid^="bar-chart-label-"]')).toHaveLength(92)
+  })
 })

@@ -1,25 +1,6 @@
 <script setup lang="ts">
-/**
- * Statystyki — widok 7 wizualizacji (06_UIUX §4.7), trasa `/statystyki`.
- *
- * Układ: kontrolka zakresu (tydzień / miesiąc / własny) → zakładki
- * Kalorie / Makroskładniki → wykres słupkowy z linią celu → podsumowanie
- * (średnia dzienna / cel / delta / status słowny).
- *
- * Trzy rzeczy, które ta strona MUSI pokazywać uczciwie:
- *
- * 1. **Dzień bez planu to luka, nie zero.** Backend zwraca `has_plan: false`
- *    i `nutrition: null`; wykres rysuje wtedy przerywany obrys, a średnia
- *    dzieli się przez `days_with_plan` (Acceptance Criteria 4).
- * 2. **Cel jest historyczny.** Każdy dzień niesie własny cel, więc linia celu
- *    jest SCHODKOWA — zmianę celu w środku zakresu widać jako zmianę poziomu.
- * 3. **Niepełne dane są nazwane.** Gdy w zakresie jest dzień z produktem bez
- *    wartości, obok podsumowania stoi plakietka „Niepełne dane" z listą braków.
- *
- * Strona nie liczy niczego domenowego: wszystkie liczby przychodzą z
- * `/stats/daily` jako stringi dziesiętne (ADR-008), a tutaj są wyłącznie
- * formatowane i zamieniane na geometrię wykresu. Stan serwera trzyma TanStack
- * Query (ADR-007) — żadnej kopii w Pinia.
+/** Whole-plan values and historical account goals are separate readouts.
+ * Missing days remain gaps; API progress ratings are intentionally not rendered.
  */
 import { useQuery } from '@tanstack/vue-query'
 import { CalendarDays, Info } from '@lucide/vue'
@@ -28,8 +9,9 @@ import { useRoute, useRouter } from 'vue-router'
 
 import { MAX_STATS_RANGE_DAYS, fetchDailyStats } from '@/api/stats'
 import type { StatsDay } from '@/api/stats'
-import type { GoalMetric } from '@/api/planning'
 import { queryKeys } from '@/api/queryKeys'
+import ErrorState from '@/components/domain/ErrorState.vue'
+import PageHeader from '@/components/domain/PageHeader.vue'
 import BarChart from '@/components/charts/BarChart.vue'
 import type { BarDatum } from '@/components/charts/BarChart.vue'
 import TrendLine from '@/components/charts/TrendLine.vue'
@@ -48,7 +30,6 @@ import {
 import { sumDecimals } from '@/lib/decimal'
 import { formatDecimal } from '@/lib/format'
 import { navigationRange, planNavigationContext, validNavigationDate } from '@/lib/navigation'
-import { statusLabel, statusToken } from '@/lib/nutrition'
 import { common, recipes as recipeTexts, stats as texts } from '@/lib/texts'
 
 type RangePreset = 'week' | 'month' | 'custom'
@@ -167,7 +148,7 @@ const kcalBars = computed<BarDatum[]>(() =>
       {
         label: 'kcal',
         value: day.nutrition?.kcal ?? '0',
-        colorClass: statusToken(day.status.kcal).fill,
+        colorClass: 'fill-primary',
       },
     ],
   })),
@@ -235,34 +216,30 @@ const macroTrend = computed<TrendPoint[]>(() =>
 /** Trend ma sens od tygodnia danych — na krótszym zakresie to ta sama linia, co słupki. */
 const showTrend = computed(() => days.value.length >= TREND_WINDOW_DAYS)
 
-interface SummaryTile {
-  key: string
-  label: string
-  unit: string
-  metric: GoalMetric
-}
-
-const summaryTiles = computed<SummaryTile[]>(() => {
+// Whole-plan averages and account targets have different scopes. API personal
+// progress ratings must not judge the sum of everybody's planned portions.
+const summaryTiles = computed(() => {
+  const avg = summary.value?.avg
+  if (!avg) return []
+  return activeTab.value === 'kcal'
+    ? [{ key: 'kcal', label: texts.tabKcal, unit: recipeTexts.kcalUnit, value: avg.kcal }]
+    : MACRO_SEGMENTS.map((segment) => ({
+        key: segment.key,
+        label: segment.label,
+        unit: 'g',
+        value: avg[segment.key],
+      }))
+})
+const goalHistory = computed(() => days.value.filter((day) => day.goal !== null))
+const accountAverages = computed(() => {
   const progress = summary.value?.goal_progress
-  if (!progress) {
-    return []
-  }
-  const tiles: SummaryTile[] =
-    activeTab.value === 'kcal'
-      ? [
-          {
-            key: 'kcal',
-            label: texts.tabKcal,
-            unit: recipeTexts.kcalUnit,
-            metric: progress.kcal,
-          },
-        ]
-      : [
-          { key: 'protein_g', label: texts.macroProtein, unit: 'g', metric: progress.protein_g },
-          { key: 'fat_g', label: texts.macroFat, unit: 'g', metric: progress.fat_g },
-          { key: 'carbs_g', label: texts.macroCarbs, unit: 'g', metric: progress.carbs_g },
-        ]
-  return tiles
+  if (!progress) return []
+  return [
+    { label: texts.tabKcal, value: progress.kcal.target, unit: 'kcal' },
+    { label: texts.macroProtein, value: progress.protein_g.target, unit: 'g' },
+    { label: texts.macroFat, value: progress.fat_g.target, unit: 'g' },
+    { label: texts.macroCarbs, value: progress.carbs_g.target, unit: 'g' },
+  ]
 })
 
 /** Braki danych z całego zakresu — bez duplikatów, do tooltipa plakietki. */
@@ -294,11 +271,16 @@ const PRESETS: { id: RangePreset; label: string }[] = [
 </script>
 
 <template>
-  <section class="grid gap-4" data-testid="statystyki-page">
-    <header class="grid gap-1">
-      <h1 class="text-2xl font-semibold">{{ texts.title }}</h1>
-      <p class="text-muted-foreground text-sm">{{ texts.subtitle }}</p>
-    </header>
+  <section class="grid min-w-0 gap-6" data-testid="statystyki-page">
+    <PageHeader
+      title="Podsumowanie planu"
+      description="Wartości wszystkich porcji w planie. Brak planu jest luką, a nie zerowym spożyciem."
+    />
+    <p class="text-muted-foreground text-sm leading-relaxed" data-testid="stats-semantics">
+      Podsumowanie opisuje cały plan, nie potwierdza zjedzenia posiłków. Wartości obejmują wszystkie
+      porcje, a cel należy do Twojego konta. Dlatego nie oceniamy tutaj realizacji indywidualnego
+      celu.
+    </p>
 
     <!-- Zakres dat: presety + zakres własny (walidowany jak na serwerze). -->
     <section class="border-border bg-card grid gap-3 rounded-xl border p-3 shadow-sm">
@@ -349,8 +331,8 @@ const PRESETS: { id: RangePreset; label: string }[] = [
       </p>
     </section>
 
-    <!-- Zakładki: ten sam wzorzec, co taby przepisu (role="tab" + aria-selected). -->
-    <div class="border-border flex gap-2 border-b" role="tablist" :aria-label="texts.title">
+    <!-- Two ordinary toggle buttons; both are reachable with Tab. -->
+    <div class="border-border flex gap-2 border-b" role="group" aria-label="Wartości planu">
       <button
         v-for="tab in TABS"
         :key="tab.id"
@@ -361,14 +343,22 @@ const PRESETS: { id: RangePreset; label: string }[] = [
             ? 'border-primary text-foreground'
             : 'text-muted-foreground border-transparent'
         "
-        :aria-selected="activeTab === tab.id"
-        role="tab"
+        :aria-pressed="activeTab === tab.id"
         :data-testid="`stats-tab-${tab.id}`"
         @click="activeTab = tab.id"
       >
         {{ tab.label }}
       </button>
     </div>
+
+    <!-- Refetch can fail after either an empty or populated successful read. -->
+    <ErrorState
+      v-if="rangeIsUsable && stats.data.value && stats.isError.value"
+      title="Nie udało się odświeżyć podsumowania"
+      message="Poniżej pozostają ostatnio odczytane dane."
+      :pending="stats.isFetching.value"
+      @retry="stats.refetch()"
+    />
 
     <!-- Zły zakres = nie pytamy serwera, więc nie udajemy też ładowania. -->
     <p
@@ -383,14 +373,13 @@ const PRESETS: { id: RangePreset; label: string }[] = [
       {{ common.loading }}
     </p>
 
-    <p
-      v-else-if="stats.isError.value"
-      class="text-destructive text-sm"
-      role="alert"
+    <ErrorState
+      v-else-if="stats.isError.value && !stats.data.value"
+      :message="common.unexpectedError"
+      :pending="stats.isFetching.value"
       data-testid="stats-fetch-error"
-    >
-      {{ common.unexpectedError }}
-    </p>
+      @retry="stats.refetch()"
+    />
 
     <!-- Pusty stan uczy, co zrobić (06_UIUX §3.2) — nie pokazuje zer. -->
     <section
@@ -416,7 +405,11 @@ const PRESETS: { id: RangePreset; label: string }[] = [
       >
         <div class="flex flex-wrap items-baseline justify-between gap-2">
           <h2 class="text-sm font-medium">
-            {{ activeTab === 'kcal' ? texts.chartKcal : texts.chartMacros }}
+            {{
+              activeTab === 'kcal'
+                ? 'Kalorie całego planu na dzień'
+                : 'Makroskładniki całego planu na dzień'
+            }}
           </h2>
           <p class="text-muted-foreground text-xs">{{ texts.gapLegend }}</p>
         </div>
@@ -425,8 +418,9 @@ const PRESETS: { id: RangePreset; label: string }[] = [
           v-if="activeTab === 'kcal'"
           :data="kcalBars"
           unit="kcal"
-          :title="texts.chartKcal"
-          :empty-text="texts.emptyHint"
+          :title="'Kalorie całego planu na dzień'"
+          target-label="historyczny cel konta, odczyt archiwalny"
+          empty-text="Zaplanowane wartości są zerowe lub niepełne. Sprawdź dane składników."
           testid="stats-kcal-chart"
         />
 
@@ -434,8 +428,9 @@ const PRESETS: { id: RangePreset; label: string }[] = [
           v-else
           :data="macroBars"
           unit="g"
-          :title="texts.chartMacros"
-          :empty-text="texts.emptyHint"
+          :title="'Makroskładniki całego planu na dzień'"
+          target-label="suma historycznych celów makro konta, odczyt archiwalny"
+          empty-text="Zaplanowane wartości są zerowe lub niepełne. Sprawdź dane składników."
           testid="stats-macro-chart"
         >
           <template v-if="showTrend" #overlay="{ width, height, scaleMax }">
@@ -452,6 +447,11 @@ const PRESETS: { id: RangePreset; label: string }[] = [
           </template>
         </BarChart>
 
+        <p class="text-muted-foreground text-sm" data-testid="stats-goal-legend">
+          Słupki: wartości całego planu. Przerywana linia: historyczny cel Twojego konta (dla makro
+          suma trzech celów, gdy wszystkie są ustawione). To odczyt archiwalny, nie ocena planu ani
+          bilansu osoby.
+        </p>
         <p v-if="activeTab === 'macros'" class="text-muted-foreground text-xs">
           {{ showTrend ? texts.trendHint : texts.trendTooShort }}
         </p>
@@ -470,10 +470,10 @@ const PRESETS: { id: RangePreset; label: string }[] = [
         </ul>
       </section>
 
-      <!-- Podsumowanie: trio wartość/cel/delta + status słowny (06_UIUX §3.5). -->
+      <!-- Whole-plan averages are deliberately separate from account goal history. -->
       <section class="grid gap-3" data-testid="stats-summary">
         <div class="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 class="text-sm font-medium">{{ texts.summaryTitle }}</h2>
+          <h2 class="text-sm font-medium">Średnie dzienne całego planu</h2>
           <p class="text-muted-foreground text-sm" data-testid="stats-days">
             {{ texts.summaryDays(summary?.days_with_plan ?? 0, summary?.days_in_range ?? 0) }}
           </p>
@@ -490,9 +490,22 @@ const PRESETS: { id: RangePreset; label: string }[] = [
         </p>
 
         <p v-if="!hasAnyGoal" class="text-muted-foreground text-sm" data-testid="stats-no-goal">
-          {{ texts.goalsMissing }}
+          Brak historycznych celów konta w tym zakresie. Wartości planu pozostają dostępne.
         </p>
 
+        <p class="text-muted-foreground text-sm">
+          Średnia uwzględnia wyłącznie dni z planem. Dni bez planu nie wnoszą zera.
+        </p>
+        <details v-if="missingData.length" class="text-sm" data-testid="stats-missing-details">
+          <summary class="min-h-11 cursor-pointer py-3 font-medium">
+            Pokaż braki wartości odżywczych
+          </summary>
+          <ul class="grid gap-1 text-muted-foreground">
+            <li v-for="entry in missingData" :key="entry" class="[overflow-wrap:anywhere]">
+              {{ entry }}
+            </li>
+          </ul>
+        </details>
         <ul class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           <li
             v-for="tile in summaryTiles"
@@ -502,30 +515,68 @@ const PRESETS: { id: RangePreset; label: string }[] = [
           >
             <p class="text-muted-foreground text-sm">{{ tile.label }}</p>
             <p class="text-xl font-semibold tabular-nums">
-              {{ formatDecimal(tile.metric.value) }}
-              <span class="text-muted-foreground text-sm font-normal">
-                /
-                {{
-                  tile.metric.target === null ? texts.noTarget : formatDecimal(tile.metric.target)
-                }}
-                {{ tile.unit }}
-              </span>
-            </p>
-            <p class="text-sm tabular-nums">
-              <span v-if="tile.metric.delta !== null" class="text-muted-foreground">
-                {{ formatDecimal(tile.metric.delta) }} {{ tile.unit }}
-              </span>
-              <span
-                v-if="tile.metric.status"
-                :class="statusToken(tile.metric.status).text"
-                :data-testid="`stats-status-${tile.key}`"
-              >
-                <span aria-hidden="true"> · </span>{{ statusLabel(tile.metric.status) }}
-              </span>
+              {{ formatDecimal(tile.value) }}
+              <span class="text-muted-foreground text-sm font-normal">{{ tile.unit }}</span>
             </p>
           </li>
         </ul>
       </section>
     </template>
+    <section
+      v-if="rangeIsUsable && !stats.isPending.value && stats.data.value && hasAnyGoal"
+      class="border-border bg-card grid min-w-0 gap-3 rounded-2xl border p-4"
+      data-testid="stats-account-history"
+    >
+      <h2 class="font-medium">Historyczne cele konta</h2>
+      <p class="text-muted-foreground text-sm">
+        Zapisane cele konta są niezależne od sumy wszystkich porcji planu. Ich historia jest
+        dostępna również w Ustawieniach → Moje cele.
+      </p>
+      <p v-if="!hasPlannedDays" class="text-muted-foreground text-sm">
+        Brak dni z planem — nie wyliczono średnich celów.
+      </p>
+      <template v-else>
+        <p class="text-muted-foreground text-sm">
+          Średnie historycznych celów dla dni z planem; każde pole uwzględnia tylko dni, w których
+          było ustawione:
+        </p>
+        <ul class="flex flex-wrap gap-x-6 gap-y-2 text-sm" data-testid="stats-account-averages">
+          <li v-for="metric in accountAverages" :key="metric.label">
+            {{ metric.label }}:
+            {{
+              metric.value === null
+                ? texts.noTarget
+                : `${formatDecimal(metric.value)} ${metric.unit}`
+            }}
+          </li>
+        </ul>
+      </template>
+      <details data-testid="stats-goal-history">
+        <summary class="min-h-11 cursor-pointer py-3 text-sm font-medium">
+          Pokaż cel konta obowiązujący w każdym dniu
+        </summary>
+        <ul class="grid gap-2 text-sm tabular-nums">
+          <li
+            v-for="entry in goalHistory"
+            :key="entry.day"
+            class="border-border border-t pt-2 [overflow-wrap:anywhere]"
+          >
+            {{ formatDate(entry.day) }} — {{ formatDecimal(entry.goal!.kcal) }} kcal
+            <span class="text-muted-foreground"
+              >(cel od {{ formatDate(entry.goal!.valid_from) }})</span
+            >
+            <span v-if="entry.goal?.protein_g != null">
+              · B {{ formatDecimal(entry.goal.protein_g) }} g</span
+            >
+            <span v-if="entry.goal?.fat_g != null">
+              · T {{ formatDecimal(entry.goal.fat_g) }} g</span
+            >
+            <span v-if="entry.goal?.carbs_g != null">
+              · W {{ formatDecimal(entry.goal.carbs_g) }} g</span
+            >
+          </li>
+        </ul>
+      </details>
+    </section>
   </section>
 </template>

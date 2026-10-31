@@ -54,7 +54,8 @@ describe('LoginPage', () => {
   it('renderuje formularz logowania po polsku', async () => {
     const wrapper = await mountLogin()
 
-    expect(wrapper.text()).toContain('Zaloguj się')
+    expect(wrapper.get('h1').text()).toBe('Zaloguj się')
+    expect(wrapper.text()).toContain('Paśnik')
     expect(wrapper.find('[data-testid="login-card"]').exists()).toBe(true)
     expect(wrapper.find('#login-email').exists()).toBe(true)
     expect(wrapper.find('#login-password').exists()).toBe(true)
@@ -71,6 +72,7 @@ describe('LoginPage', () => {
 
     expect(wrapper.get('[data-testid="login-email-error"]').text()).toBe('Podaj adres e-mail.')
     expect(wrapper.get('[data-testid="login-password-error"]').text()).toBe('Podaj hasło.')
+    expect(wrapper.get('#login-email').attributes('aria-describedby')).toBe('login-email-error')
     expect(loginRequest).not.toHaveBeenCalled()
   })
 

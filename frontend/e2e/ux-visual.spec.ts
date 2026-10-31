@@ -219,7 +219,7 @@ test('UX00: prawdziwy interfejs, telefon/desktop i prywatna lista offline', asyn
         '/ustawienia',
         'ustawienia-page',
         'profiles-list',
-        ['/households/my', '/households/my/profiles', '/goals', '/stores'],
+        ['/households/my', '/households/my/profiles', '/goals'],
       ],
       [
         'product-form',
@@ -255,10 +255,6 @@ test('UX00: prawdziwy interfejs, telefon/desktop i prywatna lista offline', asyn
             name,
           )
         }
-        await expect(page.getByTestId(`goal-row-${id('goal')}`)).toBeVisible()
-        await expect(page.getByTestId(`store-name-${id('store-0')}`)).toHaveText(
-          `${prefix} — Sklep 1`,
-        )
       }
       if (label === 'product-form') {
         await expect(page.getByTestId('product-name')).toHaveValue(product.name)
@@ -354,6 +350,30 @@ test('UX00: prawdziwy interfejs, telefon/desktop i prywatna lista offline', asyn
         await expect(page.getByTestId('recipe-photo-preview')).toBeVisible()
         await ready(page, testId)
         await capture(page, width, 'recipe-editor-expanded')
+      }
+      if (label === 'settings') {
+        await page.getByTestId('settings-tab-goals').click()
+        await expect(page.getByTestId(`goal-row-${id('goal')}`)).toBeVisible()
+        await ready(page, testId)
+        await capture(page, width, 'settings-goals')
+        const shoppingReads = ['/stores', '/shopping/round-configs'].map((endpoint) =>
+          page.waitForResponse(
+            (response) =>
+              new URL(response.url()).pathname === `/api/v1${endpoint}` &&
+              response.request().method() === 'GET',
+          ),
+        )
+        await page.getByTestId('settings-tab-shopping').click()
+        for (const response of await Promise.all(shoppingReads)) expect(response.ok()).toBe(true)
+        await expect(page.getByTestId(`store-name-${id('store-0')}`)).toHaveText(
+          `${prefix} — Sklep 1`,
+        )
+        await ready(page, testId)
+        await capture(page, width, 'settings-shopping')
+        await page.getByTestId('settings-tab-data').click()
+        await expect(page.getByTestId('transfer-scope')).toBeVisible()
+        await ready(page, testId)
+        await capture(page, width, 'settings-data')
       }
       if (label === 'shopping') {
         await page.getByTestId('zakupy-round-settings').locator('summary').click()
