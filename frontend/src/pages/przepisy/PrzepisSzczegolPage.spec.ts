@@ -10,7 +10,7 @@ import { queryKeys } from '@/api/queryKeys'
 import type { RecipeDetail, RatingResponse } from '@/api/recipes'
 import RecipePlanningPanel from '@/components/domain/planning/RecipePlanningPanel.vue'
 import { useAuthStore } from '@/stores/auth'
-import { captureSessionGeneration } from '@/lib/sessionGeneration'
+import { advanceSessionGeneration, captureSessionGeneration } from '@/lib/sessionGeneration'
 import PrzepisSzczegolPage from './PrzepisSzczegolPage.vue'
 
 const api = vi.hoisted(() => ({
@@ -122,6 +122,93 @@ beforeEach(() => {
 afterEach(() => {
   wrapper?.unmount()
   client?.clear()
+  vi.restoreAllMocks()
+})
+
+describe('PrzepisSzczegolPage — zakończenie operacji w jej sesji', () => {
+  it.each(['copy', 'delete'] as const)(
+    '%s nie nawiguje po zmianie sesji podczas invalidacji',
+    async (action) => {
+      await render('admin', 2)
+      let finish!: () => void
+      const invalidate = vi.spyOn(client, 'invalidateQueries').mockReturnValueOnce(
+        new Promise<void>((resolve) => {
+          finish = resolve
+        }),
+      )
+      const push = vi.spyOn(router, 'push')
+      const cache = vi.spyOn(client, 'setQueryData')
+      api.copyRecipe.mockResolvedValue(detail({ id: 77 }))
+      api.deleteRecipe.mockResolvedValue(undefined)
+      vi.spyOn(window, 'confirm').mockReturnValue(true)
+      await wrapper.get(`[data-testid="recipe-${action}"]`).trigger('click')
+      await flushPromises()
+      expect(invalidate).toHaveBeenCalledOnce()
+      advanceSessionGeneration()
+      finish()
+      await flushPromises()
+      expect(push).not.toHaveBeenCalled()
+      expect(cache).not.toHaveBeenCalled()
+    },
+  )
+
+  it('kopia po odmontowaniu w trakcie invalidacji nie zapisuje cache i nie nawiguje', async () => {
+    await render()
+    let finish!: () => void
+    vi.spyOn(client, 'invalidateQueries').mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        finish = resolve
+      }),
+    )
+    const push = vi.spyOn(router, 'push')
+    const cache = vi.spyOn(client, 'setQueryData')
+    api.copyRecipe.mockResolvedValue(detail({ id: 77 }))
+    await wrapper.get('[data-testid="recipe-copy"]').trigger('click')
+    await flushPromises()
+    wrapper.unmount()
+    finish()
+    await flushPromises()
+    expect(push).not.toHaveBeenCalled()
+    expect(cache).not.toHaveBeenCalled()
+  })
+
+  it('odpowiedź usunięcia ze starej sesji nie rozpoczyna invalidacji', async () => {
+    await render('admin', 2)
+    let finish!: () => void
+    api.deleteRecipe.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        finish = resolve
+      }),
+    )
+    const invalidate = vi.spyOn(client, 'invalidateQueries')
+    const push = vi.spyOn(router, 'push')
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    await wrapper.get('[data-testid="recipe-delete"]').trigger('click')
+    await flushPromises()
+    advanceSessionGeneration()
+    finish()
+    await flushPromises()
+    expect(invalidate).not.toHaveBeenCalled()
+    expect(push).not.toHaveBeenCalled()
+  })
+
+  it('usunięcie w bieżącej sesji nadal wraca do katalogu po invalidacji', async () => {
+    await render('admin', 2, detail(), '/przepisy/9?q=zupa')
+    let finish!: () => void
+    vi.spyOn(client, 'invalidateQueries').mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        finish = resolve
+      }),
+    )
+    api.deleteRecipe.mockResolvedValue(undefined)
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    await wrapper.get('[data-testid="recipe-delete"]').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.fullPath).toBe('/przepisy/9?q=zupa')
+    finish()
+    await flushPromises()
+    expect(router.currentRoute.value.fullPath).toBe('/przepisy?q=zupa')
+  })
 })
 
 describe('PrzepisSzczegolPage — scope i istniejące działania', () => {

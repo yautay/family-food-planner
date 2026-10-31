@@ -24,7 +24,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { toTypedSchema } from '@vee-validate/zod'
 import { useForm } from 'vee-validate'
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import type { ProductDetail, UnitWeight } from '@/api/catalog'
@@ -60,6 +60,7 @@ import {
   unitWeightFormSchema,
 } from '@/lib/schemas/product'
 import { common, products as texts } from '@/lib/texts'
+import { captureSessionGeneration, isSessionGenerationCurrent } from '@/lib/sessionGeneration'
 import { useAuthStore } from '@/stores/auth'
 
 interface UsedIn {
@@ -80,6 +81,25 @@ const productId = computed(() => {
   return typeof raw === 'string' ? Number(raw) : null
 })
 const isEdit = computed(() => productId.value !== null)
+let active = true
+onBeforeUnmount(() => {
+  active = false
+})
+function startOperation() {
+  return {
+    ticket: captureSessionGeneration(),
+    id: productId.value,
+    query: { ...returnQuery.value },
+  }
+}
+function operationCurrent(operation: ReturnType<typeof startOperation> | undefined): boolean {
+  return Boolean(
+    operation &&
+    active &&
+    isSessionGenerationCurrent(operation.ticket) &&
+    operation.id === productId.value,
+  )
+}
 
 const categories = useQuery({ queryKey: queryKeys.categories.all, queryFn: fetchCategories })
 
@@ -208,6 +228,7 @@ watch(
 )
 
 const saveProduct = useMutation({
+  onMutate: startOperation,
   // Wartości przychodzą z `handleSubmit`, czyli PO walidacji zod — dzięki temu
   // nie trzeba tu żadnych `as` ani domyślnych wartości „na wszelki wypadek".
   mutationFn: (values: ProductFormValues): Promise<ProductDetail> => {
@@ -221,21 +242,25 @@ const saveProduct = useMutation({
     }
     return isEdit.value ? updateProduct(productId.value as number, payload) : createProduct(payload)
   },
-  onSuccess: async (saved) => {
+  onSuccess: async (saved, _values, operation) => {
+    if (!operation || !operationCurrent(operation)) return
     actionError.value = null
     savedMessage.value = 'Zmiany zapisane.'
     await refresh()
-    if (!isEdit.value) {
+    if (!operationCurrent(operation)) return
+    if (operation.id === null) {
       // Po utworzeniu zostajemy w edycji TEGO produktu: dopiero tu są sekcje
       // wartości i przeliczników, które wymagają istniejącego id.
       await router.replace({
         name: 'produkt-edycja',
         params: { id: saved.id },
-        query: returnQuery.value,
+        query: operation.query,
       })
     }
   },
-  onError: reportError,
+  onError: (error, _values, operation) => {
+    if (operationCurrent(operation)) reportError(error)
+  },
 })
 
 const onSubmit = handleProductSubmit((values) => {
@@ -243,6 +268,7 @@ const onSubmit = handleProductSubmit((values) => {
 })
 
 const saveNutrition = useMutation({
+  onMutate: startOperation,
   mutationFn: (values: NutritionFormValues) =>
     setProductNutrition(productId.value as number, {
       kcal_100: toApiDecimal(values.kcal_100),
@@ -254,12 +280,15 @@ const saveNutrition = useMutation({
       glycemic_index: toApiDecimal(values.glycemic_index),
       nutrition_source: toApiText(values.nutrition_source),
     }),
-  onSuccess: async () => {
+  onSuccess: async (_saved, _values, operation) => {
+    if (!operationCurrent(operation)) return
     actionError.value = null
     savedMessage.value = 'Zmiany zapisane.'
     await refresh()
   },
-  onError: reportError,
+  onError: (error, _values, operation) => {
+    if (operationCurrent(operation)) reportError(error)
+  },
 })
 
 const onSubmitNutrition = handleNutritionSubmit((values) => {
@@ -276,6 +305,7 @@ const unitDraftError = computed(() =>
 )
 
 const addUnitWeight = useMutation({
+  onMutate: startOperation,
   mutationFn: () =>
     createUnitWeight(productId.value as number, {
       unit_label: unitDraft.value.unit_label.trim(),
@@ -286,42 +316,59 @@ const addUnitWeight = useMutation({
       // jadłospisów (D25). Kolumna zostaje: mówi, ile pomiarów stoi za medianą.
       samples_count: 1,
     }),
-  onSuccess: async () => {
+  onSuccess: async (_saved, _variables, operation) => {
+    if (!operationCurrent(operation)) return
     unitDraft.value = { unit_label: '', grams_per_unit: '', source: '' }
     actionError.value = null
     savedMessage.value = 'Zmiany zapisane.'
     await refresh()
   },
-  onError: reportError,
+  onError: (error, _variables, operation) => {
+    if (operationCurrent(operation)) reportError(error)
+  },
 })
 
 const removeUnitWeight = useMutation({
+  onMutate: startOperation,
   mutationFn: (weight: UnitWeight) => deleteUnitWeight(productId.value as number, weight.id),
-  onSuccess: refresh,
-  onError: reportError,
+  onSuccess: async (_saved, _weight, operation) => {
+    if (operationCurrent(operation)) await refresh()
+  },
+  onError: (error, _weight, operation) => {
+    if (operationCurrent(operation)) reportError(error)
+  },
 })
 
 // --- archiwizacja i usuwanie -------------------------------------------------------------
 
 const toggleArchive = useMutation({
+  onMutate: startOperation,
   mutationFn: (archived: boolean) => setProductArchived(productId.value as number, archived),
-  onSuccess: async () => {
+  onSuccess: async (_saved, _archived, operation) => {
+    if (!operationCurrent(operation)) return
     actionError.value = null
     usedIn.value = []
     await refresh()
   },
-  onError: reportError,
+  onError: (error, _archived, operation) => {
+    if (operationCurrent(operation)) reportError(error)
+  },
 })
 
 const remove = useMutation({
+  onMutate: startOperation,
   mutationFn: () => deleteProduct(productId.value as number),
-  onSuccess: async () => {
+  onSuccess: async (_saved, _variables, operation) => {
+    if (!operation || !operationCurrent(operation)) return
     await refresh()
-    const query = { ...returnQuery.value }
+    if (!operationCurrent(operation)) return
+    const query = { ...operation.query }
     delete query.focus
     await router.push({ name: 'produkty', query })
   },
-  onError: reportError,
+  onError: (error, _variables, operation) => {
+    if (operationCurrent(operation)) reportError(error)
+  },
 })
 
 function confirmRemove(): void {

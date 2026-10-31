@@ -448,7 +448,7 @@ const isMutating = computed(
       {{ successMessage }}
     </p>
     <nav
-      class="grid grid-cols-4 gap-0.5 rounded-xl bg-muted p-1 min-[360px]:grid-cols-7"
+      class="day-week-strip grid gap-0.5 rounded-xl bg-muted p-1"
       aria-label="Wybierz dzień tygodnia"
       data-testid="plan-week"
     >
@@ -774,7 +774,7 @@ const isMutating = computed(
           <p class="text-muted-foreground text-sm">
             Suma wszystkich porcji. To wartości planu, nie bilans spożycia jednej osoby.
           </p>
-          <ul class="grid grid-cols-2 gap-3 sm:grid-cols-4" data-testid="plan-tiles">
+          <ul class="day-summary-tiles grid gap-3" data-testid="plan-tiles">
             <li
               v-for="metric in [
                 ['kcal', 'Kalorie', 'kcal'],
@@ -812,3 +812,13 @@ const isMutating = computed(
     />
   </section>
 </template>
+
+<style scoped>
+.day-week-strip {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 3rem), 1fr));
+}
+
+.day-summary-tiles {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 7rem), 1fr));
+}
+</style>

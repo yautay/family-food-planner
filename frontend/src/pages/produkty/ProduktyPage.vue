@@ -150,13 +150,11 @@ function loadMore(): void {
         <CardDescription>{{ texts.searchPlaceholder }}</CardDescription>
       </CardHeader>
 
-      <CardContent
-        class="grid gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_auto] md:items-center"
-      >
+      <CardContent class="flex min-w-0 flex-wrap items-center gap-3">
         <Input
           v-model="search"
           type="search"
-          class="min-h-11"
+          class="min-h-11 flex-[2_1_18rem]"
           :aria-label="common.search"
           :placeholder="texts.searchPlaceholder"
           maxlength="200"
@@ -165,7 +163,7 @@ function loadMore(): void {
 
         <select
           v-model="categoryId"
-          class="border-border bg-card min-h-11 min-w-0 w-full rounded-lg border px-3 text-sm"
+          class="border-border bg-card min-h-11 min-w-0 flex-[1_1_14rem] rounded-lg border px-3 text-sm"
           :aria-label="texts.categoryLabel"
           data-testid="products-category-filter"
         >
@@ -179,11 +177,11 @@ function loadMore(): void {
           </option>
         </select>
 
-        <label class="flex min-h-11 items-center gap-2 text-sm">
+        <label class="flex min-h-11 min-w-0 max-w-full items-center gap-2 text-sm">
           <input
             v-model="includeArchived"
             type="checkbox"
-            class="size-5"
+            class="size-5 shrink-0"
             data-testid="products-include-archived"
           />
           {{ texts.showArchived }}

@@ -5,7 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { routes } from '@/router'
 import { useAuthStore } from '@/stores/auth'
+import { captureSessionGeneration, StaleSessionResponseError } from '@/lib/sessionGeneration'
 import AppShell from './AppShell.vue'
+import App from '@/App.vue'
 
 const { logoutRequest } = vi.hoisted(() => ({ logoutRequest: vi.fn() }))
 vi.mock('@/api/auth', () => ({ fetchCurrentUser: vi.fn(), loginRequest: vi.fn(), logoutRequest }))
@@ -18,7 +20,11 @@ const USER = {
   household: null,
 }
 const wrappers: ReturnType<typeof mount>[] = []
-async function mountShell(path = '/plan-dnia/2031-03-05', role: 'user' | 'admin' = 'user') {
+async function mountShell(
+  path = '/plan-dnia/2031-03-05',
+  role: 'user' | 'admin' = 'user',
+  withBoundary = false,
+) {
   const pinia = createPinia()
   setActivePinia(pinia)
   useAuthStore().user = { ...USER, role }
@@ -34,14 +40,27 @@ async function mountShell(path = '/plan-dnia/2031-03-05', role: 'user' | 'admin'
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
-      ...children,
-      { path: '/login', name: 'login', component: { template: '<div>Logowanie</div>' } },
+      ...(withBoundary
+        ? [
+            {
+              path: '/',
+              component: AppShell,
+              children: children.map((child) => ({ ...child, path: child.path.slice(1) })),
+            },
+          ]
+        : children),
+      {
+        path: '/login',
+        name: 'login',
+        meta: { public: true },
+        component: { template: '<div>Logowanie</div>' },
+      },
     ],
   })
   await router.push(path)
   await router.isReady()
   const queryClient = new QueryClient()
-  const wrapper = mount(AppShell, {
+  const wrapper = mount(withBoundary ? App : AppShell, {
     attachTo: document.body,
     global: { plugins: [pinia, [VueQueryPlugin, { queryClient }], router] },
   })
@@ -181,5 +200,88 @@ describe('AppShell UX02', () => {
     expect(useAuthStore().isAuthenticated).toBe(false)
     expect(queryClient.getQueryData(['prywatne'])).toBeUndefined()
     expect(router.currentRoute.value.name).toBe('login')
+  })
+
+  it.each(['success', 'stale-error', 'network-error'] as const)(
+    'stare wylogowanie (%s) nie usuwa cache i trasy nowego konta',
+    async (outcome) => {
+      let finish!: () => void
+      let fail!: (error: Error) => void
+      logoutRequest.mockReturnValueOnce(
+        new Promise<void>((resolve, reject) => {
+          finish = resolve
+          fail = reject
+        }),
+      )
+      const { wrapper, queryClient, router } = await mountShell()
+      await wrapper.get('[data-testid="account-toggle"]').trigger('keydown', { key: 'Enter' })
+      await flushPromises()
+      ;(document.querySelector('[data-testid="logout-button"]') as HTMLButtonElement).click()
+      await flushPromises()
+      expect(logoutRequest).toHaveBeenCalledOnce()
+      useAuthStore().setUser({ ...USER, id: 2 }, captureSessionGeneration())
+      queryClient.setQueryData(['nowa-sesja'], 'plan B')
+      if (outcome === 'success') finish()
+      else fail(outcome === 'stale-error' ? new StaleSessionResponseError() : new Error('offline'))
+      await flushPromises()
+      expect(useAuthStore().user?.id).toBe(2)
+      expect(queryClient.getQueryData(['nowa-sesja'])).toBe('plan B')
+      expect(router.currentRoute.value.name).toBe('plan-dnia')
+    },
+  )
+
+  it('błąd sieci wylogowania w tej samej sesji nadal czyści cache i otwiera login', async () => {
+    logoutRequest.mockRejectedValueOnce(new Error('offline'))
+    const { wrapper, queryClient, router } = await mountShell()
+    queryClient.setQueryData(['prywatne'], 'plan A')
+    await wrapper.get('[data-testid="account-toggle"]').trigger('keydown', { key: 'Enter' })
+    await flushPromises()
+    ;(document.querySelector('[data-testid="logout-button"]') as HTMLButtonElement).click()
+    await flushPromises()
+    expect(useAuthStore().isAuthenticated).toBe(false)
+    expect(queryClient.getQueryData(['prywatne'])).toBeUndefined()
+    expect(router.currentRoute.value.name).toBe('login')
+  })
+
+  it.each(['success', 'network-error'] as const)(
+    'własne odmontowanie granicy sesji po logout (%s) nadal otwiera login',
+    async (outcome) => {
+      let finish!: () => void
+      let fail!: (error: Error) => void
+      logoutRequest.mockReturnValueOnce(
+        new Promise<void>((resolve, reject) => {
+          finish = resolve
+          fail = reject
+        }),
+      )
+      const { wrapper, router } = await mountShell('/plan-dnia/2031-03-05', 'user', true)
+      await wrapper.get('[data-testid="account-toggle"]').trigger('keydown', { key: 'Enter' })
+      await flushPromises()
+      ;(document.querySelector('[data-testid="logout-button"]') as HTMLButtonElement).click()
+      await flushPromises()
+      expect(wrapper.find('[data-testid="app-shell"]').exists()).toBe(false)
+      if (outcome === 'success') finish()
+      else fail(new Error('offline'))
+      await flushPromises()
+      expect(router.currentRoute.value.name).toBe('login')
+    },
+  )
+
+  it('wylogowanie nie nadpisuje trasy wybranej po zamknięciu starego widoku', async () => {
+    let finish!: () => void
+    logoutRequest.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        finish = resolve
+      }),
+    )
+    const { wrapper, router } = await mountShell('/plan-dnia/2031-03-05', 'user', true)
+    await wrapper.get('[data-testid="account-toggle"]').trigger('keydown', { key: 'Enter' })
+    await flushPromises()
+    ;(document.querySelector('[data-testid="logout-button"]') as HTMLButtonElement).click()
+    await flushPromises()
+    await router.push('/login?next=/przepisy')
+    finish()
+    await flushPromises()
+    expect(router.currentRoute.value.fullPath).toBe('/login?next=/przepisy')
   })
 })

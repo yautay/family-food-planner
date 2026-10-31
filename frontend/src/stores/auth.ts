@@ -19,7 +19,11 @@ import {
   restorePrivateOfflineSession,
   subscribePrivateOfflineScope,
 } from '@/lib/offline/privateSession'
-import { advanceSessionGeneration, isSessionGenerationCurrent } from '@/lib/sessionGeneration'
+import {
+  advanceSessionGeneration,
+  isSessionGenerationCurrent,
+  StaleSessionResponseError,
+} from '@/lib/sessionGeneration'
 
 export const useAuthStore = defineStore('auth', () => {
   const user = ref<CurrentUser | null>(null)
@@ -119,9 +123,9 @@ export const useAuthStore = defineStore('auth', () => {
     clear()
     const ticket = ++generation
     const logged = await loginRequest(payload)
-    if (ticket !== generation) return logged
+    if (ticket !== generation) throw new StaleSessionResponseError()
     await confirmPrivateOfflineSession(logged)
-    if (ticket !== generation) return logged
+    if (ticket !== generation) throw new StaleSessionResponseError()
     commitUser(logged)
     return logged
   }

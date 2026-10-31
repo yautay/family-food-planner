@@ -14,6 +14,11 @@ import {
   visibleNavItems,
 } from '@/lib/navigation'
 import { APP_NAME, navigation as texts } from '@/lib/texts'
+import {
+  captureSessionGeneration,
+  isSessionGenerationCurrent,
+  StaleSessionResponseError,
+} from '@/lib/sessionGeneration'
 import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
@@ -51,12 +56,27 @@ watch(
 )
 
 const logout = useMutation({
-  mutationFn: () => auth.logout(),
-  onSettled: async () => {
+  mutationFn: (operation: { request: Promise<void>; ticket: number; from: string }) =>
+    operation.request,
+  onSettled: async (_result, error, operation) => {
+    if (
+      error instanceof StaleSessionResponseError ||
+      !isSessionGenerationCurrent(operation.ticket) ||
+      router.currentRoute.value.fullPath !== operation.from
+    )
+      return
     queryClient.clear()
     await router.push({ name: 'login' })
   },
 })
+function requestLogout(): void {
+  if (logout.isPending.value) return
+  // logout() czyści lokalną sesję synchronicznie, przed oczekiwaniem na API.
+  const request = auth.logout()
+  // Własne clear() odmontowuje shell; nadal kończymy wylogowanie, o ile
+  // użytkownik nie zmienił już sesji ani trasy.
+  logout.mutate({ request, ticket: captureSessionGeneration(), from: route.fullPath })
+}
 </script>
 
 <template>
@@ -121,7 +141,7 @@ const logout = useMutation({
             :household-name="auth.user?.household?.name"
             :is-admin="auth.isAdmin"
             :pending="logout.isPending.value"
-            @logout="logout.mutate()"
+            @logout="requestLogout"
           />
         </div>
       </div>
@@ -141,7 +161,7 @@ const logout = useMutation({
           :household-name="auth.user?.household?.name"
           :is-admin="auth.isAdmin"
           :pending="logout.isPending.value"
-          @logout="logout.mutate()"
+          @logout="requestLogout"
         />
       </header>
       <main

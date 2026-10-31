@@ -9,7 +9,7 @@
 import { toTypedSchema } from '@vee-validate/zod'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useForm } from 'vee-validate'
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, toRaw } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import * as z from 'zod'
 
@@ -19,6 +19,11 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { APP_NAME, APP_TAGLINE, auth as texts, common } from '@/lib/texts'
+import {
+  captureSessionGeneration,
+  isSessionGenerationCurrent,
+  StaleSessionResponseError,
+} from '@/lib/sessionGeneration'
 import { useAuthStore } from '@/stores/auth'
 
 const authStore = useAuthStore()
@@ -49,12 +54,24 @@ function safeNext(): string | null {
   return next
 }
 
+let active = true
+onBeforeUnmount(() => {
+  active = false
+})
 const login = useMutation({
-  mutationFn: (payload: LoginPayload) => authStore.login(payload),
-  onSuccess: async () => {
+  onMutate: () => ({ next: safeNext() }),
+  mutationFn: async (payload: LoginPayload) => {
+    const logged = await authStore.login(payload)
+    if (toRaw(authStore.user) !== logged) throw new StaleSessionResponseError()
+    // Dopiero potwierdzony login zakończył własne przejścia generacji sesji.
+    return { ticket: captureSessionGeneration() }
+  },
+  onSuccess: async (operation, _payload, context) => {
+    if (!active || !isSessionGenerationCurrent(operation.ticket)) return
     // Nowa tożsamość = wszystkie dane w cache są nieaktualne.
     await queryClient.invalidateQueries()
-    await router.push(safeNext() ?? { name: 'plan-dnia' })
+    if (!active || !isSessionGenerationCurrent(operation.ticket)) return
+    await router.push(context?.next ?? { name: 'plan-dnia' })
   },
 })
 
@@ -63,6 +80,7 @@ const serverError = computed(() => {
   if (!error) {
     return null
   }
+  if (error instanceof StaleSessionResponseError) return null
   if (error instanceof ApiError) {
     if (error.status === 401) {
       return texts.invalidCredentials

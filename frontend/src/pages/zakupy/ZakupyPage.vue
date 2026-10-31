@@ -187,8 +187,8 @@ function requestPreview(): void {
       </header>
 
       <form class="grid gap-4" data-testid="zakupy-form" @submit.prevent="requestPreview()">
-        <div class="grid gap-3 md:grid-cols-2">
-          <label class="grid gap-1 text-sm"
+        <div class="flex min-w-0 flex-wrap gap-3">
+          <label class="grid min-w-0 flex-1 basis-64 gap-1 text-sm"
             >{{ texts.dateFrom }}
             <Input
               v-model="draft.dateFrom"
@@ -198,7 +198,7 @@ function requestPreview(): void {
               :disabled="generate.isPending.value || finalize.isPending.value"
             />
           </label>
-          <label class="grid gap-1 text-sm"
+          <label class="grid min-w-0 flex-1 basis-64 gap-1 text-sm"
             >{{ texts.dateTo }}
             <Input
               v-model="draft.dateTo"

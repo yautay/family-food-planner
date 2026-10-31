@@ -139,6 +139,17 @@ Core flows (rozbudowywane w batchach, które je dostarczają):
    Włączenie `households.spec.ts` uruchamia cały projekt chromium jako
    zależność; taki przebieg należy raportować według faktycznych testów,
    a nie przedstawiać jako małą suitę zawężoną argumentami CLI.
+7. Odbiór UX11: opt-in `UX_ACCEPTANCE=1` / `ux-acceptance.spec.ts` używa
+   rzeczywistego fixture UX00 i bezpiecznego logowania. Sprawdza11głównych
+   stanów na320px oraz1024px z CSS root font32px (200% tekstu; nie natywny
+   zoom przeglądarki), nazwy dostępne kontrolek, docfit oraz czytelność
+   filtrów, dat, etykiet i głównych akcji. Pomiary Range/canvas sprawdzają
+   tekst, nie tylko szerokość dokumentu. Naturalny Tab w rozwiniętym edytorze
+   dochodzi do zapisu na320/390/1024; po jednej klatce przeglądarki test
+   sprawdza punkt centralny aktywnej kontrolki. To próbka geometrii, nie
+   samodzielny pełny audyt widoczności/focus ring/WCAG. PNG wymagają osobnego
+   review. Miękkie asercje zbierają wszystkie usterki, ale każda nadal
+   oznacza FAIL całego przebiegu; nie są retry.
 Konwencje: selektory `data-testid`, gotowość UI przez expect z timeoutem,
 seed przez API, nie przez UI. Wyjątek czasu w UX06 dotyczy jawnego wygaśnięcia
 rzeczywistego staleTime (31 s przy 30 s konfiguracji): test dwóch kart wymaga

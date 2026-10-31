@@ -216,6 +216,32 @@ watch(
 )
 
 let pendingFocus: string | null = null
+let focusFrame = 0
+onScopeDispose(() => window.cancelAnimationFrame(focusFrame))
+function revealFocusedControl(event: FocusEvent): void {
+  window.cancelAnimationFrame(focusFrame)
+  const target = event.target
+  if (!(target instanceof HTMLElement)) return
+  // Wait for the browser's native Tab scrolling before measuring the sticky bar.
+  focusFrame = window.requestAnimationFrame(() => {
+    if (!sessionCurrent() || document.activeElement !== target || !editor.value?.contains(target))
+      return
+    const bar = editor.value.querySelector<HTMLElement>('[data-testid="recipe-save-bar"]')
+    if (!bar || bar.contains(target)) return
+    const bounds = target.getBoundingClientRect()
+    const barBounds = bar.getBoundingClientRect()
+    const viewportTop = window.visualViewport?.offsetTop ?? 0
+    const viewportBottom = viewportTop + (window.visualViewport?.height ?? window.innerHeight)
+    if (!bounds.height || barBounds.top <= viewportTop || barBounds.top >= viewportBottom) return
+    const gap = 8
+    const visibleBottom = barBounds.top - gap
+    if (bounds.top >= viewportTop + gap && bounds.bottom <= visibleBottom) return
+    window.scrollBy({
+      top: (bounds.top + bounds.bottom - viewportTop - visibleBottom) / 2,
+      behavior: 'instant',
+    })
+  })
+}
 async function focusTarget(selector: string): Promise<void> {
   await nextTick()
   if (!sessionCurrent()) return
@@ -564,7 +590,12 @@ function onPhotoChange(event: Event): void {
 </script>
 
 <template>
-  <section ref="editor" class="recipe-editor grid min-w-0 gap-6" data-testid="przepis-edytor-page">
+  <section
+    ref="editor"
+    class="recipe-editor grid min-w-0 gap-6"
+    data-testid="przepis-edytor-page"
+    @focusin="revealFocusedControl"
+  >
     <PageHeader
       :title="isEdit ? texts.editTitle : texts.createTitle"
       description="Zapisz składniki i sposób przygotowania swojego dania."

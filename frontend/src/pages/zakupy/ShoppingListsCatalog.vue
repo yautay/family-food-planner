@@ -79,10 +79,10 @@ function dateLabel(value: string): string {
           v-for="(list, index) in lists.items.value"
           :key="list.id"
           :data-testid="`shopping-list-${list.id}`"
-          class="border-border bg-card grid min-w-0 gap-4 rounded-2xl border p-4 sm:flex sm:items-center sm:justify-between sm:p-6"
+          class="border-border bg-card flex min-w-0 flex-wrap items-center justify-between gap-4 rounded-2xl border p-4 sm:p-6"
           :class="index === 0 && 'bg-header rounded-bl-md'"
         >
-          <div class="grid min-w-0 gap-2">
+          <div class="grid min-w-0 flex-1 basis-80 gap-2">
             <p
               v-if="index === 0"
               class="text-muted-foreground text-xs font-medium tracking-widest uppercase"

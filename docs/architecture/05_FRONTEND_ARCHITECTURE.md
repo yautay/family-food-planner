@@ -225,6 +225,24 @@ także przy cached-empty, z retry i zachowaniem ostatniego odczytu.
 Callbacki ustawień i eksportu zachowują ochronę generacji sesji UX06;
 przestawienie sekcji nie zmienia zakresu importu/eksportu ani uprawnień.
 
+UX11: efekty globalnego routera po mutacjach przepisu/produktu sprawdzają
+generację operacji także po oczekiwaniu na invalidation. Stary komponent
+nie może przestawić nowej sesji. Login przekazuje generację dopiero po
+własnym potwierdzeniu tożsamości; nieaktualne zakończenie `auth.login`
+rzuca istniejący `StaleSessionResponseError`. Logout pobiera ticket po
+własnym synchronicznym clear i nie blokuje prawidłowego odmontowania
+AppShell, ale sprawdza generację oraz niezmieniony adres inicjujący.
+Osobny QueryClient nadal izoluje cache; te guardy chronią efekty routera.
+Nie zmieniają serwerowego uwierzytelnienia ani zakresu danych.
+
+Reflow UX11 opiera kolumny i filtry na dostępnej szerokości oraz jednostkach
+zależnych od wielkości tekstu. `PageHeader` ma własny kontener; dekoracja
+znika, gdy brak jej miejsca. Edytor reaguje na naturalny focusin wyłącznie
+gdy aktywna kontrolka jest zasłonięta paskiem zapisu/nawigacją. Odkłada pomiar
+o jedną klatkę po przewinięciu przeglądarki, sprawdza aktualną sesję, aktywny
+element i przynależność do edytora, a dispose anuluje oczekującą klatkę.
+Nie przechwytuje Tab ani nie zmienia istniejącego kierowania fokusu po422.
+
 AppShell przechowuje wyłącznie kalendarzowy kontekst UI, nie dane planu.
 Zmiana path kieruje fokus do `main#main-content`, query zachowuje fokus
 i scroll. Wstecz odtwarza zapisaną pozycję. Skiplink prowadzi do tego samego

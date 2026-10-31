@@ -1,13 +1,15 @@
-import { VueQueryPlugin } from '@tanstack/vue-query'
-import { mount } from '@vue/test-utils'
+import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
+import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createMemoryHistory, createRouter } from 'vue-router'
+import { createMemoryHistory, createRouter, type Router } from 'vue-router'
 
 import { ApiError } from '@/api/client'
 import { routes } from '@/router'
+import { advanceSessionGeneration } from '@/lib/sessionGeneration'
 
 import LoginPage from './LoginPage.vue'
+import App from '@/App.vue'
 
 const { fetchCurrentUser, loginRequest } = vi.hoisted(() => ({
   fetchCurrentUser: vi.fn(),
@@ -29,14 +31,27 @@ const USER = {
   household: null,
 }
 
-async function mountLogin() {
+let client: QueryClient
+let router: Router
+async function mountLogin(path = '/login', withApp = false) {
   const pinia = createPinia()
   setActivePinia(pinia)
-  const router = createRouter({ history: createMemoryHistory(), routes })
-  await router.push('/login')
+  router = createRouter({
+    history: createMemoryHistory(),
+    routes: withApp
+      ? [
+          { path: '/login', name: 'login', meta: { public: true }, component: LoginPage },
+          { path: '/przepisy', name: 'przepisy', component: { template: '<p>Katalog</p>' } },
+        ]
+      : routes,
+  })
+  await router.push(path)
   await router.isReady()
 
-  return mount(LoginPage, { global: { plugins: [pinia, VueQueryPlugin, router] } })
+  client = new QueryClient()
+  return mount(withApp ? App : LoginPage, {
+    global: { plugins: [pinia, [VueQueryPlugin, { queryClient: client }], router] },
+  })
 }
 
 async function submit(wrapper: Awaited<ReturnType<typeof mountLogin>>): Promise<void> {
@@ -136,5 +151,47 @@ describe('LoginPage', () => {
     await vi.waitFor(() => expect(wrapper.find('[data-testid="login-error"]').exists()).toBe(true))
 
     expect(wrapper.get('[data-testid="login-error"]').text()).toContain('Zbyt wiele prób')
+  })
+
+  it.each(['session', 'unmount'] as const)(
+    'login po %s podczas invalidacji nie przejmuje nawigacji',
+    async (change) => {
+      loginRequest.mockResolvedValue(USER)
+      const wrapper = await mountLogin('/login?next=/przepisy?q=zupa')
+      let finish!: () => void
+      const invalidate = vi.spyOn(client, 'invalidateQueries').mockReturnValueOnce(
+        new Promise<void>((resolve) => {
+          finish = resolve
+        }),
+      )
+      const push = vi.spyOn(router, 'push')
+      try {
+        await wrapper.get('#login-email').setValue(USER.email)
+        await wrapper.get('#login-password').setValue('haslo-testowe-2026')
+        await submit(wrapper)
+        await vi.waitFor(() => expect(invalidate).toHaveBeenCalledOnce())
+        if (change === 'session') advanceSessionGeneration()
+        else wrapper.unmount()
+        finish()
+        await flushPromises()
+        expect(push).not.toHaveBeenCalled()
+      } finally {
+        wrapper.unmount()
+        push.mockRestore()
+      }
+    },
+  )
+
+  it('poprawny login po własnej zmianie generacji nadal zachowuje lokalne next', async () => {
+    loginRequest.mockResolvedValue(USER)
+    const wrapper = await mountLogin('/login?next=/przepisy?q=zupa', true)
+    try {
+      await wrapper.get('#login-email').setValue(USER.email)
+      await wrapper.get('#login-password').setValue('haslo-testowe-2026')
+      await submit(wrapper)
+      await vi.waitFor(() => expect(router.currentRoute.value.fullPath).toBe('/przepisy?q=zupa'))
+    } finally {
+      wrapper.unmount()
+    }
   })
 })

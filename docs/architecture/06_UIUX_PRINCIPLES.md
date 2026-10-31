@@ -43,6 +43,14 @@ Dekoracje są nieinteraktywne, ukryte przed czytnikiem i w druku; duży motyw
 znika na wąskim ekranie. RecipeImage pokazuje rzeczywiste zdjęcie, a przy
 braku lub błędzie obrazu ilustrację zastępczą bez wielkiej litery nazwy.
 
+UX11: miejsce na motyw nagłówka zależy od własnego kontenera (36rem),
+również po powiększeniu tekstu. Kolumny szczegółu przepisu wymagają48rem
+dostępnej treści; karty katalogu mają intrinsic minimum18rem. Filtry,
+przyciski przy opisach i pola dat przechodzą do kolejnych wierszy, zamiast
+ściskać tekst lub nakładać akcje. Pasek dni i wartości makro zachowują
+czytelne komórki przy zmianie rozmiaru tekstu. Naturalny fokus edytora
+pozostaje odsłonięty także przy sticky pasku „Zapisz” i dolnej nawigacji.
+
 Statusy żywieniowe: za mało = bursztyn, prawidłowo = zieleń, za dużo =
 czerwień — zawsze z tekstem/ikoną, nigdy samym kolorem.
 

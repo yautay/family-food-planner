@@ -70,10 +70,11 @@ const CEBULA = {
   updated_at: '2026-08-16T10:00:00Z',
 }
 
-function mountEditor() {
+function mountEditor(attachTo?: HTMLElement) {
   // Edytor czyta rolę z `useAuthStore` (opcja zakresu Wszyscy tylko dla ADMIN-a).
   setActivePinia(createPinia())
   return mount(PrzepisEdytorPage, {
+    attachTo,
     global: { plugins: [VueQueryPlugin], stubs: { RouterLink: RouterLinkStub } },
   })
 }
@@ -170,6 +171,67 @@ describe('PrzepisEdytorPage — składniki przez ProductPicker', () => {
 
     expect(wrapper.find('[data-testid="ingredient-row-0"]').exists()).toBe(false)
     expect(wrapper.get('[data-testid="ingredients-empty"]').text()).not.toBe('')
+  })
+})
+
+describe('PrzepisEdytorPage — naturalny fokus nad paskiem zapisu', () => {
+  let wrapper: ReturnType<typeof mountEditor>
+  let frame: FrameRequestCallback | undefined
+  let scroll: ReturnType<typeof vi.spyOn>
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    route.params = {}
+    route.query = {}
+    recipesApi.fetchTags.mockResolvedValue({ items: [], total: 0 })
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      frame = callback
+      return 1
+    })
+    vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {})
+    scroll = vi.spyOn(window, 'scrollBy').mockImplementation(() => {})
+    wrapper = mountEditor(document.body)
+    await flushPromises()
+    vi.spyOn(
+      wrapper.get('[data-testid="recipe-save-bar"]').element,
+      'getBoundingClientRect',
+    ).mockReturnValue(new DOMRect(0, 500, 300, 100))
+  })
+  afterEach(() => {
+    wrapper.unmount()
+    vi.restoreAllMocks()
+    frame = undefined
+  })
+
+  it('odsłania faktycznie aktywne pole zasłonięte paskiem bez zmiany fokusu', () => {
+    const input = wrapper.get<HTMLInputElement>('[data-testid="recipe-name"]').element
+    vi.spyOn(input, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 480, 300, 44))
+    input.focus()
+    frame?.(0)
+    expect(scroll).toHaveBeenCalledWith({ top: 256, behavior: 'instant' })
+    expect(document.activeElement).toBe(input)
+  })
+
+  it('nie przewija już widocznego pola ani przycisku w pasku zapisu', () => {
+    const input = wrapper.get<HTMLInputElement>('[data-testid="recipe-name"]').element
+    vi.spyOn(input, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 120, 300, 44))
+    input.focus()
+    frame?.(0)
+    wrapper.get<HTMLButtonElement>('[data-testid="recipe-submit"]').element.focus()
+    frame?.(0)
+    expect(scroll).not.toHaveBeenCalled()
+  })
+
+  it('ignoruje zdarzenie dla nieaktywnego pola i pomiar po przeniesieniu fokusu', async () => {
+    const input = wrapper.get<HTMLInputElement>('[data-testid="recipe-name"]').element
+    vi.spyOn(input, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 480, 300, 44))
+    await wrapper.get('[data-testid="recipe-name"]').trigger('focusin')
+    frame?.(0)
+    expect(scroll).not.toHaveBeenCalled()
+    input.focus()
+    const staleFrame = frame
+    wrapper.get<HTMLButtonElement>('[data-testid="recipe-submit"]').element.focus()
+    staleFrame?.(0)
+    expect(scroll).not.toHaveBeenCalled()
   })
 })
 

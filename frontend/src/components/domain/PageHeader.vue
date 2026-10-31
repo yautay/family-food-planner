@@ -15,7 +15,7 @@ withDefaults(
 
 <template>
   <header
-    class="relative isolate flex min-w-0 items-center gap-6"
+    class="page-header relative isolate flex min-w-0 items-center gap-6"
     :class="
       decoration
         ? 'bg-header rounded-2xl rounded-bl-md px-4 py-6 sm:px-6 print:bg-transparent print:p-0'
@@ -23,7 +23,7 @@ withDefaults(
     "
   >
     <div class="relative z-10 grid min-w-0 flex-1 gap-4">
-      <div class="grid gap-2">
+      <div class="grid min-w-0 gap-2">
         <p
           v-if="eyebrow"
           class="text-muted-foreground text-xs font-medium tracking-widest uppercase"
@@ -53,3 +53,16 @@ withDefaults(
     <HeaderDecoration v-if="decoration" :motif="decoration" />
   </header>
 </template>
+
+<style scoped>
+.page-header {
+  container: page-header / inline-size;
+}
+
+/* Reserve decoration only when the header itself has room at the current text size. */
+@container page-header (max-width: 36rem) {
+  .page-header :deep([data-testid='header-decoration']) {
+    display: none;
+  }
+}
+</style>

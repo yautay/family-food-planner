@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { CalendarPlus, Clock, Heart, LoaderCircle, Star } from '@lucide/vue'
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import {
@@ -27,6 +27,7 @@ import { decimalsEqual, sumDecimals } from '@/lib/decimal'
 import { formatAmount, formatDecimal } from '@/lib/format'
 import { planNavigationContext, planNavigationTarget } from '@/lib/navigation'
 import { common, recipes as texts } from '@/lib/texts'
+import { captureSessionGeneration, isSessionGenerationCurrent } from '@/lib/sessionGeneration'
 import { useAuthStore } from '@/stores/auth'
 import { catalogQuery, returnToCatalog } from './catalogNavigation'
 
@@ -35,6 +36,10 @@ const router = useRouter()
 const auth = useAuthStore()
 const queryClient = useQueryClient()
 const recipeId = computed(() => Number(route.params.id))
+let active = true
+onBeforeUnmount(() => {
+  active = false
+})
 const servings = ref('1')
 const actionError = ref<string | null>(null)
 const actionSuccess = ref<string | null>(null)
@@ -98,6 +103,22 @@ function clearAction(): void {
   actionSuccess.value = null
   usedInNames.value = []
 }
+function startAction() {
+  clearAction()
+  return {
+    ticket: captureSessionGeneration(),
+    id: recipeId.value,
+    query: catalogQuery(route.query),
+  }
+}
+function actionCurrent(operation: ReturnType<typeof startAction> | undefined): boolean {
+  return Boolean(
+    operation &&
+    active &&
+    isSessionGenerationCurrent(operation.ticket) &&
+    operation.id === recipeId.value,
+  )
+}
 function reportError(error: unknown): void {
   actionSuccess.value = null
   actionError.value = error instanceof ApiError ? error.message : common.unexpectedError
@@ -121,52 +142,69 @@ function changeServings(step: '0.5' | '-0.5'): void {
 
 const rate = useMutation({
   mutationFn: (rating: number) => rateRecipe(recipeId.value, rating),
-  onMutate: clearAction,
-  onSuccess: async (saved) => {
+  onMutate: startAction,
+  onSuccess: async (saved, _rating, operation) => {
+    if (!actionCurrent(operation)) return
     await queryClient.invalidateQueries({ queryKey: queryKeys.recipes.all })
+    if (!actionCurrent(operation)) return
     ratingDraft.value = saved.my_rating
     actionSuccess.value = 'Ocena została zapisana.'
   },
-  onError: (error) => {
+  onError: (error, _rating, operation) => {
+    if (!actionCurrent(operation)) return
     ratingDraft.value = detail.value?.my_rating ?? null
     reportError(error)
   },
 })
 const remove = useMutation({
   mutationFn: () => deleteRecipe(recipeId.value),
-  onMutate: clearAction,
-  onSuccess: async () => {
+  onMutate: startAction,
+  onSuccess: async (_saved, _variables, operation) => {
+    if (!operation || !actionCurrent(operation)) return
     await queryClient.invalidateQueries({ queryKey: queryKeys.recipes.all })
-    await router.push({ name: 'przepisy', query: catalogQuery(route.query) })
+    if (!actionCurrent(operation)) return
+    await router.push({ name: 'przepisy', query: operation.query })
   },
-  onError: reportError,
+  onError: (error, _variables, operation) => {
+    if (actionCurrent(operation)) reportError(error)
+  },
 })
 const copy = useMutation({
   mutationFn: () => copyRecipe(recipeId.value),
-  onMutate: clearAction,
-  onSuccess: async (copied) => {
+  onMutate: startAction,
+  onSuccess: async (copied, _variables, operation) => {
+    if (!operation || !actionCurrent(operation)) return
     await queryClient.invalidateQueries({ queryKey: queryKeys.recipes.all })
+    if (!actionCurrent(operation)) return
     queryClient.setQueryData(queryKeys.recipes.detail(copied.id, '1'), copied)
     await router.push({
       name: 'przepis-szczegol',
       params: { id: copied.id },
-      query: catalogQuery(route.query),
+      query: operation.query,
     })
+    if (!active || !isSessionGenerationCurrent(operation.ticket) || recipeId.value !== copied.id)
+      return
     actionSuccess.value = 'Utworzono własną kopię przepisu.'
   },
-  onError: reportError,
+  onError: (error, _variables, operation) => {
+    if (actionCurrent(operation)) reportError(error)
+  },
 })
 const toggleArchive = useMutation({
   mutationFn: () =>
     detail.value?.is_archived ? unarchiveRecipe(recipeId.value) : archiveRecipe(recipeId.value),
-  onMutate: clearAction,
-  onSuccess: async (updated) => {
+  onMutate: startAction,
+  onSuccess: async (updated, _variables, operation) => {
+    if (!actionCurrent(operation)) return
     await queryClient.invalidateQueries({ queryKey: queryKeys.recipes.all })
+    if (!actionCurrent(operation)) return
     actionSuccess.value = updated.is_archived
       ? 'Przepis został zarchiwizowany.'
       : 'Przepis został przywrócony z archiwum.'
   },
-  onError: reportError,
+  onError: (error, _variables, operation) => {
+    if (actionCurrent(operation)) reportError(error)
+  },
 })
 const actionPending = computed(
   () =>
@@ -204,7 +242,7 @@ const nutritionRows = computed(() => {
 </script>
 
 <template>
-  <section class="grid min-w-0 gap-6" data-testid="przepis-szczegol-page">
+  <section class="recipe-detail grid min-w-0 gap-6" data-testid="przepis-szczegol-page">
     <RouterLink
       v-slot="{ href, navigate }"
       :to="
@@ -415,7 +453,7 @@ const nutritionRows = computed(() => {
         {{ texts.incompleteData }}: {{ detail.nutrition.missing.join(', ') }}
       </p>
 
-      <div class="grid min-w-0 items-start gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)]">
+      <div class="recipe-content grid min-w-0 items-start gap-8">
         <section
           class="grid min-w-0 gap-4"
           aria-labelledby="ingredients-heading"
@@ -567,3 +605,16 @@ const nutritionRows = computed(() => {
     />
   </section>
 </template>
+
+<style scoped>
+.recipe-detail {
+  container: recipe-detail / inline-size;
+}
+
+/* The sidebar and enlarged text both reduce the room available to the recipe. */
+@container recipe-detail (min-width: 48rem) {
+  .recipe-content {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+  }
+}
+</style>

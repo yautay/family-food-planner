@@ -5,7 +5,7 @@ import { createPinia, disposePinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError } from '@/api/client'
-import { captureSessionGeneration } from '@/lib/sessionGeneration'
+import { captureSessionGeneration, StaleSessionResponseError } from '@/lib/sessionGeneration'
 import {
   clearPrivateOfflineSession,
   confirmPrivateOfflineSession,
@@ -90,16 +90,51 @@ describe('authStore', () => {
   })
 
   it('login zapisuje zalogowanego użytkownika', async () => {
+    document.cookie = 'csrf_token=test-credential; Path=/'
     loginRequest.mockResolvedValue(USER)
     const auth = useAuthStore()
 
     await auth.login({ email: 'anna@example.com', password: 'haslo-testowe-2026' })
 
     expect(auth.isAuthenticated).toBe(true)
+    expect(getPrivateOfflineScope()).not.toBeNull()
     expect(loginRequest).toHaveBeenCalledWith({
       email: 'anna@example.com',
       password: 'haslo-testowe-2026',
     })
+  })
+
+  it('login unieważniony podczas rzeczywistego potwierdzania offline odrzuca sukces', async () => {
+    document.cookie = 'csrf_token=test-credential; Path=/'
+    loginRequest.mockResolvedValue(USER)
+    let finishPrincipal!: (value: ArrayBuffer) => void
+    let finishCredential!: (value: ArrayBuffer) => void
+    const digest = vi
+      .spyOn(crypto.subtle, 'digest')
+      .mockReturnValueOnce(
+        new Promise<ArrayBuffer>((resolve) => {
+          finishPrincipal = resolve
+        }),
+      )
+      .mockReturnValueOnce(
+        new Promise<ArrayBuffer>((resolve) => {
+          finishCredential = resolve
+        }),
+      )
+    try {
+      const auth = useAuthStore()
+      const pendingLogin = auth.login({ email: USER.email, password: 'haslo-testowe-2026' })
+      const rejected = expect(pendingLogin).rejects.toBeInstanceOf(StaleSessionResponseError)
+      await vi.waitFor(() => expect(digest).toHaveBeenCalledTimes(2))
+      auth.clear()
+      finishPrincipal(new ArrayBuffer(32))
+      finishCredential(new ArrayBuffer(32))
+      await rejected
+      expect(auth.isAuthenticated).toBe(false)
+      expect(getPrivateOfflineScope()).toBeNull()
+    } finally {
+      digest.mockRestore()
+    }
   })
 
   it('nieudany login nie ustawia sesji', async () => {
@@ -243,9 +278,10 @@ describe('authStore', () => {
     )
     const auth = useAuthStore()
     const pending = auth.login({ email: USER.email, password: 'haslo-testowe-2026' })
+    const rejected = expect(pending).rejects.toBeInstanceOf(StaleSessionResponseError)
     auth.clear()
     respond(USER)
-    await pending
+    await rejected
     expect(auth.user).toBeNull()
     expect(getPrivateOfflineScope()).toBeNull()
   })

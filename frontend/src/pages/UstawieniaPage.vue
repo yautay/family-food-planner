@@ -475,10 +475,10 @@ const saveThresholds = useMutation({
             <li
               v-for="profile in profiles"
               :key="profile.id"
-              class="border-border grid gap-3 rounded-lg border p-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center"
+              class="border-border flex flex-wrap items-center gap-3 rounded-lg border p-3"
               :data-testid="`profile-row-${profile.id}`"
             >
-              <div class="min-w-0">
+              <div class="min-w-0 flex-1 basis-64">
                 <p class="font-medium [overflow-wrap:anywhere]">{{ profile.name }}</p>
                 <p class="text-muted-foreground text-sm tabular-nums">
                   {{ texts.multiplierLabel }}: {{ toDecimalInput(profile.default_multiplier) }}
@@ -495,7 +495,7 @@ const saveThresholds = useMutation({
                 </p>
               </div>
 
-              <div class="flex flex-wrap gap-2">
+              <div class="flex min-w-0 flex-wrap gap-2">
                 <Button
                   variant="outline"
                   class="min-h-11"

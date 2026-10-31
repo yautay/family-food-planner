@@ -308,13 +308,11 @@ function confirmRemove(item: PantryItem): void {
         <CardDescription>{{ texts.searchPlaceholder }}</CardDescription>
       </CardHeader>
 
-      <CardContent
-        class="grid gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)] md:items-center"
-      >
+      <CardContent class="flex min-w-0 flex-wrap items-center gap-3">
         <Input
           v-model="search"
           type="search"
-          class="min-h-11"
+          class="min-h-11 flex-[2_1_18rem]"
           :aria-label="common.search"
           :placeholder="texts.searchPlaceholder"
           maxlength="200"
@@ -323,7 +321,7 @@ function confirmRemove(item: PantryItem): void {
 
         <select
           v-model="categoryId"
-          class="border-border bg-card min-h-11 min-w-0 w-full rounded-lg border px-3 text-sm"
+          class="border-border bg-card min-h-11 min-w-0 flex-[1_1_14rem] rounded-lg border px-3 text-sm"
           :aria-label="texts.categoryLabel"
           data-testid="pantry-category-filter"
         >
@@ -339,7 +337,7 @@ function confirmRemove(item: PantryItem): void {
 
         <select
           v-model="sort"
-          class="border-border bg-card min-h-11 min-w-0 w-full rounded-lg border px-3 text-sm"
+          class="border-border bg-card min-h-11 min-w-0 flex-[1_1_14rem] rounded-lg border px-3 text-sm"
           :aria-label="texts.sortLabel"
           data-testid="pantry-sort"
         >
@@ -347,11 +345,11 @@ function confirmRemove(item: PantryItem): void {
           <option value="name">{{ texts.sortByName }}</option>
         </select>
 
-        <label class="flex min-h-11 items-center gap-2 text-sm">
+        <label class="flex min-h-11 min-w-0 basis-full items-center gap-2 text-sm">
           <input
             v-model="expiringOnly"
             type="checkbox"
-            class="size-5"
+            class="size-5 shrink-0"
             data-testid="pantry-expiring-only"
           />
           {{ texts.expiringOnly }}

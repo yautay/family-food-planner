@@ -116,8 +116,8 @@ function planned({ day }: { day: PlanDay }): void {
     />
 
     <div class="grid min-w-0 gap-3">
-      <div class="flex min-w-0 items-end gap-2">
-        <label class="grid min-w-0 max-w-xl flex-1 gap-2 text-sm font-medium">
+      <div class="flex min-w-0 flex-wrap items-end gap-2">
+        <label class="grid min-w-0 max-w-xl flex-1 basis-80 gap-2 text-sm font-medium">
           Szukaj przepisu
           <span class="relative">
             <Search
@@ -284,11 +284,7 @@ function planned({ day }: { day: PlanDay }): void {
           </Button>
         </template>
       </EmptyState>
-      <ul
-        v-else
-        class="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-3"
-        data-testid="recipes-list"
-      >
+      <ul v-else class="recipe-catalog-grid grid min-w-0 gap-4" data-testid="recipes-list">
         <li v-for="recipe in recipes.items.value" :key="recipe.id" class="min-w-0">
           <RecipeCard
             :recipe="recipe"
@@ -321,3 +317,9 @@ function planned({ day }: { day: PlanDay }): void {
     />
   </section>
 </template>
+
+<style scoped>
+.recipe-catalog-grid {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
+}
+</style>

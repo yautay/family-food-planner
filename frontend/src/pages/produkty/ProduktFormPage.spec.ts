@@ -1,11 +1,11 @@
-import { VueQueryPlugin } from '@tanstack/vue-query'
+import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError } from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
-import { captureSessionGeneration } from '@/lib/sessionGeneration'
+import { advanceSessionGeneration, captureSessionGeneration } from '@/lib/sessionGeneration'
 
 import ProduktFormPage from './ProduktFormPage.vue'
 
@@ -20,11 +20,12 @@ import ProduktFormPage from './ProduktFormPage.vue'
 
 const navigation = vi.hoisted(() => ({
   query: {} as Record<string, string>,
+  params: { id: '10' } as { id?: string },
   push: vi.fn(),
   replace: vi.fn(),
 }))
 vi.mock('vue-router', () => ({
-  useRoute: () => ({ params: { id: '10' }, query: navigation.query }),
+  useRoute: () => ({ params: navigation.params, query: navigation.query }),
   useRouter: () => ({ push: navigation.push, replace: navigation.replace }),
 }))
 
@@ -93,6 +94,7 @@ const PRODUCT = {
   updated_at: '2026-08-21T10:00:00Z',
 }
 
+let client: QueryClient
 async function mountPage(role: 'admin' | 'user') {
   setActivePinia(createPinia())
   const auth = useAuthStore()
@@ -107,7 +109,10 @@ async function mountPage(role: 'admin' | 'user') {
     },
     captureSessionGeneration(),
   )
-  const wrapper = mount(ProduktFormPage, { global: { plugins: [VueQueryPlugin] } })
+  client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const wrapper = mount(ProduktFormPage, {
+    global: { plugins: [[VueQueryPlugin, { queryClient: client }]] },
+  })
   await flushPromises()
   return wrapper
 }
@@ -116,6 +121,7 @@ describe('ProduktFormPage — bramka D15', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     navigation.query = {}
+    navigation.params = { id: '10' }
     catalogApi.fetchProduct.mockResolvedValue(PRODUCT)
     catalogApi.fetchCategories.mockResolvedValue({
       items: [{ id: 1, name: 'Nabiał', position: 1, perishability: 'fresh' }],
@@ -217,6 +223,74 @@ describe('ProduktFormPage — bramka D15', () => {
     } finally {
       wrapper.unmount()
       confirm.mockRestore()
+    }
+  })
+
+  it.each([
+    ['create', 'session'],
+    ['delete', 'session'],
+    ['create', 'unmount'],
+    ['delete', 'unmount'],
+  ] as const)('%s nie nawiguje po %s w trakcie odświeżenia', async (action, change) => {
+    if (action === 'create') navigation.params = {}
+    catalogApi.createProduct.mockResolvedValue(PRODUCT)
+    catalogApi.deleteProduct.mockResolvedValue(undefined)
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const wrapper = await mountPage('admin')
+    let finish!: () => void
+    const invalidate = vi.spyOn(client, 'invalidateQueries').mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        finish = resolve
+      }),
+    )
+    try {
+      if (action === 'create') {
+        await wrapper.get('[data-testid="product-name"]').setValue('Jajko')
+        await wrapper.get('[data-testid="product-submit"]').trigger('submit')
+        await vi.waitFor(() => expect(catalogApi.createProduct).toHaveBeenCalledOnce())
+      } else {
+        await wrapper.get('[data-testid="product-delete"]').trigger('click')
+      }
+      await flushPromises()
+      expect(invalidate).toHaveBeenCalled()
+      if (change === 'session') advanceSessionGeneration()
+      else wrapper.unmount()
+      finish()
+      await flushPromises()
+      expect(navigation.push).not.toHaveBeenCalled()
+      expect(navigation.replace).not.toHaveBeenCalled()
+    } finally {
+      wrapper.unmount()
+      confirm.mockRestore()
+    }
+  })
+
+  it('utworzenie w bieżącej sesji otwiera edycję potwierdzonego produktu', async () => {
+    navigation.params = {}
+    navigation.query = { q: 'jaj', category: '1' }
+    catalogApi.createProduct.mockResolvedValue(PRODUCT)
+    const wrapper = await mountPage('user')
+    let finish!: () => void
+    vi.spyOn(client, 'invalidateQueries').mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        finish = resolve
+      }),
+    )
+    try {
+      await wrapper.get('[data-testid="product-name"]').setValue('Jajko')
+      await wrapper.get('[data-testid="product-submit"]').trigger('submit')
+      await vi.waitFor(() => expect(catalogApi.createProduct).toHaveBeenCalledOnce())
+      expect(navigation.replace).not.toHaveBeenCalled()
+      finish()
+      await vi.waitFor(() =>
+        expect(navigation.replace).toHaveBeenCalledWith({
+          name: 'produkt-edycja',
+          params: { id: 10 },
+          query: { q: 'jaj', category: '1' },
+        }),
+      )
+    } finally {
+      wrapper.unmount()
     }
   })
 })
