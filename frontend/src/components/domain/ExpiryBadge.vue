@@ -35,9 +35,9 @@ const label = computed(() => {
     return `${texts.expired} · ${date}`
   }
   if (status.value === 'soon') {
-    return `${texts.expiresSoon} · ${date}`
+    return `Bliski termin · ${date}`
   }
-  return `${texts.expiresOn} ${date}`
+  return `Termin: ${date}`
 })
 
 const styles: Record<ExpiryStatus, string> = {
@@ -50,7 +50,7 @@ const styles: Record<ExpiryStatus, string> = {
 
 <template>
   <span
-    class="inline-flex items-center rounded-lg px-2 py-0.5 text-xs font-medium"
+    class="inline-flex max-w-full items-center rounded-lg px-2 py-0.5 text-xs font-medium"
     :class="styles[status]"
     :data-testid="`expiry-badge-${status}`"
   >

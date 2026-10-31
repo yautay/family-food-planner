@@ -41,6 +41,10 @@ import {
 } from '@/api/catalog'
 import { ApiError } from '@/api/client'
 import { queryKeys } from '@/api/queryKeys'
+import PageHeader from '@/components/domain/PageHeader.vue'
+import ErrorState from '@/components/domain/ErrorState.vue'
+import ProductCompleteness from '@/components/domain/products/ProductCompleteness.vue'
+import { productCatalogQuery } from '@/components/domain/products/catalogNavigation'
 import RetailProductsSection from '@/components/domain/RetailProductsSection.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -66,6 +70,8 @@ interface UsedIn {
 
 const route = useRoute()
 const router = useRouter()
+const returnQuery = computed(() => productCatalogQuery(route.query))
+const savedMessage = ref('')
 const auth = useAuthStore()
 const queryClient = useQueryClient()
 
@@ -89,6 +95,7 @@ const actionError = ref<string | null>(null)
 const usedIn = ref<UsedIn[]>([])
 
 function reportError(error: unknown): void {
+  savedMessage.value = ''
   usedIn.value = []
   if (error instanceof ApiError) {
     actionError.value = error.message
@@ -216,18 +223,23 @@ const saveProduct = useMutation({
   },
   onSuccess: async (saved) => {
     actionError.value = null
+    savedMessage.value = 'Zmiany zapisane.'
     await refresh()
     if (!isEdit.value) {
       // Po utworzeniu zostajemy w edycji TEGO produktu: dopiero tu są sekcje
       // wartości i przeliczników, które wymagają istniejącego id.
-      await router.replace({ name: 'produkt-edycja', params: { id: saved.id } })
+      await router.replace({
+        name: 'produkt-edycja',
+        params: { id: saved.id },
+        query: returnQuery.value,
+      })
     }
   },
   onError: reportError,
 })
 
 const onSubmit = handleProductSubmit((values) => {
-  saveProduct.mutate(values)
+  if (!saveProduct.isPending.value) saveProduct.mutate(values)
 })
 
 const saveNutrition = useMutation({
@@ -244,13 +256,14 @@ const saveNutrition = useMutation({
     }),
   onSuccess: async () => {
     actionError.value = null
+    savedMessage.value = 'Zmiany zapisane.'
     await refresh()
   },
   onError: reportError,
 })
 
 const onSubmitNutrition = handleNutritionSubmit((values) => {
-  saveNutrition.mutate(values)
+  if (!saveNutrition.isPending.value) saveNutrition.mutate(values)
 })
 
 // --- przeliczniki jednostek domowych ---------------------------------------------------
@@ -276,6 +289,7 @@ const addUnitWeight = useMutation({
   onSuccess: async () => {
     unitDraft.value = { unit_label: '', grams_per_unit: '', source: '' }
     actionError.value = null
+    savedMessage.value = 'Zmiany zapisane.'
     await refresh()
   },
   onError: reportError,
@@ -303,7 +317,9 @@ const remove = useMutation({
   mutationFn: () => deleteProduct(productId.value as number),
   onSuccess: async () => {
     await refresh()
-    await router.push({ name: 'produkty' })
+    const query = { ...returnQuery.value }
+    delete query.focus
+    await router.push({ name: 'produkty', query })
   },
   onError: reportError,
 })
@@ -328,17 +344,35 @@ const measureLocked = computed(() => isEdit.value && !auth.isAdmin)
 </script>
 
 <template>
-  <section class="grid gap-6" data-testid="produkt-form-page">
-    <header class="grid gap-2">
-      <h1 class="text-2xl font-semibold">{{ isEdit ? texts.editTitle : texts.createTitle }}</h1>
+  <section class="grid min-w-0 gap-4" data-testid="produkt-form-page">
+    <PageHeader
+      :title="isEdit ? texts.editTitle : texts.createTitle"
+      description="Wspólny katalog dla wszystkich rodzin. Zapisuj każdą sekcję osobno."
+    >
+      <p v-if="detail" class="font-medium break-words">{{ detail.name }}</p>
       <Button as-child variant="ghost" class="min-h-11 justify-self-start">
-        <RouterLink :to="{ name: 'produkty' }" data-testid="product-back">
+        <RouterLink :to="{ name: 'produkty', query: returnQuery }" data-testid="product-back">
           {{ texts.backToList }}
         </RouterLink>
       </Button>
-    </header>
+    </PageHeader>
+    <p v-if="savedMessage" class="text-primary text-sm" role="status" data-testid="product-saved">
+      {{ savedMessage }}
+    </p>
+    <p v-if="isEdit && product.isPending.value" class="text-muted-foreground text-sm">
+      {{ common.loading }}
+    </p>
+    <ErrorState
+      v-if="isEdit && product.isError.value"
+      :message="
+        product.data.value
+          ? 'Nie udało się odświeżyć produktu. Pokazujemy ostatnio pobrane dane.'
+          : 'Nie udało się pobrać produktu.'
+      "
+      @retry="product.refetch()"
+    />
 
-    <div v-if="actionError" class="grid gap-2" role="alert" data-testid="product-error">
+    <div v-if="actionError" class="grid min-w-0 gap-2" role="alert" data-testid="product-error">
       <p class="text-destructive text-sm">{{ actionError }}</p>
       <template v-if="usedIn.length">
         <p class="text-destructive text-sm font-medium">{{ texts.usedInIntro }}</p>
@@ -349,6 +383,7 @@ const measureLocked = computed(() => isEdit.value && !auth.isAdmin)
           type="button"
           variant="outline"
           class="min-h-11 justify-self-start"
+          :disabled="toggleArchive.isPending.value"
           data-testid="product-archive-instead"
           @click="toggleArchive.mutate(true)"
         >
@@ -357,10 +392,36 @@ const measureLocked = computed(() => isEdit.value && !auth.isAdmin)
       </template>
     </div>
 
+    <nav v-if="detail" aria-label="Sekcje danych produktu" class="flex flex-wrap gap-2 text-sm">
+      <a
+        href="#product-description"
+        class="text-primary flex min-h-11 items-center rounded-md px-3 underline underline-offset-4"
+        >Nazwa i miara</a
+      >
+      <a
+        href="#product-nutrition"
+        class="text-primary flex min-h-11 items-center rounded-md px-3 underline underline-offset-4"
+        >Wartości odżywcze</a
+      >
+      <a
+        href="#product-units"
+        class="text-primary flex min-h-11 items-center rounded-md px-3 underline underline-offset-4"
+        >Jednostki domowe</a
+      >
+      <a
+        href="#product-retail"
+        class="text-primary flex min-h-11 items-center rounded-md px-3 underline underline-offset-4"
+        >Warianty sklepowe</a
+      >
+    </nav>
     <!-- Sekcja opisowa -->
-    <Card class="rounded-xl">
+    <Card v-if="!isEdit || detail" id="product-description" class="min-w-0 rounded-xl">
       <CardHeader>
-        <CardTitle>{{ texts.title }}</CardTitle>
+        <CardTitle>Nazwa i miara</CardTitle>
+        <CardDescription v-if="!isEdit"
+          >Po zapisaniu dodasz jednostki domowe i warianty sklepowe. Wartości odżywcze uzupełnia
+          administrator.</CardDescription
+        >
         <CardDescription v-if="detail" data-testid="product-status">
           {{ detail.verification_status === 'verified' ? texts.verified : texts.unverified }}
           <template v-if="detail.is_archived"> · {{ texts.archived }}</template>
@@ -369,12 +430,12 @@ const measureLocked = computed(() => isEdit.value && !auth.isAdmin)
 
       <CardContent>
         <form
-          class="grid gap-4 md:grid-cols-2"
+          class="grid min-w-0 gap-4 md:grid-cols-2"
           novalidate
           data-testid="product-form"
           @submit="onSubmit"
         >
-          <div class="grid gap-2">
+          <div class="grid min-w-0 gap-2">
             <label class="text-sm font-medium" for="product-name">{{ texts.nameLabel }}</label>
             <Input
               id="product-name"
@@ -392,14 +453,15 @@ const measureLocked = computed(() => isEdit.value && !auth.isAdmin)
             </p>
           </div>
 
-          <div class="grid gap-2">
+          <div class="grid min-w-0 gap-2">
             <label class="text-sm font-medium" for="product-category">
               {{ texts.categoryLabel }}
             </label>
             <select
               id="product-category"
               v-model="categoryId"
-              class="border-border bg-card min-h-11 rounded-lg border px-3 text-sm"
+              class="border-border bg-card min-h-11 min-w-0 w-full rounded-lg border px-3 text-sm"
+              :aria-invalid="Boolean(productErrors.category_id)"
               data-testid="product-category"
             >
               <option
@@ -410,16 +472,19 @@ const measureLocked = computed(() => isEdit.value && !auth.isAdmin)
                 {{ category.name }}
               </option>
             </select>
+            <p v-if="productErrors.category_id" role="alert" class="text-destructive text-sm">
+              {{ productErrors.category_id }}
+            </p>
           </div>
 
-          <div class="grid gap-2">
+          <div class="grid min-w-0 gap-2">
             <label class="text-sm font-medium" for="product-measure">
               {{ texts.measureKindLabel }}
             </label>
             <select
               id="product-measure"
               v-model="measureKind"
-              class="border-border bg-card min-h-11 rounded-lg border px-3 text-sm disabled:opacity-60"
+              class="border-border bg-card min-h-11 min-w-0 w-full rounded-lg border px-3 text-sm disabled:opacity-60"
               :disabled="measureLocked"
               data-testid="product-measure"
             >
@@ -436,7 +501,7 @@ const measureLocked = computed(() => isEdit.value && !auth.isAdmin)
             </p>
           </div>
 
-          <div v-if="measureKind === 'piece'" class="grid gap-2">
+          <div v-if="measureKind === 'piece'" class="grid min-w-0 gap-2">
             <label class="text-sm font-medium" for="product-piece-weight">
               {{ texts.pieceWeightLabel }}
             </label>
@@ -458,14 +523,14 @@ const measureLocked = computed(() => isEdit.value && !auth.isAdmin)
             </p>
           </div>
 
-          <div class="grid gap-2">
+          <div class="grid min-w-0 gap-2">
             <label class="text-sm font-medium" for="product-perishability">
               {{ texts.perishabilityLabel }}
             </label>
             <select
               id="product-perishability"
               v-model="perishabilityOverride"
-              class="border-border bg-card min-h-11 rounded-lg border px-3 text-sm"
+              class="border-border bg-card min-h-11 min-w-0 w-full rounded-lg border px-3 text-sm"
               data-testid="product-perishability"
             >
               <option value="">{{ texts.perishabilityFromCategory }}</option>
@@ -511,17 +576,15 @@ const measureLocked = computed(() => isEdit.value && !auth.isAdmin)
     </Card>
 
     <!-- Wartości odżywcze -->
-    <Card v-if="detail" class="rounded-xl">
+    <Card v-if="detail" id="product-nutrition" class="min-w-0 rounded-xl">
       <CardHeader>
         <CardTitle>{{ texts.nutritionTitle }} {{ basisUnit }}</CardTitle>
         <CardDescription v-if="!auth.isAdmin">{{ texts.nutritionAdminOnly }}</CardDescription>
-        <CardDescription
-          v-else-if="!detail.completeness.complete"
-          class="text-warning"
-          data-testid="nutrition-incomplete"
-        >
-          {{ texts.incompleteData }}: {{ detail.completeness.missing.join(', ') }}
-        </CardDescription>
+        <ProductCompleteness
+          v-if="!detail.completeness.complete"
+          :missing="detail.completeness.missing"
+          testid="nutrition-incomplete"
+        />
       </CardHeader>
 
       <CardContent>
@@ -559,6 +622,10 @@ const measureLocked = computed(() => isEdit.value && !auth.isAdmin)
               {{ formatNutrient(detail.nutrition.glycemic_index, '') }}
             </dd>
           </div>
+          <div class="grid min-w-0 gap-1 md:col-span-3">
+            <dt class="text-muted-foreground text-sm">{{ texts.nutritionSourceLabel }}</dt>
+            <dd class="text-sm break-words">{{ detail.nutrition.nutrition_source ?? '—' }}</dd>
+          </div>
         </dl>
 
         <form
@@ -568,7 +635,7 @@ const measureLocked = computed(() => isEdit.value && !auth.isAdmin)
           data-testid="nutrition-form"
           @submit="onSubmitNutrition"
         >
-          <div class="grid gap-2">
+          <div class="grid min-w-0 gap-2">
             <label class="text-sm font-medium" for="nutrition-kcal">{{ texts.kcalLabel }}</label>
             <Input
               id="nutrition-kcal"
@@ -583,7 +650,7 @@ const measureLocked = computed(() => isEdit.value && !auth.isAdmin)
             </p>
           </div>
 
-          <div class="grid gap-2">
+          <div class="grid min-w-0 gap-2">
             <label class="text-sm font-medium" for="nutrition-protein">
               {{ texts.proteinLabel }}
             </label>
@@ -600,7 +667,7 @@ const measureLocked = computed(() => isEdit.value && !auth.isAdmin)
             </p>
           </div>
 
-          <div class="grid gap-2">
+          <div class="grid min-w-0 gap-2">
             <label class="text-sm font-medium" for="nutrition-fat">{{ texts.fatLabel }}</label>
             <Input
               id="nutrition-fat"
@@ -615,7 +682,7 @@ const measureLocked = computed(() => isEdit.value && !auth.isAdmin)
             </p>
           </div>
 
-          <div class="grid gap-2">
+          <div class="grid min-w-0 gap-2">
             <label class="text-sm font-medium" for="nutrition-carbs">{{ texts.carbsLabel }}</label>
             <Input
               id="nutrition-carbs"
@@ -630,7 +697,7 @@ const measureLocked = computed(() => isEdit.value && !auth.isAdmin)
             </p>
           </div>
 
-          <div class="grid gap-2">
+          <div class="grid min-w-0 gap-2">
             <label class="text-sm font-medium" for="nutrition-fiber">{{ texts.fiberLabel }}</label>
             <Input
               id="nutrition-fiber"
@@ -639,9 +706,12 @@ const measureLocked = computed(() => isEdit.value && !auth.isAdmin)
               class="min-h-11 tabular-nums"
               data-testid="nutrition-fiber"
             />
+            <p v-if="nutritionErrors.fiber_100" role="alert" class="text-destructive text-sm">
+              {{ nutritionErrors.fiber_100 }}
+            </p>
           </div>
 
-          <div class="grid gap-2">
+          <div class="grid min-w-0 gap-2">
             <label class="text-sm font-medium" for="nutrition-sugars">
               {{ texts.sugarsLabel }}
             </label>
@@ -652,9 +722,12 @@ const measureLocked = computed(() => isEdit.value && !auth.isAdmin)
               class="min-h-11 tabular-nums"
               data-testid="nutrition-sugars"
             />
+            <p v-if="nutritionErrors.sugars_100" role="alert" class="text-destructive text-sm">
+              {{ nutritionErrors.sugars_100 }}
+            </p>
           </div>
 
-          <div class="grid gap-2">
+          <div class="grid min-w-0 gap-2">
             <label class="text-sm font-medium" for="nutrition-gi">
               {{ texts.glycemicIndexLabel }}
             </label>
@@ -683,8 +756,16 @@ const measureLocked = computed(() => isEdit.value && !auth.isAdmin)
               id="nutrition-source"
               v-model="nutritionSource"
               class="min-h-11"
+              :aria-invalid="Boolean(nutritionErrors.nutrition_source)"
               data-testid="nutrition-source"
             />
+            <p
+              v-if="nutritionErrors.nutrition_source"
+              role="alert"
+              class="text-destructive text-sm"
+            >
+              {{ nutritionErrors.nutrition_source }}
+            </p>
             <p class="text-muted-foreground text-xs">{{ texts.verifyHint }}</p>
           </div>
 
@@ -703,7 +784,7 @@ const measureLocked = computed(() => isEdit.value && !auth.isAdmin)
     </Card>
 
     <!-- Przeliczniki jednostek domowych -->
-    <Card v-if="detail" class="rounded-xl">
+    <Card v-if="detail" id="product-units" class="min-w-0 rounded-xl">
       <CardHeader>
         <CardTitle>{{ texts.unitWeightsTitle }}</CardTitle>
         <CardDescription>{{ texts.unitWeightsSubtitle }}</CardDescription>
@@ -718,7 +799,7 @@ const measureLocked = computed(() => isEdit.value && !auth.isAdmin)
           {{ texts.unitWeightsEmpty }}
         </p>
 
-        <ul v-else class="grid gap-2" data-testid="unit-weights-list">
+        <ul v-else class="grid min-w-0 gap-2" data-testid="unit-weights-list">
           <li
             v-for="weight in detail.unit_weights"
             :key="weight.id"
@@ -727,7 +808,7 @@ const measureLocked = computed(() => isEdit.value && !auth.isAdmin)
           >
             <!-- U9 (review R1): przelicznik leży na osi WARTOŚCI produktu
                  (basisUnit) — dla produktu VOLUME to mililitry, nie gramy. -->
-            <span class="text-sm tabular-nums">
+            <span class="min-w-0 text-sm tabular-nums break-words">
               1 {{ weight.unit_label }} = {{ formatAmount(weight.grams_per_unit, basisUnit) }}
             </span>
             <Button
@@ -744,11 +825,13 @@ const measureLocked = computed(() => isEdit.value && !auth.isAdmin)
         </ul>
 
         <form
-          class="grid gap-3 md:grid-cols-[1fr_1fr_1fr_auto] md:items-end"
+          class="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-end"
           data-testid="unit-weight-form"
-          @submit.prevent="addUnitWeight.mutate()"
+          @submit.prevent="
+            unitDraftValid && !addUnitWeight.isPending.value && addUnitWeight.mutate()
+          "
         >
-          <div class="grid gap-2">
+          <div class="grid min-w-0 gap-2">
             <label class="text-sm font-medium" for="unit-label">{{ texts.unitLabelLabel }}</label>
             <Input
               id="unit-label"
@@ -758,7 +841,7 @@ const measureLocked = computed(() => isEdit.value && !auth.isAdmin)
               data-testid="unit-weight-label"
             />
           </div>
-          <div class="grid gap-2">
+          <div class="grid min-w-0 gap-2">
             <label class="text-sm font-medium" for="unit-grams">
               {{ texts.perUnitLabel }} ({{ basisUnit }})
             </label>
@@ -770,7 +853,7 @@ const measureLocked = computed(() => isEdit.value && !auth.isAdmin)
               data-testid="unit-weight-grams"
             />
           </div>
-          <div class="grid gap-2">
+          <div class="grid min-w-0 gap-2">
             <label class="text-sm font-medium" for="unit-source">{{ texts.sourceLabel }}</label>
             <Input
               id="unit-source"
@@ -790,7 +873,7 @@ const measureLocked = computed(() => isEdit.value && !auth.isAdmin)
 
           <p
             v-if="unitDraftError && unitDraft.unit_label !== ''"
-            class="text-destructive text-sm md:col-span-4"
+            class="text-destructive text-sm lg:col-span-4"
             data-testid="unit-weight-error"
           >
             {{ unitDraftError }}
@@ -800,6 +883,6 @@ const measureLocked = computed(() => isEdit.value && !auth.isAdmin)
     </Card>
 
     <!-- Produkty sklepowe (BATCH_09) — wymagają istniejącego id produktu. -->
-    <RetailProductsSection v-if="detail" :product-id="detail.id" />
+    <RetailProductsSection v-if="detail" id="product-retail" :product-id="detail.id" />
   </section>
 </template>

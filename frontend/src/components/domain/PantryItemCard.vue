@@ -34,19 +34,19 @@ const isEmpty = computed(() => decimalsEqual(props.item.amount, '0'))
 
 <template>
   <li
-    class="border-border bg-card grid gap-2 rounded-xl border p-4"
+    class="border-border bg-card min-w-0 grid gap-2 rounded-xl border p-4"
     :data-testid="`pantry-card-${item.id}`"
   >
     <div class="min-w-0">
-      <p class="truncate font-medium" :data-testid="`pantry-name-${item.id}`">
+      <p class="break-words font-medium" :data-testid="`pantry-name-${item.id}`">
         {{ item.product_name ?? '—' }}
       </p>
-      <p v-if="item.category_name" class="text-muted-foreground truncate text-sm">
+      <p v-if="item.category_name" class="text-muted-foreground break-words text-sm">
         {{ item.category_name }}
       </p>
     </div>
 
-    <p class="text-sm tabular-nums" :data-testid="`pantry-amount-${item.id}`">
+    <p class="min-w-0 text-sm tabular-nums break-words" :data-testid="`pantry-amount-${item.id}`">
       <span v-if="isEmpty" class="text-muted-foreground">{{ texts.zeroed }}</span>
       <span v-else>{{ formatAmount(item.amount, item.amount_unit as AmountUnit) }}</span>
     </p>
@@ -55,8 +55,10 @@ const isEmpty = computed(() => decimalsEqual(props.item.amount, '0'))
          (`expiry-badge-{status}`), a to on niesie informację o wyróżnieniu. -->
     <ExpiryBadge class="justify-self-start" :expiry-date="item.expiry_date" :today="today" />
 
-    <p v-if="item.location" class="text-muted-foreground text-sm">{{ item.location }}</p>
-    <p v-if="item.note" class="text-muted-foreground text-sm italic">{{ item.note }}</p>
+    <p v-if="item.location" class="text-muted-foreground text-sm break-words">
+      {{ item.location }}
+    </p>
+    <p v-if="item.note" class="text-muted-foreground text-sm break-words italic">{{ item.note }}</p>
 
     <div class="flex flex-wrap gap-2">
       <Button

@@ -54,7 +54,7 @@ describe('ExpiryBadge', () => {
   it('odległa data nie krzyczy kolorem', () => {
     const wrapper = mountBadge('2027-01-01')
 
-    expect(wrapper.get('[data-testid="expiry-badge-ok"]').text()).toContain('Ważne do 01.01.2027')
+    expect(wrapper.get('[data-testid="expiry-badge-ok"]').text()).toContain('Termin: 01.01.2027')
   })
 
   it('pozycja bez daty mówi to wprost', () => {

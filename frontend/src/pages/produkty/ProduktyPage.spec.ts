@@ -2,7 +2,9 @@ import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as RouterModule from 'vue-router'
 
+import { queryKeys } from '@/api/queryKeys'
 import ProduktyPage from './ProduktyPage.vue'
 
 /**
@@ -14,8 +16,9 @@ import ProduktyPage from './ProduktyPage.vue'
  * wszystkich i że da się dojść do ostatniej pozycji.
  */
 
+const navigation = vi.hoisted(() => ({ query: {} as Record<string, string> }))
 vi.mock('vue-router', () => ({
-  useRoute: () => ({ params: {} }),
+  useRoute: () => ({ params: {}, query: navigation.query }),
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 }))
 
@@ -88,6 +91,7 @@ async function mountPageWithoutRetry() {
 describe('ProduktyPage — paginacja', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    navigation.query = {}
     fetchCategories.mockResolvedValue({
       items: [{ id: 1, name: 'Warzywa', position: 1 }],
       total: 1,
@@ -205,5 +209,207 @@ describe('ProduktyPage — paginacja', () => {
     await flushPromises()
 
     expect(wrapper.findAll('[data-testid^="product-card-"]')).toHaveLength(PAGE_SIZE)
+  })
+  it('powrót z edycji odtwarza filtr i stronę z pozycji 60', async () => {
+    navigation.query = { category: '1', pages: '2', focus: '60', archived: '1' }
+    const wrapper = await mountPage()
+    await flushPromises()
+    await flushPromises()
+    expect(wrapper.findAll('[data-testid^="product-card-"]')).toHaveLength(60)
+    expect(fetchProducts).toHaveBeenCalledWith(
+      expect.objectContaining({ category_id: 1, include_archived: true, offset: 50 }),
+    )
+    expect(wrapper.get('[data-testid="products-category-filter"]').element).toHaveProperty(
+      'value',
+      '1',
+    )
+    expect(wrapper.get('[data-testid="products-include-archived"]').element).toHaveProperty(
+      'checked',
+      true,
+    )
+    await wrapper.get('[data-testid="products-include-archived"]').setValue(false)
+    await flushPromises()
+    expect(wrapper.findAll('[data-testid^="product-card-"]')).toHaveLength(50)
+  })
+  it('ogromne pages ma ograniczony budżet żądań, a dalsze wyniki wymagają Pokaż więcej', async () => {
+    navigation.query = { pages: '9007199254740991', focus: '9999999' }
+    fetchProducts.mockImplementation(({ offset, limit }) =>
+      Promise.resolve({
+        items: Array.from({ length: limit }, (_, i) => product(offset + i + 1)),
+        total: 1_000_000,
+      }),
+    )
+    const wrapper = await mountPage()
+    await vi.waitFor(() => expect(fetchProducts).toHaveBeenCalledTimes(3))
+    for (let i = 0; i < 5; i += 1) await flushPromises()
+    expect(fetchProducts).toHaveBeenCalledTimes(3)
+    expect(wrapper.findAll('[data-testid^="product-card-"]')).toHaveLength(150)
+    expect(wrapper.get('[data-testid="products-restore-limited"]').text()).toContain(
+      'Przywrócono część',
+    )
+    expect(wrapper.find('[data-testid="product-card-9999999"]').exists()).toBe(false)
+    await wrapper.get('[data-testid="products-load-more"]').trigger('click')
+    await flushPromises()
+    await flushPromises()
+    expect(fetchProducts).toHaveBeenCalledTimes(4)
+    expect(fetchProducts).toHaveBeenLastCalledWith(
+      expect.objectContaining({ limit: 50, offset: 150 }),
+    )
+    expect(wrapper.findAll('[data-testid^="product-card-"]')).toHaveLength(200)
+    expect(wrapper.find('[data-testid="products-load-more"]').exists()).toBe(true)
+  })
+
+  it('nakładające się strony nie odnawiają automatycznego budżetu', async () => {
+    navigation.query = { pages: '9007199254740991' }
+    fetchProducts.mockResolvedValue({ items: ALL.slice(0, 50), total: 1_000_000 })
+    const wrapper = await mountPage()
+    await vi.waitFor(() => expect(fetchProducts).toHaveBeenCalledTimes(3))
+    for (let i = 0; i < 5; i += 1) await flushPromises()
+    expect(fetchProducts).toHaveBeenCalledTimes(3)
+    expect(wrapper.findAll('[data-testid^="product-card-"]')).toHaveLength(50)
+    expect(wrapper.find('[data-testid="products-restore-limited"]').exists()).toBe(true)
+  })
+
+  it('budżet nie usuwa pięciu stron z cache ani fokusu powracającej pozycji', async () => {
+    navigation.query = { pages: '5', focus: '230' }
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+    })
+    queryClient.setQueryData(
+      queryKeys.products.list({
+        limit: 50,
+        q: undefined,
+        category_id: undefined,
+        include_archived: false,
+      }),
+      {
+        pages: Array.from({ length: 5 }, (_, page) => ({
+          items: Array.from({ length: 50 }, (_, i) => product(page * 50 + i + 1)),
+          total: 500,
+        })),
+        pageParams: [0, 50, 100, 150, 200],
+      },
+    )
+    setActivePinia(createPinia())
+    const wrapper = mount(ProduktyPage, {
+      attachTo: document.body,
+      global: { plugins: [[VueQueryPlugin, { queryClient }]], stubs: { RouterLink: true } },
+    })
+    try {
+      await flushPromises()
+      await vi.waitFor(() => expect(document.activeElement?.id).toBe('product-230'))
+      expect(wrapper.findAll('[data-testid^="product-card-"]')).toHaveLength(250)
+      expect(fetchProducts).not.toHaveBeenCalled()
+      expect(wrapper.find('[data-testid="products-restore-limited"]').exists()).toBe(false)
+    } finally {
+      wrapper.unmount()
+      queryClient.clear()
+    }
+  })
+  it('zimny powrót na drugą stronę nadal pobiera dwie strony i przywraca fokus', async () => {
+    navigation.query = { category: '1', pages: '2', focus: '60' }
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    setActivePinia(createPinia())
+    const wrapper = mount(ProduktyPage, {
+      attachTo: document.body,
+      global: { plugins: [[VueQueryPlugin, { queryClient }]], stubs: { RouterLink: true } },
+    })
+    try {
+      await flushPromises()
+      await vi.waitFor(() => expect(document.activeElement?.id).toBe('product-60'))
+      expect(fetchProducts).toHaveBeenCalledTimes(2)
+      expect(fetchProducts).toHaveBeenLastCalledWith(
+        expect.objectContaining({ category_id: 1, offset: 50, limit: 50 }),
+      )
+      expect(wrapper.findAll('[data-testid^="product-card-"]')).toHaveLength(60)
+      expect(wrapper.find('[data-testid="products-restore-limited"]').exists()).toBe(false)
+    } finally {
+      wrapper.unmount()
+      queryClient.clear()
+    }
+  })
+  it('niepełne dane biblioteki mają krótki opis i wszystkie surowe komunikaty w rozwinięciu', async () => {
+    const name = 'Płatki owsiane pełnoziarniste z otrębami, pestkami dyni i suszonymi owocami'
+    const missing = [
+      `${name}: brak kalorii`,
+      `${name}: brak białka`,
+      `${name}: brak indeksu glikemicznego`,
+    ]
+    fetchProducts.mockResolvedValue({
+      items: [
+        {
+          ...product(1),
+          name,
+          completeness: {
+            complete: false,
+            has_core_macros: false,
+            has_glycemic_index: false,
+            missing,
+          },
+        },
+      ],
+      total: 1,
+    })
+    const wrapper = await mountPage()
+    expect(wrapper.get('[data-testid="product-incomplete-1-toggle"]').text()).toBe(
+      'Niepełne dane — szczegóły',
+    )
+    expect(wrapper.get('[data-testid="product-incomplete-1"]').attributes('open')).toBeUndefined()
+    expect(
+      wrapper.findAll('[data-testid="product-incomplete-1-messages"] li').map((row) => row.text()),
+    ).toEqual(missing)
+  })
+  it('link widocznego produktu zachowuje wpisaną nazwę przed debounce serwera', async () => {
+    const { createRouter, createMemoryHistory } =
+      await vi.importActual<typeof RouterModule>('vue-router')
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/produkty', name: 'produkty', component: { template: '<div />' } },
+        { path: '/produkty/nowy', name: 'produkt-nowy', component: { template: '<div />' } },
+        {
+          path: '/produkty/:id/edytuj',
+          name: 'produkt-edycja',
+          component: { template: '<div />' },
+        },
+      ],
+    })
+    navigation.query = { q: 'stare wyszukanie', category: '1', archived: '1' }
+    await router.push({ name: 'produkty', query: navigation.query })
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+    })
+    setActivePinia(createPinia())
+    const wrapper = mount(ProduktyPage, {
+      global: { plugins: [router, [VueQueryPlugin, { queryClient }]] },
+    })
+    await flushPromises()
+    const initialRequests = fetchProducts.mock.calls.length
+    vi.useFakeTimers()
+    try {
+      await wrapper.get('[data-testid="products-search"]').setValue('  Produkt 1  ')
+      const edit = wrapper.get('[data-testid="product-edit-1"]')
+      const href = new URL(edit.attributes('href')!, 'https://example.invalid')
+      expect(href.pathname).toBe('/produkty/1/edytuj')
+      expect(Object.fromEntries(href.searchParams)).toEqual({
+        q: 'Produkt 1',
+        category: '1',
+        archived: '1',
+        pages: '1',
+        focus: '1',
+      })
+      expect(fetchProducts).toHaveBeenCalledTimes(initialRequests)
+      expect(fetchProducts).toHaveBeenLastCalledWith(
+        expect.objectContaining({ q: 'stare wyszukanie' }),
+      )
+      await edit.trigger('click')
+      await flushPromises()
+      expect(router.currentRoute.value.query.q).toBe('Produkt 1')
+      expect(fetchProducts).toHaveBeenCalledTimes(initialRequests)
+    } finally {
+      wrapper.unmount()
+      queryClient.clear()
+      vi.useRealTimers()
+    }
   })
 })

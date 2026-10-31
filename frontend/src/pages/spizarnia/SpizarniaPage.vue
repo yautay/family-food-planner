@@ -33,6 +33,10 @@ import {
 import type { PantryFiltersKey } from '@/api/queryKeys'
 import { queryKeys } from '@/api/queryKeys'
 import AmountInput from '@/components/domain/AmountInput.vue'
+import ActionPanel from '@/components/domain/ActionPanel.vue'
+import PageHeader from '@/components/domain/PageHeader.vue'
+import ErrorState from '@/components/domain/ErrorState.vue'
+import ExpiryBadge from '@/components/domain/ExpiryBadge.vue'
 import LoadMoreButton from '@/components/domain/LoadMoreButton.vue'
 import PantryItemCard from '@/components/domain/PantryItemCard.vue'
 import PantryItemRow from '@/components/domain/PantryItemRow.vue'
@@ -40,9 +44,10 @@ import ProductPicker from '@/components/domain/ProductPicker.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { decimalsEqual } from '@/lib/decimal'
 import { isoDate } from '@/lib/dates'
 import { EXPIRY_SOON_DAYS } from '@/lib/expiry'
-import { baseUnitFor } from '@/lib/format'
+import { baseUnitFor, formatAmount } from '@/lib/format'
 import { common, listCount, pantry as texts } from '@/lib/texts'
 import { usePantryViewStore } from '@/stores/pantryView'
 
@@ -87,6 +92,21 @@ const pantry = usePaginatedList({
 })
 
 const items = pantry.items
+// Odrębny wycinek serwerowego filtra, nigdy licznik całej spiżarni.
+const urgentFilters = {
+  limit: 3,
+  offset: 0,
+  sort: 'expiry' as const,
+  expires_within_days: EXPIRY_SOON_DAYS,
+}
+const urgent = useQuery({
+  queryKey: queryKeys.pantry.list(urgentFilters),
+  queryFn: () => fetchPantryItems(urgentFilters),
+})
+const urgentItems = computed(() =>
+  (urgent.data.value?.items ?? []).filter((item) => !decimalsEqual(item.amount, '0')),
+)
+const savedMessage = ref('')
 const isEmpty = computed(() => !pantry.isPending.value && items.value.length === 0)
 const isFiltering = computed(
   () => debouncedSearch.value.trim().length > 0 || categoryId.value !== null || expiringOnly.value,
@@ -148,6 +168,7 @@ function openCreate(): void {
   draft.location = ''
   draft.note = ''
   actionError.value = null
+  savedMessage.value = ''
   formOpen.value = true
 }
 
@@ -164,6 +185,7 @@ function openEdit(item: PantryItem): void {
   draft.location = item.location ?? ''
   draft.note = item.note
   actionError.value = null
+  savedMessage.value = ''
   formOpen.value = true
 }
 
@@ -183,6 +205,7 @@ const save = useMutation({
   onSuccess: async () => {
     actionError.value = null
     formOpen.value = false
+    savedMessage.value = 'Zapas zapisany.'
     await refresh()
   },
   onError: reportError,
@@ -209,11 +232,75 @@ function confirmRemove(item: PantryItem): void {
 </script>
 
 <template>
-  <section class="grid gap-6" data-testid="spizarnia-page">
-    <header class="grid gap-1">
-      <h1 class="text-2xl font-semibold">{{ texts.title }}</h1>
-      <p class="text-muted-foreground text-sm">{{ texts.subtitle }}</p>
-    </header>
+  <section class="grid min-w-0 gap-4" data-testid="spizarnia-page">
+    <PageHeader
+      :title="texts.title"
+      description="Najpierw sprawdź to, co już masz w domu."
+      decoration="wheat"
+    >
+      <template #actions
+        ><Button data-testid="pantry-add" @click="openCreate()"
+          >+ {{ texts.addItem }}</Button
+        ></template
+      >
+    </PageHeader>
+    <section
+      class="border-warning/30 bg-warning/5 grid min-w-0 gap-3 rounded-xl border p-4"
+      aria-labelledby="pantry-urgent-title"
+      data-testid="pantry-use-first"
+    >
+      <h2 id="pantry-urgent-title" class="font-semibold">Wykorzystaj najpierw</h2>
+      <p class="text-muted-foreground text-sm">
+        Wycinek partii z zapisanym terminem do 7 dni, także po terminie. Sprawdź etykietę i stan
+        produktu.
+      </p>
+      <p v-if="urgent.isPending.value" class="text-muted-foreground text-sm">
+        {{ common.loading }}
+      </p>
+      <ErrorState
+        v-else-if="urgent.isError.value && !urgent.data.value"
+        compact
+        message="Nie udało się pobrać partii z bliskim terminem."
+        @retry="urgent.refetch()"
+      />
+      <template v-else>
+        <p v-if="urgent.isError.value" role="alert" class="text-destructive text-sm">
+          Nie udało się odświeżyć podglądu. Pokazujemy ostatnio pobrane dane.
+        </p>
+        <p v-if="!urgentItems.length" class="text-muted-foreground text-sm">
+          {{
+            urgent.data.value?.total === 0
+              ? 'Brak partii w tym filtrze. Pozycje bez daty nie są nim objęte.'
+              : 'W pobranym wycinku nie ma zapasów z dodatnią ilością. Sprawdź listę z filtrem terminu.'
+          }}
+        </p>
+        <ul v-else class="grid min-w-0 gap-3">
+          <li
+            v-for="item in urgentItems"
+            :key="item.id"
+            class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1"
+            :data-testid="`pantry-urgent-${item.id}`"
+          >
+            <span
+              class="w-full min-w-0 basis-full text-sm font-medium break-words sm:w-auto sm:flex-1 sm:basis-0"
+              :data-testid="`pantry-urgent-name-${item.id}`"
+              >{{ item.product_name }}</span
+            >
+            <span class="text-sm tabular-nums">{{
+              formatAmount(item.amount, item.amount_unit)
+            }}</span>
+            <ExpiryBadge :expiry-date="item.expiry_date" :today="today" />
+          </li>
+        </ul>
+      </template>
+      <Button
+        variant="outline"
+        class="justify-self-start whitespace-normal text-left"
+        data-testid="pantry-show-expiring"
+        @click="expiringOnly = true"
+        >Zastosuj filtr terminu do listy</Button
+      >
+    </section>
 
     <Card class="rounded-xl">
       <CardHeader>
@@ -221,19 +308,22 @@ function confirmRemove(item: PantryItem): void {
         <CardDescription>{{ texts.searchPlaceholder }}</CardDescription>
       </CardHeader>
 
-      <CardContent class="grid gap-3 md:grid-cols-[2fr_1fr_1fr] md:items-center">
+      <CardContent
+        class="grid gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)] md:items-center"
+      >
         <Input
           v-model="search"
           type="search"
           class="min-h-11"
           :aria-label="common.search"
           :placeholder="texts.searchPlaceholder"
+          maxlength="200"
           data-testid="pantry-search"
         />
 
         <select
           v-model="categoryId"
-          class="border-border bg-card min-h-11 rounded-lg border px-3 text-sm"
+          class="border-border bg-card min-h-11 min-w-0 w-full rounded-lg border px-3 text-sm"
           :aria-label="texts.categoryLabel"
           data-testid="pantry-category-filter"
         >
@@ -249,7 +339,7 @@ function confirmRemove(item: PantryItem): void {
 
         <select
           v-model="sort"
-          class="border-border bg-card min-h-11 rounded-lg border px-3 text-sm"
+          class="border-border bg-card min-h-11 min-w-0 w-full rounded-lg border px-3 text-sm"
           :aria-label="texts.sortLabel"
           data-testid="pantry-sort"
         >
@@ -280,6 +370,7 @@ function confirmRemove(item: PantryItem): void {
           <Button
             :variant="view.mode === 'grid' ? 'default' : 'outline'"
             class="min-h-11"
+            :aria-pressed="view.mode === 'grid'"
             data-testid="pantry-view-grid"
             @click="view.setMode('grid')"
           >
@@ -288,103 +379,115 @@ function confirmRemove(item: PantryItem): void {
           <Button
             :variant="view.mode === 'list' ? 'default' : 'outline'"
             class="min-h-11"
+            :aria-pressed="view.mode === 'list'"
             data-testid="pantry-view-list"
             @click="view.setMode('list')"
           >
             {{ texts.viewList }}
           </Button>
         </div>
-
-        <Button class="min-h-11" data-testid="pantry-add" @click="openCreate()">
-          + {{ texts.addItem }}
-        </Button>
       </div>
     </div>
 
-    <Card v-if="formOpen" class="rounded-xl" data-testid="pantry-form">
-      <CardHeader>
-        <CardTitle>{{ isEditing ? common.edit : texts.addItem }}</CardTitle>
-      </CardHeader>
+    <ActionPanel
+      :open="formOpen"
+      :title="isEditing ? 'Zmień zapas' : texts.addItem"
+      :submit-label="common.save"
+      :submit-disabled="!formValid"
+      :pending="save.isPending.value"
+      :error="actionError"
+      testid="pantry"
+      @submit="save.mutate()"
+      @close="formOpen = false"
+    >
+      <template #default="{ formId }">
+        <div class="grid min-w-0 gap-4" data-testid="pantry-form">
+          <!-- Edycja: produkt tylko do odczytu (zmiana produktu = inna pozycja). -->
+          <p v-if="isEditing" class="text-sm break-words" data-testid="pantry-edited-product">
+            <span class="text-muted-foreground">{{ texts.productLabel }}:</span>
+            {{ draft.editedProduct?.name ?? '—' }}
+          </p>
+          <ProductPicker v-else v-model="draft.product" :label="texts.productLabel" />
 
-      <CardContent class="grid gap-4">
-        <!-- Edycja: produkt tylko do odczytu (zmiana produktu = inna pozycja). -->
-        <p v-if="isEditing" class="text-sm" data-testid="pantry-edited-product">
-          <span class="text-muted-foreground">{{ texts.productLabel }}:</span>
-          {{ draft.editedProduct?.name ?? '—' }}
-        </p>
-        <ProductPicker v-else v-model="draft.product" :label="texts.productLabel" />
-
-        <AmountInput
-          v-model="draft.amount"
-          :label="`${texts.amountLabel} (${unitLabel})`"
-          :decimal-places="3"
-          :positive="false"
-          required
-          testid="pantry-amount"
-          :hint="texts.amountRequired"
-          @update:valid="draft.amountValid = $event"
-        />
-
-        <label class="grid gap-1 text-sm">
-          {{ texts.expiryLabel }}
-          <Input
-            v-model="draft.expiryDate"
-            type="date"
-            class="min-h-11"
-            data-testid="pantry-expiry-input"
+          <AmountInput
+            v-model="draft.amount"
+            :label="`${texts.amountLabel} (${unitLabel})`"
+            :decimal-places="3"
+            :positive="false"
+            required
+            :form="formId"
+            testid="pantry-amount"
+            :hint="texts.amountRequired"
+            @update:valid="draft.amountValid = $event"
           />
-        </label>
 
-        <label class="grid gap-1 text-sm">
-          {{ texts.locationLabel }}
-          <Input
-            v-model="draft.location"
-            list="pantry-location-hints"
-            class="min-h-11"
-            :placeholder="texts.locationHint"
-            data-testid="pantry-location-input"
-          />
-          <datalist id="pantry-location-hints">
-            <option v-for="hint in LOCATION_HINTS" :key="hint" :value="hint" />
-          </datalist>
-        </label>
+          <label class="grid gap-1 text-sm">
+            {{ texts.expiryLabel }}
+            <Input
+              v-model="draft.expiryDate"
+              type="date"
+              class="min-h-11"
+              :form="formId"
+              data-testid="pantry-expiry-input"
+            />
+          </label>
 
-        <label class="grid gap-1 text-sm">
-          {{ texts.noteLabel }}
-          <Input v-model="draft.note" class="min-h-11" data-testid="pantry-note-input" />
-        </label>
+          <p class="text-muted-foreground text-xs">
+            Brak daty oznacza brak zapisanej informacji o terminie.
+          </p>
+          <label class="grid min-w-0 gap-1 text-sm">
+            {{ texts.locationLabel }}
+            <Input
+              v-model="draft.location"
+              list="pantry-location-hints"
+              class="min-h-11"
+              :placeholder="texts.locationHint"
+              :form="formId"
+              data-testid="pantry-location-input"
+            />
+            <datalist id="pantry-location-hints">
+              <option v-for="hint in LOCATION_HINTS" :key="hint" :value="hint" />
+            </datalist>
+          </label>
 
-        <div class="flex flex-wrap gap-2">
-          <Button
-            class="min-h-11"
-            :disabled="!formValid || save.isPending.value"
-            data-testid="pantry-submit"
-            @click="save.mutate()"
-          >
-            {{ save.isPending.value ? common.loading : common.save }}
-          </Button>
-          <Button
-            variant="outline"
-            class="min-h-11"
-            data-testid="pantry-cancel"
-            @click="formOpen = false"
-          >
-            {{ common.cancel }}
-          </Button>
+          <label class="grid gap-1 text-sm">
+            {{ texts.noteLabel }}
+            <Input
+              v-model="draft.note"
+              class="min-h-11"
+              :form="formId"
+              data-testid="pantry-note-input"
+            />
+          </label>
         </div>
-      </CardContent>
-    </Card>
-
-    <p v-if="actionError" class="text-destructive text-sm" role="alert" data-testid="pantry-error">
+      </template>
+    </ActionPanel>
+    <p v-if="savedMessage" role="status" class="text-primary text-sm" data-testid="pantry-saved">
+      {{ savedMessage }}
+    </p>
+    <p
+      v-if="actionError && !formOpen"
+      role="alert"
+      class="text-destructive text-sm"
+      data-testid="pantry-error"
+    >
       {{ actionError }}
     </p>
+    <ErrorState
+      v-if="pantry.refreshFailed.value"
+      compact
+      message="Nie udało się odświeżyć zapasów. Pokazujemy ostatnio pobrane dane."
+      @retry="pantry.refresh()"
+    />
 
     <p v-if="pantry.isPending.value" class="text-muted-foreground text-sm">
       {{ common.loading }}
     </p>
-    <p v-else-if="pantry.isError.value" class="text-destructive text-sm" role="alert">
-      {{ common.unexpectedError }}
-    </p>
+    <ErrorState
+      v-else-if="pantry.isError.value"
+      :message="common.unexpectedError"
+      @retry="pantry.refresh()"
+    />
 
     <!-- Pusty stan uczy: jedno zdanie + akcja główna (06_UIUX §3.2). -->
     <div v-else-if="isEmpty" class="grid justify-items-start gap-3" data-testid="pantry-empty">

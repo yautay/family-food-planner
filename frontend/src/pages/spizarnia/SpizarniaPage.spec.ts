@@ -1,8 +1,10 @@
-import { VueQueryPlugin } from '@tanstack/vue-query'
+import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import type { PantryItem } from '@/api/pantry'
+import { ApiError } from '@/api/client'
 import SpizarniaPage from './SpizarniaPage.vue'
 
 const { fetchPantryItems, createPantryItem, updatePantryItem, deletePantryItem, fetchCategories } =
@@ -45,9 +47,16 @@ function item(overrides: Record<string, unknown> = {}) {
   }
 }
 
+const panelStub = {
+  props: ['open', 'error', 'submitDisabled', 'pending'],
+  emits: ['submit', 'close'],
+  template: `<div v-if="open"><slot formId="test-form" /><p data-testid="pantry-error">{{ error }}</p><button data-testid="pantry-submit" :disabled="submitDisabled || pending" @click="$emit('submit')">Zapisz</button></div>`,
+}
 async function mountPage() {
   setActivePinia(createPinia())
-  const wrapper = mount(SpizarniaPage, { global: { plugins: [VueQueryPlugin] } })
+  const wrapper = mount(SpizarniaPage, {
+    global: { plugins: [VueQueryPlugin], stubs: { ActionPanel: panelStub } },
+  })
   await flushPromises()
   return wrapper
 }
@@ -89,7 +98,9 @@ describe('SpizarniaPage', () => {
 
     const wrapper = await mountPage()
 
-    expect(wrapper.find('[data-testid="expiry-badge-soon"]').exists()).toBe(true)
+    expect(
+      wrapper.get('[data-testid="pantry-list"]').find('[data-testid="expiry-badge-soon"]').exists(),
+    ).toBe(true)
   })
 
   it('domyślnie pyta o sortowanie po dacie ważności', async () => {
@@ -245,8 +256,7 @@ describe('SpizarniaPage — paginacja', () => {
     await flushPromises()
 
     expect(wrapper.findAll('[data-testid^="pantry-card-"]')).toHaveLength(TOTAL)
-    expect(fetchPantryItems).toHaveBeenNthCalledWith(
-      2,
+    expect(fetchPantryItems).toHaveBeenCalledWith(
       expect.objectContaining({ limit: PAGE_SIZE, offset: PAGE_SIZE }),
     )
     expect(wrapper.find('[data-testid="pantry-load-more"]').exists()).toBe(false)
@@ -258,5 +268,136 @@ describe('SpizarniaPage — paginacja', () => {
     const wrapper = await mountPage()
 
     expect(wrapper.find('[data-testid="pantry-load-more"]').exists()).toBe(false)
+  })
+})
+
+const api = { fetchPantryItems, createPantryItem, updatePantryItem, deletePantryItem }
+const all: PantryItem[] = Array.from({ length: 105 }, (_, i) => ({
+  id: i + 1,
+  product_id: 1,
+  product_name: `Długa nazwa produktu ${i + 1}`,
+  category_name: 'Warzywa',
+  category_id: 1,
+  measure_kind: 'mass',
+  amount: '1500.000',
+  amount_unit: 'g',
+  expiry_date: null,
+  location: 'szafka',
+  note: '',
+  retail_product_id: null,
+  owner_user_id: 1,
+  household_id: null,
+  created_at: '2026-10-31T10:00:00Z',
+  updated_at: '2026-10-31T10:00:00Z',
+}))
+async function render() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const wrapper = mount(SpizarniaPage, {
+    global: {
+      plugins: [createPinia(), [VueQueryPlugin, { queryClient: client }]],
+      stubs: {
+        ProductPicker: true,
+        ActionPanel: panelStub,
+      },
+    },
+  })
+  await flushPromises()
+  return { wrapper, client }
+}
+describe('Spiżarnia — rzeczywisty filtr i zachowanie miejsca', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    localStorage.clear()
+    fetchCategories.mockResolvedValue({ items: [{ id: 1, name: 'Warzywa' }], total: 1 })
+    api.fetchPantryItems.mockImplementation(({ limit, offset = 0 }) =>
+      Promise.resolve({
+        items:
+          limit === 3
+            ? [{ ...all[0], expiry_date: '2026-10-31' }]
+            : all.slice(offset, offset + limit),
+        total: limit === 3 ? 200 : 105,
+      }),
+    )
+    api.updatePantryItem.mockResolvedValue(all[104])
+  })
+  it('podgląd korzysta z serwerowego filtra i nie udaje globalnego licznika', async () => {
+    const { wrapper } = await render()
+    expect(api.fetchPantryItems).toHaveBeenCalledWith(
+      expect.objectContaining({ limit: 3, offset: 0, sort: 'expiry', expires_within_days: 7 }),
+    )
+    const urgent = wrapper.get('[data-testid="pantry-use-first"]')
+    expect(urgent.text()).toContain('Wycinek partii')
+    expect(urgent.text()).not.toContain('200')
+    await wrapper.get('[data-testid="pantry-show-expiring"]').trigger('click')
+    await flushPromises()
+    expect(api.fetchPantryItems).toHaveBeenCalledWith(
+      expect.objectContaining({ limit: 100, expires_within_days: 7 }),
+    )
+  })
+  it('edycja ilości 0,25 pozostawia filtr, widok i wszystkie wczytane strony', async () => {
+    const { wrapper } = await render()
+    await wrapper.get('[data-testid="pantry-category-filter"]').setValue('1')
+    await wrapper.get('[data-testid="pantry-view-list"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="pantry-load-more"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="pantry-edit-105"]').trigger('click')
+    await wrapper.get('[data-testid="pantry-amount"]').setValue('0,25')
+    await wrapper.get('[data-testid="pantry-submit"]').trigger('click')
+    await flushPromises()
+    expect(api.updatePantryItem).toHaveBeenCalledWith(
+      105,
+      expect.objectContaining({ amount: '0.25' }),
+    )
+    expect(wrapper.findAll('[data-testid^="pantry-row-"]')).toHaveLength(105)
+    expect(wrapper.get('[data-testid="pantry-category-filter"]').element).toHaveProperty(
+      'value',
+      '1',
+    )
+    expect(wrapper.get('[data-testid="pantry-view-list"]').attributes('aria-pressed')).toBe('true')
+    expect(wrapper.find('[data-testid="pantry-form"]').exists()).toBe(false)
+    expect(api.fetchPantryItems).toHaveBeenCalledWith(
+      expect.objectContaining({ offset: 100, category_id: 1 }),
+    )
+    expect(wrapper.get('[data-testid="pantry-saved"]').text()).toBe('Zapas zapisany.')
+  })
+  it('odmowa zapisu zachowuje szkic i zapasy', async () => {
+    api.updatePantryItem.mockRejectedValue(
+      new ApiError(422, { code: 'validation_error', message: 'Popraw ilość.', details: {} }),
+    )
+    const { wrapper } = await render()
+    await wrapper.get('[data-testid="pantry-edit-1"]').trigger('click')
+    await wrapper.get('[data-testid="pantry-amount"]').setValue('0,25')
+    await wrapper.get('[data-testid="pantry-submit"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="pantry-error"]').text()).toContain('Popraw ilość.')
+    expect(wrapper.get('[data-testid="pantry-amount"]').element).toHaveProperty('value', '0,25')
+    expect(wrapper.findAll('[data-testid^="pantry-card-"]')).toHaveLength(100)
+    expect(wrapper.find('[data-testid="pantry-saved"]').exists()).toBe(false)
+  })
+  it('błąd odświeżenia pokazuje zapisane dane i ponowienie', async () => {
+    const { wrapper, client } = await render()
+    api.fetchPantryItems.mockRejectedValue(new Error('brak sieci'))
+    await client.invalidateQueries()
+    await flushPromises()
+    expect(wrapper.findAll('[data-testid^="pantry-card-"]')).toHaveLength(100)
+    expect(wrapper.text()).toContain('Pokazujemy ostatnio pobrane dane.')
+    expect(wrapper.find('[data-testid="pantry-empty"]').exists()).toBe(false)
+  })
+  it('zerowa ilość w wycinku nie jest rekomendowana ani uznana za brak zapasów całego domu', async () => {
+    api.fetchPantryItems.mockImplementation(({ limit, offset = 0 }) =>
+      Promise.resolve({
+        items:
+          limit === 3
+            ? [{ ...all[0], amount: '0.000', expiry_date: '2026-10-31' }]
+            : all.slice(offset, offset + limit),
+        total: limit === 3 ? 200 : 105,
+      }),
+    )
+    const { wrapper } = await render()
+    const preview = wrapper.get('[data-testid="pantry-use-first"]')
+    expect(preview.find('[data-testid="pantry-urgent-1"]').exists()).toBe(false)
+    expect(preview.text()).toContain('W pobranym wycinku')
+    expect(preview.find('[data-testid="pantry-show-expiring"]').exists()).toBe(true)
   })
 })

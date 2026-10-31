@@ -165,11 +165,15 @@ Realizacja: `src/api/pagination.ts` + `components/domain/LoadMoreButton.vue`
    w domu" są wyszarzone na końcu swojej sekcji; panel akcji ma dodatkowo
    „Przyjmij zakupy do spiżarni" (dialog potwierdzenia) i „Usuń listę" (dialog
    z konsekwencjami). Zapis listy do PDF pozostaje „later".
-6. **Spiżarnia** — grid/lista z filtrem kategorii i sortowaniem po dacie
-   ważności; produkty bliskie przeterminowania wyróżnione. Paginacja wzorcem
-   z §3.6, ale strona jest WIĘKSZA (100): spiżarnia to inwentarz przeglądany
-   „ile mam czego", a nie przeszukiwany katalog, więc mniejsza strona dołożyłaby
-   kliknięć tam, gdzie ich dziś nie ma (§2).
+6. **Spiżarnia (UX09)** — pełne nazwy, ilości i terminy w zachowanych
+   widokach grid/lista; filtry i sortowanie serwerowe, strona100. Dodanie
+   i edycja używają ActionPanel, pozostawiając listę, pobrane strony, filtry
+   i powrót fokusu. „Wykorzystaj najpierw” to jawny wycinek osobnego zapytania
+   terminu do7dni (także po terminie), maksymalnie3niezerowe partie, bez
+   globalnego licznika. Na telefonie nazwa zajmuje cały wiersz, ilość i termin
+   kolejny. Przycisk nakłada filtr terminu, zachowując kategorię/szukanie.
+   „Brak daty” oznacza brak informacji; etykieta „Termin” nie obiecuje
+   bezpieczeństwa produktu. Ilości korzystają z dotychczasowego parsera.
 7. **Statystyki** — zakładki Kalorie/Makroskładniki; słupki stacked
    tydzień/zakres, linie celów; średnie dzienne vs cele.
    Stan po BATCH_13: zakres jako presety **Tydzień / Miesiąc / Własny** (dwa
@@ -183,13 +187,16 @@ Realizacja: `src/api/pagination.ts` + `components/domain/LoadMoreButton.vue`
    z niepełnymi danymi dochodzi plakietka „Niepełne dane" z listą braków,
    a zakres bez planu dostaje pusty stan z akcją „Przejdź do planu".
    Wykresy ŁG świadomie NIE MA (ŁG jest w odpowiedzi API, ale nie w UI).
-8. **Edycja produktu** (lista katalogu `/produkty` — paginacja §3.6, strona 50,
-   licznik „50 z 185") — formularz z kategorią, jednostkami, wartościami
-   /100 g (+ IG), zdjęciem, datą ważności domyślną; sekcja przeliczników
-   jednostek domowych. Stan po BATCH_09: dodatkowo sekcja **„Produkty
-   sklepowe"** (warianty z półki: nazwa, marka, sklep, opakowanie, miniatura
-   zdjęcia) z dodawaniem w drawerze, czyli bez opuszczania karty; sposób
-   liczenia i waga sztuki są dla nie-ADMIN-a wyłączone z podpowiedzią (D15).
+8. **Produkty (UX09)** — wspólna biblioteka wszystkich rodzin, pełne nazwy
+   i paginacja50. Formularz ma sekcje Nazwa i miara / Wartości odżywcze /
+   Jednostki domowe / Warianty sklepowe, z zachowanym osobnym zapisem.
+   Pozostają kategoria, przydatność, IG, źródła danych, przeliczniki oraz
+   warianty z nazwą/marką/sklepem/opakowaniem/zdjęciem i create-in-context.
+   D13/D15 i409 used_in nadal określają dostępność zmian/usunięcia/miary/wagi.
+   Niekompletność widzą także USER-y: krótki status i natywne rozwinięcie
+   wszystkich oryginalnych komunikatów serwera, bez parsowania ich treści.
+   Odtwarzanie katalogu zachowuje filtry, rzeczywiste strony i fokus;
+   budżet automatyczny nie ogranicza ręcznego „Pokaż więcej”.
 9. **Mobile** — patrz §5.
 10. **Ustawienia → „Sklepy"** (BATCH_09, bez osobnej wizualizacji) — lista
    sklepów (nazwa, kolor, archiwum) z edycją w miejscu oraz edytor profilu:

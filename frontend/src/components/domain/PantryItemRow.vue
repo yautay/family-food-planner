@@ -4,7 +4,7 @@
  *
  * Ten sam kontrakt co `PantryItemCard` (props + emits) — przełącznik widoku
  * podmienia komponent, nie logikę strony. Na telefonie wiersz układa się
- * pionowo, od `sm:` wchodzi układ kolumnowy (mobile-first, 06_UIUX §5).
+ * w dwie elastyczne kolumny (mobile-first, 06_UIUX §5).
  */
 import { computed } from 'vue'
 
@@ -33,35 +33,39 @@ const isEmpty = computed(() => decimalsEqual(props.item.amount, '0'))
 
 <template>
   <li
-    class="border-border bg-card grid gap-2 rounded-xl border p-3 sm:grid-cols-[2fr_1fr_1fr_auto] sm:items-center"
+    class="border-border grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-2 border-b py-3"
     :data-testid="`pantry-row-${item.id}`"
   >
     <div class="min-w-0">
-      <p class="truncate font-medium" :data-testid="`pantry-name-${item.id}`">
+      <p class="break-words font-medium" :data-testid="`pantry-name-${item.id}`">
         {{ item.product_name ?? '—' }}
       </p>
-      <p v-if="item.location || item.note" class="text-muted-foreground truncate text-sm">
+      <p v-if="item.location || item.note" class="text-muted-foreground break-words text-sm">
         {{ [item.location, item.note].filter(Boolean).join(' · ') }}
       </p>
     </div>
 
-    <p class="text-sm tabular-nums" :data-testid="`pantry-amount-${item.id}`">
+    <p class="min-w-0 text-sm tabular-nums break-words" :data-testid="`pantry-amount-${item.id}`">
       <span v-if="isEmpty" class="text-muted-foreground">{{ texts.zeroed }}</span>
       <span v-else>{{ formatAmount(item.amount, item.amount_unit as AmountUnit) }}</span>
     </p>
 
     <!-- Bez `data-testid` z zewnątrz: fallthrough nadpisałby testid komponentu
          (`expiry-badge-{status}`), a to on niesie informację o wyróżnieniu. -->
-    <ExpiryBadge class="justify-self-start" :expiry-date="item.expiry_date" :today="today" />
+    <ExpiryBadge
+      class="col-span-2 justify-self-start"
+      :expiry-date="item.expiry_date"
+      :today="today"
+    />
 
-    <div class="flex flex-wrap gap-2 sm:justify-end">
+    <div class="col-span-2 flex flex-wrap gap-2">
       <Button
         variant="outline"
         class="min-h-11"
         :data-testid="`pantry-edit-${item.id}`"
         @click="$emit('edit', item)"
       >
-        {{ common.edit }}
+        Zmień ilość
       </Button>
       <Button
         variant="outline"

@@ -11,12 +11,20 @@
  */
 import { useQuery } from '@tanstack/vue-query'
 import { refDebounced } from '@vueuse/core'
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 
 import { fetchCategories, fetchProducts } from '@/api/catalog'
 import { PAGE_SIZE, usePaginatedList } from '@/api/pagination'
 import type { ProductsFilters } from '@/api/queryKeys'
 import { queryKeys } from '@/api/queryKeys'
+import PageHeader from '@/components/domain/PageHeader.vue'
+import ErrorState from '@/components/domain/ErrorState.vue'
+import ProductCompleteness from '@/components/domain/products/ProductCompleteness.vue'
+import {
+  MAX_AUTOMATIC_RESTORE_PAGES,
+  productCatalogQuery,
+} from '@/components/domain/products/catalogNavigation'
 import LoadMoreButton from '@/components/domain/LoadMoreButton.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -24,10 +32,13 @@ import { Input } from '@/components/ui/input'
 import { formatNutrient } from '@/lib/format'
 import { common, listCount, products as texts } from '@/lib/texts'
 
-const search = ref('')
+const route = useRoute()
+const router = useRouter()
+const initial = productCatalogQuery(route.query)
+const search = ref(typeof initial.q === 'string' ? initial.q : '')
 const debouncedSearch = refDebounced(search, 250)
-const categoryId = ref<number | null>(null)
-const includeArchived = ref(false)
+const categoryId = ref<number | null>(initial.category ? Number(initial.category) : null)
+const includeArchived = ref(initial.archived === '1')
 
 const categories = useQuery({ queryKey: queryKeys.categories.all, queryFn: fetchCategories })
 
@@ -46,15 +57,92 @@ const products = usePaginatedList({
 
 const items = products.items
 const isEmpty = computed(() => !products.isPending.value && items.value.length === 0)
-const isSearching = computed(() => debouncedSearch.value.trim().length > 0)
+const isSearching = computed(
+  () =>
+    debouncedSearch.value.trim().length > 0 || categoryId.value !== null || includeArchived.value,
+)
+const returnQuery = computed(() => ({
+  // Link zachowuje wpisany szkic także przed upływem debounce zapytania API.
+  q: search.value.trim() || undefined,
+  category: categoryId.value?.toString(),
+  archived: includeArchived.value ? '1' : undefined,
+  pages: String(Math.max(1, Math.ceil(products.loaded.value / PAGE_SIZE))),
+}))
+watch([debouncedSearch, categoryId, includeArchived], () => {
+  requestedPages.value = 1
+  restoredFocus = true
+  void router.replace({ query: { ...returnQuery.value, pages: undefined, focus: undefined } })
+})
+watch(
+  () => route.query,
+  (query) => {
+    const selected = productCatalogQuery(query)
+    search.value = typeof selected.q === 'string' ? selected.q : ''
+    categoryId.value = selected.category ? Number(selected.category) : null
+    includeArchived.value = selected.archived === '1'
+  },
+)
+// Zachowujemy wszystkie strony cache. Zimny powrót automatycznie pobiera tylko
+// ograniczony początek; dalsze strony pozostają dostępne przez Pokaż więcej.
+const requestedPages = ref(Number(initial.pages ?? 1))
+const automaticLoadsRemaining = ref(MAX_AUTOMATIC_RESTORE_PAGES - 1)
+const loadedPages = computed(() => Math.ceil(products.loaded.value / PAGE_SIZE))
+const restorationLimited = computed(
+  () =>
+    !products.isPending.value &&
+    !products.isLoadingMore.value &&
+    products.hasMore.value &&
+    loadedPages.value < requestedPages.value &&
+    (loadedPages.value >= MAX_AUTOMATIC_RESTORE_PAGES || automaticLoadsRemaining.value === 0),
+)
+let restoredFocus = false
+watch(
+  [products.loaded, products.isPending, products.isLoadingMore],
+  async () => {
+    if (
+      products.isPending.value ||
+      products.isLoadingMore.value ||
+      products.isError.value ||
+      products.loadMoreFailed.value
+    )
+      return
+    if (
+      loadedPages.value < Math.min(requestedPages.value, MAX_AUTOMATIC_RESTORE_PAGES) &&
+      products.hasMore.value &&
+      automaticLoadsRemaining.value > 0
+    ) {
+      // Osobny licznik chroni także przy nakładających się stronach i odsiewaniu ID.
+      automaticLoadsRemaining.value -= 1
+      products.loadMore()
+      return
+    }
+    if (!restoredFocus && initial.focus) {
+      await nextTick()
+      if (typeof requestAnimationFrame === 'function') {
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+      }
+      const row = document.getElementById(`product-${initial.focus}`)
+      if (row && !restoredFocus) {
+        restoredFocus = true
+        row.scrollIntoView?.({ block: 'center' })
+        row.focus({ preventScroll: true })
+      }
+    }
+  },
+  { immediate: true },
+)
+function loadMore(): void {
+  products.loadMore()
+}
 </script>
 
 <template>
-  <section class="grid gap-6" data-testid="produkty-page">
-    <header class="grid gap-1">
-      <h1 class="text-2xl font-semibold">{{ texts.title }}</h1>
-      <p class="text-muted-foreground text-sm">{{ texts.subtitle }}</p>
-    </header>
+  <section class="grid min-w-0 gap-4" data-testid="produkty-page">
+    <PageHeader
+      title="Biblioteka produktów"
+      description="Wspólny katalog składników i ich danych. Zmiany są widoczne dla wszystkich rodzin."
+      decoration="wheat"
+    />
 
     <Card class="rounded-xl">
       <CardHeader>
@@ -62,19 +150,22 @@ const isSearching = computed(() => debouncedSearch.value.trim().length > 0)
         <CardDescription>{{ texts.searchPlaceholder }}</CardDescription>
       </CardHeader>
 
-      <CardContent class="grid gap-3 md:grid-cols-[2fr_1fr_auto] md:items-center">
+      <CardContent
+        class="grid gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_auto] md:items-center"
+      >
         <Input
           v-model="search"
           type="search"
           class="min-h-11"
           :aria-label="common.search"
           :placeholder="texts.searchPlaceholder"
+          maxlength="200"
           data-testid="products-search"
         />
 
         <select
           v-model="categoryId"
-          class="border-border bg-card min-h-11 rounded-lg border px-3 text-sm"
+          class="border-border bg-card min-h-11 min-w-0 w-full rounded-lg border px-3 text-sm"
           :aria-label="texts.categoryLabel"
           data-testid="products-category-filter"
         >
@@ -107,7 +198,7 @@ const isSearching = computed(() => debouncedSearch.value.trim().length > 0)
         Produktów: {{ listCount(products.loaded.value, products.total.value) }}
       </p>
       <Button as-child class="min-h-11">
-        <RouterLink :to="{ name: 'produkt-nowy' }" data-testid="products-add">
+        <RouterLink :to="{ name: 'produkt-nowy', query: returnQuery }" data-testid="products-add">
           {{ texts.addProduct }}
         </RouterLink>
       </Button>
@@ -116,27 +207,31 @@ const isSearching = computed(() => debouncedSearch.value.trim().length > 0)
     <p v-if="products.isPending.value" class="text-muted-foreground text-sm">
       {{ common.loading }}
     </p>
-    <p v-else-if="products.isError.value" class="text-destructive text-sm" role="alert">
-      {{ common.unexpectedError }}
-    </p>
+    <ErrorState
+      v-else-if="products.isError.value"
+      :message="common.unexpectedError"
+      @retry="products.refresh()"
+    />
     <p v-else-if="isEmpty" class="text-muted-foreground text-sm" data-testid="products-empty">
       {{ isSearching ? texts.emptySearch : texts.emptyState }}
     </p>
 
-    <ul v-else class="grid gap-3 md:grid-cols-2 xl:grid-cols-3" data-testid="products-list">
+    <ul v-else class="grid min-w-0 gap-0" data-testid="products-list">
       <li
         v-for="product in items"
+        :id="`product-${product.id}`"
         :key="product.id"
-        class="border-border bg-card grid gap-2 rounded-xl border p-4"
+        class="border-border grid min-w-0 gap-2 border-b py-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center"
+        tabindex="-1"
         :data-testid="`product-card-${product.id}`"
       >
-        <div class="flex items-start justify-between gap-2">
+        <div class="flex min-w-0 flex-wrap items-start justify-between gap-2">
           <div class="min-w-0">
-            <p class="truncate font-medium">{{ product.name }}</p>
-            <p class="text-muted-foreground truncate text-sm">{{ product.category_name }}</p>
+            <p class="font-medium break-words">{{ product.name }}</p>
+            <p class="text-muted-foreground text-sm break-words">{{ product.category_name }}</p>
           </div>
 
-          <div class="flex shrink-0 flex-col items-end gap-1">
+          <div class="flex flex-wrap items-start gap-1">
             <!-- Status zawsze kolor + tekst, nigdy sam kolor (06_UIUX §1). -->
             <span
               class="rounded-lg px-2 py-0.5 text-xs font-medium"
@@ -159,25 +254,30 @@ const isSearching = computed(() => debouncedSearch.value.trim().length > 0)
           </div>
         </div>
 
-        <p class="text-sm tabular-nums">
+        <p class="min-w-0 text-sm tabular-nums break-words">
           {{ formatNutrient(product.nutrition.kcal_100, 'kcal') }}
           <span class="text-muted-foreground"
             >/ 100 {{ product.measure_kind === 'volume' ? 'ml' : 'g' }}</span
           >
         </p>
 
-        <p
+        <ProductCompleteness
           v-if="!product.completeness.complete"
-          class="text-warning text-xs"
-          :title="product.completeness.missing.join(', ')"
-          :data-testid="`product-incomplete-${product.id}`"
-        >
-          {{ texts.incompleteData }}
-        </p>
+          :missing="product.completeness.missing"
+          :testid="`product-incomplete-${product.id}`"
+        />
 
-        <Button as-child variant="outline" class="min-h-11 justify-self-start">
+        <Button
+          as-child
+          variant="outline"
+          class="min-h-11 justify-self-start lg:col-start-2 lg:row-span-3 lg:row-start-1"
+        >
           <RouterLink
-            :to="{ name: 'produkt-edycja', params: { id: product.id } }"
+            :to="{
+              name: 'produkt-edycja',
+              params: { id: product.id },
+              query: { ...returnQuery, focus: String(product.id) },
+            }"
             :data-testid="`product-edit-${product.id}`"
           >
             {{ common.edit }}
@@ -186,6 +286,20 @@ const isSearching = computed(() => debouncedSearch.value.trim().length > 0)
       </li>
     </ul>
 
+    <ErrorState
+      v-if="products.refreshFailed.value"
+      compact
+      message="Nie udało się odświeżyć biblioteki. Pokazujemy ostatnio pobrane dane."
+      @retry="products.refresh()"
+    />
+    <p
+      v-if="restorationLimited"
+      class="text-muted-foreground text-sm"
+      role="status"
+      data-testid="products-restore-limited"
+    >
+      Przywrócono część poprzednich wyników. Wybierz „Pokaż więcej”, aby wrócić do dalszych pozycji.
+    </p>
     <LoadMoreButton
       :loaded="products.loaded.value"
       :total="products.total.value"
@@ -193,7 +307,7 @@ const isSearching = computed(() => debouncedSearch.value.trim().length > 0)
       :loading="products.isLoadingMore.value"
       :failed="products.loadMoreFailed.value"
       testid="products-load-more"
-      @more="products.loadMore"
+      @more="loadMore"
     />
   </section>
 </template>

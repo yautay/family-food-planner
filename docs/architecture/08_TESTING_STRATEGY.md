@@ -118,6 +118,16 @@ Core flows (rozbudowywane w batchach, które je dostarczają):
    raport kolizji → wczytanie → podsumowanie (`transfer.spec.ts`). Spec jedzie
    po `data-testid`, więc przemianowanie sekcji na „Kopia danych rodziny"
    (B20) go nie dotyka.
+5. Spiżarnia i produkty UX09: `ux-pantry-products.spec.ts` tworzy własną
+   kategorię55produktów/105partii i sprząta wyłącznie swoje dane. Sprawdza
+   filtr serwera, edycję drugiej strony, zapis0,25g potwierdzony GET,
+   transporterror zachowujący szkic, Escape/Enter/powrót fokusu, powrót
+   biblioteki i cold reload. Używa rzeczywistych polskich `missing` z API
+   oraz klawiaturowego otwarcia/odczytu/zamknięcia szczegółów; mierzy nazwę
+   pilnego zapasu na390. Dziewięć PNG obejmuje pantry/form390/768/1024,
+   bibliotekę390/1024 i panel390. Unit testy dodatkowo dowodzą budżetu żądań
+   przy ogromnym `pages`, zachowania głębszego cache/fokusu oraz ręcznego
+   pobierania po częściowym odtworzeniu.
 Konwencje: selektory `data-testid`, gotowość UI przez expect z timeoutem,
 seed przez API, nie przez UI. Wyjątek czasu w UX06 dotyczy jawnego wygaśnięcia
 rzeczywistego staleTime (31 s przy 30 s konfiguracji): test dwóch kart wymaga

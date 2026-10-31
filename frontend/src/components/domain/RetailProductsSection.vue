@@ -11,10 +11,13 @@
  * sekcje o różnych właścicielach; tutaj cały stan to jeden `ref` (otwarty
  * drawer), a dane serwera trzyma TanStack Query (ADR-007).
  */
-import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
+import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import { computed, ref } from 'vue'
 
 import { ApiError } from '@/api/client'
+import { usePaginatedList } from '@/api/pagination'
+import LoadMoreButton from '@/components/domain/LoadMoreButton.vue'
+import ErrorState from '@/components/domain/ErrorState.vue'
 import { queryKeys } from '@/api/queryKeys'
 import type { RetailProduct } from '@/api/retail'
 import { deleteRetailProduct, fetchRetailProducts, updateRetailProduct } from '@/api/retail'
@@ -42,17 +45,14 @@ const conflictItem = ref<RetailProduct | null>(null)
 
 const filters = computed(() => ({
   limit: 50,
-  offset: 0,
   canonical_product_id: props.productId,
   include_archived: true,
 }))
-const variants = useQuery({
+const variants = usePaginatedList({
   queryKey: computed(() => queryKeys.retailProducts.list(filters.value)),
-  queryFn: () => fetchRetailProducts(filters.value),
-  enabled: computed(() => props.productId > 0),
+  fetchPage: (page) => fetchRetailProducts({ ...filters.value, ...page }),
 })
-
-const items = computed<RetailProduct[]>(() => variants.data.value?.items ?? [])
+const items = variants.items
 
 /**
  * Komunikat błędu + lista „Używane w:" z 409.
@@ -150,8 +150,16 @@ function packageLabel(item: RetailProduct): string {
         </template>
       </div>
 
+      <p v-if="variants.isPending.value" class="text-muted-foreground text-sm">
+        {{ common.loading }}
+      </p>
+      <ErrorState
+        v-else-if="variants.isError.value"
+        message="Nie udało się pobrać wariantów sklepowych."
+        @retry="variants.refresh()"
+      />
       <p
-        v-if="items.length === 0 && !variants.isPending.value"
+        v-else-if="items.length === 0"
         class="text-muted-foreground text-sm"
         data-testid="retail-empty"
       >
@@ -162,7 +170,7 @@ function packageLabel(item: RetailProduct): string {
         <li
           v-for="item in items"
           :key="item.id"
-          class="border-border grid gap-3 rounded-lg border p-3 md:grid-cols-[auto_1fr_auto] md:items-center"
+          class="border-border grid gap-3 rounded-lg border p-3 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center"
           :data-testid="`retail-row-${item.id}`"
         >
           <img
@@ -175,10 +183,10 @@ function packageLabel(item: RetailProduct): string {
           <span v-else class="bg-muted h-12 w-12 rounded-lg" aria-hidden="true" />
 
           <div class="min-w-0">
-            <p class="truncate font-medium" :data-testid="`retail-name-${item.id}`">
+            <p class="font-medium break-words" :data-testid="`retail-name-${item.id}`">
               {{ item.name }}
             </p>
-            <p class="text-muted-foreground text-sm tabular-nums">
+            <p class="text-muted-foreground text-sm tabular-nums break-words">
               <span :data-testid="`retail-package-${item.id}`">{{ packageLabel(item) }}</span>
               <template v-if="item.brand">
                 <span aria-hidden="true"> · </span>{{ item.brand }}
@@ -191,7 +199,7 @@ function packageLabel(item: RetailProduct): string {
             </p>
           </div>
 
-          <div class="flex flex-wrap gap-2">
+          <div class="flex flex-wrap gap-2 sm:col-span-2 sm:justify-end">
             <Button
               variant="outline"
               class="min-h-11"
@@ -214,6 +222,21 @@ function packageLabel(item: RetailProduct): string {
         </li>
       </ul>
 
+      <ErrorState
+        v-if="variants.refreshFailed.value"
+        compact
+        message="Nie udało się odświeżyć wariantów. Pokazujemy ostatnio pobrane dane."
+        @retry="variants.refresh()"
+      />
+      <LoadMoreButton
+        :loaded="variants.loaded.value"
+        :total="variants.total.value"
+        :has-more="variants.hasMore.value"
+        :loading="variants.isLoadingMore.value"
+        :failed="variants.loadMoreFailed.value"
+        testid="retail-load-more"
+        @more="variants.loadMore"
+      />
       <Button
         v-if="!drawerOpen"
         class="min-h-11 justify-self-start"

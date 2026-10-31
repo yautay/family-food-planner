@@ -196,6 +196,21 @@ fokus poza paskiem zapisu/nawigacją. `ProductPicker.inputId` jest opcjonalny;
 domyślne ID przez `useId` wiąże własną etykietę i listę wyników każdej instancji,
 bez zmiany pozostałych props/emits lub danych wyszukiwarki.
 
+UX09: biblioteka produktów przekazuje tylko `q/category/archived/pages/focus`.
+Link odczytuje bieżący wpisany tekst, także przed upływem debounce zapytania
+serwera. Po usunięciu produktu zachowuje filtry/strony, usuwając jego fokus.
+`components/domain/products/catalogNavigation.ts` waliduje liczby i filtry;
+zimne odtwarzanie ma najwyżej3strony i osobny budżet dwóch dodatkowych żądań,
+także przy nakładających się odpowiedziach. Głębsze pobrane strony z Query
+pozostają, a częściowe odtworzenie ma jawny status; ręczne pobieranie nie ma
+tego limitu. Fokus wraca dopiero do rzeczywiście załadowanego wiersza.
+Spiżarnia ma niezależny Query terminu limit3/7dni, z tym samym scope/kluczem
+filtrów, bez kopiowania danych do magazynu UI. Edycja zachowuje listę w DOM.
+`ProductCompleteness` używa natywnego rozwinięcia i wyświetla oryginalne
+`missing` z API; nie interpretuje ich jako kluczy pól ani nie przelicza danych.
+Warianty sklepowe używają paginacji istniejącego GET, z błędem odświeżenia
+i zachowaniem wcześniej pobranych wierszy.
+
 AppShell przechowuje wyłącznie kalendarzowy kontekst UI, nie dane planu.
 Zmiana path kieruje fokus do `main#main-content`, query zachowuje fokus
 i scroll. Wstecz odtwarza zapisaną pozycję. Skiplink prowadzi do tego samego

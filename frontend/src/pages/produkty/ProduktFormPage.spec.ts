@@ -3,6 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { ApiError } from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
 import { captureSessionGeneration } from '@/lib/sessionGeneration'
 
@@ -17,9 +18,14 @@ import ProduktFormPage from './ProduktFormPage.vue'
  * Sprawdzamy więc oba warianty: USER widzi blokadę, ADMIN nie.
  */
 
+const navigation = vi.hoisted(() => ({
+  query: {} as Record<string, string>,
+  push: vi.fn(),
+  replace: vi.fn(),
+}))
 vi.mock('vue-router', () => ({
-  useRoute: () => ({ params: { id: '10' } }),
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  useRoute: () => ({ params: { id: '10' }, query: navigation.query }),
+  useRouter: () => ({ push: navigation.push, replace: navigation.replace }),
 }))
 
 const catalogApi = vi.hoisted(() => ({
@@ -74,7 +80,13 @@ const PRODUCT = {
     complete: false,
     has_core_macros: false,
     has_glycemic_index: false,
-    missing: ['kcal_100'],
+    missing: [
+      'Jajko: brak kalorii',
+      'Jajko: brak białka',
+      'Jajko: brak tłuszczu',
+      'Jajko: brak węglowodanów',
+      'Jajko: brak indeksu glikemicznego',
+    ],
   },
   unit_weights: [],
   created_at: '2026-08-21T10:00:00Z',
@@ -103,6 +115,7 @@ async function mountPage(role: 'admin' | 'user') {
 describe('ProduktFormPage — bramka D15', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    navigation.query = {}
     catalogApi.fetchProduct.mockResolvedValue(PRODUCT)
     catalogApi.fetchCategories.mockResolvedValue({
       items: [{ id: 1, name: 'Nabiał', position: 1, perishability: 'fresh' }],
@@ -142,5 +155,68 @@ describe('ProduktFormPage — bramka D15', () => {
     expect(retailApi.fetchRetailProducts).toHaveBeenCalledWith(
       expect.objectContaining({ canonical_product_id: 10 }),
     )
+  })
+  it('USER widzi braki wartości i nie dostaje przycisku usuwania', async () => {
+    const wrapper = await mountPage('user')
+    expect(wrapper.get('[data-testid="nutrition-incomplete-toggle"]').text()).toBe(
+      'Niepełne dane — szczegóły',
+    )
+    expect(
+      wrapper.findAll('[data-testid="nutrition-incomplete-messages"] li').map((row) => row.text()),
+    ).toEqual(PRODUCT.completeness.missing)
+    expect(wrapper.get('[data-testid="nutrition-incomplete"]').attributes('open')).toBeUndefined()
+    expect(wrapper.find('[data-testid="nutrition-form"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="product-delete"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="product-archive"]').exists()).toBe(true)
+  })
+
+  it('jednostka domowa przechodzi istniejący parser przecinka jako string', async () => {
+    catalogApi.createUnitWeight.mockResolvedValue({ id: 2 })
+    const wrapper = await mountPage('user')
+    await wrapper.get('[data-testid="unit-weight-label"]').setValue('łyżka')
+    await wrapper.get('[data-testid="unit-weight-grams"]').setValue('0,25')
+    await wrapper.get('[data-testid="unit-weight-form"]').trigger('submit')
+    await flushPromises()
+    expect(catalogApi.createUnitWeight).toHaveBeenCalledWith(
+      10,
+      expect.objectContaining({ unit_label: 'łyżka', grams_per_unit: '0.25', samples_count: 1 }),
+    )
+  })
+
+  it('409 zachowuje produkt, opisuje użycia i daje archiwizację', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    catalogApi.deleteProduct.mockRejectedValue(
+      new ApiError(409, {
+        code: 'conflict',
+        message: 'Produkt jest używany.',
+        details: { used_in: [{ type: 'recipe', id: 42, name: 'Owsianka' }] },
+      }),
+    )
+    const wrapper = await mountPage('admin')
+    await wrapper.get('[data-testid="product-delete"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="product-used-in"]').text()).toContain('Owsianka')
+    expect(wrapper.find('[data-testid="product-archive-instead"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="product-name"]').element).toHaveProperty('value', 'Jajko')
+    vi.restoreAllMocks()
+  })
+  it('usunięcie zachowuje filtr i strony powrotu, usuwając fokus skasowanego produktu', async () => {
+    navigation.query = { q: 'Jajko', category: '4', archived: '1', pages: '2', focus: '10' }
+    catalogApi.deleteProduct.mockResolvedValue(undefined)
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const wrapper = await mountPage('admin')
+    try {
+      await wrapper.get('[data-testid="product-delete"]').trigger('click')
+      await flushPromises()
+      expect(catalogApi.deleteProduct).toHaveBeenCalledWith(10)
+      expect(navigation.push).toHaveBeenCalledWith({
+        name: 'produkty',
+        query: { q: 'Jajko', category: '4', archived: '1', pages: '2' },
+      })
+      expect(navigation.query.focus).toBe('10')
+    } finally {
+      wrapper.unmount()
+      confirm.mockRestore()
+    }
   })
 })
