@@ -1,5 +1,6 @@
 import { VueQueryPlugin } from '@tanstack/vue-query'
 import { flushPromises, mount } from '@vue/test-utils'
+import { defineComponent } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import ProductPicker from './ProductPicker.vue'
@@ -71,6 +72,36 @@ describe('ProductPicker', () => {
       items: [{ id: 1, name: 'Warzywa', position: 1, perishability: 'fresh' }],
       total: 1,
     })
+  })
+
+  it('dwa pickery mają oddzielne etykiety i listy wyników, także z własnym inputId', async () => {
+    const wrapper = mount(
+      defineComponent({
+        components: { ProductPicker },
+        template:
+          '<div><ProductPicker label="Pierwszy" :debounce-ms="0" /><ProductPicker label="Drugi" input-id="drugi-produkt" :debounce-ms="0" /></div>',
+      }),
+      { attachTo: document.body, global: { plugins: [VueQueryPlugin] } },
+    )
+    try {
+      const inputs = wrapper.findAll<HTMLInputElement>('[data-testid="picker-input"]')
+      expect(inputs[0]!.element.id).not.toBe(inputs[1]!.element.id)
+      expect(inputs[1]!.element.id).toBe('drugi-produkt')
+      const labels = wrapper.findAll<HTMLLabelElement>('label')
+      for (const [index, input] of inputs.entries()) {
+        expect(labels[index]!.element.control).toBe(input.element)
+        await input.setValue('cebula')
+      }
+      await flushPromises()
+      const lists = wrapper.findAll('[data-testid="picker-results"]')
+      expect(lists).toHaveLength(2)
+      for (const [index, list] of lists.entries()) {
+        expect(inputs[index]!.attributes('aria-controls')).toBe(list.attributes('id'))
+      }
+      expect(lists[0]!.attributes('id')).not.toBe(lists[1]!.attributes('id'))
+    } finally {
+      wrapper.unmount()
+    }
   })
 
   it('szuka produktu po wpisanej frazie', async () => {

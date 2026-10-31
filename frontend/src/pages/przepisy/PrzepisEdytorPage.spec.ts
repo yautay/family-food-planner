@@ -15,9 +15,12 @@ const route = vi.hoisted(() => ({
 vi.mock('vue-router', () => ({
   useRoute: () => route,
   useRouter: () => ({ push: routerPush, replace: vi.fn() }),
+  onBeforeRouteLeave: vi.fn(),
+  onBeforeRouteUpdate: vi.fn(),
 }))
 
 const recipesApi = vi.hoisted(() => ({
+  copyRecipe: vi.fn(),
   createRecipe: vi.fn(),
   updateRecipe: vi.fn(),
   createTag: vi.fn(),

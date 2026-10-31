@@ -20,7 +20,7 @@
  */
 import { useQuery } from '@tanstack/vue-query'
 import { refDebounced } from '@vueuse/core'
-import { computed, ref, watch } from 'vue'
+import { computed, ref, useId, watch } from 'vue'
 
 import type { Product, ProductDetail } from '@/api/catalog'
 import { fetchProducts } from '@/api/catalog'
@@ -38,11 +38,23 @@ const props = withDefaults(
     /** Ile trafień pokazać — picker to skrót, nie przeglądarka katalogu. */
     limit?: number
     disabled?: boolean
+    /** Opcjonalne ID pola; domyślnie unikalne także dla wielu składników. */
+    inputId?: string
     /** Opóźnienie szukajki; testy komponentu podają 0, żeby nie czekać. */
     debounceMs?: number
   }>(),
-  { modelValue: null, label: texts.label, limit: 8, disabled: false, debounceMs: 250 },
+  {
+    modelValue: null,
+    label: texts.label,
+    limit: 8,
+    disabled: false,
+    inputId: undefined,
+    debounceMs: 250,
+  },
 )
+const generatedId = useId()
+const inputId = computed(() => props.inputId ?? `product-picker-${generatedId}`)
+const resultsId = computed(() => `${inputId.value}-results`)
 
 const emit = defineEmits<{
   (event: 'update:modelValue', product: Product | ProductDetail | null): void
@@ -118,7 +130,7 @@ function onKeydown(event: KeyboardEvent): void {
 
 <template>
   <div class="grid gap-2" data-testid="product-picker">
-    <label class="text-sm font-medium" for="product-picker-input">{{ label }}</label>
+    <label class="text-sm font-medium" :for="inputId">{{ label }}</label>
 
     <!-- Stan „wybrany": pokazujemy wynik, a nie pole wyszukiwania — użytkownik
          ma widzieć, co wybrał, bez czytania pustego inputa. -->
@@ -142,11 +154,11 @@ function onKeydown(event: KeyboardEvent): void {
 
     <template v-else>
       <Input
-        id="product-picker-input"
+        :id="inputId"
         v-model="search"
         role="combobox"
         aria-expanded="true"
-        aria-controls="product-picker-results"
+        :aria-controls="resultsId"
         :placeholder="texts.placeholder"
         :disabled="disabled"
         class="min-h-11"
@@ -157,7 +169,7 @@ function onKeydown(event: KeyboardEvent): void {
 
       <ul
         v-if="isSearching"
-        id="product-picker-results"
+        :id="resultsId"
         class="border-border grid gap-1 rounded-lg border p-1"
         role="listbox"
         data-testid="picker-results"

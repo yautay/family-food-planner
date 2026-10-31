@@ -136,6 +136,12 @@ Realizacja: `src/api/pagination.ts` + `components/domain/LoadMoreButton.vue`
    rzeczywistego `day.day`. Role oceny/kopiowania/edycji/archiwizacji/usunięcia
    pozostają zgodne z API. `used_in` pokazuje nazwy, ponieważ odpowiedź nie
    gwarantuje daty potrzebnej do poprawnego linku dnia.
+   **Edytor (UX08)**: nazwa/porcje/czas → składniki → przygotowanie;
+   widoczność, trudność, tagi i zdjęcie w jawnym rozwinięciu. Pełne nazwy
+   składników zawijają się, ilość pozostaje stringiem z parsera dziesiętnego.
+   Pasek „Zapisz” pokazuje stan niezapisanych zmian. Ochrona opuszczenia
+   pozwala zostać, błędy zachowują szkic i kierują widoczny fokus do pola.
+   Nie obiecujemy odtworzenia szkicu po awarii lub zamknięciu przeglądarki.
 4. **Plan tygodniowy (UX07)** — responsywna agenda z pełnymi nazwami dań,
    pustymi dniami i zaznaczonym dniem. Przy aktualnym ograniczeniu szerokości
    AppShell agenda pozostaje także na desktopie; siedem kolumn wymaga

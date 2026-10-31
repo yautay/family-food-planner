@@ -181,6 +181,21 @@ bez materializowania całego zakresu w pamięci. Payload zachowuje cały zakres.
 Kopiowanie dopisuje, a przeniesienie jest sekwencją kopia → usunięcie,
 z jawnym wynikiem częściowym; nie deklarujemy transakcji backendowej.
 
+UX08: edytor zachowuje otwarte podstawy, składniki i przygotowanie; natywne
+`details[data-testid=recipe-extras]` zawiera widoczność, trudność, tagi i zdjęcie.
+Dirty porównuje lokalny szkic formularza z potwierdzonym początkiem; odświeżenie
+Query i osobne mutacje zdjęcia nie nadpisują wpisanych danych. Guardy opuszczenia
+i zmiany ID przepisu oraz `beforeunload` chronią niezapisane edytowalne pola;
+udany zapis zdejmuje ostrzeżenie przed przejściem do rzeczywistego szczegółu.
+Nie ma trwałego szkicu ani autosave. Zmiana generacji sesji i spóźnione callbacki
+nie mogą przejąć nawigacji lub danych kolejnego konta. Zdjęcie zapisuje się
+osobno, od razu po potwierdzonym uploadzie istniejącego przepisu; nowy wymaga ID.
+Globalny przepis USER czyta bez edycji/uploadu, a kopia korzysta z API i jej ID.
+Po błędzie edytor otwiera właściwą sekcję, czeka na odblokowanie pola i centruje
+fokus poza paskiem zapisu/nawigacją. `ProductPicker.inputId` jest opcjonalny;
+domyślne ID przez `useId` wiąże własną etykietę i listę wyników każdej instancji,
+bez zmiany pozostałych props/emits lub danych wyszukiwarki.
+
 AppShell przechowuje wyłącznie kalendarzowy kontekst UI, nie dane planu.
 Zmiana path kieruje fokus do `main#main-content`, query zachowuje fokus
 i scroll. Wstecz odtwarza zapisaną pozycję. Skiplink prowadzi do tego samego

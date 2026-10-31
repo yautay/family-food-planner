@@ -87,6 +87,18 @@ w transakcji z rollbackiem; migracje aplikowane raz na sesję testową.
 Smoke (każdy batch): login → plan dnia → dodanie posiłku → wylogowanie.
 Core flows (rozbudowywane w batchach, które je dostarczają):
 1. Przepis z inline create produktu → wartości per porcja.
+   UX08: `ux-editor.spec.ts` na390/1024 sprawdza rzeczywisty klik etykiety
+   drugiej z dwóch wyszukiwarek, pozostanie po klawiaturowej próbie wyjścia,
+   walidację wiersza, kontrolowane odpowiedzi422/403/409 zachowujące dane
+   i potem rzeczywisty zapis z GET ilości12.500. Asercje geometrii po422
+   dowodzą widoczności fokusu poza paskiem zapisu i mobilną nawigacją.
+   `recipe-global` sprawdza rzeczywisty USER read-only i kopię w edytorze.
+   Visual rozróżnia podstawowy i rozwinięty edytor; zdjęcie potwierdza dopiero
+   po natywnym otwarciu sekcji klawiaturą. Unit testy nie deklarują geometrii
+   jsdom jako dowodu widoczności; obejmują guardy/refetch/generację sesji.
+   Fixture visual obejmuje rzeczywiste jednostki g/ml/szt. na pięciu
+   szerokościach: pomiar miejsca na etykietę i natywną strzałkę po załadowaniu
+   fontu oraz PNG. Regresja musi być czerwona przy zwężaniu wyboru jednostki.
 2. Tydzień: kopiuj dzień, szablon, cykl. UX07 rozszerza rzeczywiste E2E
    o kalendarz klawiaturą przez koniec roku, dwa cele z zachowaniem zajętego
    dnia, pełne nazwy, powrót ze szczegółu (dedykowany i browser

@@ -42,6 +42,8 @@ test('przepis z inline create produktu i przeliczaniem porcji', async ({ page })
 
   await page.getByTestId('recipe-name').fill(recipeName)
   await page.getByTestId('recipe-base-servings').fill('2')
+  await page.getByTestId('recipe-prep-time').fill('15')
+  await page.getByTestId('recipe-instructions').fill('Pokrój warzywa. Wymieszaj i podaj.')
 
   // --- składnik przez inline create produktu (06_UIUX §3.1) ------------------------
   await page.getByTestId('ingredient-add').click()
@@ -56,6 +58,12 @@ test('przepis z inline create produktu i przeliczaniem porcji', async ({ page })
 
   // Auto-wybór: wracamy do edycji przepisu z wybranym produktem.
   await expect(page.getByTestId('picker-selected')).toContainText(productName)
+  await expect(page.getByTestId('recipe-name')).toHaveValue(recipeName)
+  await expect(page.getByTestId('recipe-base-servings')).toHaveValue('2')
+  await expect(page.getByTestId('recipe-prep-time')).toHaveValue('15')
+  await expect(page.getByTestId('recipe-instructions')).toHaveValue(
+    'Pokrój warzywa. Wymieszaj i podaj.',
+  )
 
   await page.getByTestId('ingredient-amount-0').fill('250')
   await page.getByTestId('recipe-submit').click()

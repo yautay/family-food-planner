@@ -105,6 +105,7 @@ test('ADMIN publikuje przepis, USER innej rodziny go widzi, planuje, kopiuje i e
   await page.goto('/przepisy/nowy')
   await expect(page.getByTestId('przepis-edytor-page')).toBeVisible()
   await page.getByTestId('recipe-name').fill(recipeName)
+  await page.getByTestId('recipe-extras').locator('summary').click()
   await page.getByTestId('recipe-scope').selectOption('global')
   await expect(page.getByTestId('recipe-scope-hint')).toBeVisible()
   await page.getByTestId('recipe-submit').click()
@@ -180,6 +181,23 @@ test('ADMIN publikuje przepis, USER innej rodziny go widzi, planuje, kopiuje i e
     await userPage.getByTestId('recipe-name').fill(copyName)
     await userPage.getByTestId('recipe-submit').click()
     await expect(userPage.getByTestId('recipe-name')).toHaveText(copyName)
+
+    // Bezpośredni adres edytora oryginału: wszystkie pola są tylko do odczytu.
+    // Kopia z tego miejsca prowadzi do edycji rzeczywiście utworzonego ID.
+    await userPage.goto(`/przepisy/${recipeId}/edytuj?selectedDate=${DAY}`)
+    await expect(userPage.getByTestId('recipe-read-only')).toBeVisible()
+    await expect(userPage.getByTestId('recipe-name')).toBeDisabled()
+    await expect(userPage.getByTestId('recipe-instructions')).toBeDisabled()
+    await expect(userPage.getByTestId('ingredient-add')).toBeDisabled()
+    await expect(userPage.getByTestId('recipe-submit')).toBeDisabled()
+    await userPage.getByTestId('recipe-editor-copy').click()
+    await expect(userPage).toHaveURL(
+      new RegExp(`/przepisy/(?!${recipeId}/)\\d+/edytuj\\?selectedDate=${DAY}`),
+    )
+    await expect(userPage.getByTestId('recipe-name')).toBeEnabled()
+    await userPage.getByTestId('recipe-name').fill(`${copyName} z edytora`)
+    await userPage.getByTestId('recipe-submit').click()
+    await expect(userPage.getByTestId('recipe-name')).toHaveText(`${copyName} z edytora`)
   } finally {
     await context.close()
   }

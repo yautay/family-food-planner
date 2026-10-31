@@ -117,7 +117,16 @@ test('UX00: prawdziwy interfejs, telefon/desktop i prywatna lista offline', asyn
     await target.screenshot({ path: file, fullPage: true, animations: 'disabled', caret: 'hide' })
     await testInfo.attach(`${width}-${label}`, { path: file, contentType: 'image/png' })
     // Długi katalog skaluje pełny PNG do nieczytelnej miniatury; zachowaj też pierwszy ekran.
-    if (['recipes', 'recipe-photo', 'recipe-no-photo', 'recipe-global'].includes(label)) {
+    if (
+      [
+        'recipes',
+        'recipe-photo',
+        'recipe-no-photo',
+        'recipe-global',
+        'recipe-editor',
+        'recipe-editor-expanded',
+      ].includes(label)
+    ) {
       const viewportFile = path.join(output, `${width}-${label}-viewport.png`)
       await target.screenshot({
         path: viewportFile,
@@ -194,7 +203,7 @@ test('UX00: prawdziwy interfejs, telefon/desktop i prywatna lista offline', asyn
         'recipe-editor',
         `/przepisy/${id('recipe-0')}/edytuj`,
         'przepis-edytor-page',
-        'recipe-photo-preview',
+        'recipe-name',
         [
           `/recipes/${id('recipe-0')}`,
           '/tags',
@@ -302,6 +311,50 @@ test('UX00: prawdziwy interfejs, telefon/desktop i prywatna lista offline', asyn
       }
       await ready(page, testId)
       await capture(page, width, label)
+      if (label === 'recipe-editor') {
+        const units = await page
+          .locator('select[data-testid^="ingredient-amount-"][data-testid$="-unit"]')
+          .evaluateAll((elements) =>
+            elements.map((element) => {
+              const view = element.ownerDocument.defaultView!
+              const style = view.getComputedStyle(element)
+              const canvas = element.ownerDocument.createElement('canvas')
+              const context = canvas.getContext('2d')!
+              context.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`
+              const text = element.querySelector('option:checked')!.textContent!.trim()
+              return {
+                text,
+                available:
+                  element.getBoundingClientRect().width -
+                  parseFloat(style.paddingLeft) -
+                  parseFloat(style.paddingRight),
+                // Chromium native arrow reservation, calibrated against the
+                // unshrunk control and confirmed by actual unit-label PNGs.
+                needed: context.measureText(text).width + 22,
+              }
+            }),
+          )
+        expect(units.map((unit) => unit.text)).toEqual(['g', 'ml', 'szt.'])
+        await testInfo.attach(`editor-unit-measurements-${width}.json`, {
+          body: Buffer.from(JSON.stringify(units)),
+          contentType: 'application/json',
+        })
+        for (const unit of units)
+          expect(
+            unit.available,
+            `Miejsce na pełną jednostkę ${unit.text} i strzałkę`,
+          ).toBeGreaterThanOrEqual(unit.needed)
+      }
+      if (label === 'recipe-editor') {
+        const extras = page.getByTestId('recipe-extras')
+        await expect(extras).toHaveJSProperty('open', false)
+        await extras.locator('summary').focus()
+        await page.keyboard.press('Enter')
+        await expect(extras).toHaveJSProperty('open', true)
+        await expect(page.getByTestId('recipe-photo-preview')).toBeVisible()
+        await ready(page, testId)
+        await capture(page, width, 'recipe-editor-expanded')
+      }
       if (label === 'shopping') {
         await page.getByTestId('zakupy-round-settings').locator('summary').click()
         await expect(page.locator('[data-testid^="round-config-"]').first()).toBeVisible()

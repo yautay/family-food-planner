@@ -61,10 +61,26 @@ export interface IngredientDraft {
 
 /** Czy szkic składnika nadaje się do wysłania (produkt + poprawna ilość). */
 export function isIngredientDraftValid(draft: IngredientDraft): boolean {
-  return (
-    draft.product !== null &&
-    draft.quantity !== null &&
-    isValidDecimal(draft.quantity, { decimalPlaces: 3, positive: true }) &&
-    draft.unit.trim() !== ''
-  )
+  return ingredientDraftError(draft) === null
+}
+
+/** Pierwsze pole wymagające poprawy; limity odpowiadają RecipeIngredientInput. */
+export function ingredientDraftError(
+  draft: IngredientDraft,
+): { field: 'product' | 'quantity' | 'unit' | 'note'; message: string } | null {
+  if (!draft.product) return { field: 'product', message: 'Wybierz produkt dla tego składnika.' }
+  if (
+    draft.quantity === null ||
+    !isValidDecimal(draft.quantity, { decimalPlaces: 3, positive: true }) ||
+    draft.quantity.split('.')[0]!.replace(/^0+/, '').length > 5
+  ) {
+    return { field: 'quantity', message: 'Podaj ilość większą od 0, do 99999,999.' }
+  }
+  if (!draft.unit.trim() || draft.unit.trim().length > 50) {
+    return { field: 'unit', message: 'Wybierz jednostkę (do 50 znaków).' }
+  }
+  if (draft.note.trim().length > 500) {
+    return { field: 'note', message: 'Notatka może mieć do 500 znaków.' }
+  }
+  return null
 }
