@@ -179,7 +179,7 @@ function confirmRemove(): void {
   if (window.confirm(texts.confirmDelete)) remove.mutate()
 }
 function backToList(event: MouseEvent, navigate: (event: MouseEvent) => unknown): void {
-  returnToCatalog(event, router, route.query)
+  if (route.query.returnTo !== 'week') returnToCatalog(event, router, route.query)
   if (!event.defaultPrevented) void navigate(event)
 }
 function planned({ day }: { day: PlanDay }): void {
@@ -207,12 +207,16 @@ const nutritionRows = computed(() => {
   <section class="grid min-w-0 gap-6" data-testid="przepis-szczegol-page">
     <RouterLink
       v-slot="{ href, navigate }"
-      :to="{ name: 'przepisy', query: catalogQuery(route.query) }"
+      :to="
+        route.query.returnTo === 'week'
+          ? planNavigationTarget('tydzien', navigation)
+          : { name: 'przepisy', query: catalogQuery(route.query) }
+      "
       custom
     >
       <Button as-child variant="ghost" class="justify-self-start">
         <a :href="href" data-testid="recipe-back" @click="backToList($event, navigate)">
-          {{ texts.backToList }}
+          {{ route.query.returnTo === 'week' ? 'Wróć do tygodnia' : texts.backToList }}
         </a>
       </Button>
     </RouterLink>

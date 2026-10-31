@@ -9,6 +9,7 @@
  */
 import { computed, ref, watch } from 'vue'
 
+import PlanReusePreview from '@/components/domain/planning/PlanReusePreview.vue'
 import PlanningDialog from '@/components/domain/planning/PlanningDialog.vue'
 import { Input } from '@/components/ui/input'
 import { weekDayLabel } from '@/lib/dates'
@@ -37,6 +38,7 @@ const emit = defineEmits<{
   (event: 'close'): void
 }>()
 
+const previewReady = ref(false)
 const kind = ref<'day' | 'week'>('day')
 const name = ref('')
 const scope = ref<'private' | 'household'>('private')
@@ -59,7 +61,7 @@ const trimmedName = computed(() => name.value.trim())
 const canSubmit = computed(() => trimmedName.value.length > 0)
 
 function submit(): void {
-  if (!canSubmit.value) {
+  if (!canSubmit.value || !previewReady.value || props.pending) {
     return
   }
   emit('apply', {
@@ -78,7 +80,7 @@ function submit(): void {
     :title="texts.templateSaveTitle"
     :subtitle="texts.templateSaveSubtitle"
     :submit-label="texts.templateSaveApply"
-    :submit-disabled="!canSubmit"
+    :submit-disabled="!canSubmit || !previewReady"
     :pending="pending"
     :error="error"
     testid="template-save-dialog"
@@ -149,5 +151,13 @@ function submit(): void {
         <option value="household">{{ texts.templateScopeHousehold }}</option>
       </select>
     </label>
+    <PlanReusePreview
+      v-if="open"
+      :dates="[]"
+      :source-dates="kind === 'day' ? [sourceDate] : weekDates"
+      :source-label="kind === 'day' ? sourceDate : `${weekDates[0]} – ${weekDates.at(-1)}`"
+      :append="false"
+      @ready="previewReady = $event"
+    />
   </PlanningDialog>
 </template>

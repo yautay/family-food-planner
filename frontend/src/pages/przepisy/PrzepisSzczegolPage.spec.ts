@@ -98,6 +98,7 @@ async function render(
   router = createRouter({
     history: createMemoryHistory(),
     routes: [
+      { path: '/tydzien/:weekStart?', name: 'tydzien', component: { template: '<div />' } },
       { path: '/przepisy', name: 'przepisy', component: { template: '<div />' } },
       { path: '/przepisy/:id', name: 'przepis-szczegol', component: { template: '<div />' } },
       { path: '/przepisy/:id/edytuj', name: 'przepis-edycja', component: { template: '<div />' } },
@@ -379,4 +380,29 @@ describe('PrzepisSzczegolPage — odczyt, skalowanie i planowanie', () => {
     await flushPromises()
     expect(router.currentRoute.value.params.date).toBe('2031-04-11')
   })
+})
+
+it('jawny powrót UX07 zachowuje tydzień i dzień, a obcy marker pozostawia katalog', async () => {
+  await render(
+    'user',
+    1,
+    detail(),
+    '/przepisy/9?returnTo=week&selectedDate=2031-12-31&from=2031-12-29&to=2032-01-04',
+  )
+  expect(wrapper.get('[data-testid="recipe-back"]').text()).toBe('Wróć do tygodnia')
+  await wrapper.get('[data-testid="recipe-back"]').trigger('click')
+  await flushPromises()
+  expect(router.currentRoute.value.path).toBe('/tydzien/2031-12-29')
+  expect(router.currentRoute.value.query.selectedDate).toBe('2031-12-31')
+  wrapper.unmount()
+  await render(
+    'user',
+    1,
+    detail(),
+    '/przepisy/9?returnTo=https://example.com&q=zupa&tag=3&scope=global&prep_time_max=30',
+  )
+  const link = wrapper.get('[data-testid="recipe-back"]')
+  expect(link.text()).toContain('Wróć do przepisów')
+  expect(link.attributes('href')).toContain('/przepisy?q=zupa&tag=3&scope=global&prep_time_max=30')
+  expect(link.attributes('href')).not.toContain('example.com')
 })

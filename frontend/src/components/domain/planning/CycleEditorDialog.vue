@@ -14,12 +14,15 @@
 import { computed, ref, watch } from 'vue'
 
 import type { Cycle, TemplateSummary } from '@/api/templates'
+import TemplateSourcePreview from '@/components/domain/planning/TemplateSourcePreview.vue'
+import PlanReusePreview from '@/components/domain/planning/PlanReusePreview.vue'
 import PlanningDialog from '@/components/domain/planning/PlanningDialog.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { addDays } from '@/lib/dates'
-import { cycleApplySchema } from '@/lib/schemas/template'
+import { cycleApplySchema, cycleSchema } from '@/lib/schemas/template'
 import { common, week as texts } from '@/lib/texts'
+import { datePreviewWindow, usedCycleTemplateIds } from './cyclePreview'
 
 const props = defineProps<{
   open: boolean
@@ -27,6 +30,8 @@ const props = defineProps<{
   weekTemplates: TemplateSummary[]
   /** Poniedziałek widocznego tygodnia — domyślny początek zakresu. */
   weekStart: string
+  unavailable?: boolean
+  loading?: boolean
   pending?: boolean
   error?: string | null
   warnings?: string[]
@@ -46,6 +51,8 @@ const emit = defineEmits<{
   (event: 'close'): void
 }>()
 
+const previewReady = ref(false)
+const sourceReady = ref(false)
 const mode = ref<'apply' | 'create'>('apply')
 
 // --- tworzenie cyklu ---------------------------------------------------------------
@@ -59,6 +66,14 @@ const templateToAdd = ref<number | null>(null)
 const cycleId = ref<number | null>(null)
 const dateFrom = ref(props.weekStart)
 const dateTo = ref(addDays(props.weekStart, 13))
+const previewPage = ref(0)
+watch(
+  [dateFrom, dateTo],
+  () => {
+    previewPage.value = 0
+  },
+  { flush: 'sync' },
+)
 
 // `cycles` i `weekTemplates` są źródłami watcha — mogą dojechać PO otwarciu
 // dialogu, a wtedy tryb „apply" nie miałby czego wybrać (ustalenie /code-review).
@@ -70,6 +85,7 @@ watch(
     if (!open) {
       return
     }
+    mode.value = props.cycles.length ? 'apply' : 'create'
     name.value = ''
     scope.value = 'private'
     templateIds.value = []
@@ -92,7 +108,7 @@ watch(
     if (!weekTemplates.some((template) => template.id === templateToAdd.value)) {
       templateToAdd.value = weekTemplates[0]?.id ?? null
     }
-    mode.value = cycles.length > 0 ? 'apply' : 'create'
+    if (!cycles.length) mode.value = 'create'
   },
   { immediate: true },
 )
@@ -125,13 +141,20 @@ function move(index: number, offset: -1 | 1): void {
 }
 
 const createMessage = computed(() => {
+  if (props.loading || props.unavailable) return null
   if (props.weekTemplates.length === 0) {
     return texts.cycleNeedsWeekTemplates
   }
   if (name.value.trim().length === 0) {
     return 'Podaj nazwę cyklu.'
   }
-  return templateIds.value.length === 0 ? texts.cycleNeedsTemplate : null
+  const parsed = cycleSchema.safeParse({
+    name: name.value,
+    scope: scope.value,
+    templateIds: templateIds.value,
+    startDate: startDate.value,
+  })
+  return parsed.success ? null : (parsed.error.issues[0]?.message ?? texts.datesInvalid)
 })
 
 const applyParsed = computed(() =>
@@ -139,6 +162,7 @@ const applyParsed = computed(() =>
 )
 
 const applyMessage = computed(() => {
+  if (props.loading || props.unavailable) return null
   if (cycleId.value === null) {
     return texts.cycleEmpty
   }
@@ -147,12 +171,40 @@ const applyMessage = computed(() => {
     : (applyParsed.value.error.issues[0]?.message ?? texts.datesInvalid)
 })
 
+const previewWindow = computed(() =>
+  applyParsed.value.success
+    ? datePreviewWindow(dateFrom.value, dateTo.value, previewPage.value)
+    : null,
+)
+const usedTemplates = computed(() => {
+  const cycle = props.cycles.find((c) => c.id === cycleId.value)
+  if (!cycle?.template_ids.length || !applyParsed.value.success) return []
+  return usedCycleTemplateIds(
+    cycle.template_ids,
+    cycle.start_date,
+    dateFrom.value,
+    dateTo.value,
+  ).map((id) => ({ kind: 'week' as const, id }))
+})
+const sourceLabel = computed(() => {
+  const cycle = props.cycles.find((c) => c.id === cycleId.value)
+  return cycle
+    ? `${cycle.name} · ${cycle.template_names.filter(Boolean).join(' → ')} · start rotacji: ${cycle.start_date ?? dateFrom.value}`
+    : ''
+})
+
 const validationMessage = computed(() =>
   mode.value === 'create' ? createMessage.value : applyMessage.value,
 )
 
 function submit(): void {
-  if (validationMessage.value !== null) {
+  if (
+    validationMessage.value !== null ||
+    props.loading ||
+    props.unavailable ||
+    props.pending ||
+    (mode.value === 'apply' && (!previewReady.value || !sourceReady.value))
+  ) {
     return
   }
   if (mode.value === 'create') {
@@ -177,7 +229,12 @@ function submit(): void {
     :title="mode === 'create' ? texts.cycleTitle : texts.cycleApplyTitle"
     :subtitle="texts.cycleSubtitle"
     :submit-label="mode === 'create' ? texts.cycleSave : texts.cycleApplyApply"
-    :submit-disabled="validationMessage !== null"
+    :submit-disabled="
+      validationMessage !== null ||
+      (mode === 'apply' && (!previewReady || !sourceReady)) ||
+      unavailable ||
+      loading
+    "
     :pending="pending"
     :error="error"
     :validation-message="validationMessage"
@@ -186,6 +243,7 @@ function submit(): void {
     @submit="submit()"
     @close="emit('close')"
   >
+    <p v-if="loading" role="status" class="text-sm">Sprawdzamy aktualne cykle i szablony…</p>
     <div class="flex flex-wrap gap-2">
       <label class="flex min-h-11 items-center gap-2 text-sm">
         <input
@@ -356,5 +414,55 @@ function submit(): void {
         </select>
       </label>
     </template>
+    <section
+      v-if="open && mode === 'apply' && previewWindow"
+      class="grid gap-2 text-sm"
+      data-testid="cycle-range-summary"
+      aria-label="Zakres zastosowania cyklu"
+    >
+      <p>
+        <strong>Pełny zakres zapisu:</strong> {{ dateFrom }} – {{ dateTo }} ·
+        {{ previewWindow.totalDays.toLocaleString('pl-PL') }} dni.
+      </p>
+      <template v-if="previewWindow.totalPages > 1">
+        <p data-testid="cycle-preview-slice">
+          Podgląd sprawdza tylko widoczne dni docelowe: {{ previewWindow.from }} –
+          {{ previewWindow.to }} (strona {{ previewWindow.page + 1 }} z
+          {{ previewWindow.totalPages }}). Pozostałe dni nie są sprawdzone na tej stronie.
+          Zastosowanie cyklu obejmie cały zakres zapisu.
+        </p>
+        <nav class="flex flex-wrap gap-2" aria-label="Strony podglądu dni docelowych">
+          <Button
+            type="button"
+            variant="outline"
+            class="min-h-11"
+            :disabled="pending || previewWindow.page === 0"
+            data-testid="cycle-preview-prev"
+            @click="previewPage = previewWindow.page - 1"
+            >Poprzednie dni</Button
+          >
+          <Button
+            type="button"
+            variant="outline"
+            class="min-h-11"
+            :disabled="pending || previewWindow.page + 1 >= previewWindow.totalPages"
+            data-testid="cycle-preview-next"
+            @click="previewPage = previewWindow.page + 1"
+            >Następne dni</Button
+          >
+        </nav>
+      </template>
+    </section>
+    <PlanReusePreview
+      v-if="open && mode === 'apply' && previewWindow"
+      :dates="previewWindow.dates"
+      :source-label="sourceLabel"
+      @ready="previewReady = $event"
+    />
+    <TemplateSourcePreview
+      v-if="open && mode === 'apply' && !loading && !unavailable"
+      :references="usedTemplates"
+      @ready="sourceReady = $event"
+    />
   </PlanningDialog>
 </template>

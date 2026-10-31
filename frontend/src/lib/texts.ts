@@ -273,7 +273,7 @@ export const plan = {
 } as const
 
 export const week = {
-  title: 'Plan tygodnia',
+  title: 'Tydzień przy stole',
   previousWeek: 'Poprzedni tydzień',
   nextWeek: 'Następny tydzień',
   currentWeek: 'Bieżący tydzień',
@@ -282,7 +282,7 @@ export const week = {
   dayEmpty: 'Brak posiłków',
   addMeal: 'Dodaj posiłek',
   openDay: 'Otwórz plan dnia',
-  chartTitle: 'Kalorie w tygodniu',
+  chartTitle: 'Kalorie całego planu w tygodniu',
   sumKcal: 'Suma',
   targetKcal: 'Cel',
 
@@ -369,9 +369,45 @@ export const week = {
 
   // wynik
   warningsTitle: 'Uwagi',
-  datesHint: 'Po jednej dacie w wierszu (RRRR-MM-DD).',
+  datesHint: 'Wybierz dni w kalendarzu.',
   datesRequired: 'Podaj przynajmniej jedną datę.',
   datesInvalid: 'Popraw daty — wymagany format RRRR-MM-DD.',
+  completePlan: 'Uzupełnij plan',
+  shopping: 'Zrób listę zakupów',
+  addToMeal: 'Dodaj do posiłku',
+  newMealWithDish: 'Nowy posiłek z daniem',
+  replaceDish: 'Zamień',
+  loadError: 'Nie udało się wczytać tygodnia. Spróbuj ponownie.',
+  refreshError: 'Nie udało się odświeżyć tygodnia. Pokazujemy ostatnio pobrane dane.',
+  retry: 'Spróbuj ponownie',
+  wholePlan:
+    'Wartości dotyczą całego planu, nie bilansu konkretnej osoby. Puste dni oznaczają brak planu.',
+  zeroEnergyPlan: 'Energia całego planu z dostępnych danych wynosi 0 kcal.',
+  incompleteNutrition: 'Niepełne wartości odżywcze',
+  appendNotice: 'Posiłki zostaną dopisane do dni docelowych. Istniejące posiłki pozostaną.',
+  visibleNotice:
+    'Podgląd pokazuje widoczne plany. Przy dostępie administracyjnym do innych rodzin widoczny plan może różnić się od Twojego lub rodzinnego planu, do którego dopiszesz posiłki.',
+  source: 'Źródło',
+  targets: 'Daty docelowe',
+  existingMeals: 'Widoczne posiłki',
+  emptySources: 'Brak posiłków w widocznym źródle',
+  previewLoading: 'Sprawdzamy źródło i widoczne plany docelowe…',
+  previewError: 'Nie udało się sprawdzić planów. Ponów podgląd przed zapisem.',
+  retryPreview: 'Ponów podgląd',
+  previousMonth: 'Poprzedni miesiąc',
+  nextMonth: 'Następny miesiąc',
+  calendarHint:
+    'Wybierz kilka dni, także w różnych miesiącach. Strzałki zmieniają dzień, Page Up / Page Down miesiąc, Spacja wybiera.',
+  selectedDates: 'Wybrane dni',
+  removeDate: 'Odznacz dzień',
+  completed: 'Operacja została zapisana.',
+  resultDates: 'Zapisane dni',
+  historyLoading: 'Wczytujemy historię planów…',
+  historyError: 'Nie udało się wczytać historii. Zamknij panel i spróbuj ponownie.',
+  optionsLoading: 'Wczytujemy zapisane szablony i cykle…',
+  optionsError: 'Nie udało się odświeżyć szablonów lub cykli. Spróbuj ponownie.',
+  movePartial:
+    'Posiłek został skopiowany do dnia docelowego, ale nie udało się potwierdzić usunięcia źródła. Sprawdź oba dni i usuń zbędny posiłek. Ponowne przeniesienie utworzyłoby następną kopię.',
 } as const
 
 export const recipePicker = {

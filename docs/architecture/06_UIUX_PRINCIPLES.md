@@ -136,9 +136,20 @@ Realizacja: `src/api/pagination.ts` + `components/domain/LoadMoreButton.vue`
    rzeczywistego `day.day`. Role oceny/kopiowania/edycji/archiwizacji/usunięcia
    pozostają zgodne z API. `used_in` pokazuje nazwy, ponieważ odpowiedź nie
    gwarantuje daty potrzebnej do poprawnego linku dnia.
-4. **Plan tygodniowy** — siatka dni × posiłki (miniatury), przeciąganie/
-   kopiowanie, akcje: kopiuj dzień, powiel blok, zapisz jako szablon,
-   zastosuj szablon/cykl.
+4. **Plan tygodniowy (UX07)** — responsywna agenda z pełnymi nazwami dań,
+   pustymi dniami i zaznaczonym dniem. Przy aktualnym ograniczeniu szerokości
+   AppShell agenda pozostaje także na desktopie; siedem kolumn wymaga
+   dostępnych 84rem treści. „Dodaj do posiłku” zachowuje istniejący posiłek,
+   „Nowy posiłek z daniem” tworzy kolejny. Dodawanie i zamiana używają panelu
+   UX03. Przenoszenie ma dialog z datą, bez wymuszania przeciągania.
+   „Uzupełnij plan” zawiera kopiowanie dnia/bloku, zapis i zastosowanie
+   szablonu, cykle oraz historię. Kalendarz pozwala wybrać wiele dat także
+   klawiaturą i przez granicę roku. Podgląd rozróżnia źródło, widoczne cele
+   i dopisywanie; błąd odczytu blokuje zastosowanie. Archiwalne odniesienia
+   zachowują ostrzeżenia serwera. Wykres opisuje cały plan, bez oceny celu
+   osoby; zero energii przy istniejących posiłkach nie oznacza pustego planu.
+   Przy dacie pozostaje zwięzły status niekompletności. Wszystkie szczegóły
+   braków są w jawnym natywnym rozwinięciu za daniami, poza kolumną daty.
 5. **Lista zakupów** — sekcje per kategoria w kolejności profilu sklepu,
    pozycje z dużym checkboxem, ilością i plakietką resztki; panel akcji:
    udostępnij (link/QR/systemowe share), drukuj, zapis do PDF later.

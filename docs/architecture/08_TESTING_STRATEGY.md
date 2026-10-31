@@ -87,7 +87,14 @@ w transakcji z rollbackiem; migracje aplikowane raz na sesję testową.
 Smoke (każdy batch): login → plan dnia → dodanie posiłku → wylogowanie.
 Core flows (rozbudowywane w batchach, które je dostarczają):
 1. Przepis z inline create produktu → wartości per porcja.
-2. Tydzień: kopiuj dzień, szablon, cykl.
+2. Tydzień: kopiuj dzień, szablon, cykl. UX07 rozszerza rzeczywiste E2E
+   o kalendarz klawiaturą przez koniec roku, dwa cele z zachowaniem zajętego
+   dnia, pełne nazwy, powrót ze szczegółu (dedykowany i browser
+   Back) oraz zakres zakupów. `ux-week.spec.ts` dołącza rzeczywiste PNG
+   agendy i załadowanego kalendarza na360/768/1024 oraz dołu podglądu
+   na360/1024. Testy komponentów sprawdzają cele wejść tygodnia do panelu
+   UX03, odrzucony refetch z cache, pusty dzień,
+   archiwalne/brakujące odniesienia oraz ograniczony podgląd skrajnego cyklu.
 3. Zakupy: generacja → pytanie o spiżarnię → preview z resztkami →
    finalizacja → publiczny link → odhaczenie bez logowania.
    Dwa specy: `shopping-generate.spec.ts` (B10, do finalizacji) i

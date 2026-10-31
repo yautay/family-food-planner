@@ -54,7 +54,10 @@ for (const width of [360, 1440]) {
     try {
       await page.goto('/tydzien/2032-03-01')
       await expect(page.getByTestId('plan-tygodnia-page')).toBeVisible()
+      await page.getByTestId('week-complete').click()
       const opener = page.getByTestId('action-template-save')
+      await expect(opener).toBeVisible()
+      await expect(opener).toBeEnabled()
       await opener.focus()
       await page.keyboard.press('Enter')
       const panel = page.getByTestId('template-save-dialog')
@@ -69,6 +72,7 @@ for (const width of [360, 1440]) {
         await expect(panel.locator(':focus')).toHaveCount(1)
       }
       await name.fill('E2E UX01 — Dzień Łucji i Żanety')
+      await expect(submit).toBeEnabled()
       await page.screenshot({ path: testInfo.outputPath(`panel-filled-${width}.png`) })
       await name.press('Enter')
       await expect.poll(() => requests).toBe(1)

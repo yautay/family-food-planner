@@ -167,6 +167,20 @@ Kontrakt UI dla UX03/04/05/07/10:
   katalogu, a istniejący cache Query zachowuje pobrane strony. Nie utrwalamy
   odpowiedzi serwera w Pinia ani osobnym magazynie katalogu.
 
+UX07: bezpośredni link tydzień → szczegół przepisu dodaje wyłącznie
+`returnTo=week` i kontekst `from/to/selectedDate`. Szczegół buduje wtedy
+dedykowane „Wróć do tygodnia” przez `planNavigationTarget`; inne wejścia
+zachowują powrót do katalogu UX04. Kontrakt save/back edytora nie zmienia się.
+`DateMultiSelect` obsługuje limit62, roving tabindex i klawiaturę kalendarza;
+osiągnięcie limitu nie odbiera fokusu niewybranym dniom (`aria-disabled`).
+Podglądy źródeł/celów nie dopuszczają zapisu podczas refetch ani po błędzie,
+także przy danych w cache. Opisują widoczne plany, z jawnym ograniczeniem
+widoczności administracyjnej względem celu owned; backend rozstrzyga zapis.
+Cykl pokazuje paginowane okno28dni, pełny zakres/licznik oraz użyte rotacje,
+bez materializowania całego zakresu w pamięci. Payload zachowuje cały zakres.
+Kopiowanie dopisuje, a przeniesienie jest sekwencją kopia → usunięcie,
+z jawnym wynikiem częściowym; nie deklarujemy transakcji backendowej.
+
 AppShell przechowuje wyłącznie kalendarzowy kontekst UI, nie dane planu.
 Zmiana path kieruje fokus do `main#main-content`, query zachowuje fokus
 i scroll. Wstecz odtwarza zapisaną pozycję. Skiplink prowadzi do tego samego

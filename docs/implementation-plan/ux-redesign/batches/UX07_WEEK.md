@@ -8,11 +8,11 @@ Użytkownik widzi dania w tygodniu i wykorzystuje istniejące plany bez ręczneg
 
 ## Zadania
 
-- [ ] UX07.1 Wprowadzić responsywną agendę; siedem kolumn tylko przy odpowiedniej dostępnej szerokości. Pokazywać nazwy dań i stan pustego slotu, nie same inicjały.
-- [ ] UX07.2 Reużyć panel UX03 dla dodawania/zamiany i zachować datę/posiłek przy wejściu z tygodnia. Zachować dotychczasowe przenoszenie i obsługę klawiaturą bez wymuszania drag-and-drop.
-- [ ] UX07.3 Zastąpić pole wielowierszowe dat kalendarzem wielokrotnego wyboru; pokazać źródło, cele i informację o dopisywaniu. Kopiowanie nie usuwa istniejących posiłków.
-- [ ] UX07.4 Uporządkować „Uzupełnij plan”: kopia, blok, szablon i cykl. Przed zapisem pokazać zakres, istniejące dane, rzeczywiste ostrzeżenia oraz wynik. Zachować zapis szablonu i historię ponownego użycia.
-- [ ] UX07.5 „Zrób listę zakupów” przekazuje wyświetlany zakres do UX05. Przejście do przepisu i powrót nie resetuje tygodnia.
+- [x] UX07.1 Wprowadzić responsywną agendę; siedem kolumn tylko przy odpowiedniej dostępnej szerokości. Pokazywać nazwy dań i stan pustego slotu, nie same inicjały.
+- [x] UX07.2 Reużyć panel UX03 dla dodawania/zamiany i zachować datę/posiłek przy wejściu z tygodnia. Zachować dotychczasowe przenoszenie i obsługę klawiaturą bez wymuszania drag-and-drop.
+- [x] UX07.3 Zastąpić pole wielowierszowe dat kalendarzem wielokrotnego wyboru; pokazać źródło, cele i informację o dopisywaniu. Kopiowanie nie usuwa istniejących posiłków.
+- [x] UX07.4 Uporządkować „Uzupełnij plan”: kopia, blok, szablon i cykl. Przed zapisem pokazać zakres, istniejące dane, rzeczywiste ostrzeżenia oraz wynik. Zachować zapis szablonu i historię ponownego użycia.
+- [x] UX07.5 „Zrób listę zakupów” przekazuje wyświetlany zakres do UX05. Przejście do przepisu i powrót nie resetuje tygodnia.
 
 ## Pliki
 
@@ -25,3 +25,22 @@ Przy 768/1024 px nie występują siedem nieczytelnych kolumn obok sidebaru. Tydz
 `task check`; rozszerzyć `week-template-cycle.spec.ts` i testy paneli o wybór dat, zachowanie istniejących dań i przejście do zakupów. Nie zmieniać testów na sprawdzanie wyłącznie liczby przycisków.
 
 Skills: Required SKILL-FE; SKILL-CALC jeśli ruszane są ilości; Review SKILL-REVIEW. Dokumentacja: responsywny tydzień, nowe wejścia do kopiowania, zachowane semantyki i lista dostępnych operacji.
+
+## Odbiór 2026-10-31
+
+O: `task check DB_TEST_RUNTIME=linux` PASS675unit/300integration/460API/795FE,
+typy/lint/format/build/OpenAPI; pełne `task test-e2e-linux` PASS43/9 jawnych
+opt-in SKIP (final3). Targeted tydzień PASS3, w tym koniec roku i zajęty cel.
+Finalvisual2 PASS1,135PNG na360/390/768/1024/1440, osobne8PNG kalendarza,
+podglądu i agendy. Źródła/dokumentacja/uzgodnione PNG odebrane niezależnie
+przez Sol bez otwartych P0–P3, zgodnie z D35. Dowody i wcześniejsze FAIL
+w `backend/data/ux07-results`, obrazy końcowe w
+`backend/data/ux-baseline/screenshots-ux07-final2`.
+
+Obecny AppShell nie osiąga84rem treści, więc rzeczywiście odebrano agendę,
+bez deklarowania testu siedmiu kolumn. Cykl ma okno podglądu28dni i pełny
+payload zakresu. Kopiowanie dopisuje, przeniesienie pozostaje sekwencją
+kopia/usunięcie z wynikiem częściowym. Bez zmian backendu, obliczeń lub
+zależności. Ograniczenia widocznego podglądu ADMIN-a wobec owned są jawne;
+nie narzucono nowej reguły owner-only. Audyty zależności mają zastane
+alerty zapisane w PROGRESS; nie przedstawiamy ich jako zielonych.

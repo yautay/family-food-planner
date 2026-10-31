@@ -134,6 +134,7 @@ test('tydzień przez szablon i cykl: dzień → szablon → daty → tydzień �
   await expect(page.getByTestId(`week-day-${WEEK_START}`)).toContainText('Obiad E2E')
 
   // --- zapisz dzień jako szablon ------------------------------------------------------
+  await page.getByTestId('week-complete').click()
   await page.getByTestId(`week-day-select-${WEEK_START}`).click()
   await page.getByTestId('action-template-save').click()
   await expect(page.getByTestId('template-save-dialog')).toBeVisible()
@@ -148,7 +149,11 @@ test('tydzień przez szablon i cykl: dzień → szablon → daty → tydzień �
   await expect(page.getByTestId('template-apply-dialog')).toBeVisible()
   await page.getByTestId('apply-kind-day').check()
   await selectByText(page.getByTestId('apply-day-template'), dayTemplateName)
-  await page.getByTestId('apply-dates').fill(`${TUESDAY}\n${WEDNESDAY}`)
+  await page.getByTestId(`apply-dates-${WEEK_START}`).click()
+  await page.getByTestId(`apply-dates-${TUESDAY}`).click()
+  await page.getByTestId(`apply-dates-${WEDNESDAY}`).click()
+  await expect(page.getByTestId('reuse-targets')).toContainText('02.03.2032')
+  await expect(page.getByTestId('reuse-targets')).toContainText('03.03.2032')
   await page.getByTestId('template-apply-dialog-submit').click()
   await expect(page.getByTestId('template-apply-dialog')).toBeHidden()
 

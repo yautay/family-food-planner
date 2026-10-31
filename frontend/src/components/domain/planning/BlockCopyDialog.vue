@@ -13,6 +13,7 @@
  */
 import { computed, ref, watch } from 'vue'
 
+import PlanReusePreview from '@/components/domain/planning/PlanReusePreview.vue'
 import PlanningDialog from '@/components/domain/planning/PlanningDialog.vue'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -41,6 +42,7 @@ const emit = defineEmits<{
   (event: 'close'): void
 }>()
 
+const previewReady = ref(false)
 const form = ref(defaultBlockForm(props.sourceFrom))
 
 watch(
@@ -72,7 +74,7 @@ function applyPreset(): void {
 }
 
 function submit(): void {
-  if (parsed.value.success) {
+  if (parsed.value.success && previewReady.value && !props.pending) {
     emit('apply', parsed.value.data)
   }
 }
@@ -85,7 +87,7 @@ function submit(): void {
     :title="texts.blockTitle"
     :subtitle="texts.blockSubtitle"
     :submit-label="texts.blockApply"
-    :submit-disabled="!parsed.success"
+    :submit-disabled="!parsed.success || !previewReady"
     :pending="pending"
     :error="error"
     :validation-message="validationMessage"
@@ -170,5 +172,12 @@ function submit(): void {
         </li>
       </ol>
     </div>
+    <PlanReusePreview
+      v-if="open"
+      :dates="pairs.map((pair) => pair.target)"
+      :source-dates="[...new Set(pairs.map((pair) => pair.source))]"
+      :source-label="pairs.length ? `${pairs[0]?.source} – ${pairs.at(-1)?.source}` : undefined"
+      @ready="previewReady = $event"
+    />
   </PlanningDialog>
 </template>

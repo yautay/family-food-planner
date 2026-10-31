@@ -1,8 +1,11 @@
+import { VueQueryPlugin } from '@tanstack/vue-query'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import BlockCopyDialog from './BlockCopyDialog.vue'
 import TemplateSaveDialog from './TemplateSaveDialog.vue'
 import CycleEditorDialog from './CycleEditorDialog.vue'
+
+vi.mock('@/api/planning', () => ({ fetchPlanDays: vi.fn(async () => ({ items: [] })) }))
 
 let wrapper: VueWrapper | undefined
 afterEach(() => {
@@ -19,6 +22,14 @@ describe('PlanningDialog — kompatybilność istniejących formularzy', () => {
   it('zmiana komunikatu walidacji podczas pisania nazwy cyklu nie odbiera fokusu', async () => {
     wrapper = mount(CycleEditorDialog, {
       attachTo: document.body,
+      global: {
+        plugins: [
+          [
+            VueQueryPlugin,
+            { queryClientConfig: { defaultOptions: { queries: { retry: false } } } },
+          ],
+        ],
+      },
       props: {
         open: true,
         weekStart: '2032-03-01',
@@ -66,6 +77,14 @@ describe('PlanningDialog — kompatybilność istniejących formularzy', () => {
   it('zachowuje walidację bloku, podgląd i dotychczasowy payload', async () => {
     wrapper = mount(BlockCopyDialog, {
       attachTo: document.body,
+      global: {
+        plugins: [
+          [
+            VueQueryPlugin,
+            { queryClientConfig: { defaultOptions: { queries: { retry: false } } } },
+          ],
+        ],
+      },
       props: { open: true, sourceFrom: '2032-03-01' },
     })
     await flushPromises()
@@ -97,6 +116,14 @@ describe('PlanningDialog — kompatybilność istniejących formularzy', () => {
   it('nie usuwa nazwy szablonu po błędzie i zachowuje selektory przy ponowieniu', async () => {
     wrapper = mount(TemplateSaveDialog, {
       attachTo: document.body,
+      global: {
+        plugins: [
+          [
+            VueQueryPlugin,
+            { queryClientConfig: { defaultOptions: { queries: { retry: false } } } },
+          ],
+        ],
+      },
       props: { open: true, selectedDate: '2032-03-01', weekDates: ['2032-03-01'] },
     })
     await flushPromises()
