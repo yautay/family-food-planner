@@ -1,14 +1,19 @@
 import { VueQueryPlugin } from '@tanstack/vue-query'
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises, mount, RouterLinkStub } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { RecipeDetail } from '@/api/recipes'
 
 import PrzepisEdytorPage from './PrzepisEdytorPage.vue'
 
 const routerPush = vi.hoisted(() => vi.fn())
+const route = vi.hoisted(() => ({
+  params: {} as Record<string, string>,
+  query: {} as Record<string, string | string[] | null>,
+}))
 
 vi.mock('vue-router', () => ({
-  useRoute: () => ({ params: {} }),
+  useRoute: () => route,
   useRouter: () => ({ push: routerPush, replace: vi.fn() }),
 }))
 
@@ -66,13 +71,15 @@ function mountEditor() {
   // Edytor czyta rolę z `useAuthStore` (opcja zakresu Wszyscy tylko dla ADMIN-a).
   setActivePinia(createPinia())
   return mount(PrzepisEdytorPage, {
-    global: { plugins: [VueQueryPlugin], stubs: { RouterLink: true } },
+    global: { plugins: [VueQueryPlugin], stubs: { RouterLink: RouterLinkStub } },
   })
 }
 
 describe('PrzepisEdytorPage — składniki przez ProductPicker', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    route.params = {}
+    route.query = {}
     recipesApi.fetchTags.mockResolvedValue({ items: [], total: 0 })
     catalogApi.fetchProducts.mockResolvedValue({ items: [CEBULA], total: 1 })
     catalogApi.fetchUnitWeights.mockResolvedValue({
@@ -132,7 +139,11 @@ describe('PrzepisEdytorPage — składniki przez ProductPicker', () => {
         ingredients: [{ product_id: 1, quantity: '2.5', unit: 'łyżka', note: '' }],
       }),
     )
-    expect(routerPush).toHaveBeenCalledWith({ name: 'przepis-szczegol', params: { id: 7 } })
+    expect(routerPush).toHaveBeenCalledWith({
+      name: 'przepis-szczegol',
+      params: { id: 7 },
+      query: {},
+    })
   })
 
   it('składnik bez produktu blokuje wysyłkę z czytelnym komunikatem', async () => {
@@ -157,4 +168,107 @@ describe('PrzepisEdytorPage — składniki przez ProductPicker', () => {
     expect(wrapper.find('[data-testid="ingredient-row-0"]').exists()).toBe(false)
     expect(wrapper.get('[data-testid="ingredients-empty"]').text()).not.toBe('')
   })
+})
+
+describe('PrzepisEdytorPage — zachowanie kontekstu katalogu i planowania', () => {
+  const context = {
+    q: 'zupa',
+    tag: ['2', '7'],
+    scope: 'household',
+    prep_time_max: '30',
+    selectedDate: '2031-04-09',
+    from: '2031-04-07',
+    to: '2031-04-13',
+  }
+  function detail(id: number): RecipeDetail {
+    return {
+      id,
+      name: 'Zupa na sobotę',
+      instructions: 'Ugotuj i podaj.',
+      scope: 'household',
+      owner_user_id: 1,
+      base_servings: 2,
+      prep_time_min: 30,
+      difficulty: null,
+      is_archived: false,
+      photo_url: null,
+      photo_thumb_url: null,
+      tags: [],
+      avg_rating: null,
+      ratings_count: 0,
+      my_rating: null,
+      servings: '1',
+      ingredients: [],
+      nutrition: {
+        kcal: '0',
+        protein_g: '0',
+        fat_g: '0',
+        carbs_g: '0',
+        fiber_g: '0',
+        sugars_g: '0',
+        glycemic_load: '0',
+        complete: true,
+        missing: [],
+      },
+      created_at: '2026-10-03T10:00:00Z',
+      updated_at: '2026-10-03T10:00:00Z',
+    }
+  }
+  let wrapper: ReturnType<typeof mountEditor>
+  beforeEach(() => {
+    vi.resetAllMocks()
+    route.params = {}
+    route.query = { ...context, offset: '50', next: 'https://example.com/nie-przekierowuj' }
+    recipesApi.fetchTags.mockResolvedValue({ items: [], total: 0 })
+    recipesApi.fetchRecipe.mockResolvedValue(detail(19))
+    recipesApi.createRecipe.mockResolvedValue(detail(77))
+    recipesApi.updateRecipe.mockResolvedValue(detail(19))
+    catalogApi.fetchUnitWeights.mockResolvedValue({ items: [], total: 0 })
+  })
+  afterEach(() => {
+    wrapper?.unmount()
+  })
+
+  it.each([false, true])(
+    'Wróć z edytora (edycja=%s) nadal prowadzi do katalogu z całą allowlistą query',
+    async (edit) => {
+      route.params = edit ? { id: '19' } : {}
+      wrapper = mountEditor()
+      await flushPromises()
+      expect(wrapper.getComponent(RouterLinkStub).props('to')).toEqual({
+        name: 'przepisy',
+        query: context,
+      })
+    },
+  )
+
+  it.each([false, true])(
+    'zapis (edycja=%s) zachowuje filtry i datę przy rzeczywistym ID odpowiedzi API',
+    async (edit) => {
+      route.params = edit ? { id: '19' } : {}
+      wrapper = mountEditor()
+      await flushPromises()
+      await wrapper.get('[data-testid="recipe-name"]').setValue('Zupa po zapisaniu')
+      await wrapper.get('[data-testid="recipe-form"]').trigger('submit')
+      await vi.waitFor(() =>
+        expect(routerPush).toHaveBeenCalledWith({
+          name: 'przepis-szczegol',
+          params: { id: edit ? 19 : 77 },
+          query: context,
+        }),
+      )
+      if (edit) {
+        expect(recipesApi.updateRecipe).toHaveBeenCalledWith(
+          19,
+          expect.objectContaining({ name: 'Zupa po zapisaniu', scope: 'household' }),
+        )
+        expect(recipesApi.createRecipe).not.toHaveBeenCalled()
+      } else {
+        expect(recipesApi.createRecipe).toHaveBeenCalledWith(
+          expect.objectContaining({ name: 'Zupa po zapisaniu', scope: 'private' }),
+        )
+        expect(recipesApi.updateRecipe).not.toHaveBeenCalled()
+      }
+    },
+  )
 })

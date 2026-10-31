@@ -115,6 +115,20 @@ test('UX00: prawdziwy interfejs, telefon/desktop i prywatna lista offline', asyn
     const file = path.join(output, `${width}-${label}.png`)
     await target.screenshot({ path: file, fullPage: true, animations: 'disabled', caret: 'hide' })
     await testInfo.attach(`${width}-${label}`, { path: file, contentType: 'image/png' })
+    // Długi katalog skaluje pełny PNG do nieczytelnej miniatury; zachowaj też pierwszy ekran.
+    if (['recipes', 'recipe-photo', 'recipe-no-photo', 'recipe-global'].includes(label)) {
+      const viewportFile = path.join(output, `${width}-${label}-viewport.png`)
+      await target.screenshot({
+        path: viewportFile,
+        fullPage: false,
+        animations: 'disabled',
+        caret: 'hide',
+      })
+      await testInfo.attach(`${width}-${label}-viewport`, {
+        path: viewportFile,
+        contentType: 'image/png',
+      })
+    }
   }
   const detail = async (): Promise<ListDetail> => {
     const response = await page.request.get(`/api/v1/shopping/lists/${id('list-plain')}`)

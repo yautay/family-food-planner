@@ -60,6 +60,8 @@ describe('kontrakt kalendarza nawigacji UX02', () => {
       planNavigationContext(route('tydzien', { weekStart: '2031-03-03' }, { ...context }), TODAY),
     ).toEqual(context)
     expect(planNavigationTarget('zakupy', context)).toEqual({ name: 'zakupy', query: context })
+    expect(planNavigationTarget('przepisy', context)).toEqual({ name: 'przepisy', query: context })
+    expect(planNavigationContext(route('przepisy', {}, { ...context }), TODAY)).toEqual(context)
   })
   it('stary link tygodnia wybiera dziś tylko w bieżącym tygodniu, inaczej poniedziałek', () => {
     expect(

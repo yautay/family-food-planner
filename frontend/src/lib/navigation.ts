@@ -186,6 +186,6 @@ export function planNavigationTarget(
   const query = { selectedDate, from, to }
   if (name === 'plan-dnia') return { name, params: { date: selectedDate }, query }
   if (name === 'tydzien') return { name, params: { weekStart: startOfWeek(selectedDate) }, query }
-  if (name === 'statystyki' || name === 'zakupy') return { name, query }
+  if (name === 'statystyki' || name === 'zakupy' || name === 'przepisy') return { name, query }
   return { name }
 }

@@ -39,6 +39,7 @@ import type { IngredientDraft, RecipeFormValues } from '@/lib/schemas/recipe'
 import { isIngredientDraftValid, recipeFormSchema } from '@/lib/schemas/recipe'
 import { common, recipes as texts } from '@/lib/texts'
 import { useAuthStore } from '@/stores/auth'
+import { catalogQuery } from './catalogNavigation'
 
 const route = useRoute()
 const router = useRouter()
@@ -264,7 +265,11 @@ const save = useMutation({
     // Odpowiedź zapisu to gotowy detail (servings=1) — zasiewamy cache, żeby
     // strona szczegółów nie pobierała drugi raz tego, co już mamy.
     queryClient.setQueryData(queryKeys.recipes.detail(saved.id, '1'), saved)
-    await router.push({ name: 'przepis-szczegol', params: { id: saved.id } })
+    await router.push({
+      name: 'przepis-szczegol',
+      params: { id: saved.id },
+      query: catalogQuery(route.query),
+    })
   },
   onError: (error: unknown) => {
     actionError.value = error instanceof ApiError ? error.message : common.unexpectedError
@@ -317,7 +322,10 @@ function onPhotoChange(event: Event): void {
     <header class="grid gap-2">
       <h1 class="text-2xl font-semibold">{{ isEdit ? texts.editTitle : texts.createTitle }}</h1>
       <Button as-child variant="ghost" class="min-h-11 justify-self-start">
-        <RouterLink :to="{ name: 'przepisy' }" data-testid="recipe-editor-back">
+        <RouterLink
+          :to="{ name: 'przepisy', query: catalogQuery(route.query) }"
+          data-testid="recipe-editor-back"
+        >
           {{ texts.backToList }}
         </RouterLink>
       </Button>

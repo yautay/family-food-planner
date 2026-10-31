@@ -15,7 +15,7 @@ import PrzepisEdytorPage from './PrzepisEdytorPage.vue'
  * (zapis i tak skończyłby się 403).
  */
 
-const route = vi.hoisted(() => ({ params: {} as Record<string, string> }))
+const route = vi.hoisted(() => ({ params: {} as Record<string, string>, query: {} }))
 vi.mock('vue-router', () => ({
   useRoute: () => route,
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),

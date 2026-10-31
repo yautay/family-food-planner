@@ -131,7 +131,8 @@ test('ADMIN publikuje przepis, USER innej rodziny go widzi, planuje, kopiuje i e
     await expect(userPage).toHaveURL(/\/plan-dnia/)
 
     // Widzi przepis na liście (filtr „Dla wszystkich") z odznaką zakresu.
-    await userPage.goto('/przepisy')
+    await userPage.goto(`/przepisy?selectedDate=${DAY}`)
+    await userPage.getByTestId('recipes-filters-toggle').click()
     await userPage.getByTestId('recipes-scope-global').click()
     const card = userPage.getByTestId(`recipe-open-${recipeId}`)
     await expect(card).toBeVisible()
@@ -147,17 +148,18 @@ test('ADMIN publikuje przepis, USER innej rodziny go widzi, planuje, kopiuje i e
     await expect(userPage.getByTestId('recipe-archive')).toHaveCount(0)
     await expect(userPage.getByTestId('recipe-copy')).toBeVisible()
 
-    // Dodaje go do własnego planu (picker widzi przepis globalny obcej rodziny).
-    await userPage.goto(`/plan-dnia/${DAY}`)
-    await expect(userPage.getByTestId('plan-dnia-page')).toBeVisible()
-    await userPage.getByTestId('plan-add-meal').click()
-    await userPage.getByTestId('meal-name-input').fill('Obiad E2E')
-    await userPage.getByTestId('meal-submit').click()
-    await userPage.locator('[data-testid^="meal-add-item-"]').first().click()
-    await userPage.getByTestId('recipe-picker-input').fill(recipeName)
-    await userPage.getByTestId(`recipe-picker-option-${recipeId}`).click()
-    await expect(userPage.getByTestId('recipe-picker-selected')).toContainText(recipeName)
+    // Szczegół planuje globalny przepis bez edycji i zachowuje datę katalogu.
+    await userPage.getByTestId('recipe-plan').click()
+    await expect(userPage.getByTestId('planning-date')).toHaveValue(DAY)
+    await userPage.getByTestId('planning-meal-name').fill('Obiad E2E')
+    const scheduled = userPage.waitForResponse(
+      (response) =>
+        response.url().includes(`/plan/days/${DAY}/recipe-items`) &&
+        response.request().method() === 'POST',
+    )
     await userPage.getByTestId('recipe-planning-submit').click()
+    expect((await scheduled).status()).toBe(201)
+    await expect(userPage).toHaveURL(new RegExp(`/plan-dnia/${DAY}`))
     await expect(userPage.locator('[data-testid^="plan-item-servings-"]').first()).toBeVisible()
 
     // Kopiuje do swojej rodziny i dostaje WŁASNY, edytowalny przepis.

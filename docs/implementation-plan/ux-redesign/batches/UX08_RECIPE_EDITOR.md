@@ -18,6 +18,13 @@ Przepis da się wygodnie zapisać bez przebijania się przez wszystkie opcje jed
 
 `pages/przepisy/PrzepisEdytorPage.vue` i jego testy, `lib/schemas/recipe.ts`, komponenty edytora wydzielone w domenie. ProductPicker/ProductCreateDrawer są wspólne z UX09: zachować kontrakt; zmiany tylko po rezerwacji O. Nie zmieniać scope API, globalnych tokenów ani katalogu przepisów należącego do UX04.
 
+Kontrakt przekazany przez UX04: oba wyjścia edytora (Zapisz → rzeczywisty
+szczegół oraz Wróć → katalog) zachowują `catalogQuery(route.query)` z filtrami
+`q/tag/scope/prep_time_max` i kontekstem `selectedDate/from/to`. Nie przenosić
+arbitralnych `next/offset`. Zachować regresje create/edit × save/back oraz datę
+wspólnego panelu po wizycie w edytorze. Nowe zabezpieczenie brudnego formularza
+nie może kasować tego kontekstu ani przejmować udanego zapisu.
+
 ## Kryteria i testy
 
 Dodanie/edycja składnika i nowego produktu zachowują formularz. Błąd 422/403/409 jest czytelny. Nawigacja z niezapisanymi zmianami pozwala zostać; zapis poprawny zdejmuje ostrzeżenie. Refresh lub awaria przeglądarki nie jest opisywana jako bezpieczna — prawdziwe trwałe szkice są poza kartą.

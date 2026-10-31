@@ -116,14 +116,26 @@ Realizacja: `src/api/pagination.ts` + `components/domain/LoadMoreButton.vue`
    nazwa, kcal, menu ⋮: edytuj/duplikuj/przenieś/usuń/dopasuj porcję do
    celu), panel boczny: donut makro + słupki tygodnia, FAB „+" dodaje
    posiłek/pozycję.
-2. **Przepisy** — grid kart ze zdjęciem, czasem, kcal/porcję; filtry jako
-   chipsy tagów + szukajka; serce = ulubione (tag systemowy). Filtrów czasu,
-   trudności i oceny UI świadomie NIE MA, choć API je przyjmuje — rewizja
-   wymaga decyzji właściciela (ustalenie B19). Lista jest paginowana wzorcem
-   z §3.6 (strona 50): realny katalog rodziny to ponad sto dań.
-3. **Przepis szczegół** — hero zdjęcie, meta (czas, trudność, typ, kcal),
-   taby: Składniki / Przygotowanie / Wartości odżywcze; regulacja liczby
-   porcji przelicza składniki i wartości na żywo.
+2. **Przepisy (UX04)** — karty ze zdjęciem lub RecipeImage, pełną nazwą,
+   czasem i porcjami; osobne działania „Zaplanuj” i „Przepis”. Wyszukiwanie,
+   tagi, scope i „Do 30 minut” filtrują cały katalog na serwerze. Query URL
+   przechowuje `q`, powtarzane `tag`, `scope`, `prep_time_max=30`; powrót ze
+   szczegółu przywraca wyniki i scroll. Paginacja nadal po 50. Serce oznacza
+   istniejący tag „ulubione”, bez osobistej zakładki. Filtry trudności/oceny
+   pozostają poza kartą; uzgodniony UX04 zastępuje ograniczenie czasu z B19.
+   Zakresy i tagi są w domyślnie zwiniętym „Pozostałe filtry”; poza panelem
+   pozostają opis wszystkich aktywnych ograniczeń oraz „Wyczyść filtry”.
+   Szybki filtr czasu jest dostępny bez rozwijania. Karty mają kompaktową
+   ilustrację, a rzeczywiste zdjęcie mieści się w obrazie bez obcinania dania.
+   Pierwszy długi tytuł i Zaplanuj są sprawdzane względem dolnej nawigacji.
+3. **Przepis szczegół (UX04)** — zdjęcie, tytuł, metadane i „Zaplanuj”.
+   Składniki i przygotowanie są widoczne równocześnie, na telefonie pionowo.
+   Regulacja porcji korzysta z odpowiedzi serwera; błąd zachowuje ostatnio
+   potwierdzony wynik tego samego przepisu. Wartości odżywcze pozostają jawne.
+   Karta i szczegół otwierają wspólny panel UX03; po zapisie przechodzą do
+   rzeczywistego `day.day`. Role oceny/kopiowania/edycji/archiwizacji/usunięcia
+   pozostają zgodne z API. `used_in` pokazuje nazwy, ponieważ odpowiedź nie
+   gwarantuje daty potrzebnej do poprawnego linku dnia.
 4. **Plan tygodniowy** — siatka dni × posiłki (miniatury), przeciąganie/
    kopiowanie, akcje: kopiuj dzień, powiel blok, zapisz jako szablon,
    zastosuj szablon/cykl.

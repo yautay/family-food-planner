@@ -137,7 +137,7 @@ Zakupy z planu. `AccountNavigation` przyjmuje `displayName`, `householdName`,
 `isAdmin`, `pending`, `mobile` i emituje `logout`; Reka obsługuje menu
 zarówno przy koncie w sidebarze, jak i w nagłówku telefonu.
 
-Kontrakt UI dla UX03/05/07/10:
+Kontrakt UI dla UX03/04/05/07/10:
 
 - `PlanNavigationContext { selectedDate, from, to }`: lokalne dni ISO,
   zakres włącznie, do 92 dni. `validNavigationDate` odrzuca także tablice
@@ -153,6 +153,12 @@ Kontrakt UI dla UX03/05/07/10:
   zostaje lokalny. Presety używają aktualnej daty odniesienia także bez reloadu.
 - Zakupy otrzymują from/to/selectedDate w query. Odczyt przez generator
   należy do UX05; sama nawigacja nie generuje listy ani nie zapisuje danych.
+- Przepisy również otrzymują from/to/selectedDate. UX04 zachowuje ten kontekst
+  między katalogiem a szczegółem i przekazuje datę do RecipePlanningPanel.
+  Filtry katalogu są w URL (`q`, powtarzane `tag`, `scope`, `prep_time_max=30`);
+  serwer filtruje przed paginacją. `catalogNavigation.ts` buduje powrót do
+  katalogu, a istniejący cache Query zachowuje pobrane strony. Nie utrwalamy
+  odpowiedzi serwera w Pinia ani osobnym magazynie katalogu.
 
 AppShell przechowuje wyłącznie kalendarzowy kontekst UI, nie dane planu.
 Zmiana path kieruje fokus do `main#main-content`, query zachowuje fokus

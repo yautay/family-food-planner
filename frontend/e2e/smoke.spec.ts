@@ -158,10 +158,17 @@ test.describe('plan dnia (własne dane, sprzątane po obu stronach)', () => {
 
     await page.goto('/przepisy')
     await page.getByTestId('recipes-search').fill(recipeName)
-    const card = page.locator('[data-testid^="recipe-card-"]').first()
+    await expect(page).toHaveURL((url) => url.searchParams.get('q') === recipeName)
+    const card = page.locator('[data-testid^="recipe-card-"]').filter({
+      has: page.getByRole('heading', { name: recipeName, exact: true }),
+    })
+    await expect(card).toHaveCount(1)
     await expect(card).toBeVisible()
-    await card.click()
+    await card.getByTestId(/^recipe-open-/).click()
+    await expect(page.getByTestId('recipe-name')).toHaveText(recipeName)
     await page.getByTestId('recipe-delete').click()
-    await expect(page).toHaveURL(/\/przepisy$/)
+    await expect(page).toHaveURL(
+      (url) => url.pathname === '/przepisy' && url.searchParams.get('q') === recipeName,
+    )
   })
 })
